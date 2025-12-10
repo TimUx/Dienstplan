@@ -27,7 +27,17 @@ function showView(viewName) {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     
     document.getElementById(`${viewName}-view`).classList.add('active');
-    event.target.classList.add('active');
+    
+    // Add active class to the clicked button
+    const buttons = {
+        'schedule': 0,
+        'employees': 1,
+        'statistics': 2
+    };
+    const buttonIndex = buttons[viewName];
+    if (buttonIndex !== undefined) {
+        document.querySelectorAll('.nav-btn')[buttonIndex].classList.add('active');
+    }
     
     if (viewName === 'schedule') {
         loadSchedule();

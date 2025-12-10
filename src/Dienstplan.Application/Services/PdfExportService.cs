@@ -16,30 +16,27 @@ public class PdfExportService : IPdfExportService
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
-    public async Task<byte[]> GenerateSchedulePdfAsync(ScheduleViewDto schedule)
+    public Task<byte[]> GenerateSchedulePdfAsync(ScheduleViewDto schedule)
     {
-        return await Task.Run(() =>
+        var pdfBytes = Document.Create(container =>
         {
-            var document = Document.Create(container =>
+            container.Page(page =>
             {
-                container.Page(page =>
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(30);
+                
+                page.Header().Element(ComposeHeader);
+                page.Content().Element(content => ComposeContent(content, schedule));
+                page.Footer().AlignCenter().Text(text =>
                 {
-                    page.Size(PageSizes.A4.Landscape());
-                    page.Margin(30);
-                    
-                    page.Header().Element(ComposeHeader);
-                    page.Content().Element(content => ComposeContent(content, schedule));
-                    page.Footer().AlignCenter().Text(text =>
-                    {
-                        text.CurrentPageNumber();
-                        text.Span(" / ");
-                        text.TotalPages();
-                    });
+                    text.CurrentPageNumber();
+                    text.Span(" / ");
+                    text.TotalPages();
                 });
             });
-            
-            return document.GeneratePdf();
-        });
+        }).GeneratePdf();
+        
+        return Task.FromResult(pdfBytes);
     }
 
     private void ComposeHeader(IContainer container)
@@ -134,12 +131,15 @@ public class PdfExportService : IPdfExportService
                 }
             });
             
-            // Legend for absences
-            if (schedule.Absences.Any())
+            // Legend for absences and springer assignments
+            if (schedule.Absences.Any() || assignmentsByDate.Any(g => g.Any(a => a.IsSpringerAssignment)))
             {
                 column.Item().PaddingTop(15).Text("Legende").FontSize(10).Bold();
-                column.Item().PaddingTop(5).Text("* = Abwesend (Urlaub/Krank/Lehrgang)")
-                    .FontSize(8).Italic();
+                column.Item().PaddingTop(5).Column(legendColumn =>
+                {
+                    legendColumn.Item().Text("* = Abwesend (Urlaub/Krank/Lehrgang)").FontSize(8).Italic();
+                    legendColumn.Item().Text("(S) = Springer-Einsatz").FontSize(8).Italic();
+                });
             }
         });
     }

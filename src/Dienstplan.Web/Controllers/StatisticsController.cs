@@ -7,7 +7,6 @@ namespace Dienstplan.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize] // Require authentication for all endpoints
 public class StatisticsController : ControllerBase
 {
     private readonly IStatisticsService _statisticsService;

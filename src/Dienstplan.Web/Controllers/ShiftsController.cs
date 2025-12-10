@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
+using Dienstplan.Application.Services;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
 
@@ -14,15 +15,18 @@ public class ShiftsController : ControllerBase
     private readonly IShiftAssignmentRepository _shiftRepository;
     private readonly IAbsenceRepository _absenceRepository;
     private readonly IShiftPlanningService _planningService;
+    private readonly IPdfExportService _pdfExportService;
 
     public ShiftsController(
         IShiftAssignmentRepository shiftRepository,
         IAbsenceRepository absenceRepository,
-        IShiftPlanningService planningService)
+        IShiftPlanningService planningService,
+        IPdfExportService pdfExportService)
     {
         _shiftRepository = shiftRepository;
         _absenceRepository = absenceRepository;
         _planningService = planningService;
+        _pdfExportService = pdfExportService;
     }
 
     [HttpGet("schedule")]
@@ -146,5 +150,59 @@ public class ShiftsController : ControllerBase
             Date = assignment.Date,
             IsSpringerAssignment = true
         });
+    }
+
+    [HttpGet("schedule/export/pdf")]
+    [AllowAnonymous] // Allow all to export schedules
+    public async Task<IActionResult> ExportScheduleToPdf(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        [FromQuery] string view = "week")
+    {
+        var start = startDate ?? DateTime.Today;
+        var end = endDate ?? view switch
+        {
+            "week" => start.AddDays(7),
+            "month" => start.AddMonths(1),
+            "year" => start.AddYears(1),
+            _ => start.AddDays(7)
+        };
+
+        var assignments = await _shiftRepository.GetByDateRangeAsync(start, end);
+        var absences = await _absenceRepository.GetByDateRangeAsync(start, end);
+
+        var schedule = new ScheduleViewDto
+        {
+            StartDate = start,
+            EndDate = end,
+            Assignments = assignments.Select(a => new ShiftAssignmentDto
+            {
+                Id = a.Id,
+                EmployeeId = a.EmployeeId,
+                EmployeeName = a.Employee.FullName,
+                ShiftTypeId = a.ShiftTypeId,
+                ShiftCode = a.ShiftType.Code,
+                ShiftName = a.ShiftType.Name,
+                Date = a.Date,
+                IsManual = a.IsManual,
+                IsSpringerAssignment = a.IsSpringerAssignment,
+                Notes = a.Notes
+            }).ToList(),
+            Absences = absences.Select(a => new AbsenceDto
+            {
+                Id = a.Id,
+                EmployeeId = a.EmployeeId,
+                EmployeeName = a.Employee.FullName,
+                Type = a.Type.ToString(),
+                StartDate = a.StartDate,
+                EndDate = a.EndDate,
+                Notes = a.Notes
+            }).ToList()
+        };
+
+        var pdfBytes = await _pdfExportService.GenerateSchedulePdfAsync(schedule);
+        var fileName = $"Dienstplan_{start:yyyy-MM-dd}_bis_{end:yyyy-MM-dd}.pdf";
+        
+        return File(pdfBytes, "application/pdf", fileName);
     }
 }

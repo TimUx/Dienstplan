@@ -56,8 +56,23 @@ public class EmployeeRepository : IEmployeeRepository
     public async Task<IEnumerable<Employee>> GetSpringersAsync()
     {
         return await _context.Employees
+            .Include(e => e.Team)
             .Where(e => e.IsSpringer)
             .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Employee>> GetSpringersAsync(int? teamId)
+    {
+        var query = _context.Employees
+            .Include(e => e.Team)
+            .Where(e => e.IsSpringer);
+        
+        if (teamId.HasValue)
+        {
+            query = query.Where(e => e.TeamId == teamId.Value);
+        }
+        
+        return await query.ToListAsync();
     }
 
     public async Task<IEnumerable<Employee>> GetByTeamIdAsync(int teamId)

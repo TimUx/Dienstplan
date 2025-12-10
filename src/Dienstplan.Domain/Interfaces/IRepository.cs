@@ -17,6 +17,7 @@ public interface IRepository<T> where T : class
 public interface IEmployeeRepository : IRepository<Employee>
 {
     Task<IEnumerable<Employee>> GetSpringersAsync();
+    Task<IEnumerable<Employee>> GetSpringersAsync(int? teamId);
     Task<IEnumerable<Employee>> GetByTeamIdAsync(int teamId);
     Task<Employee?> GetByPersonalnummerAsync(string personalnummer);
 }
@@ -32,4 +33,9 @@ public interface IAbsenceRepository : IRepository<Absence>
 {
     Task<IEnumerable<Absence>> GetByEmployeeIdAsync(int employeeId);
     Task<IEnumerable<Absence>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
+}
+
+public interface ITeamRepository : IRepository<Team>
+{
+    Task<Team?> GetByNameAsync(string name);
 }

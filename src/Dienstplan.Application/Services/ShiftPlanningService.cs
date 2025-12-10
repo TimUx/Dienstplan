@@ -163,8 +163,15 @@ public class ShiftPlanningService : IShiftPlanningService
             return null;
         }
         
-        // Get available Springers
-        var springers = await _employeeRepository.GetSpringersAsync();
+        // Get the employee to determine their team
+        var employee = await _employeeRepository.GetByIdAsync(employeeId);
+        if (employee == null)
+        {
+            return null;
+        }
+        
+        // Get available Springers from the same team
+        var springers = await _employeeRepository.GetSpringersAsync(employee.TeamId);
         var absences = await _absenceRepository.GetByDateRangeAsync(date, date);
         
         var availableSpringers = springers.Where(s => 

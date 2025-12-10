@@ -38,17 +38,64 @@ body {
 }
 
 header {
-    background: var(--card-bg);
+    background: var(--primary-color);
     padding: 20px;
     border-radius: 8px;
     box-shadow: var(--shadow);
     margin-bottom: 20px;
+    color: white;
+}
+
+.header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.company-logo-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.logo-fw {
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: white;
+    line-height: 1;
+}
+
+.logo-subtext {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-top: 2px;
+}
+
+.divider {
+    width: 2px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.company-logo {
+    height: 60px;
+    width: auto;
+    filter: brightness(0) invert(1);
 }
 
 h1 {
     font-size: 2rem;
-    margin-bottom: 15px;
-    color: var(--primary-color);
+    margin-bottom: 0;
+    color: white;
 }
 
 nav {
@@ -59,22 +106,24 @@ nav {
 
 .nav-btn {
     padding: 10px 20px;
-    background: transparent;
-    border: 2px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
     cursor: pointer;
     font-size: 1rem;
     transition: all 0.3s;
+    color: white;
 }
 
 .nav-btn:hover {
-    background: var(--bg-color);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
 }
 
 .nav-btn.active {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
+    background: white;
+    color: var(--primary-color);
+    border-color: white;
 }
 
 .view {
@@ -322,8 +371,30 @@ select {
         padding: 10px;
     }
     
+    .logo-section {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .divider {
+        display: none;
+    }
+    
+    .logo-fw {
+        font-size: 2rem;
+    }
+    
+    .logo-subtext {
+        font-size: 0.6rem;
+    }
+    
+    .company-logo {
+        height: 40px;
+    }
+    
     h1 {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
+        width: 100%;
     }
     
     .controls {

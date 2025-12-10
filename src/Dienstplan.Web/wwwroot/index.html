@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dienstplan - Schichtverwaltung</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="logo-section">
+                    <img src="/images/fw-logo-white.svg" alt="Fritz Winter Logo" class="company-logo-img">
+                    <div class="divider"></div>
+                    <h1>Dienstplan - Schichtverwaltung</h1>
+                </div>
+                <nav>
+                    <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
+                    <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
+                    <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
+                    <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
+                </nav>
+            </div>
+        </header>
+
+        <main>
+            <!-- Schedule View -->
+            <div id="schedule-view" class="view active">
+                <div class="controls">
+                    <div class="date-controls">
+                        <button onclick="changeDate(-1)">◀ Vorherige Woche</button>
+                        <input type="date" id="startDate" onchange="loadSchedule()">
+                        <button onclick="changeDate(1)">Nächste Woche ▶</button>
+                    </div>
+                    <div class="view-controls">
+                        <select id="viewType" onchange="loadSchedule()">
+                            <option value="week">Woche</option>
+                            <option value="month">Monat</option>
+                            <option value="year">Jahr</option>
+                        </select>
+                        <button onclick="planShifts()" class="btn-primary">Schichten planen</button>
+                    </div>
+                </div>
+                
+                <div id="schedule-content" class="schedule-grid">
+                    <p class="loading">Lade Dienstplan...</p>
+                </div>
+            </div>
+
+            <!-- Employees View -->
+            <div id="employees-view" class="view">
+                <div class="controls">
+                    <button onclick="showAddEmployeeModal()" class="btn-primary">+ Mitarbeiter hinzufügen</button>
+                </div>
+                <div id="employees-content">
+                    <p class="loading">Lade Mitarbeiter...</p>
+                </div>
+            </div>
+
+            <!-- Statistics View -->
+            <div id="statistics-view" class="view">
+                <div class="controls">
+                    <div class="date-range">
+                        <label>Von: <input type="date" id="statsStartDate"></label>
+                        <label>Bis: <input type="date" id="statsEndDate"></label>
+                        <button onclick="loadStatistics()" class="btn-primary">Aktualisieren</button>
+                    </div>
+                </div>
+                <div id="statistics-content">
+                    <p class="loading">Lade Statistiken...</p>
+                </div>
+            </div>
+
+            <!-- Manual/Help View -->
+            <div id="manual-view" class="view">
+                <div class="manual-content">
+                    <h2>📖 Betriebshandbuch - Dienstplan-System</h2>
+                    
+                    <div class="manual-toc">
+                        <h3>Inhaltsverzeichnis</h3>
+                        <ul>
+                            <li><a href="#manual-intro">1. Einführung</a></li>
+                            <li><a href="#manual-login">2. Anmeldung</a></li>
+                            <li><a href="#manual-schedule">3. Dienstplan verwalten</a></li>
+                            <li><a href="#manual-employees">4. Mitarbeiter verwalten</a></li>
+                            <li><a href="#manual-statistics">5. Statistiken</a></li>
+                            <li><a href="#manual-rules">6. Schichtplanungsregeln</a></li>
+                            <li><a href="#manual-springer">7. Springer-System</a></li>
+                            <li><a href="#manual-troubleshooting">8. Problembehebung</a></li>
+                        </ul>
+                    </div>
+
+                    <section id="manual-intro" class="manual-section">
+                        <h3>1. Einführung</h3>
+                        <p>Das Dienstplan-System unterstützt Sie bei der Verwaltung von Schichtplänen für bis zu 15 Mitarbeiter in 3 Teams.</p>
+                        <h4>Hauptfunktionen:</h4>
+                        <ul>
+                            <li><strong>Automatische Schichtplanung:</strong> Das System erstellt automatisch Schichtpläne unter Beachtung aller gesetzlichen und betrieblichen Regeln</li>
+                            <li><strong>Mitarbeiterverwaltung:</strong> Verwalten Sie Mitarbeiter, Teams und Abwesenheiten</li>
+                            <li><strong>Springer-System:</strong> Automatische Zuweisung von Vertretungen bei Ausfällen</li>
+                            <li><strong>Statistiken:</strong> Übersicht über Arbeitsstunden, Schichtverteilung und Auslastung</li>
+                        </ul>
+                    </section>
+
+                    <section id="manual-login" class="manual-section">
+                        <h3>2. Anmeldung</h3>
+                        <p>Für die Nutzung des Systems benötigen Sie einen Benutzeraccount mit entsprechenden Berechtigungen:</p>
+                        <ul>
+                            <li><strong>Administrator:</strong> Volle Berechtigung für alle Funktionen</li>
+                            <li><strong>Disponent:</strong> Schichtplanung und Bearbeitung</li>
+                            <li><strong>Mitarbeiter:</strong> Nur Lesezugriff auf eigenen Dienstplan</li>
+                        </ul>
+                        <p class="note"><strong>Hinweis:</strong> Wenden Sie sich an Ihren Administrator, um einen Account zu erhalten.</p>
+                    </section>
+
+                    <section id="manual-schedule" class="manual-section">
+                        <h3>3. Dienstplan verwalten</h3>
+                        <h4>Dienstplan anzeigen</h4>
+                        <p>Wählen Sie im Hauptmenü "Dienstplan" aus. Sie können zwischen folgenden Ansichten wählen:</p>
+                        <ul>
+                            <li><strong>Woche:</strong> Detaillierte Ansicht für 7 Tage</li>
+                            <li><strong>Monat:</strong> Übersicht für 30 Tage</li>
+                            <li><strong>Jahr:</strong> Jahresübersicht</li>
+                        </ul>
+                        
+                        <h4>Schichten automatisch planen</h4>
+                        <ol>
+                            <li>Klicken Sie auf "Schichten planen"</li>
+                            <li>Wählen Sie den Zeitraum aus</li>
+                            <li>Bestätigen Sie die Planung</li>
+                        </ol>
+                        <p>Das System erstellt automatisch einen optimalen Schichtplan unter Beachtung aller Regeln.</p>
+
+                        <h4>Manuelle Anpassungen</h4>
+                        <p>Sie können jederzeit manuelle Änderungen am Dienstplan vornehmen:</p>
+                        <ul>
+                            <li>Einzelne Schichten können individuell zugewiesen werden</li>
+                            <li>Manuelle Zuweisungen werden vom System respektiert und nicht überschrieben</li>
+                        </ul>
+                    </section>
+
+                    <section id="manual-employees" class="manual-section">
+                        <h3>4. Mitarbeiter verwalten</h3>
+                        <h4>Neuen Mitarbeiter anlegen</h4>
+                        <ol>
+                            <li>Wechseln Sie zur Ansicht "Mitarbeiter"</li>
+                            <li>Klicken Sie auf "+ Mitarbeiter hinzufügen"</li>
+                            <li>Füllen Sie die Pflichtfelder aus:
+                                <ul>
+                                    <li>Vorname</li>
+                                    <li>Name</li>
+                                    <li>Personalnummer (eindeutig)</li>
+                                </ul>
+                            </li>
+                            <li>Optional: Markieren Sie den Mitarbeiter als "Springer"</li>
+                            <li>Klicken Sie auf "Speichern"</li>
+                        </ol>
+
+                        <h4>Abwesenheiten erfassen</h4>
+                        <p>Erfassen Sie Abwesenheiten direkt über die API oder das Mitarbeiter-Profil:</p>
+                        <ul>
+                            <li><strong>Krank:</strong> Krankheitstage</li>
+                            <li><strong>Urlaub:</strong> Geplanter Urlaub</li>
+                            <li><strong>Lehrgang:</strong> Schulungen und Weiterbildungen</li>
+                        </ul>
+                    </section>
+
+                    <section id="manual-statistics" class="manual-section">
+                        <h3>5. Statistiken</h3>
+                        <p>Die Statistik-Ansicht bietet Ihnen einen Überblick über:</p>
+                        <ul>
+                            <li><strong>Arbeitsstunden:</strong> Gesamtstunden und Schichtanzahl pro Mitarbeiter</li>
+                            <li><strong>Schichtverteilung:</strong> Verteilung der Schichtarten pro Team</li>
+                            <li><strong>Fehltage:</strong> Übersicht der Abwesenheiten nach Typ</li>
+                            <li><strong>Team-Auslastung:</strong> Durchschnittliche Schichten pro Mitarbeiter</li>
+                        </ul>
+                        <p>Wählen Sie den gewünschten Zeitraum aus und klicken Sie auf "Aktualisieren".</p>
+                    </section>
+
+                    <section id="manual-rules" class="manual-section">
+                        <h3>6. Schichtplanungsregeln</h3>
+                        <p>Das System beachtet automatisch folgende Regeln:</p>
+                        
+                        <h4>Schichtarten</h4>
+                        <table class="rules-table">
+                            <tr>
+                                <th>Schicht</th>
+                                <th>Code</th>
+                                <th>Uhrzeit</th>
+                            </tr>
+                            <tr>
+                                <td>Frühdienst</td>
+                                <td class="shift-badge shift-F">F</td>
+                                <td>05:45 – 13:45</td>
+                            </tr>
+                            <tr>
+                                <td>Spätdienst</td>
+                                <td class="shift-badge shift-S">S</td>
+                                <td>13:45 – 21:45</td>
+                            </tr>
+                            <tr>
+                                <td>Nachtdienst</td>
+                                <td class="shift-badge shift-N">N</td>
+                                <td>21:45 – 05:45</td>
+                            </tr>
+                            <tr>
+                                <td>Zwischendienst</td>
+                                <td class="shift-badge shift-ZD">ZD</td>
+                                <td>08:00 – 16:00</td>
+                            </tr>
+                        </table>
+
+                        <h4>Besetzungsregeln</h4>
+                        <p><strong>Montag bis Freitag:</strong></p>
+                        <ul>
+                            <li>Frühdienst: 4-5 Personen</li>
+                            <li>Spätdienst: 3-4 Personen</li>
+                            <li>Nachtdienst: 3 Personen</li>
+                        </ul>
+                        <p><strong>Samstag und Sonntag:</strong></p>
+                        <ul>
+                            <li>Alle Schichten: maximal 3 Personen</li>
+                        </ul>
+
+                        <h4>Verbotene Schichtwechsel</h4>
+                        <ul>
+                            <li>❌ Spätdienst → Frühdienst (zu kurze Ruhezeit)</li>
+                            <li>❌ Nachtdienst → Spätdienst (zu kurze Ruhezeit)</li>
+                            <li>❌ Gleiche Schicht zweimal hintereinander</li>
+                        </ul>
+
+                        <h4>Idealer Rhythmus</h4>
+                        <p>Frühdienst → Nachtdienst → Spätdienst</p>
+                        <p>Dieser Rhythmus ermöglicht optimale Ruhezeiten und Belastungsverteilung.</p>
+
+                        <h4>Ruhezeiten</h4>
+                        <p>Mindestens 11 Stunden Ruhezeit zwischen zwei Schichten (gesetzlich vorgeschrieben).</p>
+                    </section>
+
+                    <section id="manual-springer" class="manual-section">
+                        <h3>7. Springer-System</h3>
+                        <p>Das Springer-System sorgt für automatische Vertretung bei kurzfristigen Ausfällen.</p>
+                        
+                        <h4>Springer definieren</h4>
+                        <p>Markieren Sie beim Anlegen oder Bearbeiten eines Mitarbeiters das Feld "Springer".</p>
+                        
+                        <h4>Automatische Zuweisung</h4>
+                        <p>Bei Erfassung einer Abwesenheit prüft das System automatisch:</p>
+                        <ol>
+                            <li>Welche Schichten betroffen sind</li>
+                            <li>Welche Springer verfügbar sind</li>
+                            <li>Weist den ersten verfügbaren Springer zu</li>
+                        </ol>
+                        <p class="note"><strong>Hinweis:</strong> Springer werden nur bei tatsächlichen Ausfällen eingesetzt, nicht bei der regulären Planung.</p>
+                    </section>
+
+                    <section id="manual-troubleshooting" class="manual-section">
+                        <h3>8. Problembehebung</h3>
+                        
+                        <h4>Problem: Schichtplanung schlägt fehl</h4>
+                        <p><strong>Lösung:</strong></p>
+                        <ul>
+                            <li>Prüfen Sie, ob genügend Mitarbeiter verfügbar sind</li>
+                            <li>Überprüfen Sie bestehende Abwesenheiten</li>
+                            <li>Stellen Sie sicher, dass mindestens 12-15 Mitarbeiter angelegt sind</li>
+                        </ul>
+
+                        <h4>Problem: Kein Springer verfügbar</h4>
+                        <p><strong>Lösung:</strong></p>
+                        <ul>
+                            <li>Definieren Sie weitere Mitarbeiter als Springer</li>
+                            <li>Prüfen Sie Abwesenheiten der Springer</li>
+                            <li>Bei Bedarf: Manuelle Zuweisung einer Vertretung</li>
+                        </ul>
+
+                        <h4>Problem: Statistiken werden nicht angezeigt</h4>
+                        <p><strong>Lösung:</strong></p>
+                        <ul>
+                            <li>Prüfen Sie den ausgewählten Zeitraum</li>
+                            <li>Stellen Sie sicher, dass Schichten für diesen Zeitraum vorhanden sind</li>
+                            <li>Aktualisieren Sie die Seite (F5)</li>
+                        </ul>
+
+                        <h4>Weitere Hilfe</h4>
+                        <p>Bei weiteren Fragen wenden Sie sich bitte an:</p>
+                        <ul>
+                            <li>IT-Support: support@fritzwinter.de</li>
+                            <li>Telefon: +49 XXX XXXXXXX</li>
+                        </ul>
+                    </section>
+
+                    <div class="manual-footer">
+                        <p><strong>Version:</strong> 1.0.0</p>
+                        <p><strong>Letzte Aktualisierung:</strong> Dezember 2025</p>
+                        <p>© Fritz Winter Eisengießerei GmbH & Co. KG</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for adding employee -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEmployeeModal()">&times;</span>
+            <h2>Mitarbeiter hinzufügen</h2>
+            <form id="employeeForm" onsubmit="saveEmployee(event)">
+                <div class="form-group">
+                    <label>Vorname*</label>
+                    <input type="text" id="vorname" required>
+                </div>
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Personalnummer*</label>
+                    <input type="text" id="personalnummer" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="isSpringer">
+                        Springer
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeEmployeeModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

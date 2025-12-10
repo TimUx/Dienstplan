@@ -1,18 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" width="200" height="80">
-  <!-- Fritz Winter Logo -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" width="240" height="80">
+  <!-- Fritz Winter Logo - Professional Version -->
   <defs>
     <style>
-      .logo-text { fill: white; font-family: Arial, sans-serif; font-weight: 900; }
-      .logo-subtext { fill: white; font-family: Arial, sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 2px; }
+      .fw-text { fill: white; font-family: 'Arial Black', Arial, sans-serif; font-weight: 900; letter-spacing: 2px; }
+      .company-text { fill: white; font-family: Arial, sans-serif; font-weight: 400; font-size: 11px; letter-spacing: 3px; }
+      .tagline { fill: rgba(255,255,255,0.85); font-family: Arial, sans-serif; font-size: 8px; letter-spacing: 1px; }
     </style>
   </defs>
   
-  <!-- Background -->
-  <rect width="200" height="80" fill="#2563eb" rx="4"/>
-  
-  <!-- FW Text -->
-  <text x="20" y="50" class="logo-text" font-size="36">FW</text>
-  
-  <!-- Fritz Winter Text -->
-  <text x="20" y="65" class="logo-subtext">FRITZ WINTER</text>
+  <!-- Logo Container -->
+  <g>
+    <!-- Main FW Text -->
+    <text x="20" y="38" class="fw-text" font-size="32">FW</text>
+    
+    <!-- Company Name -->
+    <text x="20" y="55" class="company-text">FRITZ WINTER</text>
+    
+    <!-- Tagline -->
+    <text x="20" y="68" class="tagline">Eisengießerei GmbH &amp; Co. KG</text>
+  </g>
 </svg>

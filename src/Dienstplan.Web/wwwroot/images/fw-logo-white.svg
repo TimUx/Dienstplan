@@ -1,22 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" width="240" height="80">
-  <!-- Fritz Winter Logo - White Version for Blue Header -->
-  <defs>
-    <style>
-      .fw-text { fill: white; font-family: 'Arial Black', Arial, sans-serif; font-weight: 900; letter-spacing: 2px; }
-      .company-text { fill: white; font-family: Arial, sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 3px; }
-      .tagline { fill: rgba(255,255,255,0.9); font-family: Arial, sans-serif; font-size: 8px; letter-spacing: 1px; }
-    </style>
-  </defs>
-  
-  <!-- Logo Content -->
-  <g>
-    <!-- Main FW Text -->
-    <text x="10" y="38" class="fw-text" font-size="32">FW</text>
-    
-    <!-- Company Name -->
-    <text x="10" y="55" class="company-text">FRITZ WINTER</text>
-    
-    <!-- Tagline -->
-    <text x="10" y="68" class="tagline">Eisengießerei GmbH &amp; Co. KG</text>
-  </g>
+<svg id="circle-icon" xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+  <path id="circle_1_" d="M75.6,2.6a40,40,0,1,0,40,40A39.96,39.96,0,0,0,75.6,2.6Zm0,74.525a34.413,34.413,0,1,1,34.413-34.413A34.357,34.357,0,0,1,75.6,77.125Z" transform="translate(-35.6 -2.6)" fill="#fff"/>
+  <path id="font" d="M71.61,13.2H85.577V18H77.2v4.8H83.23v4.8H77.2V38.34L88.929,54.988,99.543,24.261l3.464,6.927L90.6,67.278,74.4,44.038,58.09,67.278,45.8,31.189l3.464-6.927L59.878,54.988,71.61,38.34Z" transform="translate(-34.403 -1.356)" fill="#fff"/>
 </svg>

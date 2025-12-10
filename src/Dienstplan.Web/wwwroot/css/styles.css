@@ -58,6 +58,11 @@ header {
     gap: 20px;
 }
 
+.company-logo-img {
+    height: 60px;
+    width: auto;
+}
+
 .company-logo-text {
     display: flex;
     flex-direction: column;

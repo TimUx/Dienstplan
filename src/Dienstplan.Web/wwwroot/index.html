@@ -18,6 +18,7 @@
                 <nav>
                     <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
                     <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
+                    <button onclick="showView('teams')" class="nav-btn">Teams</button>
                     <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
                     <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
                 </nav>
@@ -51,10 +52,20 @@
             <!-- Employees View -->
             <div id="employees-view" class="view">
                 <div class="controls">
-                    <button onclick="showAddEmployeeModal()" class="btn-primary">+ Mitarbeiter hinzufügen</button>
+                    <button onclick="showAddEmployeeModal()" class="btn-primary" id="addEmployeeBtn" style="display: none;">+ Mitarbeiter hinzufügen</button>
                 </div>
                 <div id="employees-content">
                     <p class="loading">Lade Mitarbeiter...</p>
+                </div>
+            </div>
+
+            <!-- Teams View -->
+            <div id="teams-view" class="view">
+                <div class="controls">
+                    <button onclick="showAddTeamModal()" class="btn-primary" id="addTeamBtn" style="display: none;">+ Team hinzufügen</button>
+                </div>
+                <div id="teams-content">
+                    <p class="loading">Lade Teams...</p>
                 </div>
             </div>
 

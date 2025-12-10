@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dienstplan - Schichtverwaltung</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗓️ Dienstplan - Schichtverwaltung</h1>
+            <nav>
+                <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
+                <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
+                <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Schedule View -->
+            <div id="schedule-view" class="view active">
+                <div class="controls">
+                    <div class="date-controls">
+                        <button onclick="changeDate(-1)">◀ Vorherige Woche</button>
+                        <input type="date" id="startDate" onchange="loadSchedule()">
+                        <button onclick="changeDate(1)">Nächste Woche ▶</button>
+                    </div>
+                    <div class="view-controls">
+                        <select id="viewType" onchange="loadSchedule()">
+                            <option value="week">Woche</option>
+                            <option value="month">Monat</option>
+                            <option value="year">Jahr</option>
+                        </select>
+                        <button onclick="planShifts()" class="btn-primary">Schichten planen</button>
+                    </div>
+                </div>
+                
+                <div id="schedule-content" class="schedule-grid">
+                    <p class="loading">Lade Dienstplan...</p>
+                </div>
+            </div>
+
+            <!-- Employees View -->
+            <div id="employees-view" class="view">
+                <div class="controls">
+                    <button onclick="showAddEmployeeModal()" class="btn-primary">+ Mitarbeiter hinzufügen</button>
+                </div>
+                <div id="employees-content">
+                    <p class="loading">Lade Mitarbeiter...</p>
+                </div>
+            </div>
+
+            <!-- Statistics View -->
+            <div id="statistics-view" class="view">
+                <div class="controls">
+                    <div class="date-range">
+                        <label>Von: <input type="date" id="statsStartDate"></label>
+                        <label>Bis: <input type="date" id="statsEndDate"></label>
+                        <button onclick="loadStatistics()" class="btn-primary">Aktualisieren</button>
+                    </div>
+                </div>
+                <div id="statistics-content">
+                    <p class="loading">Lade Statistiken...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for adding employee -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEmployeeModal()">&times;</span>
+            <h2>Mitarbeiter hinzufügen</h2>
+            <form id="employeeForm" onsubmit="saveEmployee(event)">
+                <div class="form-group">
+                    <label>Vorname*</label>
+                    <input type="text" id="vorname" required>
+                </div>
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Personalnummer*</label>
+                    <input type="text" id="personalnummer" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="isSpringer">
+                        Springer
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeEmployeeModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

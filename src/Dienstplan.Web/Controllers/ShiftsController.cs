@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
@@ -7,6 +8,7 @@ namespace Dienstplan.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ShiftsController : ControllerBase
 {
     private readonly IShiftAssignmentRepository _shiftRepository;
@@ -24,6 +26,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpGet("schedule")]
+    [AllowAnonymous] // Allow all to view schedules
     public async Task<ActionResult<ScheduleViewDto>> GetSchedule(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate,
@@ -72,6 +75,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPost("plan")]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<ActionResult<List<ShiftAssignmentDto>>> PlanShifts(
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,

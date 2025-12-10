@@ -370,6 +370,128 @@ select {
     margin-top: 20px;
 }
 
+/* Manual/Help View Styles */
+.manual-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.manual-content h2 {
+    color: var(--primary-color);
+    margin-bottom: 30px;
+    font-size: 2rem;
+}
+
+.manual-toc {
+    background: var(--bg-color);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.manual-toc h3 {
+    margin-bottom: 15px;
+    color: var(--primary-color);
+}
+
+.manual-toc ul {
+    list-style: none;
+}
+
+.manual-toc li {
+    padding: 8px 0;
+}
+
+.manual-toc a {
+    color: var(--text-color);
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.manual-toc a:hover {
+    color: var(--primary-color);
+}
+
+.manual-section {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.manual-section:last-of-type {
+    border-bottom: none;
+}
+
+.manual-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+.manual-section h4 {
+    color: var(--secondary-color);
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+}
+
+.manual-section ul,
+.manual-section ol {
+    margin-left: 20px;
+    margin-bottom: 15px;
+}
+
+.manual-section li {
+    margin-bottom: 8px;
+    line-height: 1.8;
+}
+
+.manual-section p {
+    margin-bottom: 15px;
+    line-height: 1.8;
+}
+
+.manual-section .note {
+    background: var(--warning-color);
+    color: white;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 20px 0;
+}
+
+.rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+
+.rules-table th,
+.rules-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.rules-table th {
+    background: var(--bg-color);
+    font-weight: 600;
+}
+
+.manual-footer {
+    background: var(--bg-color);
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    margin-top: 40px;
+}
+
+.manual-footer p {
+    margin: 5px 0;
+    color: var(--secondary-color);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .container {
@@ -397,6 +519,10 @@ select {
         height: 40px;
     }
     
+    .company-logo-img {
+        height: 40px;
+    }
+    
     h1 {
         font-size: 1.3rem;
         width: 100%;
@@ -418,5 +544,21 @@ select {
     
     .statistics-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .manual-content {
+        padding: 10px;
+    }
+    
+    .manual-content h2 {
+        font-size: 1.5rem;
+    }
+    
+    .manual-section h3 {
+        font-size: 1.3rem;
+    }
+    
+    .rules-table {
+        font-size: 0.9rem;
     }
 }

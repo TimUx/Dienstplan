@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Dienstplan.Domain.Entities;
+using Dienstplan.Infrastructure.Identity;
 
 namespace Dienstplan.Infrastructure.Data;
 
-public class DienstplanDbContext : DbContext
+public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
 {
     public DienstplanDbContext(DbContextOptions<DienstplanDbContext> options)
         : base(options)
@@ -19,6 +21,15 @@ public class DienstplanDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        
+        // ApplicationUser configuration
+        modelBuilder.Entity<ApplicationUser>(entity =>
+        {
+            entity.HasOne(u => u.Employee)
+                .WithMany()
+                .HasForeignKey(u => u.EmployeeId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
         
         // Employee configuration
         modelBuilder.Entity<Employee>(entity =>

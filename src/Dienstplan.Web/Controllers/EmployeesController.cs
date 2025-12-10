@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
@@ -7,6 +8,7 @@ namespace Dienstplan.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // Require authentication for all endpoints
 public class EmployeesController : ControllerBase
 {
     private readonly IEmployeeRepository _repository;
@@ -17,6 +19,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous] // Allow read access for all users
     public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetAll()
     {
         var employees = await _repository.GetAllAsync();
@@ -34,6 +37,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<EmployeeDto>> GetById(int id)
     {
         var employee = await _repository.GetByIdAsync(id);
@@ -53,6 +57,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet("springers")]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetSpringers()
     {
         var springers = await _repository.GetSpringersAsync();
@@ -70,6 +75,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<ActionResult<EmployeeDto>> Create(EmployeeDto dto)
     {
         var employee = new Employee
@@ -87,6 +93,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<ActionResult<EmployeeDto>> Update(int id, EmployeeDto dto)
     {
         var employee = await _repository.GetByIdAsync(id);
@@ -104,6 +111,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         var employee = await _repository.GetByIdAsync(id);

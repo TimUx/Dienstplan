@@ -32,7 +32,8 @@ function showView(viewName) {
     const buttons = {
         'schedule': 0,
         'employees': 1,
-        'statistics': 2
+        'statistics': 2,
+        'manual': 3
     };
     const buttonIndex = buttons[viewName];
     if (buttonIndex !== undefined) {
@@ -45,7 +46,24 @@ function showView(viewName) {
         loadEmployees();
     } else if (viewName === 'statistics') {
         loadStatistics();
+    } else if (viewName === 'manual') {
+        // Manual view is static HTML, no loading needed
+        initializeManualAnchors();
     }
+}
+
+// Initialize smooth scrolling for manual anchors
+function initializeManualAnchors() {
+    document.querySelectorAll('.manual-toc a').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('href').substring(1);
+            const targetElement = document.getElementById(targetId);
+            if (targetElement) {
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
 }
 
 // Schedule Management

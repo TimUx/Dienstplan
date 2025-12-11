@@ -109,6 +109,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPost("assignments")]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<ActionResult<ShiftAssignmentDto>> CreateAssignment(ShiftAssignmentDto dto)
     {
         var assignment = new ShiftAssignment
@@ -126,7 +127,7 @@ public class ShiftsController : ControllerBase
         var (isValid, errorMessage) = await _planningService.ValidateShiftAssignment(assignment);
         if (!isValid)
         {
-            return BadRequest(new { error = errorMessage });
+            return BadRequest(new { error = errorMessage, warning = true });
         }
 
         var created = await _shiftRepository.AddAsync(assignment);
@@ -134,7 +135,51 @@ public class ShiftsController : ControllerBase
         return CreatedAtAction(nameof(GetSchedule), dto);
     }
 
+    [HttpPut("assignments/{id}")]
+    [Authorize(Roles = "Admin,Disponent")]
+    public async Task<ActionResult<ShiftAssignmentDto>> UpdateAssignment(int id, ShiftAssignmentDto dto)
+    {
+        var existing = await _shiftRepository.GetByIdAsync(id);
+        if (existing == null)
+        {
+            return NotFound(new { error = "Schichtzuweisung nicht gefunden" });
+        }
+
+        // Update fields
+        existing.EmployeeId = dto.EmployeeId;
+        existing.ShiftTypeId = dto.ShiftTypeId;
+        existing.Date = dto.Date;
+        existing.IsFixed = dto.IsFixed;
+        existing.Notes = dto.Notes;
+        existing.ModifiedBy = User.Identity?.Name;
+        existing.ModifiedAt = DateTime.UtcNow;
+
+        // Validate the change
+        var (isValid, errorMessage) = await _planningService.ValidateShiftAssignment(existing);
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage, warning = true });
+        }
+
+        await _shiftRepository.UpdateAsync(existing);
+        
+        return Ok(new ShiftAssignmentDto
+        {
+            Id = existing.Id,
+            EmployeeId = existing.EmployeeId,
+            EmployeeName = existing.Employee?.FullName ?? "",
+            ShiftTypeId = existing.ShiftTypeId,
+            ShiftCode = existing.ShiftType?.Code ?? "",
+            ShiftName = existing.ShiftType?.Name ?? "",
+            Date = existing.Date,
+            IsManual = existing.IsManual,
+            IsFixed = existing.IsFixed,
+            Notes = existing.Notes
+        });
+    }
+
     [HttpDelete("assignments/{id}")]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<IActionResult> DeleteAssignment(int id)
     {
         await _shiftRepository.DeleteAsync(id);

@@ -342,43 +342,55 @@ async function loadSchedule() {
     content.innerHTML = '<p class="loading">Lade Dienstplan...</p>';
     
     try {
-        const response = await fetch(`${API_BASE}/shifts/schedule?startDate=${startDate}&view=${viewType}`);
-        const data = await response.json();
+        // Load both schedule and all employees
+        const [scheduleResponse, employeesResponse] = await Promise.all([
+            fetch(`${API_BASE}/shifts/schedule?startDate=${startDate}&view=${viewType}`),
+            fetch(`${API_BASE}/employees`)
+        ]);
         
-        displaySchedule(data);
+        const data = await scheduleResponse.json();
+        const employees = await employeesResponse.json();
+        
+        displaySchedule(data, employees);
     } catch (error) {
         content.innerHTML = `<p class="error">Fehler beim Laden: ${error.message}</p>`;
     }
 }
 
-function displaySchedule(data) {
+function displaySchedule(data, employees) {
     const content = document.getElementById('schedule-content');
     const viewType = currentView;
     
     // Store shifts globally for editing
     allShifts = data.assignments;
     
-    if (data.assignments.length === 0) {
-        content.innerHTML = '<p>Keine Schichten geplant. Klicken Sie auf "Schichten planen" um automatisch Schichten zu erstellen.</p>';
-        return;
-    }
-    
+    // Always show employees, even if no shifts are planned yet
     // Display based on view type
     if (viewType === 'week') {
-        content.innerHTML = displayWeekView(data);
+        content.innerHTML = displayWeekView(data, employees);
     } else if (viewType === 'month') {
-        content.innerHTML = displayMonthView(data);
+        content.innerHTML = displayMonthView(data, employees);
     } else if (viewType === 'year') {
-        content.innerHTML = displayYearView(data);
+        content.innerHTML = displayYearView(data, employees);
     }
 }
 
-function displayWeekView(data) {
+function displayWeekView(data, employees) {
     // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments);
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
     
-    // Get all dates in the range
+    // Get all dates in the range (from backend, already aligned to Monday-Sunday)
     const dates = getUniqueDates(data.assignments);
+    
+    // If no assignments yet, generate dates from startDate to endDate
+    if (dates.length === 0 && data.startDate && data.endDate) {
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(d.toISOString().split('T')[0]);
+        }
+    }
+    
     dates.sort();
     
     if (dates.length === 0) {
@@ -444,12 +456,22 @@ function displayWeekView(data) {
     return html;
 }
 
-function displayMonthView(data) {
+function displayMonthView(data, employees) {
     // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments);
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
     
     // Get all dates and organize by calendar weeks
     const dates = getUniqueDates(data.assignments);
+    
+    // If no assignments yet, generate dates from startDate to endDate
+    if (dates.length === 0 && data.startDate && data.endDate) {
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(d.toISOString().split('T')[0]);
+        }
+    }
+    
     dates.sort();
     
     if (dates.length === 0) {
@@ -517,12 +539,22 @@ function displayMonthView(data) {
     return html;
 }
 
-function displayYearView(data) {
+function displayYearView(data, employees) {
     // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments);
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
     
     // Get all dates and organize by months and weeks
     const dates = getUniqueDates(data.assignments);
+    
+    // If no assignments yet, generate dates from startDate to endDate
+    if (dates.length === 0 && data.startDate && data.endDate) {
+        const start = new Date(data.startDate);
+        const end = new Date(data.endDate);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(d.toISOString().split('T')[0]);
+        }
+    }
+    
     dates.sort();
     
     if (dates.length === 0) {
@@ -598,12 +630,18 @@ function displayYearView(data) {
 // Constant for employees without team assignment
 const UNASSIGNED_TEAM_ID = 0;
 
-function groupByTeamAndEmployee(assignments) {
+function groupByTeamAndEmployee(assignments, allEmployees) {
     const teams = {};
     
-    assignments.forEach(a => {
-        const teamId = a.teamId || UNASSIGNED_TEAM_ID;
-        const teamName = a.teamName || 'Ohne Team';
+    // First, create team structure with all employees
+    allEmployees.forEach(emp => {
+        // Skip Springers from display in regular schedule
+        if (emp.isSpringer) {
+            return;
+        }
+        
+        const teamId = emp.teamId || UNASSIGNED_TEAM_ID;
+        const teamName = emp.team?.name || 'Ohne Team';
         
         if (!teams[teamId]) {
             teams[teamId] = {
@@ -613,6 +651,30 @@ function groupByTeamAndEmployee(assignments) {
             };
         }
         
+        if (!teams[teamId].employees[emp.id]) {
+            teams[teamId].employees[emp.id] = {
+                id: emp.id,
+                name: emp.fullName || `${emp.vorname} ${emp.name}`,
+                shifts: {}
+            };
+        }
+    });
+    
+    // Then, add shift assignments to the employees
+    assignments.forEach(a => {
+        const teamId = a.teamId || UNASSIGNED_TEAM_ID;
+        
+        // Ensure team exists (in case assignment has a team not in allEmployees)
+        if (!teams[teamId]) {
+            const teamName = a.teamName || 'Ohne Team';
+            teams[teamId] = {
+                teamId: teamId,
+                teamName: teamName,
+                employees: {}
+            };
+        }
+        
+        // Ensure employee exists in the team
         if (!teams[teamId].employees[a.employeeId]) {
             teams[teamId].employees[a.employeeId] = {
                 id: a.employeeId,

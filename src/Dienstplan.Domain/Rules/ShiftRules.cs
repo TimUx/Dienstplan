@@ -33,12 +33,14 @@ public class ShiftRules
     public const int MaximumHoursPerWeek = 48;
     
     /// <summary>
-    /// Forbidden shift transitions
+    /// Forbidden shift transitions (must respect 11-hour rest period)
+    /// Spät ends at 21:45, Früh starts at 05:45 = only 8 hours rest (forbidden)
+    /// Nacht ends at 05:45, Früh starts at 05:45 = 0 hours rest (forbidden)
     /// </summary>
     public static readonly Dictionary<string, List<string>> ForbiddenTransitions = new()
     {
         { ShiftTypeCodes.Spaet, new List<string> { ShiftTypeCodes.Frueh } },
-        { ShiftTypeCodes.Nacht, new List<string> { ShiftTypeCodes.Spaet } }
+        { ShiftTypeCodes.Nacht, new List<string> { ShiftTypeCodes.Frueh } }
     };
     
     /// <summary>

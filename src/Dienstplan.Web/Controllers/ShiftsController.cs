@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Application.Services;
+using Dienstplan.Application.Helpers;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
 
@@ -37,13 +38,34 @@ public class ShiftsController : ControllerBase
         [FromQuery] string view = "week")
     {
         var start = startDate ?? DateTime.Today;
-        var end = endDate ?? view switch
+        DateTime end;
+        
+        // Align dates to complete weeks (Monday to Sunday)
+        if (view == "week")
         {
-            "week" => start.AddDays(7),
-            "month" => start.AddMonths(1),
-            "year" => start.AddYears(1),
-            _ => start.AddDays(7)
-        };
+            // For week view, always show Monday to Sunday
+            (start, end) = DateHelper.GetWeekViewDateRange(start);
+        }
+        else if (view == "month")
+        {
+            // For month view, show complete weeks from Monday before 1st to Sunday after last day
+            var year = start.Year;
+            var month = start.Month;
+            (start, end) = DateHelper.GetMonthViewDateRange(year, month);
+        }
+        else if (view == "year")
+        {
+            // For year view, align to complete weeks for the entire year
+            var yearStart = new DateTime(start.Year, 1, 1);
+            var yearEnd = new DateTime(start.Year, 12, 31);
+            (start, end) = DateHelper.AlignToCompleteWeeks(yearStart, yearEnd);
+        }
+        else
+        {
+            // Default: use provided end date or calculate it
+            end = endDate ?? start.AddDays(7);
+            (start, end) = DateHelper.AlignToCompleteWeeks(start, end);
+        }
 
         var assignments = await _shiftRepository.GetByDateRangeAsync(start, end);
         var absences = await _absenceRepository.GetByDateRangeAsync(start, end);

@@ -204,3 +204,17 @@ public class CreateEmailSettingsDto
     public string? SenderName { get; set; }
     public string? ReplyToEmail { get; set; }
 }
+
+public class CreateTeamDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Email { get; set; }
+}
+
+public class UpdateTeamDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Email { get; set; }
+}

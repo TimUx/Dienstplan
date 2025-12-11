@@ -65,7 +65,6 @@ function updateUIForAnonymousUser() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('nav-vacations').style.display = 'none';
 }
-}
 
 function showLoginModal() {
     document.getElementById('loginModal').style.display = 'block';

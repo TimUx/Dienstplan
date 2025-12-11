@@ -102,25 +102,49 @@ Das System beachtet folgende Regeln:
 
 ## 📸 Screenshots
 
-### Hauptansicht - Dienstplan
-![Dienstplan Hauptansicht](https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba)
-*Übersichtliche Darstellung des Schichtplans mit Wochen-, Monats- und Jahresansicht*
+### Dienstplan-Ansicht (Woche) - Öffentlich
+![Dienstplan Wochenansicht öffentlich](https://github.com/user-attachments/assets/8fbba678-8a94-4e95-aae2-cfea5dcf19f8)
+*Wochenansicht des Dienstplans - sichtbar für alle Benutzer ohne Anmeldung*
 
 ### Anmeldung
-![Anmeldedialog](https://github.com/user-attachments/assets/e24ff77c-2f6f-4c60-8d48-71c82c29299c)
-*Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle*
+![Anmeldedialog](https://github.com/user-attachments/assets/9ca2ea96-c4aa-4dc6-818c-cae725b95a18)
+*Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle (Admin, Disponent, Mitarbeiter)*
 
-### Angemeldet als Administrator
-![Angemeldet](https://github.com/user-attachments/assets/a3936df0-769b-4a00-b683-36a23542e2d4)
-*Nach erfolgreicher Anmeldung mit Administrator-Rechten*
+### Dienstplan-Ansicht (Woche) - Administrator
+![Dienstplan Wochenansicht Administrator](https://github.com/user-attachments/assets/b19b9db2-2445-46b9-bf9c-c0fa47f388b8)
+*Wochenansicht mit vollem Funktionsumfang nach Administrator-Anmeldung*
+
+### Dienstplan-Ansicht (Monat)
+![Dienstplan Monatsansicht](https://github.com/user-attachments/assets/8a30f018-7061-4fb9-9bec-2b8eb4263faf)
+*Monatsansicht für besseren Überblick über längere Zeiträume*
+
+### Dienstplan-Ansicht (Jahr)
+![Dienstplan Jahresansicht](https://github.com/user-attachments/assets/99881f1d-dfbc-4e98-a245-34a737ff6ac7)
+*Jahresansicht für die Langzeitplanung*
 
 ### Mitarbeiterverwaltung
-![Mitarbeiter](https://github.com/user-attachments/assets/ca549d88-f312-4557-8978-a0e49ef92612)
-*Verwaltung von Mitarbeitern, Teams und Abwesenheiten*
+![Mitarbeiterverwaltung](docs/screenshots/06-employees-list.png)
+*Übersicht aller Mitarbeiter mit Teams, Personalnummern und Springer-Kennzeichnung*
+
+### Urlaubsverwaltung
+![Urlaubsanträge](docs/screenshots/07-vacation-requests.png)
+*Verwaltung von Urlaubsanträgen mit Status-Workflow (In Bearbeitung, Genehmigt, Nicht genehmigt)*
+
+### Diensttausch-System
+![Diensttausch](docs/screenshots/08-shift-exchange.png)
+*Mitarbeiter können Dienste zum Tausch anbieten - Genehmigung durch Disponent erforderlich*
 
 ### Statistiken & Auswertungen
-![Statistiken](https://github.com/user-attachments/assets/016fab62-3005-40fa-aebd-a6e6c187cc15)
-*Umfassende Statistiken über Arbeitsstunden, Schichtverteilung und Fehltage*
+![Statistiken](docs/screenshots/09-statistics.png)
+*Umfassende Statistiken über Arbeitsstunden, Schichtverteilung, Fehltage und Team-Auslastung*
+
+### Hilfe & Handbuch
+![Handbuch](docs/screenshots/10-help-manual.png)
+*Integriertes Benutzerhandbuch mit ausführlichen Anleitungen zu allen Funktionen*
+
+### Administration
+![Admin-Panel](docs/screenshots/11-admin-panel.png)
+*Administrator-Panel mit Benutzerverwaltung, E-Mail-Einstellungen und globalen Systemparametern*
 
 ## 🏗️ Architektur
 

@@ -46,13 +46,28 @@ function updateUIForAuthenticatedUser(user) {
     const isAdmin = userRoles.includes('Admin');
     const isDisponent = userRoles.includes('Disponent');
     
+    // Show admin-only elements
+    document.querySelectorAll('.admin-only').forEach(el => {
+        if (isAdmin || isDisponent) {
+            el.style.display = '';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+    
     if (isAdmin) {
         document.body.classList.add('admin');
         document.getElementById('nav-admin').style.display = 'inline-block';
         document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     } else if (isDisponent) {
         document.body.classList.add('disponent');
         document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-shiftexchange').style.display = 'inline-block';
+    } else {
+        // Mitarbeiter can also access vacation and shift exchange
+        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     }
 }
 
@@ -64,6 +79,7 @@ function updateUIForAnonymousUser() {
     document.body.classList.remove('admin', 'disponent');
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('nav-vacations').style.display = 'none';
+    document.getElementById('nav-shiftexchange').style.display = 'none';
 }
 
 function showLoginModal() {
@@ -185,6 +201,8 @@ function showView(viewName) {
         loadTeams();
     } else if (viewName === 'vacations') {
         loadVacationRequests('all');
+    } else if (viewName === 'shiftexchange') {
+        loadShiftExchanges('available');
     } else if (viewName === 'statistics') {
         loadStatistics();
     } else if (viewName === 'admin') {
@@ -788,16 +806,32 @@ function displayEmployees(employees) {
         return;
     }
     
+    const canEdit = canEditEmployees();
+    const isAdmin = hasRole('Admin');
+    
     let html = '<div class="employees-grid">';
     employees.forEach(e => {
+        const birthdateStr = e.geburtsdatum ? new Date(e.geburtsdatum).toLocaleDateString('de-DE') : 'Nicht angegeben';
         html += `
             <div class="employee-card">
                 <h3>${e.vorname} ${e.name}</h3>
                 <div class="employee-info">
                     <span><strong>Personalnr:</strong> ${e.personalnummer}</span>
+                    ${e.email ? `<span><strong>E-Mail:</strong> ${e.email}</span>` : ''}
+                    ${e.geburtsdatum ? `<span><strong>Geburtsdatum:</strong> ${birthdateStr}</span>` : ''}
+                    ${e.funktion ? `<span><strong>Funktion:</strong> ${e.funktion}</span>` : ''}
                     <span><strong>Team:</strong> ${e.teamName || 'Kein Team'}</span>
-                    ${e.isSpringer ? '<span class="springer-badge">Springer</span>' : ''}
+                    <div class="badge-row">
+                        ${e.isSpringer ? '<span class="badge badge-springer">Springer</span>' : ''}
+                        ${e.isFerienjobber ? '<span class="badge badge-ferienjobber">Ferienjobber</span>' : ''}
+                    </div>
                 </div>
+                ${canEdit ? `
+                    <div class="card-actions">
+                        <button onclick="editEmployee(${e.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
+                        ${isAdmin ? `<button onclick="deleteEmployee(${e.id}, '${e.vorname} ${e.name}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                    </div>
+                ` : ''}
             </div>
         `;
     });
@@ -806,47 +840,149 @@ function displayEmployees(employees) {
     content.innerHTML = html;
 }
 
-function showAddEmployeeModal() {
+async function showAddEmployeeModal() {
     if (!canEditEmployees()) {
         alert('Sie haben keine Berechtigung, Mitarbeiter hinzuzufügen. Bitte melden Sie sich als Admin oder Disponent an.');
         return;
     }
-    document.getElementById('employeeModal').classList.add('active');
+    
+    // Reset form
+    document.getElementById('employeeForm').reset();
+    document.getElementById('employeeId').value = '';
+    document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter hinzufügen';
+    
+    // Load teams for dropdown
+    await loadTeamsForDropdown();
+    
+    document.getElementById('employeeModal').style.display = 'block';
+}
+
+async function editEmployee(id) {
+    if (!canEditEmployees()) {
+        alert('Sie haben keine Berechtigung, Mitarbeiter zu bearbeiten.');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/employees/${id}`);
+        if (!response.ok) {
+            alert('Fehler beim Laden der Mitarbeiterdaten');
+            return;
+        }
+        
+        const employee = await response.json();
+        
+        // Load teams for dropdown
+        await loadTeamsForDropdown();
+        
+        // Fill form with employee data
+        document.getElementById('employeeId').value = employee.id;
+        document.getElementById('vorname').value = employee.vorname;
+        document.getElementById('name').value = employee.name;
+        document.getElementById('personalnummer').value = employee.personalnummer;
+        document.getElementById('email').value = employee.email || '';
+        document.getElementById('geburtsdatum').value = employee.geburtsdatum ? employee.geburtsdatum.split('T')[0] : '';
+        document.getElementById('funktion').value = employee.funktion || '';
+        document.getElementById('teamId').value = employee.teamId || '';
+        document.getElementById('isSpringer').checked = employee.isSpringer;
+        document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
+        
+        document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
+        document.getElementById('employeeModal').style.display = 'block';
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function deleteEmployee(id, name) {
+    if (!hasRole('Admin')) {
+        alert('Nur Administratoren können Mitarbeiter löschen.');
+        return;
+    }
+    
+    if (!confirm(`Möchten Sie den Mitarbeiter "${name}" wirklich löschen?\n\nAchtung: Alle zugehörigen Schichten und Abwesenheiten werden ebenfalls gelöscht!`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/employees/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            alert('Mitarbeiter erfolgreich gelöscht!');
+            loadEmployees();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung zum Löschen.');
+        } else {
+            alert('Fehler beim Löschen');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function loadTeamsForDropdown() {
+    try {
+        const response = await fetch(`${API_BASE}/teams`);
+        const teams = await response.json();
+        
+        const select = document.getElementById('teamId');
+        select.innerHTML = '<option value="">Kein Team</option>';
+        teams.forEach(team => {
+            select.innerHTML += `<option value="${team.id}">${team.name}</option>`;
+        });
+    } catch (error) {
+        console.error('Fehler beim Laden der Teams:', error);
+    }
 }
 
 function closeEmployeeModal() {
-    document.getElementById('employeeModal').classList.remove('active');
+    document.getElementById('employeeModal').style.display = 'none';
     document.getElementById('employeeForm').reset();
 }
 
 async function saveEmployee(event) {
     event.preventDefault();
     
+    const id = document.getElementById('employeeId').value;
     const employee = {
         vorname: document.getElementById('vorname').value,
         name: document.getElementById('name').value,
         personalnummer: document.getElementById('personalnummer').value,
-        isSpringer: document.getElementById('isSpringer').checked
+        email: document.getElementById('email').value || null,
+        geburtsdatum: document.getElementById('geburtsdatum').value || null,
+        funktion: document.getElementById('funktion').value || null,
+        teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
+        isSpringer: document.getElementById('isSpringer').checked,
+        isFerienjobber: document.getElementById('isFerienjobber').checked
     };
     
     try {
-        const response = await fetch(`${API_BASE}/employees`, {
-            method: 'POST',
+        const url = id ? `${API_BASE}/employees/${id}` : `${API_BASE}/employees`;
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(employee)
         });
         
         if (response.ok) {
-            alert('Mitarbeiter erfolgreich hinzugefügt!');
+            alert(id ? 'Mitarbeiter erfolgreich aktualisiert!' : 'Mitarbeiter erfolgreich hinzugefügt!');
             closeEmployeeModal();
             loadEmployees();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an, um Mitarbeiter hinzuzufügen.');
+            alert('Bitte melden Sie sich an.');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung, Mitarbeiter hinzuzufügen.');
+            alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
-            alert('Fehler beim Speichern');
+            const error = await response.json();
+            alert(`Fehler beim Speichern: ${error.message || 'Unbekannter Fehler'}`);
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);
@@ -954,6 +1090,9 @@ function displayTeams(teams) {
         return;
     }
     
+    const canEdit = canEditEmployees();
+    const isAdmin = hasRole('Admin');
+    
     let html = '<div class="grid">';
     teams.forEach(team => {
         html += `
@@ -962,6 +1101,12 @@ function displayTeams(teams) {
                 <p>${team.description || 'Keine Beschreibung'}</p>
                 <p><strong>E-Mail:</strong> ${team.email || 'Nicht angegeben'}</p>
                 <p><strong>Mitarbeiter:</strong> ${team.employeeCount || 0}</p>
+                ${canEdit ? `
+                    <div class="card-actions">
+                        <button onclick="editTeam(${team.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
+                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${team.name}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                    </div>
+                ` : ''}
             </div>
         `;
     });
@@ -969,26 +1114,120 @@ function displayTeams(teams) {
     content.innerHTML = html;
 }
 
-function showAddTeamModal() {
-    alert('Team hinzufügen - Funktion wird implementiert');
+async function showAddTeamModal() {
+    if (!canEditEmployees()) {
+        alert('Sie haben keine Berechtigung, Teams hinzuzufügen.');
+        return;
+    }
+    
+    document.getElementById('teamForm').reset();
+    document.getElementById('teamId').value = '';
+    document.getElementById('teamModalTitle').textContent = 'Team hinzufügen';
+    document.getElementById('teamModal').style.display = 'block';
 }
 
-// Vacation Management Functions
-function showVacationTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+async function editTeam(id) {
+    if (!canEditEmployees()) {
+        alert('Sie haben keine Berechtigung, Teams zu bearbeiten.');
+        return;
+    }
     
-    document.getElementById(`tab-${tabName}`).classList.add('active');
-    
-    if (tabName === 'requests') {
-        document.getElementById('vacation-requests-tab').classList.add('active');
-        loadVacationRequests('all');
-    } else if (tabName === 'exchanges') {
-        document.getElementById('shift-exchanges-tab').classList.add('active');
-        loadShiftExchanges('available');
+    try {
+        const response = await fetch(`${API_BASE}/teams/${id}`);
+        if (!response.ok) {
+            alert('Fehler beim Laden der Teamdaten');
+            return;
+        }
+        
+        const team = await response.json();
+        
+        document.getElementById('teamId').value = team.id;
+        document.getElementById('teamName').value = team.name;
+        document.getElementById('teamDescription').value = team.description || '';
+        document.getElementById('teamEmail').value = team.email || '';
+        
+        document.getElementById('teamModalTitle').textContent = 'Team bearbeiten';
+        document.getElementById('teamModal').style.display = 'block';
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
     }
 }
 
+async function deleteTeam(id, name) {
+    if (!hasRole('Admin')) {
+        alert('Nur Administratoren können Teams löschen.');
+        return;
+    }
+    
+    if (!confirm(`Möchten Sie das Team "${name}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/teams/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            alert('Team erfolgreich gelöscht!');
+            loadTeams();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung zum Löschen.');
+        } else {
+            alert('Fehler beim Löschen');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+function closeTeamModal() {
+    document.getElementById('teamModal').style.display = 'none';
+    document.getElementById('teamForm').reset();
+}
+
+async function saveTeam(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('teamId').value;
+    const team = {
+        name: document.getElementById('teamName').value,
+        description: document.getElementById('teamDescription').value || null,
+        email: document.getElementById('teamEmail').value || null
+    };
+    
+    try {
+        const url = id ? `${API_BASE}/teams/${id}` : `${API_BASE}/teams`;
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(team)
+        });
+        
+        if (response.ok) {
+            alert(id ? 'Team erfolgreich aktualisiert!' : 'Team erfolgreich hinzugefügt!');
+            closeTeamModal();
+            loadTeams();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Speichern');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Vacation Management Functions
+// Vacation Management Functions (no longer needed, vacations are separate)
 async function loadVacationRequests(filter = 'all') {
     const content = document.getElementById('vacation-requests-content');
     content.innerHTML = '<p class="loading">Lade Urlaubsanträge...</p>';
@@ -997,6 +1236,9 @@ async function loadVacationRequests(filter = 'all') {
         let url = `${API_BASE}/vacationrequests`;
         if (filter === 'pending') {
             url += '/pending';
+        } else if (filter === 'my' && currentUser) {
+            // Load only current user's requests - for now load all and filter
+            url = `${API_BASE}/vacationrequests`;
         }
         
         const response = await fetch(url, {
@@ -1004,8 +1246,14 @@ async function loadVacationRequests(filter = 'all') {
         });
         
         if (response.ok) {
-            const requests = await response.json();
+            let requests = await response.json();
+            // Filter for 'my' requests if needed
+            if (filter === 'my' && currentUser) {
+                requests = requests.filter(r => r.employeeEmail === currentUser.email);
+            }
             displayVacationRequests(requests);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
         } else {
             content.innerHTML = '<p class="error">Fehler beim Laden der Urlaubsanträge.</p>';
         }
@@ -1023,41 +1271,146 @@ function displayVacationRequests(requests) {
         return;
     }
     
-    let html = '<table class="data-table"><thead><tr><th>Mitarbeiter</th><th>Von</th><th>Bis</th><th>Status</th><th>Erstellt</th></tr></thead><tbody>';
+    const canProcess = hasRole('Admin') || hasRole('Disponent');
+    
+    let html = '<table class="data-table"><thead><tr><th>Mitarbeiter</th><th>Von</th><th>Bis</th><th>Status</th><th>Notizen</th><th>Erstellt</th>';
+    if (canProcess) html += '<th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
     requests.forEach(req => {
         const statusClass = req.status === 'Genehmigt' ? 'success' : req.status === 'NichtGenehmigt' ? 'danger' : 'warning';
         html += `
             <tr>
-                <td>${req.employeeName}</td>
+                <td>${req.employeeName || 'Unbekannt'}</td>
                 <td>${new Date(req.startDate).toLocaleDateString('de-DE')}</td>
                 <td>${new Date(req.endDate).toLocaleDateString('de-DE')}</td>
                 <td><span class="badge ${statusClass}">${req.status}</span></td>
-                <td>${new Date(req.createdAt).toLocaleDateString('de-DE')}</td>
-            </tr>
-        `;
+                <td>${req.notes || '-'}</td>
+                <td>${new Date(req.createdAt).toLocaleDateString('de-DE')}</td>`;
+        
+        if (canProcess && req.status === 'InBearbeitung') {
+            html += `
+                <td>
+                    <button onclick="processVacationRequest(${req.id}, 'Genehmigt')" class="btn-small btn-success">✓ Genehmigen</button>
+                    <button onclick="processVacationRequest(${req.id}, 'NichtGenehmigt')" class="btn-small btn-danger">✗ Ablehnen</button>
+                </td>`;
+        } else if (canProcess) {
+            html += '<td>-</td>';
+        }
+        
+        html += '</tr>';
     });
     html += '</tbody></table>';
     content.innerHTML = html;
 }
 
-function showAddVacationRequestModal() {
-    alert('Urlaubsantrag stellen - Funktion wird implementiert');
+async function showAddVacationRequestModal() {
+    // Load employees for dropdown
+    try {
+        const response = await fetch(`${API_BASE}/employees`);
+        if (response.ok) {
+            const employees = await response.json();
+            const select = document.getElementById('vacationEmployeeId');
+            select.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+            employees.forEach(emp => {
+                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading employees:', error);
+    }
+    
+    document.getElementById('vacationRequestForm').reset();
+    document.getElementById('vacationRequestModal').style.display = 'block';
 }
 
+function closeVacationRequestModal() {
+    document.getElementById('vacationRequestModal').style.display = 'none';
+    document.getElementById('vacationRequestForm').reset();
+}
+
+async function saveVacationRequest(event) {
+    event.preventDefault();
+    
+    const request = {
+        employeeId: parseInt(document.getElementById('vacationEmployeeId').value),
+        startDate: document.getElementById('vacationStartDate').value,
+        endDate: document.getElementById('vacationEndDate').value,
+        notes: document.getElementById('vacationNotes').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacationrequests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(request)
+        });
+        
+        if (response.ok) {
+            alert('Urlaubsantrag erfolgreich eingereicht!');
+            closeVacationRequestModal();
+            loadVacationRequests('all');
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else {
+            alert('Fehler beim Speichern des Urlaubsantrags.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function processVacationRequest(id, status) {
+    const response = prompt(`${status === 'Genehmigt' ? 'Genehmigung' : 'Ablehnung'} - Optionale Antwort:`);
+    
+    try {
+        const result = await fetch(`${API_BASE}/vacationrequests/${id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                status: status,
+                disponentResponse: response || null
+            })
+        });
+        
+        if (result.ok) {
+            alert(`Urlaubsantrag wurde ${status === 'Genehmigt' ? 'genehmigt' : 'abgelehnt'}!`);
+            loadVacationRequests('pending');
+        } else if (result.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (result.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Verarbeiten des Antrags.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Shift Exchange Functions
 async function loadShiftExchanges(filter = 'available') {
     const content = document.getElementById('shift-exchanges-content');
     content.innerHTML = '<p class="loading">Lade Diensttausch-Angebote...</p>';
     
     try {
         let url = `${API_BASE}/shiftexchanges/${filter}`;
+        if (filter === 'my') {
+            // Load all and filter on client side
+            url = `${API_BASE}/shiftexchanges/available`;
+        }
         
         const response = await fetch(url, {
             credentials: 'include'
         });
         
         if (response.ok) {
-            const exchanges = await response.json();
-            displayShiftExchanges(exchanges);
+            let exchanges = await response.json();
+            displayShiftExchanges(exchanges, filter);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
         } else {
             content.innerHTML = '<p class="error">Fehler beim Laden der Diensttausch-Angebote.</p>';
         }
@@ -1067,7 +1420,7 @@ async function loadShiftExchanges(filter = 'available') {
     }
 }
 
-function displayShiftExchanges(exchanges) {
+function displayShiftExchanges(exchanges, filter) {
     const content = document.getElementById('shift-exchanges-content');
     
     if (exchanges.length === 0) {
@@ -1075,23 +1428,200 @@ function displayShiftExchanges(exchanges) {
         return;
     }
     
-    let html = '<table class="data-table"><thead><tr><th>Anbieter</th><th>Schicht-Datum</th><th>Status</th><th>Erstellt</th></tr></thead><tbody>';
+    const canProcess = hasRole('Admin') || hasRole('Disponent');
+    
+    let html = '<table class="data-table"><thead><tr><th>Anbieter</th><th>Schicht-Datum</th><th>Schichttyp</th><th>Status</th><th>Grund</th><th>Erstellt</th>';
+    if (canProcess || filter === 'available') html += '<th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
     exchanges.forEach(ex => {
+        const statusClass = ex.status === 'Genehmigt' ? 'success' : ex.status === 'Abgelehnt' ? 'danger' : 'warning';
         html += `
             <tr>
-                <td>${ex.offeringEmployeeName}</td>
+                <td>${ex.offeringEmployeeName || 'Unbekannt'}</td>
                 <td>${new Date(ex.shiftDate).toLocaleDateString('de-DE')}</td>
-                <td><span class="badge">${ex.status}</span></td>
-                <td>${new Date(ex.createdAt).toLocaleDateString('de-DE')}</td>
-            </tr>
-        `;
+                <td><span class="shift-badge shift-${ex.shiftTypeCode}">${ex.shiftTypeCode}</span></td>
+                <td><span class="badge ${statusClass}">${ex.status}</span></td>
+                <td>${ex.offeringReason || '-'}</td>
+                <td>${new Date(ex.createdAt).toLocaleDateString('de-DE')}</td>`;
+        
+        if (filter === 'available' && ex.status === 'Angeboten') {
+            html += `
+                <td>
+                    <button onclick="requestShiftExchange(${ex.id})" class="btn-small btn-primary">Anfragen</button>
+                </td>`;
+        } else if (canProcess && ex.status === 'Angefragt') {
+            html += `
+                <td>
+                    <button onclick="processShiftExchange(${ex.id}, 'Genehmigt')" class="btn-small btn-success">✓ Genehmigen</button>
+                    <button onclick="processShiftExchange(${ex.id}, 'Abgelehnt')" class="btn-small btn-danger">✗ Ablehnen</button>
+                </td>`;
+        } else {
+            html += '<td>-</td>';
+        }
+        
+        html += '</tr>';
     });
     html += '</tbody></table>';
     content.innerHTML = html;
 }
 
-function showOfferShiftExchangeModal() {
-    alert('Dienst zum Tausch anbieten - Funktion wird implementiert');
+async function showOfferShiftExchangeModal() {
+    // Load employees for dropdown
+    try {
+        const empResponse = await fetch(`${API_BASE}/employees`);
+        if (empResponse.ok) {
+            const employees = await empResponse.json();
+            const select = document.getElementById('exchangeEmployeeId');
+            select.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+            employees.forEach(emp => {
+                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name}</option>`;
+            });
+        }
+        
+        // Setup event listener for date/employee change to load shifts
+        document.getElementById('exchangeDate').onchange = loadShiftsForExchange;
+        document.getElementById('exchangeEmployeeId').onchange = loadShiftsForExchange;
+        
+    } catch (error) {
+        console.error('Error loading employees:', error);
+    }
+    
+    document.getElementById('shiftExchangeForm').reset();
+    document.getElementById('shiftExchangeModal').style.display = 'block';
+}
+
+async function loadShiftsForExchange() {
+    const date = document.getElementById('exchangeDate').value;
+    const employeeId = document.getElementById('exchangeEmployeeId').value;
+    const select = document.getElementById('exchangeShiftId');
+    
+    if (!date || !employeeId) {
+        select.innerHTML = '<option value="">Zuerst Datum und Mitarbeiter wählen...</option>';
+        return;
+    }
+    
+    try {
+        // Load schedule for that date
+        const response = await fetch(`${API_BASE}/shifts/schedule?startDate=${date}&endDate=${date}`);
+        if (response.ok) {
+            const data = await response.json();
+            const shifts = data.assignments.filter(a => 
+                a.employeeId == employeeId && 
+                a.date.startsWith(date)
+            );
+            
+            select.innerHTML = '';
+            if (shifts.length === 0) {
+                select.innerHTML = '<option value="">Keine Schichten für diesen Tag gefunden</option>';
+            } else {
+                shifts.forEach(shift => {
+                    select.innerHTML += `<option value="${shift.id}">${shift.shiftTypeName} (${shift.shiftTypeCode})</option>`;
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading shifts:', error);
+        select.innerHTML = '<option value="">Fehler beim Laden der Schichten</option>';
+    }
+}
+
+function closeShiftExchangeModal() {
+    document.getElementById('shiftExchangeModal').style.display = 'none';
+    document.getElementById('shiftExchangeForm').reset();
+}
+
+async function saveShiftExchange(event) {
+    event.preventDefault();
+    
+    const exchange = {
+        shiftAssignmentId: parseInt(document.getElementById('exchangeShiftId').value),
+        offeringReason: document.getElementById('exchangeReason').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/shiftexchanges`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(exchange)
+        });
+        
+        if (response.ok) {
+            alert('Diensttausch erfolgreich angeboten!');
+            closeShiftExchangeModal();
+            loadShiftExchanges('available');
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else {
+            alert('Fehler beim Anbieten des Diensttauschs.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function requestShiftExchange(id) {
+    if (!currentUser) {
+        alert('Bitte melden Sie sich an.');
+        return;
+    }
+    
+    // For simplicity, use current user's associated employee
+    // In a real scenario, you'd need to properly map user to employee
+    const employeeId = prompt('Bitte geben Sie Ihre Mitarbeiter-ID ein:');
+    if (!employeeId) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/shiftexchanges/${id}/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                requestingEmployeeId: parseInt(employeeId)
+            })
+        });
+        
+        if (response.ok) {
+            alert('Diensttausch erfolgreich angefragt! Warten Sie auf die Genehmigung durch den Disponenten.');
+            loadShiftExchanges('available');
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else {
+            alert('Fehler beim Anfragen des Diensttauschs.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function processShiftExchange(id, status) {
+    const notes = prompt(`${status === 'Genehmigt' ? 'Genehmigung' : 'Ablehnung'} - Optionale Notizen:`);
+    
+    try {
+        const response = await fetch(`${API_BASE}/shiftexchanges/${id}/process`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                status: status,
+                disponentNotes: notes || null
+            })
+        });
+        
+        if (response.ok) {
+            alert(`Diensttausch wurde ${status === 'Genehmigt' ? 'genehmigt' : 'abgelehnt'}!`);
+            loadShiftExchanges('pending');
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Verarbeiten des Tauschs.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
 }
 
 // Admin View Functions
@@ -1104,17 +1634,70 @@ async function loadUsers() {
     const content = document.getElementById('users-content');
     content.innerHTML = '<p class="loading">Lade Benutzer...</p>';
     
-    // For now, show a placeholder
+    // Note: ASP.NET Identity doesn't provide a direct API to list all users by default
+    // This is a placeholder that shows the user management is available via the register endpoint
     content.innerHTML = `
         <div class="info-box">
-            <p>Benutzerverwaltung über die ASP.NET Identity API.</p>
-            <p>Verwenden Sie die Identity-Endpunkte um Benutzer zu verwalten.</p>
+            <p><strong>Benutzerverwaltung</strong></p>
+            <p>Neue Benutzer können über den Button "Benutzer hinzufügen" erstellt werden.</p>
+            <p>Die Verwaltung erfolgt über die ASP.NET Identity API.</p>
+            <p>Standard-Administrator: admin@fritzwinter.de</p>
         </div>
     `;
 }
 
-function showAddUserModal() {
-    alert('Benutzer hinzufügen - Funktion wird implementiert');
+async function showAddUserModal() {
+    if (!hasRole('Admin')) {
+        alert('Nur Administratoren können Benutzer hinzufügen.');
+        return;
+    }
+    
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = '';
+    document.getElementById('userModalTitle').textContent = 'Benutzer hinzufügen';
+    document.getElementById('passwordGroup').style.display = 'block';
+    document.getElementById('userPassword').required = true;
+    document.getElementById('userModal').style.display = 'block';
+}
+
+function closeUserModal() {
+    document.getElementById('userModal').style.display = 'none';
+    document.getElementById('userForm').reset();
+}
+
+async function saveUser(event) {
+    event.preventDefault();
+    
+    const user = {
+        fullName: document.getElementById('userFullName').value,
+        email: document.getElementById('userEmail').value,
+        password: document.getElementById('userPassword').value,
+        role: document.getElementById('userRole').value
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(user)
+        });
+        
+        if (response.ok) {
+            alert('Benutzer erfolgreich erstellt!');
+            closeUserModal();
+            loadUsers();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Erstellen: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
 }
 
 async function loadEmailSettings() {
@@ -1128,6 +1711,13 @@ async function loadEmailSettings() {
         if (response.ok) {
             const settings = await response.json();
             displayEmailSettings(settings);
+        } else if (response.status === 404) {
+            content.innerHTML = `
+                <div class="info-box">
+                    <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
+                    <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+                </div>
+            `;
         } else {
             content.innerHTML = `
                 <div class="info-box">
@@ -1138,7 +1728,12 @@ async function loadEmailSettings() {
         }
     } catch (error) {
         console.error('Error loading email settings:', error);
-        content.innerHTML = '<p class="error">Fehler beim Laden der E-Mail-Einstellungen.</p>';
+        content.innerHTML = `
+            <div class="info-box">
+                <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
+                <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+            </div>
+        `;
     }
 }
 
@@ -1152,13 +1747,101 @@ function displayEmailSettings(settings) {
             <p><strong>Absender:</strong> ${settings.senderEmail} (${settings.senderName || 'Kein Name'})</p>
             <p><strong>Authentifizierung:</strong> ${settings.requiresAuthentication ? 'Ja' : 'Nein'}</p>
             ${settings.requiresAuthentication ? `<p><strong>Benutzername:</strong> ${settings.username}</p>` : ''}
-            <p><strong>Status:</strong> <span class="badge success">Aktiv</span></p>
+            <p><strong>Status:</strong> <span class="badge badge-success">Aktiv</span></p>
         </div>
     `;
 }
 
-function showEmailSettingsModal() {
-    alert('E-Mail-Einstellungen bearbeiten - Funktion wird implementiert');
+async function showEmailSettingsModal() {
+    if (!hasRole('Admin')) {
+        alert('Nur Administratoren können E-Mail-Einstellungen bearbeiten.');
+        return;
+    }
+    
+    // Try to load existing settings
+    try {
+        const response = await fetch(`${API_BASE}/emailsettings/active`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const settings = await response.json();
+            // Fill form with existing settings
+            document.getElementById('smtpServer').value = settings.smtpServer || '';
+            document.getElementById('smtpPort').value = settings.smtpPort || 587;
+            document.getElementById('smtpProtocol').value = settings.protocol || 'SMTP';
+            document.getElementById('smtpSecurity').value = settings.securityProtocol || 'STARTTLS';
+            document.getElementById('requiresAuth').checked = settings.requiresAuthentication !== false;
+            document.getElementById('smtpUsername').value = settings.username || '';
+            document.getElementById('senderEmail').value = settings.senderEmail || '';
+            document.getElementById('senderName').value = settings.senderName || '';
+            document.getElementById('replyToEmail').value = settings.replyToEmail || '';
+            // Don't fill password for security
+        } else {
+            // New settings, use defaults
+            document.getElementById('emailSettingsForm').reset();
+        }
+    } catch (error) {
+        console.error('Error loading email settings:', error);
+        document.getElementById('emailSettingsForm').reset();
+    }
+    
+    // Setup auth toggle
+    document.getElementById('requiresAuth').onchange = function() {
+        document.getElementById('authFields').style.display = this.checked ? 'block' : 'none';
+    };
+    document.getElementById('authFields').style.display = document.getElementById('requiresAuth').checked ? 'block' : 'none';
+    
+    document.getElementById('emailSettingsModal').style.display = 'block';
+}
+
+function closeEmailSettingsModal() {
+    document.getElementById('emailSettingsModal').style.display = 'none';
+    document.getElementById('emailSettingsForm').reset();
+}
+
+async function saveEmailSettings(event) {
+    event.preventDefault();
+    
+    const settings = {
+        smtpServer: document.getElementById('smtpServer').value,
+        smtpPort: parseInt(document.getElementById('smtpPort').value),
+        protocol: document.getElementById('smtpProtocol').value,
+        securityProtocol: document.getElementById('smtpSecurity').value,
+        requiresAuthentication: document.getElementById('requiresAuth').checked,
+        username: document.getElementById('smtpUsername').value || null,
+        password: document.getElementById('smtpPassword').value || null,
+        senderEmail: document.getElementById('senderEmail').value,
+        senderName: document.getElementById('senderName').value,
+        replyToEmail: document.getElementById('replyToEmail').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/emailsettings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(settings)
+        });
+        
+        if (response.ok) {
+            alert('E-Mail-Einstellungen erfolgreich gespeichert!');
+            closeEmailSettingsModal();
+            loadEmailSettings();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Speichern der E-Mail-Einstellungen.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function testEmailSettings() {
+    alert('Test-E-Mail Funktion ist vorbereitet.\n\nIn der Produktion würde hier eine Test-E-Mail an die konfigurierte Adresse gesendet.');
 }
 
 function saveGlobalSettings() {
@@ -1167,6 +1850,12 @@ function saveGlobalSettings() {
     const maxConsecutiveShifts = document.getElementById('setting-max-consecutive-shifts').value;
     const maxConsecutiveNights = document.getElementById('setting-max-consecutive-nights').value;
     
-    alert(`Einstellungen gespeichert:\n- Max Stunden/Monat: ${maxHoursMonth}\n- Max Stunden/Woche: ${maxHoursWeek}\n- Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n- Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}`);
+    // Store in localStorage for now (in production, these would be saved to a backend configuration)
+    localStorage.setItem('maxHoursMonth', maxHoursMonth);
+    localStorage.setItem('maxHoursWeek', maxHoursWeek);
+    localStorage.setItem('maxConsecutiveShifts', maxConsecutiveShifts);
+    localStorage.setItem('maxConsecutiveNights', maxConsecutiveNights);
+    
+    alert(`Globale Einstellungen gespeichert:\n• Max Stunden/Monat: ${maxHoursMonth}\n• Max Stunden/Woche: ${maxHoursWeek}\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Diese Einstellungen werden lokal im Browser gespeichert.`);
 }
 

@@ -21,6 +21,7 @@
                         <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
                         <button onclick="showView('teams')" class="nav-btn">Teams</button>
                         <button onclick="showView('vacations')" class="nav-btn" id="nav-vacations" style="display:none;">Urlaub</button>
+                        <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">Diensttausch</button>
                         <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
                         <button onclick="showView('admin')" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
@@ -64,7 +65,7 @@
             <!-- Employees View -->
             <div id="employees-view" class="view">
                 <div class="controls">
-                    <button onclick="showAddEmployeeModal()" class="btn-primary">+ Mitarbeiter hinzufügen</button>
+                    <button onclick="showAddEmployeeModal()" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
                 </div>
                 <div id="employees-content">
                     <p class="loading">Lade Mitarbeiter...</p>
@@ -98,31 +99,28 @@
             <!-- Vacations View -->
             <div id="vacations-view" class="view">
                 <h2>Urlaubsverwaltung</h2>
-                <div class="tabs">
-                    <button onclick="showVacationTab('requests')" class="tab-btn active" id="tab-requests">Urlaubsanträge</button>
-                    <button onclick="showVacationTab('exchanges')" class="tab-btn" id="tab-exchanges">Diensttausch</button>
+                <div class="controls">
+                    <button onclick="showAddVacationRequestModal()" class="btn-primary">+ Urlaubsantrag stellen</button>
+                    <button onclick="loadVacationRequests('pending')" class="btn-secondary admin-only">Offene Anträge</button>
+                    <button onclick="loadVacationRequests('all')" class="btn-secondary admin-only">Alle Anträge</button>
+                    <button onclick="loadVacationRequests('my')" class="btn-secondary">Meine Anträge</button>
                 </div>
-                
-                <div id="vacation-requests-tab" class="tab-content active">
-                    <div class="controls">
-                        <button onclick="showAddVacationRequestModal()" class="btn-primary">+ Urlaubsantrag stellen</button>
-                        <button onclick="loadVacationRequests('pending')" class="btn-secondary admin-only">Offene Anträge</button>
-                        <button onclick="loadVacationRequests('all')" class="btn-secondary admin-only">Alle Anträge</button>
-                    </div>
-                    <div id="vacation-requests-content">
-                        <p class="loading">Lade Urlaubsanträge...</p>
-                    </div>
+                <div id="vacation-requests-content">
+                    <p class="loading">Lade Urlaubsanträge...</p>
                 </div>
+            </div>
 
-                <div id="shift-exchanges-tab" class="tab-content">
-                    <div class="controls">
-                        <button onclick="showOfferShiftExchangeModal()" class="btn-primary">+ Dienst anbieten</button>
-                        <button onclick="loadShiftExchanges('available')" class="btn-secondary">Verfügbare Tausche</button>
-                        <button onclick="loadShiftExchanges('pending')" class="btn-secondary admin-only">Offene Anfragen</button>
-                    </div>
-                    <div id="shift-exchanges-content">
-                        <p class="loading">Lade Diensttausch-Angebote...</p>
-                    </div>
+            <!-- Shift Exchange View (separate from vacation) -->
+            <div id="shiftexchange-view" class="view">
+                <h2>Diensttausch</h2>
+                <div class="controls">
+                    <button onclick="showOfferShiftExchangeModal()" class="btn-primary">+ Dienst zum Tausch anbieten</button>
+                    <button onclick="loadShiftExchanges('available')" class="btn-secondary">Verfügbare Dienste</button>
+                    <button onclick="loadShiftExchanges('pending')" class="btn-secondary admin-only">Offene Anfragen</button>
+                    <button onclick="loadShiftExchanges('my')" class="btn-secondary">Meine Tauschangebote</button>
+                </div>
+                <div id="shift-exchanges-content">
+                    <p class="loading">Lade Diensttausch-Angebote...</p>
                 </div>
             </div>
 
@@ -568,12 +566,13 @@
         </main>
     </div>
 
-    <!-- Modal for adding employee -->
+    <!-- Modal for adding/editing employee -->
     <div id="employeeModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeEmployeeModal()">&times;</span>
-            <h2>Mitarbeiter hinzufügen</h2>
+            <h2 id="employeeModalTitle">Mitarbeiter hinzufügen</h2>
             <form id="employeeForm" onsubmit="saveEmployee(event)">
+                <input type="hidden" id="employeeId">
                 <div class="form-group">
                     <label>Vorname*</label>
                     <input type="text" id="vorname" required>
@@ -587,9 +586,33 @@
                     <input type="text" id="personalnummer" required>
                 </div>
                 <div class="form-group">
+                    <label>E-Mail</label>
+                    <input type="email" id="email" placeholder="mitarbeiter@fritzwinter.de">
+                </div>
+                <div class="form-group">
+                    <label>Geburtsdatum</label>
+                    <input type="date" id="geburtsdatum">
+                </div>
+                <div class="form-group">
+                    <label>Funktion/Rolle</label>
+                    <input type="text" id="funktion" placeholder="z.B. Brandmeldetechniker">
+                </div>
+                <div class="form-group">
+                    <label>Team</label>
+                    <select id="teamId">
+                        <option value="">Kein Team</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>
                         <input type="checkbox" id="isSpringer">
-                        Springer
+                        Springer (Vertretungspool)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="isFerienjobber">
+                        Ferienjobber (Temporärer Mitarbeiter)
                     </label>
                 </div>
                 <div class="form-actions">
@@ -631,6 +654,213 @@
                 <p>E-Mail: admin@fritzwinter.de</p>
                 <p>Passwort: Admin123!</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Team Modal -->
+    <div id="teamModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeTeamModal()">&times;</span>
+            <h2 id="teamModalTitle">Team hinzufügen</h2>
+            <form id="teamForm" onsubmit="saveTeam(event)">
+                <input type="hidden" id="teamId">
+                <div class="form-group">
+                    <label>Team-Name*</label>
+                    <input type="text" id="teamName" required placeholder="z.B. Team A">
+                </div>
+                <div class="form-group">
+                    <label>Beschreibung</label>
+                    <textarea id="teamDescription" rows="3" placeholder="Beschreibung des Teams"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>E-Mail</label>
+                    <input type="email" id="teamEmail" placeholder="team@fritzwinter.de">
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeTeamModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Vacation Request Modal -->
+    <div id="vacationRequestModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeVacationRequestModal()">&times;</span>
+            <h2>Urlaubsantrag stellen</h2>
+            <form id="vacationRequestForm" onsubmit="saveVacationRequest(event)">
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="vacationEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Von (Startdatum)*</label>
+                    <input type="date" id="vacationStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Bis (Enddatum)*</label>
+                    <input type="date" id="vacationEndDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Notizen</label>
+                    <textarea id="vacationNotes" rows="3" placeholder="Optional: Grund oder Hinweise zum Urlaubsantrag"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeVacationRequestModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Antrag einreichen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Exchange Modal -->
+    <div id="shiftExchangeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeShiftExchangeModal()">&times;</span>
+            <h2>Dienst zum Tausch anbieten</h2>
+            <form id="shiftExchangeForm" onsubmit="saveShiftExchange(event)">
+                <div class="form-group">
+                    <label>Datum*</label>
+                    <input type="date" id="exchangeDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="exchangeEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Schicht*</label>
+                    <select id="exchangeShiftId" required>
+                        <option value="">Zuerst Datum und Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Grund für den Tausch</label>
+                    <textarea id="exchangeReason" rows="3" placeholder="Optional: Grund für den Tauschwunsch"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeShiftExchangeModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Tausch anbieten</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- User Management Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeUserModal()">&times;</span>
+            <h2 id="userModalTitle">Benutzer hinzufügen</h2>
+            <form id="userForm" onsubmit="saveUser(event)">
+                <input type="hidden" id="userId">
+                <div class="form-group">
+                    <label>Vollständiger Name*</label>
+                    <input type="text" id="userFullName" required placeholder="Max Mustermann">
+                </div>
+                <div class="form-group">
+                    <label>E-Mail*</label>
+                    <input type="email" id="userEmail" required placeholder="benutzer@fritzwinter.de">
+                </div>
+                <div class="form-group" id="passwordGroup">
+                    <label>Passwort*</label>
+                    <input type="password" id="userPassword" placeholder="Mindestens 8 Zeichen">
+                    <small>Muss mindestens 8 Zeichen, einen Großbuchstaben, einen Kleinbuchstaben und eine Ziffer enthalten.</small>
+                </div>
+                <div class="form-group">
+                    <label>Rolle*</label>
+                    <select id="userRole" required>
+                        <option value="Mitarbeiter">Mitarbeiter (Lesezugriff)</option>
+                        <option value="Disponent">Disponent (Planung & Bearbeitung)</option>
+                        <option value="Admin">Administrator (Volle Berechtigung)</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeUserModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Email Settings Modal -->
+    <div id="emailSettingsModal" class="modal">
+        <div class="modal-content large">
+            <span class="close" onclick="closeEmailSettingsModal()">&times;</span>
+            <h2>E-Mail-Einstellungen</h2>
+            <form id="emailSettingsForm" onsubmit="saveEmailSettings(event)">
+                <h3>SMTP-Server</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>SMTP Server*</label>
+                        <input type="text" id="smtpServer" required placeholder="smtp.gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Port*</label>
+                        <input type="number" id="smtpPort" required value="587" min="1" max="65535">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Protokoll*</label>
+                        <select id="smtpProtocol" required>
+                            <option value="SMTP">SMTP</option>
+                            <option value="SMTPS">SMTPS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sicherheit*</label>
+                        <select id="smtpSecurity" required>
+                            <option value="None">Keine</option>
+                            <option value="SSL">SSL</option>
+                            <option value="TLS">TLS</option>
+                            <option value="STARTTLS" selected>STARTTLS</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>Authentifizierung</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="requiresAuth" checked>
+                        Authentifizierung erforderlich
+                    </label>
+                </div>
+                <div id="authFields">
+                    <div class="form-group">
+                        <label>Benutzername</label>
+                        <input type="text" id="smtpUsername" placeholder="benutzer@domain.de">
+                    </div>
+                    <div class="form-group">
+                        <label>Passwort</label>
+                        <input type="password" id="smtpPassword" placeholder="••••••••">
+                        <small>Leer lassen, um bestehendes Passwort nicht zu ändern</small>
+                    </div>
+                </div>
+
+                <h3>Absender-Informationen</h3>
+                <div class="form-group">
+                    <label>Absenderadresse*</label>
+                    <input type="email" id="senderEmail" required placeholder="dienstplan@fritzwinter.de">
+                </div>
+                <div class="form-group">
+                    <label>Absendername*</label>
+                    <input type="text" id="senderName" required value="Dienstplan-System">
+                </div>
+                <div class="form-group">
+                    <label>Antwortadresse</label>
+                    <input type="email" id="replyToEmail" placeholder="Optional, falls abweichend">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" onclick="closeEmailSettingsModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="button" onclick="testEmailSettings()" class="btn-secondary">Test-E-Mail senden</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -1,6 +1,10 @@
 # Dienstplan - Automatisches Schichtverwaltungssystem
 
+**Version 1.2** | Entwickelt von Timo Braun
+
 Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdiensten für bis zu 17 Stammpersonal-Mitarbeiter plus Ferienjobber in 3 Teams.
+
+![Dienstplan Hauptansicht](https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba)
 
 ## 🎯 Funktionsumfang
 
@@ -72,6 +76,16 @@ Das System beachtet folgende Regeln:
 - 🕐 Wann wurde die Änderung vorgenommen?
 - 📢 Automatische Benachrichtigungen bei Änderungen (Vorbereitet)
 
+### E-Mail-Benachrichtigungen 🆕
+- **E-Mail-Adressen**: Erfassung von E-Mail-Adressen für Mitarbeiter und Teams
+- **SMTP-Konfiguration**: Flexible Konfiguration der E-Mail-Server-Einstellungen
+  - SMTP Server (DNS/IP), Port, Protokoll (SMTP, SMTPS)
+  - Sicherheit (None, SSL, TLS, STARTTLS)
+  - Authentifizierung (Benutzername/Passwort)
+  - Absender- und Antwortadresse
+- **Benachrichtigungen**: Automatische E-Mails bei Dienstplanänderungen, Urlaubsanträgen und Diensttauschen
+- **Verwaltung**: Admin-Oberfläche für E-Mail-Einstellungen
+
 ### PDF-Export
 - 📄 Professionelle PDF-Generierung von Dienstplänen
 - 🎨 Farbcodierte Schichtarten für bessere Übersichtlichkeit
@@ -85,6 +99,28 @@ Das System beachtet folgende Regeln:
 - 🔐 Authentifizierung und Autorisierung
 - 👀 Lesezugriff für alle Mitarbeiter
 - ⚡ Performante REST API
+
+## 📸 Screenshots
+
+### Hauptansicht - Dienstplan
+![Dienstplan Hauptansicht](https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba)
+*Übersichtliche Darstellung des Schichtplans mit Wochen-, Monats- und Jahresansicht*
+
+### Anmeldung
+![Anmeldedialog](https://github.com/user-attachments/assets/e24ff77c-2f6f-4c60-8d48-71c82c29299c)
+*Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle*
+
+### Angemeldet als Administrator
+![Angemeldet](https://github.com/user-attachments/assets/a3936df0-769b-4a00-b683-36a23542e2d4)
+*Nach erfolgreicher Anmeldung mit Administrator-Rechten*
+
+### Mitarbeiterverwaltung
+![Mitarbeiter](https://github.com/user-attachments/assets/ca549d88-f312-4557-8978-a0e49ef92612)
+*Verwaltung von Mitarbeitern, Teams und Abwesenheiten*
+
+### Statistiken & Auswertungen
+![Statistiken](https://github.com/user-attachments/assets/016fab62-3005-40fa-aebd-a6e6c187cc15)
+*Umfassende Statistiken über Arbeitsstunden, Schichtverteilung und Fehltage*
 
 ## 🏗️ Architektur
 
@@ -623,8 +659,9 @@ Bei Fragen oder Problemen:
 - [x] **Änderungsverfolgung** (Audit Trail) ✅ **Neu in v1.2**
 - [x] **Wochenend-Statistiken** ✅ **Neu in v1.2**
 - [x] **Spezielle Schichttypen** (Brandmeldetechniker, Brandschutzbeauftragter) ✅ **Neu in v1.2**
+- [x] **E-Mail-Infrastruktur** (Mitarbeiter-E-Mails, SMTP-Konfiguration) ✅ **Neu in v1.2**
 - [x] **Benachrichtigungs-Service** (Interface vorbereitet) ✅ **Neu in v1.2**
-- [ ] E-Mail-Benachrichtigungen (SMTP-Integration)
+- [ ] E-Mail-Benachrichtigungen (SMTP-Integration mit MailKit)
 - [ ] Mobile App (React Native)
 
 ### Version 2.x
@@ -637,4 +674,6 @@ Bei Fragen oder Problemen:
 
 ---
 
-**Entwickelt mit ❤️ für effiziente Schichtverwaltung**
+**Version 1.2** | Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
+
+© 2025 Fritz Winter Eisengießerei GmbH & Co. KG

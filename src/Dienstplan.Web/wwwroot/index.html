@@ -94,22 +94,34 @@
                             <li><a href="#manual-login">2. Anmeldung</a></li>
                             <li><a href="#manual-schedule">3. Dienstplan verwalten</a></li>
                             <li><a href="#manual-employees">4. Mitarbeiter verwalten</a></li>
-                            <li><a href="#manual-statistics">5. Statistiken</a></li>
-                            <li><a href="#manual-rules">6. Schichtplanungsregeln</a></li>
-                            <li><a href="#manual-springer">7. Springer-System</a></li>
-                            <li><a href="#manual-troubleshooting">8. Problembehebung</a></li>
+                            <li><a href="#manual-vacation">5. Urlaubsverwaltung</a></li>
+                            <li><a href="#manual-exchange">6. Diensttausch</a></li>
+                            <li><a href="#manual-statistics">7. Statistiken</a></li>
+                            <li><a href="#manual-email">8. E-Mail-Einstellungen</a></li>
+                            <li><a href="#manual-rules">9. Schichtplanungsregeln</a></li>
+                            <li><a href="#manual-springer">10. Springer-System</a></li>
+                            <li><a href="#manual-troubleshooting">11. Problembehebung</a></li>
                         </ul>
                     </div>
 
                     <section id="manual-intro" class="manual-section">
                         <h3>1. Einführung</h3>
-                        <p>Das Dienstplan-System unterstützt Sie bei der Verwaltung von Schichtplänen für bis zu 15 Mitarbeiter in 3 Teams.</p>
+                        <p>Das Dienstplan-System unterstützt Sie bei der Verwaltung von Schichtplänen für bis zu 17 Stammpersonal-Mitarbeiter plus Ferienjobber in 3 Teams.</p>
+                        
+                        <div class="manual-screenshot">
+                            <img src="https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba" alt="Dienstplan Hauptansicht" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung: Hauptansicht des Dienstplan-Systems</p>
+                        </div>
+                        
                         <h4>Hauptfunktionen:</h4>
                         <ul>
                             <li><strong>Automatische Schichtplanung:</strong> Das System erstellt automatisch Schichtpläne unter Beachtung aller gesetzlichen und betrieblichen Regeln</li>
-                            <li><strong>Mitarbeiterverwaltung:</strong> Verwalten Sie Mitarbeiter, Teams und Abwesenheiten</li>
+                            <li><strong>Mitarbeiterverwaltung:</strong> Verwalten Sie Mitarbeiter, Teams und Abwesenheiten mit erweiterten Daten (E-Mail, Geburtsdatum, Funktion)</li>
+                            <li><strong>Urlaubsverwaltung:</strong> Mitarbeiter können Urlaubsanträge einreichen, die vom Disponent genehmigt werden</li>
+                            <li><strong>Diensttausch-System:</strong> Mitarbeiter können Dienste untereinander tauschen (mit Genehmigung)</li>
                             <li><strong>Springer-System:</strong> Automatische Zuweisung von Vertretungen bei Ausfällen</li>
-                            <li><strong>Statistiken:</strong> Übersicht über Arbeitsstunden, Schichtverteilung und Auslastung</li>
+                            <li><strong>Statistiken:</strong> Übersicht über Arbeitsstunden, Schichtverteilung, Wochenend-Dienste und Auslastung</li>
+                            <li><strong>E-Mail-Benachrichtigungen:</strong> Konfigurierbare E-Mail-Benachrichtigungen für alle Beteiligten</li>
                         </ul>
                     </section>
 
@@ -152,6 +164,12 @@
 
                     <section id="manual-employees" class="manual-section">
                         <h3>4. Mitarbeiter verwalten</h3>
+                        
+                        <div class="manual-screenshot">
+                            <img src="https://github.com/user-attachments/assets/ca549d88-f312-4557-8978-a0e49ef92612" alt="Mitarbeiterverwaltung" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung: Mitarbeiterverwaltung</p>
+                        </div>
+                        
                         <h4>Neuen Mitarbeiter anlegen</h4>
                         <ol>
                             <li>Wechseln Sie zur Ansicht "Mitarbeiter"</li>
@@ -163,7 +181,15 @@
                                     <li>Personalnummer (eindeutig)</li>
                                 </ul>
                             </li>
-                            <li>Optional: Markieren Sie den Mitarbeiter als "Springer"</li>
+                            <li>Optionale Felder:
+                                <ul>
+                                    <li><strong>E-Mail:</strong> Für Benachrichtigungen</li>
+                                    <li><strong>Geburtsdatum:</strong> Für Personalverwaltung</li>
+                                    <li><strong>Funktion:</strong> Z.B. Brandmeldetechniker, Brandschutzbeauftragter</li>
+                                    <li><strong>Springer:</strong> Markieren für Vertretungspool</li>
+                                    <li><strong>Ferienjobber:</strong> Für temporäre Mitarbeiter</li>
+                                </ul>
+                            </li>
                             <li>Klicken Sie auf "Speichern"</li>
                         </ol>
 
@@ -171,25 +197,125 @@
                         <p>Erfassen Sie Abwesenheiten direkt über die API oder das Mitarbeiter-Profil:</p>
                         <ul>
                             <li><strong>Krank:</strong> Krankheitstage</li>
-                            <li><strong>Urlaub:</strong> Geplanter Urlaub</li>
+                            <li><strong>Urlaub:</strong> Geplanter Urlaub (alternativ über Urlaubsantragssystem)</li>
                             <li><strong>Lehrgang:</strong> Schulungen und Weiterbildungen</li>
                         </ul>
                     </section>
 
+                    <section id="manual-vacation" class="manual-section">
+                        <h3>5. Urlaubsverwaltung</h3>
+                        <p>Das System bietet ein vollständiges Urlaubsantragssystem mit Workflow-Management.</p>
+                        
+                        <h4>Urlaubsantrag stellen (Mitarbeiter)</h4>
+                        <ol>
+                            <li>Verwenden Sie die API: <code>POST /api/vacationrequests</code></li>
+                            <li>Geben Sie Startdatum und Enddatum an</li>
+                            <li>Optional: Fügen Sie eine Notiz hinzu</li>
+                            <li>Der Status wird zunächst auf "In Bearbeitung" gesetzt</li>
+                        </ol>
+
+                        <h4>Urlaub genehmigen/ablehnen (Disponent/Admin)</h4>
+                        <ol>
+                            <li>Rufen Sie offene Anträge ab: <code>GET /api/vacationrequests/pending</code></li>
+                            <li>Prüfen Sie den Antrag</li>
+                            <li>Setzen Sie den Status auf "Genehmigt" oder "Nicht genehmigt": <code>PUT /api/vacationrequests/{id}/status</code></li>
+                            <li>Optional: Fügen Sie eine Antwort/Begründung hinzu</li>
+                        </ol>
+
+                        <p><strong>Hinweis:</strong> Genehmigte Urlaubsanträge werden automatisch als Abwesenheiten vom Typ "Urlaub" in den Kalender eingetragen.</p>
+                    </section>
+
+                    <section id="manual-exchange" class="manual-section">
+                        <h3>6. Diensttausch</h3>
+                        <p>Mitarbeiter können Dienste untereinander tauschen, mit Genehmigungspflicht durch den Disponent.</p>
+                        
+                        <h4>Dienst zum Tausch anbieten (Mitarbeiter)</h4>
+                        <ol>
+                            <li>Verwenden Sie die API: <code>POST /api/shiftexchanges</code></li>
+                            <li>Geben Sie die Schicht-ID an, die getauscht werden soll</li>
+                            <li>Optional: Geben Sie einen Grund an</li>
+                            <li>Der Dienst wird als "Angeboten" markiert</li>
+                        </ol>
+
+                        <h4>Angebotenen Dienst anfragen (Mitarbeiter)</h4>
+                        <ol>
+                            <li>Verfügbare Tauschangebote anzeigen: <code>GET /api/shiftexchanges/available</code></li>
+                            <li>Gewünschten Dienst anfragen: <code>POST /api/shiftexchanges/{id}/request</code></li>
+                            <li>Status wechselt zu "Angefragt"</li>
+                        </ol>
+
+                        <h4>Tausch genehmigen (Disponent/Admin)</h4>
+                        <ol>
+                            <li>Offene Tauschanfragen anzeigen: <code>GET /api/shiftexchanges/pending</code></li>
+                            <li>Tausch prüfen und genehmigen/ablehnen: <code>PUT /api/shiftexchanges/{id}/process</code></li>
+                            <li>Bei Genehmigung wird die Schicht automatisch umgeschichtet</li>
+                        </ol>
+
+                        <p><strong>Wichtig:</strong> Auch bei genehmigten Tauschen werden die Ruhezeiten und Planungsregeln geprüft!</p>
+                    </section>
+
                     <section id="manual-statistics" class="manual-section">
-                        <h3>5. Statistiken</h3>
+                        <h3>7. Statistiken</h3>
+                        
+                        <div class="manual-screenshot">
+                            <img src="https://github.com/user-attachments/assets/016fab62-3005-40fa-aebd-a6e6c187cc15" alt="Statistiken" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung: Statistiken und Auswertungen</p>
+                        </div>
+                        
                         <p>Die Statistik-Ansicht bietet Ihnen einen Überblick über:</p>
                         <ul>
                             <li><strong>Arbeitsstunden:</strong> Gesamtstunden und Schichtanzahl pro Mitarbeiter</li>
                             <li><strong>Schichtverteilung:</strong> Verteilung der Schichtarten pro Team</li>
                             <li><strong>Fehltage:</strong> Übersicht der Abwesenheiten nach Typ</li>
                             <li><strong>Team-Auslastung:</strong> Durchschnittliche Schichten pro Mitarbeiter</li>
+                            <li><strong>Wochenend-Statistiken (Admin/Disponent):</strong> Samstags- und Sonntagsdienste je Mitarbeiter</li>
                         </ul>
                         <p>Wählen Sie den gewünschten Zeitraum aus und klicken Sie auf "Aktualisieren".</p>
+                        
+                        <h4>Wochenend-Statistiken abrufen</h4>
+                        <p>Als Administrator oder Disponent können Sie detaillierte Wochenend-Statistiken abrufen:</p>
+                        <code>GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31</code>
+                    </section>
+
+                    <section id="manual-email" class="manual-section">
+                        <h3>8. E-Mail-Einstellungen</h3>
+                        <p>Als Administrator können Sie die E-Mail-Server-Einstellungen konfigurieren, um automatische Benachrichtigungen zu ermöglichen.</p>
+                        
+                        <h4>E-Mail-Konfiguration anlegen</h4>
+                        <ol>
+                            <li>Verwenden Sie die API: <code>POST /api/emailsettings</code></li>
+                            <li>Erforderliche Einstellungen:
+                                <ul>
+                                    <li><strong>SMTP Server:</strong> Hostname oder IP-Adresse (z.B. smtp.gmail.com)</li>
+                                    <li><strong>Port:</strong> Standard 587 für STARTTLS, 465 für SSL, 25 für unverschlüsselt</li>
+                                    <li><strong>Protokoll:</strong> SMTP oder SMTPS</li>
+                                    <li><strong>Sicherheit:</strong> None, SSL, TLS oder STARTTLS</li>
+                                    <li><strong>Authentifizierung:</strong> Ja/Nein</li>
+                                    <li><strong>Benutzername:</strong> Falls Authentifizierung erforderlich</li>
+                                    <li><strong>Passwort:</strong> Falls Authentifizierung erforderlich</li>
+                                    <li><strong>Absenderadresse:</strong> z.B. dienstplan@fritzwinter.de</li>
+                                    <li><strong>Absendername:</strong> z.B. "Dienstplan-System"</li>
+                                    <li><strong>Antwortadresse:</strong> Optional, falls abweichend</li>
+                                </ul>
+                            </li>
+                        </ol>
+
+                        <h4>Mitarbeiter-E-Mails pflegen</h4>
+                        <p>Erfassen Sie E-Mail-Adressen für jeden Mitarbeiter, der Benachrichtigungen erhalten soll:</p>
+                        <ol>
+                            <li>Öffnen Sie den Mitarbeiter zur Bearbeitung</li>
+                            <li>Tragen Sie die E-Mail-Adresse im Feld "E-Mail" ein</li>
+                            <li>Speichern Sie die Änderungen</li>
+                        </ol>
+
+                        <h4>Aktive Konfiguration abrufen</h4>
+                        <code>GET /api/emailsettings/active</code>
+
+                        <p><strong>Sicherheitshinweis:</strong> Das System zeigt Passwörter niemals in API-Antworten an. Passwörter sollten vor der Speicherung verschlüsselt werden.</p>
                     </section>
 
                     <section id="manual-rules" class="manual-section">
-                        <h3>6. Schichtplanungsregeln</h3>
+                        <h3>9. Schichtplanungsregeln</h3>
                         <p>Das System beachtet automatisch folgende Regeln:</p>
                         
                         <h4>Schichtarten</h4>
@@ -249,7 +375,7 @@
                     </section>
 
                     <section id="manual-springer" class="manual-section">
-                        <h3>7. Springer-System</h3>
+                        <h3>10. Springer-System</h3>
                         <p>Das Springer-System sorgt für automatische Vertretung bei kurzfristigen Ausfällen.</p>
                         
                         <h4>Springer definieren</h4>
@@ -266,7 +392,7 @@
                     </section>
 
                     <section id="manual-troubleshooting" class="manual-section">
-                        <h3>8. Problembehebung</h3>
+                        <h3>11. Problembehebung</h3>
                         
                         <h4>Problem: Schichtplanung schlägt fehl</h4>
                         <p><strong>Lösung:</strong></p>
@@ -301,7 +427,8 @@
                     </section>
 
                     <div class="manual-footer">
-                        <p><strong>Version:</strong> 1.0.0</p>
+                        <p><strong>Version:</strong> 1.2</p>
+                        <p><strong>Entwickelt von:</strong> Timo Braun</p>
                         <p><strong>Letzte Aktualisierung:</strong> Dezember 2025</p>
                         <p>© Fritz Winter Eisengießerei GmbH & Co. KG</p>
                     </div>
@@ -375,6 +502,19 @@
             </div>
         </div>
     </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <p><strong>Dienstplan-System v1.2</strong></p>
+                <p>© 2025 Fritz Winter Eisengießerei GmbH & Co. KG</p>
+            </div>
+            <div class="footer-right">
+                <p>Entwickelt von <strong>Timo Braun</strong></p>
+                <p>Letzte Aktualisierung: Dezember 2025</p>
+            </div>
+        </div>
+    </footer>
 
     <script src="/js/app.js"></script>
 </body>

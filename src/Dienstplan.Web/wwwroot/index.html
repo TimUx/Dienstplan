@@ -19,8 +19,11 @@
                     <nav>
                         <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
                         <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
+                        <button onclick="showView('teams')" class="nav-btn">Teams</button>
+                        <button onclick="showView('vacations')" class="nav-btn" id="nav-vacations" style="display:none;">Urlaub</button>
                         <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
+                        <button onclick="showView('admin')" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
                     </nav>
                     <div id="user-info" class="user-info" style="display: none;">
                         <span id="user-name"></span>
@@ -79,6 +82,113 @@
                 </div>
                 <div id="statistics-content">
                     <p class="loading">Lade Statistiken...</p>
+                </div>
+            </div>
+
+            <!-- Teams View -->
+            <div id="teams-view" class="view">
+                <div class="controls">
+                    <button onclick="showAddTeamModal()" class="btn-primary admin-only">+ Team hinzufügen</button>
+                </div>
+                <div id="teams-content">
+                    <p class="loading">Lade Teams...</p>
+                </div>
+            </div>
+
+            <!-- Vacations View -->
+            <div id="vacations-view" class="view">
+                <h2>Urlaubsverwaltung</h2>
+                <div class="tabs">
+                    <button onclick="showVacationTab('requests')" class="tab-btn active" id="tab-requests">Urlaubsanträge</button>
+                    <button onclick="showVacationTab('exchanges')" class="tab-btn" id="tab-exchanges">Diensttausch</button>
+                </div>
+                
+                <div id="vacation-requests-tab" class="tab-content active">
+                    <div class="controls">
+                        <button onclick="showAddVacationRequestModal()" class="btn-primary">+ Urlaubsantrag stellen</button>
+                        <button onclick="loadVacationRequests('pending')" class="btn-secondary admin-only">Offene Anträge</button>
+                        <button onclick="loadVacationRequests('all')" class="btn-secondary admin-only">Alle Anträge</button>
+                    </div>
+                    <div id="vacation-requests-content">
+                        <p class="loading">Lade Urlaubsanträge...</p>
+                    </div>
+                </div>
+
+                <div id="shift-exchanges-tab" class="tab-content">
+                    <div class="controls">
+                        <button onclick="showOfferShiftExchangeModal()" class="btn-primary">+ Dienst anbieten</button>
+                        <button onclick="loadShiftExchanges('available')" class="btn-secondary">Verfügbare Tausche</button>
+                        <button onclick="loadShiftExchanges('pending')" class="btn-secondary admin-only">Offene Anfragen</button>
+                    </div>
+                    <div id="shift-exchanges-content">
+                        <p class="loading">Lade Diensttausch-Angebote...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin View -->
+            <div id="admin-view" class="view">
+                <h2>⚙️ Administration</h2>
+                <div class="admin-sections">
+                    <div class="admin-section">
+                        <h3>👥 Benutzerverwaltung</h3>
+                        <p>Verwaltung von Benutzerkonten, Passwörtern und Rollen.</p>
+                        <div class="controls">
+                            <button onclick="showAddUserModal()" class="btn-primary">+ Benutzer hinzufügen</button>
+                        </div>
+                        <div id="users-content">
+                            <p class="loading">Lade Benutzer...</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-section">
+                        <h3>📧 E-Mail-Einstellungen</h3>
+                        <p>Konfiguration des SMTP-Servers für Benachrichtigungen.</p>
+                        <div class="controls">
+                            <button onclick="showEmailSettingsModal()" class="btn-primary">E-Mail-Einstellungen bearbeiten</button>
+                            <button onclick="loadEmailSettings()" class="btn-secondary">Aktuelle Einstellungen laden</button>
+                        </div>
+                        <div id="email-settings-content">
+                            <div class="info-box">
+                                <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
+                                <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-section">
+                        <h3>🔧 Globale Einstellungen</h3>
+                        <p>Allgemeine Systemeinstellungen und Parameter.</p>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label>Maximale Arbeitsstunden pro Monat:</label>
+                                <input type="number" id="setting-max-hours-month" value="192" min="1" max="300">
+                            </div>
+                            <div class="setting-item">
+                                <label>Maximale Arbeitsstunden pro Woche:</label>
+                                <input type="number" id="setting-max-hours-week" value="48" min="1" max="60">
+                            </div>
+                            <div class="setting-item">
+                                <label>Maximale aufeinanderfolgende Schichten:</label>
+                                <input type="number" id="setting-max-consecutive-shifts" value="6" min="1" max="10">
+                            </div>
+                            <div class="setting-item">
+                                <label>Maximale aufeinanderfolgende Nachtschichten:</label>
+                                <input type="number" id="setting-max-consecutive-nights" value="3" min="1" max="7">
+                            </div>
+                        </div>
+                        <button onclick="saveGlobalSettings()" class="btn-primary">Einstellungen speichern</button>
+                    </div>
+
+                    <div class="admin-section">
+                        <h3>📊 System-Information</h3>
+                        <div class="info-box">
+                            <p><strong>Version:</strong> 1.2</p>
+                            <p><strong>Entwickler:</strong> Timo Braun</p>
+                            <p><strong>Datenbank:</strong> SQLite</p>
+                            <p><strong>Backend:</strong> ASP.NET Core 10.0</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 

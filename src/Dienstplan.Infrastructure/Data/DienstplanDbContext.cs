@@ -20,6 +20,7 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<VacationRequest> VacationRequests => Set<VacationRequest>();
     public DbSet<ShiftExchange> ShiftExchanges => Set<ShiftExchange>();
     public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

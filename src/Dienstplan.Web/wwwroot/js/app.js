@@ -212,6 +212,12 @@ function showView(viewName) {
     }
 }
 
+function loadAdminView() {
+    loadUsers();
+    loadEmailSettings();
+    loadAuditLogs(100);
+}
+
 // Initialize smooth scrolling for manual anchors
 function initializeManualAnchors() {
     document.querySelectorAll('.manual-toc a').forEach(anchor => {
@@ -255,6 +261,9 @@ async function loadSchedule() {
 function displaySchedule(data) {
     const content = document.getElementById('schedule-content');
     const viewType = document.getElementById('viewType').value;
+    
+    // Store shifts globally for editing
+    allShifts = data.assignments;
     
     if (data.assignments.length === 0) {
         content.innerHTML = '<p>Keine Schichten geplant. Klicken Sie auf "Schichten planen" um automatisch Schichten zu erstellen.</p>';
@@ -322,9 +331,14 @@ function displayWeekView(data) {
                 const isSunday = date.getDay() === 0;
                 const isHoliday = isHessianHoliday(date);
                 const shifts = employee.shifts[dateStr] || [];
-                const shiftBadges = shifts.map(s => 
-                    `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
-                ).join(' ');
+                const shiftBadges = shifts.map(s => {
+                    const canEdit = canPlanShifts();
+                    const shiftId = parseInt(s.id); // Ensure it's a number
+                    const shiftCode = escapeHtml(s.shiftCode);
+                    const shiftName = escapeHtml(s.shiftName);
+                    const badge = `<span class="shift-badge shift-${shiftCode}" title="${shiftName}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${shiftCode}</span>`;
+                    return badge;
+                }).join(' ');
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
                 html += `<td class="${cellClass}">${shiftBadges}</td>`;
             });
@@ -1634,16 +1648,109 @@ async function loadUsers() {
     const content = document.getElementById('users-content');
     content.innerHTML = '<p class="loading">Lade Benutzer...</p>';
     
-    // Note: ASP.NET Identity doesn't provide a direct API to list all users by default
-    // This is a placeholder that shows the user management is available via the register endpoint
-    content.innerHTML = `
-        <div class="info-box">
-            <p><strong>Benutzerverwaltung</strong></p>
-            <p>Neue Benutzer können über den Button "Benutzer hinzufügen" erstellt werden.</p>
-            <p>Die Verwaltung erfolgt über die ASP.NET Identity API.</p>
-            <p>Standard-Administrator: admin@fritzwinter.de</p>
-        </div>
-    `;
+    try {
+        const response = await fetch(`${API_BASE}/auth/users`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const users = await response.json();
+            displayUsers(users);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
+        } else if (response.status === 403) {
+            content.innerHTML = '<p class="error">Sie haben keine Berechtigung, Benutzer anzuzeigen.</p>';
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Benutzer.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Benutzer.</p>';
+    }
+}
+
+function displayUsers(users) {
+    const content = document.getElementById('users-content');
+    
+    if (!users || users.length === 0) {
+        content.innerHTML = '<p>Keine Benutzer gefunden.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Name</th><th>E-Mail</th><th>Rolle(n)</th><th>Status</th><th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    users.forEach(user => {
+        const isLocked = user.lockoutEnd && new Date(user.lockoutEnd) > new Date();
+        const statusBadge = isLocked 
+            ? '<span class="badge badge-error">Gesperrt</span>' 
+            : '<span class="badge badge-success">Aktiv</span>';
+        
+        html += '<tr>';
+        html += `<td>${escapeHtml(user.fullName || 'N/A')}</td>`;
+        html += `<td>${escapeHtml(user.email || 'N/A')}</td>`;
+        html += `<td>${escapeHtml(user.roles.join(', '))}</td>`;
+        html += `<td>${statusBadge}</td>`;
+        html += `<td>`;
+        html += `<button onclick="editUser('${escapeHtml(user.id)}')" class="btn-small btn-primary">Bearbeiten</button> `;
+        html += `<button onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')" class="btn-small btn-danger">Löschen</button>`;
+        html += `</td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+async function editUser(userId) {
+    try {
+        const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const user = await response.json();
+            
+            document.getElementById('userId').value = user.id;
+            document.getElementById('userFullName').value = user.fullName;
+            document.getElementById('userEmail').value = user.email;
+            document.getElementById('userRole').value = user.roles[0] || 'Mitarbeiter';
+            document.getElementById('userModalTitle').textContent = 'Benutzer bearbeiten';
+            document.getElementById('passwordGroup').style.display = 'none';
+            document.getElementById('userPassword').required = false;
+            document.getElementById('userModal').style.display = 'block';
+        } else {
+            alert('Fehler beim Laden des Benutzers.');
+        }
+    } catch (error) {
+        console.error('Error loading user:', error);
+        alert('Fehler beim Laden des Benutzers.');
+    }
+}
+
+async function deleteUser(userId, userEmail) {
+    if (!confirm(`Möchten Sie den Benutzer "${userEmail}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            alert('Benutzer erfolgreich gelöscht!');
+            loadUsers();
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Löschen: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert(`Fehler: ${error.message}`);
+    }
 }
 
 async function showAddUserModal() {
@@ -1668,23 +1775,33 @@ function closeUserModal() {
 async function saveUser(event) {
     event.preventDefault();
     
-    const user = {
+    const userId = document.getElementById('userId').value;
+    const isEdit = userId !== '';
+    
+    const userData = {
         fullName: document.getElementById('userFullName').value,
         email: document.getElementById('userEmail').value,
-        password: document.getElementById('userPassword').value,
         role: document.getElementById('userRole').value
     };
     
+    // Only include password for new users
+    if (!isEdit) {
+        userData.password = document.getElementById('userPassword').value;
+    }
+    
     try {
-        const response = await fetch(`${API_BASE}/auth/register`, {
-            method: 'POST',
+        const url = isEdit ? `${API_BASE}/auth/users/${userId}` : `${API_BASE}/auth/register`;
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify(user)
+            body: JSON.stringify(userData)
         });
         
         if (response.ok) {
-            alert('Benutzer erfolgreich erstellt!');
+            alert(isEdit ? 'Benutzer erfolgreich aktualisiert!' : 'Benutzer erfolgreich erstellt!');
             closeUserModal();
             loadUsers();
         } else if (response.status === 401) {
@@ -1693,7 +1810,7 @@ async function saveUser(event) {
             alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Erstellen: ${error.error || 'Unbekannter Fehler'}`);
+            alert(`Fehler beim ${isEdit ? 'Aktualisieren' : 'Erstellen'}: ${error.error || 'Unbekannter Fehler'}`);
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);
@@ -1857,5 +1974,240 @@ function saveGlobalSettings() {
     localStorage.setItem('maxConsecutiveNights', maxConsecutiveNights);
     
     alert(`Globale Einstellungen gespeichert:\n• Max Stunden/Monat: ${maxHoursMonth}\n• Max Stunden/Woche: ${maxHoursWeek}\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Diese Einstellungen werden lokal im Browser gespeichert.`);
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Shift assignment editing functions
+let allShiftTypes = [];
+let allShifts = [];
+
+async function loadShiftTypes() {
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes`, {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            allShiftTypes = await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading shift types:', error);
+    }
+}
+
+async function editShiftAssignment(shiftId) {
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten zu bearbeiten.');
+        return;
+    }
+
+    // Find the shift in the cached data
+    const shift = allShifts.find(s => s.id === shiftId);
+    if (!shift) {
+        alert('Schicht nicht gefunden.');
+        return;
+    }
+
+    // Load employees and shift types if not already loaded
+    await loadEmployees();
+    if (allShiftTypes.length === 0) {
+        await loadShiftTypes();
+    }
+
+    // Populate modal
+    document.getElementById('editShiftId').value = shift.id;
+    document.getElementById('editShiftEmployeeId').value = shift.employeeId;
+    document.getElementById('editShiftDate').value = shift.date.split('T')[0];
+    document.getElementById('editShiftTypeId').value = shift.shiftTypeId;
+    document.getElementById('editShiftIsFixed').checked = shift.isFixed || false;
+    document.getElementById('editShiftNotes').value = shift.notes || '';
+    
+    // Populate employee dropdown
+    const employeeSelect = document.getElementById('editShiftEmployeeId');
+    employeeSelect.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+    cachedEmployees.forEach(emp => {
+        const option = document.createElement('option');
+        option.value = emp.id;
+        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        employeeSelect.appendChild(option);
+    });
+    employeeSelect.value = shift.employeeId;
+
+    // Populate shift type dropdown
+    const shiftTypeSelect = document.getElementById('editShiftTypeId');
+    shiftTypeSelect.innerHTML = '<option value="">Schichttyp wählen...</option>';
+    allShiftTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type.id;
+        option.textContent = `${type.name} (${type.code})`;
+        shiftTypeSelect.appendChild(option);
+    });
+    shiftTypeSelect.value = shift.shiftTypeId;
+
+    document.getElementById('editShiftWarning').style.display = 'none';
+    document.getElementById('editShiftModalTitle').textContent = 'Schicht bearbeiten';
+    document.getElementById('editShiftModal').style.display = 'block';
+}
+
+function closeEditShiftModal() {
+    document.getElementById('editShiftModal').style.display = 'none';
+    document.getElementById('editShiftForm').reset();
+    document.getElementById('editShiftWarning').style.display = 'none';
+}
+
+async function saveShiftAssignment(event) {
+    event.preventDefault();
+
+    const shiftId = document.getElementById('editShiftId').value;
+    const shiftData = {
+        id: parseInt(shiftId),
+        employeeId: parseInt(document.getElementById('editShiftEmployeeId').value),
+        date: document.getElementById('editShiftDate').value,
+        shiftTypeId: parseInt(document.getElementById('editShiftTypeId').value),
+        isFixed: document.getElementById('editShiftIsFixed').checked,
+        notes: document.getElementById('editShiftNotes').value
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(shiftData)
+        });
+
+        if (response.ok) {
+            alert('Schicht erfolgreich aktualisiert!');
+            closeEditShiftModal();
+            loadSchedule();
+        } else if (response.status === 400) {
+            const error = await response.json();
+            if (error.warning) {
+                // Show warning and ask for confirmation
+                document.getElementById('editShiftWarningText').textContent = error.error;
+                document.getElementById('editShiftWarning').style.display = 'block';
+                
+                if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
+                    // Override validation - for now just try again
+                    // In a real implementation, you'd add a 'force' parameter
+                    alert('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.');
+                }
+            } else {
+                alert(`Fehler: ${error.error}`);
+            }
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Aktualisieren der Schicht.');
+        }
+    } catch (error) {
+        console.error('Error updating shift:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function deleteShiftAssignment() {
+    const shiftId = document.getElementById('editShiftId').value;
+    
+    if (!confirm('Möchten Sie diese Schichtzuweisung wirklich löschen?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+
+        if (response.ok || response.status === 204) {
+            alert('Schicht erfolgreich gelöscht!');
+            closeEditShiftModal();
+            loadSchedule();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Löschen der Schicht.');
+        }
+    } catch (error) {
+        console.error('Error deleting shift:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Audit Log functions
+async function loadAuditLogs(count = 100) {
+    const content = document.getElementById('audit-logs-content');
+    content.innerHTML = '<p class="loading">Lade Änderungsprotokoll...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/auditlogs/recent/${count}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const logs = await response.json();
+            displayAuditLogs(logs);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
+        } else if (response.status === 403) {
+            content.innerHTML = '<p class="error">Sie haben keine Berechtigung, das Änderungsprotokoll anzuzeigen.</p>';
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden des Änderungsprotokolls.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading audit logs:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden des Änderungsprotokolls.</p>';
+    }
+}
+
+function displayAuditLogs(logs) {
+    const content = document.getElementById('audit-logs-content');
+    
+    if (!logs || logs.length === 0) {
+        content.innerHTML = '<p>Keine Einträge im Änderungsprotokoll gefunden.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Zeitstempel</th><th>Benutzer</th><th>Aktion</th><th>Entität</th><th>Details</th>';
+    html += '</tr></thead><tbody>';
+    
+    logs.forEach(log => {
+        const timestamp = new Date(log.timestamp).toLocaleString('de-DE');
+        const actionBadge = getActionBadge(log.action);
+        
+        html += '<tr>';
+        html += `<td>${timestamp}</td>`;
+        html += `<td>${escapeHtml(log.userName)}</td>`;
+        html += `<td>${actionBadge}</td>`;
+        html += `<td>${escapeHtml(log.entityName)} (ID: ${escapeHtml(log.entityId)})</td>`;
+        html += `<td><small>${log.changes ? escapeHtml(log.changes.substring(0, 100)) + '...' : '-'}</small></td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+function getActionBadge(action) {
+    switch(action) {
+        case 'Created':
+            return '<span class="badge badge-success">Erstellt</span>';
+        case 'Updated':
+            return '<span class="badge badge-warning">Aktualisiert</span>';
+        case 'Deleted':
+            return '<span class="badge badge-error">Gelöscht</span>';
+        default:
+            return `<span class="badge">${escapeHtml(action)}</span>`;
+    }
 }
 

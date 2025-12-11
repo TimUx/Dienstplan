@@ -135,8 +135,113 @@ public class AuthController : ControllerBase
 
         return Ok(new { success = true });
     }
+
+    [HttpGet("users")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult> GetAllUsers()
+    {
+        var users = _userManager.Users.ToList();
+        var userList = new List<object>();
+        
+        foreach (var user in users)
+        {
+            var roles = await _userManager.GetRolesAsync(user);
+            userList.Add(new
+            {
+                id = user.Id,
+                email = user.Email,
+                fullName = user.FullName,
+                roles = roles,
+                emailConfirmed = user.EmailConfirmed,
+                lockoutEnd = user.LockoutEnd
+            });
+        }
+        
+        return Ok(userList);
+    }
+
+    [HttpGet("users/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult> GetUser(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { error = "Benutzer nicht gefunden" });
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        return Ok(new
+        {
+            id = user.Id,
+            email = user.Email,
+            fullName = user.FullName,
+            roles = roles,
+            emailConfirmed = user.EmailConfirmed,
+            lockoutEnd = user.LockoutEnd
+        });
+    }
+
+    [HttpPut("users/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult> UpdateUser(string id, [FromBody] UpdateUserRequest request)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { error = "Benutzer nicht gefunden" });
+        }
+
+        // Update basic info
+        user.FullName = request.FullName;
+        user.Email = request.Email;
+        user.UserName = request.Email;
+
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { error = "Benutzer konnte nicht aktualisiert werden", errors = result.Errors });
+        }
+
+        // Update roles
+        if (!string.IsNullOrEmpty(request.Role))
+        {
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            await _userManager.AddToRoleAsync(user, request.Role);
+        }
+
+        return Ok(new { success = true });
+    }
+
+    [HttpDelete("users/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult> DeleteUser(string id)
+    {
+        // Prevent admin from deleting themselves
+        var currentUser = await _userManager.GetUserAsync(User);
+        if (currentUser?.Id == id)
+        {
+            return BadRequest(new { error = "Sie können sich nicht selbst löschen" });
+        }
+
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound(new { error = "Benutzer nicht gefunden" });
+        }
+
+        var result = await _userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { error = "Benutzer konnte nicht gelöscht werden", errors = result.Errors });
+        }
+
+        return Ok(new { success = true });
+    }
 }
 
 public record LoginRequest(string Email, string Password, bool RememberMe = false);
 public record RegisterRequest(string Email, string Password, string FullName, string Role = "Mitarbeiter");
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record UpdateUserRequest(string Email, string FullName, string Role);

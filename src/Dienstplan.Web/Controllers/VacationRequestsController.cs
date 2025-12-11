@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
+using Dienstplan.Infrastructure.Identity;
 
 namespace Dienstplan.Web.Controllers;
 
@@ -14,15 +16,18 @@ public class VacationRequestsController : ControllerBase
     private readonly IVacationRequestRepository _vacationRequestRepository;
     private readonly IEmployeeRepository _employeeRepository;
     private readonly IAbsenceRepository _absenceRepository;
+    private readonly UserManager<ApplicationUser> _userManager;
 
     public VacationRequestsController(
         IVacationRequestRepository vacationRequestRepository,
         IEmployeeRepository employeeRepository,
-        IAbsenceRepository absenceRepository)
+        IAbsenceRepository absenceRepository,
+        UserManager<ApplicationUser> userManager)
     {
         _vacationRequestRepository = vacationRequestRepository;
         _employeeRepository = employeeRepository;
         _absenceRepository = absenceRepository;
+        _userManager = userManager;
     }
 
     /// <summary>
@@ -46,8 +51,12 @@ public class VacationRequestsController : ControllerBase
         // Users can only see their own requests unless they are Admin/Disponent
         if (!User.IsInRole("Admin") && !User.IsInRole("Disponent"))
         {
-            // TODO: Check if current user is linked to this employeeId
-            // For now, allow if authenticated
+            // Get the current user's linked employee ID
+            var currentUser = await _userManager.GetUserAsync(User);
+            if (currentUser?.EmployeeId != employeeId)
+            {
+                return Forbid();
+            }
         }
 
         var requests = await _vacationRequestRepository.GetByEmployeeIdAsync(employeeId);

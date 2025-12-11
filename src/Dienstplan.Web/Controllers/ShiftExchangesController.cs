@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
+using Dienstplan.Infrastructure.Identity;
 
 namespace Dienstplan.Web.Controllers;
 
@@ -14,15 +16,18 @@ public class ShiftExchangesController : ControllerBase
     private readonly IShiftExchangeRepository _exchangeRepository;
     private readonly IShiftAssignmentRepository _shiftRepository;
     private readonly IEmployeeRepository _employeeRepository;
+    private readonly UserManager<ApplicationUser> _userManager;
 
     public ShiftExchangesController(
         IShiftExchangeRepository exchangeRepository,
         IShiftAssignmentRepository shiftRepository,
-        IEmployeeRepository employeeRepository)
+        IEmployeeRepository employeeRepository,
+        UserManager<ApplicationUser> userManager)
     {
         _exchangeRepository = exchangeRepository;
         _shiftRepository = shiftRepository;
         _employeeRepository = employeeRepository;
+        _userManager = userManager;
     }
 
     /// <summary>
@@ -213,8 +218,15 @@ public class ShiftExchangesController : ControllerBase
             return NotFound(new { error = "Tauschangebot nicht gefunden" });
         }
 
-        // Only offering employee can cancel their offer
-        // TODO: Verify current user is the offering employee
+        // Only offering employee or Admin/Disponent can cancel
+        if (!User.IsInRole("Admin") && !User.IsInRole("Disponent"))
+        {
+            var currentUser = await _userManager.GetUserAsync(User);
+            if (currentUser?.EmployeeId != exchange.OfferingEmployeeId)
+            {
+                return Forbid();
+            }
+        }
 
         if (exchange.Status != ShiftExchangeStatus.Angeboten && exchange.Status != ShiftExchangeStatus.Angefragt)
         {

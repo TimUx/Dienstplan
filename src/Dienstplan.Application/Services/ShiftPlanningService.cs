@@ -25,16 +25,17 @@ public class ShiftPlanningService : IShiftPlanningService
         var assignments = new List<ShiftAssignment>();
         
         // Get existing assignments (including fixed ones)
-        var existingAssignments = await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate);
+        var existingAssignments = (await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate)).ToList();
         
-        if (!force && existingAssignments.Any())
-        {
-            return existingAssignments.ToList();
-        }
+        // Keep fixed assignments and existing assignments if not forcing
+        var keptAssignments = force 
+            ? existingAssignments.Where(a => a.IsFixed).ToList()
+            : existingAssignments;
         
-        // Keep fixed assignments
-        var fixedAssignments = existingAssignments.Where(a => a.IsFixed).ToList();
-        assignments.AddRange(fixedAssignments);
+        assignments.AddRange(keptAssignments);
+        
+        // Get dates that already have assignments (to skip if not forcing)
+        var datesWithAssignments = keptAssignments.Select(a => a.Date.Date).Distinct().ToHashSet();
         
         var employees = (await _employeeRepository.GetAllAsync())
             .Where(e => !e.IsSpringer) // Exclude Springers from regular planning
@@ -45,8 +46,8 @@ public class ShiftPlanningService : IShiftPlanningService
         // Plan for each day
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
-            // Skip days with fixed assignments
-            if (fixedAssignments.Any(a => a.Date == date))
+            // Skip days that already have assignments (unless forcing and not fixed)
+            if (datesWithAssignments.Contains(date.Date))
             {
                 continue;
             }

@@ -137,7 +137,7 @@ public class ShiftsController : ControllerBase
 
     [HttpPut("assignments/{id}")]
     [Authorize(Roles = "Admin,Disponent")]
-    public async Task<ActionResult<ShiftAssignmentDto>> UpdateAssignment(int id, ShiftAssignmentDto dto)
+    public async Task<ActionResult<ShiftAssignmentDto>> UpdateAssignment(int id, ShiftAssignmentDto dto, [FromQuery] bool forceOverride = false)
     {
         var existing = await _shiftRepository.GetByIdAsync(id);
         if (existing == null)
@@ -156,7 +156,7 @@ public class ShiftsController : ControllerBase
 
         // Validate the change
         var (isValid, errorMessage) = await _planningService.ValidateShiftAssignment(existing);
-        if (!isValid)
+        if (!isValid && !forceOverride)
         {
             return BadRequest(new { error = errorMessage, warning = true });
         }
@@ -174,7 +174,8 @@ public class ShiftsController : ControllerBase
             Date = existing.Date,
             IsManual = existing.IsManual,
             IsFixed = existing.IsFixed,
-            Notes = existing.Notes
+            Notes = existing.Notes,
+            Warning = isValid ? null : errorMessage
         });
     }
 

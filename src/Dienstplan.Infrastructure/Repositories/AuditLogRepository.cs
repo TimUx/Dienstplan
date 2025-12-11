@@ -34,4 +34,68 @@ public class AuditLogRepository : Repository<AuditLog>, IAuditLogRepository
             .Take(count)
             .ToListAsync();
     }
+
+    public async Task<(IEnumerable<AuditLog> Items, int TotalCount)> GetPagedAsync(int page, int pageSize)
+    {
+        var query = _dbSet.OrderByDescending(a => a.Timestamp);
+        
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
+
+    public async Task<(IEnumerable<AuditLog> Items, int TotalCount)> SearchAsync(
+        int page,
+        int pageSize,
+        string? entityName = null,
+        string? action = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? userId = null)
+    {
+        var query = _dbSet.AsQueryable();
+
+        // Apply filters
+        if (!string.IsNullOrEmpty(entityName))
+        {
+            query = query.Where(a => a.EntityName.Contains(entityName));
+        }
+
+        if (!string.IsNullOrEmpty(action))
+        {
+            if (Enum.TryParse<AuditAction>(action, true, out var auditAction))
+            {
+                query = query.Where(a => a.Action == auditAction);
+            }
+        }
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(a => a.Timestamp >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(a => a.Timestamp <= endDate.Value);
+        }
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            query = query.Where(a => a.UserId == userId);
+        }
+
+        query = query.OrderByDescending(a => a.Timestamp);
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
 }

@@ -86,6 +86,46 @@ public class EmployeesController : ControllerBase
         return Ok(dtos);
     }
 
+    [HttpGet("search")]
+    [AllowAnonymous]
+    public async Task<ActionResult<PaginatedResult<EmployeeDto>>> Search(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] int? teamId = null,
+        [FromQuery] bool? isSpringer = null)
+    {
+        // Validate pagination parameters
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 50;
+        if (pageSize > 100) pageSize = 100;
+
+        var (items, totalCount) = await _repository.SearchAsync(page, pageSize, searchTerm, teamId, isSpringer);
+
+        var result = new PaginatedResult<EmployeeDto>
+        {
+            Items = items.Select(e => new EmployeeDto
+            {
+                Id = e.Id,
+                Vorname = e.Vorname,
+                Name = e.Name,
+                Personalnummer = e.Personalnummer,
+                Email = e.Email,
+                Geburtsdatum = e.Geburtsdatum,
+                Funktion = e.Funktion,
+                IsSpringer = e.IsSpringer,
+                IsFerienjobber = e.IsFerienjobber,
+                TeamId = e.TeamId,
+                TeamName = e.Team?.Name
+            }).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+
+        return Ok(result);
+    }
+
     [HttpPost]
     [Authorize(Roles = "Admin,Disponent")]
     public async Task<ActionResult<EmployeeDto>> Create(EmployeeDto dto)

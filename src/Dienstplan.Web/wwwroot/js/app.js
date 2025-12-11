@@ -445,11 +445,14 @@ function displayYearView(data) {
 
 // Helper functions
 
+// Constant for employees without team assignment
+const UNASSIGNED_TEAM_ID = 0;
+
 function groupByTeamAndEmployee(assignments) {
     const teams = {};
     
     assignments.forEach(a => {
-        const teamId = a.teamId || 0;
+        const teamId = a.teamId || UNASSIGNED_TEAM_ID;
         const teamName = a.teamName || 'Ohne Team';
         
         if (!teams[teamId]) {
@@ -482,8 +485,8 @@ function groupByTeamAndEmployee(assignments) {
         employees: Object.values(team.employees).sort((a, b) => a.name.localeCompare(b.name))
     })).sort((a, b) => {
         // Put "Ohne Team" at the end
-        if (a.teamId === 0) return 1;
-        if (b.teamId === 0) return -1;
+        if (a.teamId === UNASSIGNED_TEAM_ID) return 1;
+        if (b.teamId === UNASSIGNED_TEAM_ID) return -1;
         return a.teamName.localeCompare(b.teamName);
     });
 }
@@ -496,11 +499,23 @@ function getUniqueDates(assignments) {
     return Array.from(dates);
 }
 
+/**
+ * Calculate ISO 8601 week number for a given date
+ * ISO 8601 week starts on Monday and the first week of the year is the week containing the first Thursday
+ * @param {Date} date - The date to calculate the week number for
+ * @returns {number} The ISO 8601 week number
+ */
 function getWeekNumber(date) {
+    // Create a copy of the date in UTC
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    // ISO 8601 week starts on Monday (day 1), Sunday is day 7
     const dayNum = d.getUTCDay() || 7;
+    // Set to the nearest Thursday (current date + 4 - current day number)
+    // This ensures we're in the correct week according to ISO 8601
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    // Get first day of year
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    // Calculate week number: days since year start divided by 7, rounded up
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 

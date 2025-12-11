@@ -57,6 +57,8 @@ public class ShiftsController : ControllerBase
                 Id = a.Id,
                 EmployeeId = a.EmployeeId,
                 EmployeeName = a.Employee.FullName,
+                TeamId = a.Employee.TeamId,
+                TeamName = a.Employee.Team?.Name,
                 ShiftTypeId = a.ShiftTypeId,
                 ShiftCode = a.ShiftType.Code,
                 ShiftName = a.ShiftType.Name,

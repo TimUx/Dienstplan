@@ -58,6 +58,7 @@ public class ShiftAssignmentRepository : IShiftAssignmentRepository
     {
         return await _context.ShiftAssignments
             .Include(s => s.Employee)
+                .ThenInclude(e => e.Team)
             .Include(s => s.ShiftType)
             .Where(s => s.Date >= startDate && s.Date <= endDate)
             .OrderBy(s => s.Date)

@@ -236,44 +236,438 @@ async function loadSchedule() {
 
 function displaySchedule(data) {
     const content = document.getElementById('schedule-content');
+    const viewType = document.getElementById('viewType').value;
     
     if (data.assignments.length === 0) {
         content.innerHTML = '<p>Keine Schichten geplant. Klicken Sie auf "Schichten planen" um automatisch Schichten zu erstellen.</p>';
         return;
     }
     
-    // Group by date and employee
-    const byDate = {};
-    data.assignments.forEach(a => {
-        const dateKey = a.date.split('T')[0];
-        if (!byDate[dateKey]) byDate[dateKey] = {};
-        if (!byDate[dateKey][a.employeeId]) byDate[dateKey][a.employeeId] = [];
-        byDate[dateKey][a.employeeId].push(a);
+    // Display based on view type
+    if (viewType === 'week') {
+        content.innerHTML = displayWeekView(data);
+    } else if (viewType === 'month') {
+        content.innerHTML = displayMonthView(data);
+    } else if (viewType === 'year') {
+        content.innerHTML = displayYearView(data);
+    }
+}
+
+function displayWeekView(data) {
+    // Group assignments by team and employee
+    const teamGroups = groupByTeamAndEmployee(data.assignments);
+    
+    // Get all dates in the range
+    const dates = getUniqueDates(data.assignments);
+    dates.sort();
+    
+    if (dates.length === 0) {
+        return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
+    }
+    
+    // Get week info from first date for header
+    const firstDate = new Date(dates[0]);
+    const weekNumber = getWeekNumber(firstDate);
+    const year = firstDate.getFullYear();
+    
+    // Build table with header
+    let html = `<div class="month-header"><h3>Woche: KW ${weekNumber} ${year}</h3></div>`;
+    html += '<table class="calendar-table week-view"><thead><tr>';
+    html += '<th class="team-column">Team / Person</th>';
+    
+    // Add date columns
+    dates.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const dayName = date.toLocaleDateString('de-DE', { weekday: 'short' });
+        const dayNum = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        const isSunday = date.getDay() === 0;
+        const isHoliday = isHessianHoliday(date);
+        const columnClass = (isSunday || isHoliday) ? 'date-column sunday-column' : 'date-column';
+        html += `<th class="${columnClass}">${dayName}<br>${dayNum}</th>`;
     });
     
-    let html = '<table class="schedule-table"><thead><tr><th>Datum</th><th>Mitarbeiter</th><th>Schichten</th></tr></thead><tbody>';
+    html += '</tr></thead><tbody>';
     
-    Object.keys(byDate).sort().forEach(date => {
-        const dateObj = new Date(date);
-        const dayName = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    // Add rows for each team and employee
+    teamGroups.forEach(team => {
+        // Team header row
+        html += `<tr class="team-row"><td colspan="${dates.length + 1}" class="team-header">${team.teamName}</td></tr>`;
         
-        Object.entries(byDate[date]).forEach(([employeeId, shifts]) => {
-            const employee = shifts[0].employeeName;
-            const shiftBadges = shifts.map(s => 
-                `<span class="shift-badge shift-${s.shiftCode}">${s.shiftCode}</span>
-                ${s.isSpringerAssignment ? '<span class="springer-badge">Springer</span>' : ''}`
-            ).join(' ');
+        // Employee rows
+        team.employees.forEach(employee => {
+            html += '<tr class="employee-row">';
+            html += `<td class="employee-name">  - ${employee.name}</td>`;
             
-            html += `<tr>
-                <td>${dayName}</td>
-                <td>${employee}</td>
-                <td>${shiftBadges}</td>
-            </tr>`;
+            // Add shift cells for each date
+            dates.forEach(dateStr => {
+                const date = new Date(dateStr);
+                const isSunday = date.getDay() === 0;
+                const isHoliday = isHessianHoliday(date);
+                const shifts = employee.shifts[dateStr] || [];
+                const shiftBadges = shifts.map(s => 
+                    `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
+                ).join(' ');
+                const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
+                html += `<td class="${cellClass}">${shiftBadges}</td>`;
+            });
+            
+            html += '</tr>';
         });
     });
     
     html += '</tbody></table>';
-    content.innerHTML = html;
+    return html;
+}
+
+function displayMonthView(data) {
+    // Group assignments by team and employee
+    const teamGroups = groupByTeamAndEmployee(data.assignments);
+    
+    // Get all dates and organize by calendar weeks
+    const dates = getUniqueDates(data.assignments);
+    dates.sort();
+    
+    if (dates.length === 0) {
+        return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
+    }
+    
+    // Group dates by calendar week
+    const weekGroups = groupDatesByWeek(dates);
+    
+    // Get month name from first date
+    const firstDate = new Date(dates[0]);
+    const monthName = firstDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+    
+    let html = `<div class="month-header"><h3>Monat: ${monthName}</h3></div>`;
+    html += '<table class="calendar-table month-view"><thead><tr>';
+    html += '<th class="team-column">Team / Mitarbeiter</th>';
+    
+    // Add all weeks horizontally - each week shows all its days
+    weekGroups.forEach(week => {
+        week.days.forEach(day => {
+            const date = new Date(day);
+            const dayName = date.toLocaleDateString('de-DE', { weekday: 'short' });
+            const dayNum = date.getDate();
+            const isSunday = date.getDay() === 0;
+            const isHoliday = isHessianHoliday(date);
+            const columnClass = (isSunday || isHoliday) ? 'date-column sunday-column' : 'date-column';
+            html += `<th class="${columnClass}">${dayName} ${dayNum}</th>`;
+        });
+    });
+    
+    html += '</tr></thead><tbody>';
+    
+    // Add rows for each team and employee
+    teamGroups.forEach(team => {
+        // Calculate total number of days across all weeks
+        const totalDays = weekGroups.reduce((sum, w) => sum + w.days.length, 0);
+        // Team header row
+        html += `<tr class="team-row"><td colspan="${totalDays + 1}" class="team-header">${team.teamName}</td></tr>`;
+        
+        // Employee rows
+        team.employees.forEach(employee => {
+            html += '<tr class="employee-row">';
+            html += `<td class="employee-name">  - ${employee.name}</td>`;
+            
+            // Add shift cells for all days across all weeks
+            weekGroups.forEach(week => {
+                week.days.forEach(dateStr => {
+                    const date = new Date(dateStr);
+                    const isSunday = date.getDay() === 0;
+                    const isHoliday = isHessianHoliday(date);
+                    const shifts = employee.shifts[dateStr] || [];
+                    const shiftBadges = shifts.map(s => 
+                        `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
+                    ).join(' ');
+                    const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
+                    html += `<td class="${cellClass}">${shiftBadges}</td>`;
+                });
+            });
+            
+            html += '</tr>';
+        });
+    });
+    
+    html += '</tbody></table>';
+    return html;
+}
+
+function displayYearView(data) {
+    // Group assignments by team and employee
+    const teamGroups = groupByTeamAndEmployee(data.assignments);
+    
+    // Get all dates and organize by months and weeks
+    const dates = getUniqueDates(data.assignments);
+    dates.sort();
+    
+    if (dates.length === 0) {
+        return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
+    }
+    
+    // Group dates by month
+    const monthGroups = groupDatesByMonth(dates);
+    
+    // Get year from first date for main header
+    const firstDate = new Date(dates[0]);
+    const year = firstDate.getFullYear();
+    
+    let html = `<div class="month-header"><h3>Jahr: ${year}</h3></div>`;
+    html += '<div class="year-view-container">';
+    
+    // Create a table for each month
+    monthGroups.forEach(month => {
+        const monthDate = new Date(month.dates[0]);
+        const monthName = monthDate.toLocaleDateString('de-DE', { month: 'long' });
+        
+        html += `<div class="month-section">`;
+        html += `<div class="month-header"><h3>${monthName}</h3></div>`;
+        html += '<table class="calendar-table year-view"><thead><tr>';
+        html += '<th class="team-column">Team / Mitarbeiter</th>';
+        
+        // Add week columns - all weeks for the month horizontally
+        month.weeks.forEach(week => {
+            html += `<th class="week-column">KW ${week}</th>`;
+        });
+        
+        html += '</tr></thead><tbody>';
+        
+        // Add rows for each team and employee
+        teamGroups.forEach(team => {
+            // Team header row
+            html += `<tr class="team-row"><td colspan="${month.weeks.length + 1}" class="team-header">${team.teamName}</td></tr>`;
+            
+            // Employee rows
+            team.employees.forEach(employee => {
+                html += '<tr class="employee-row">';
+                html += `<td class="employee-name">  - ${employee.name}</td>`;
+                
+                // Add shift cells for each week
+                month.weeks.forEach(weekNum => {
+                    const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
+                    const shifts = [];
+                    weekDates.forEach(dateStr => {
+                        if (employee.shifts[dateStr]) {
+                            shifts.push(...employee.shifts[dateStr]);
+                        }
+                    });
+                    
+                    const shiftBadges = shifts.map(s => 
+                        `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
+                    ).join(' ');
+                    html += `<td class="shift-cell">${shiftBadges}</td>`;
+                });
+                
+                html += '</tr>';
+            });
+        });
+        
+        html += '</tbody></table></div>';
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+// Helper functions
+
+// Constant for employees without team assignment
+const UNASSIGNED_TEAM_ID = 0;
+
+function groupByTeamAndEmployee(assignments) {
+    const teams = {};
+    
+    assignments.forEach(a => {
+        const teamId = a.teamId || UNASSIGNED_TEAM_ID;
+        const teamName = a.teamName || 'Ohne Team';
+        
+        if (!teams[teamId]) {
+            teams[teamId] = {
+                teamId: teamId,
+                teamName: teamName,
+                employees: {}
+            };
+        }
+        
+        if (!teams[teamId].employees[a.employeeId]) {
+            teams[teamId].employees[a.employeeId] = {
+                id: a.employeeId,
+                name: a.employeeName,
+                shifts: {}
+            };
+        }
+        
+        const dateKey = a.date.split('T')[0];
+        if (!teams[teamId].employees[a.employeeId].shifts[dateKey]) {
+            teams[teamId].employees[a.employeeId].shifts[dateKey] = [];
+        }
+        teams[teamId].employees[a.employeeId].shifts[dateKey].push(a);
+    });
+    
+    // Convert to array and sort
+    return Object.values(teams).map(team => ({
+        teamId: team.teamId,
+        teamName: team.teamName,
+        employees: Object.values(team.employees).sort((a, b) => a.name.localeCompare(b.name))
+    })).sort((a, b) => {
+        // Put "Ohne Team" at the end
+        if (a.teamId === UNASSIGNED_TEAM_ID) return 1;
+        if (b.teamId === UNASSIGNED_TEAM_ID) return -1;
+        return a.teamName.localeCompare(b.teamName);
+    });
+}
+
+function getUniqueDates(assignments) {
+    const dates = new Set();
+    assignments.forEach(a => {
+        dates.add(a.date.split('T')[0]);
+    });
+    return Array.from(dates);
+}
+
+/**
+ * Calculate ISO 8601 week number for a given date
+ * ISO 8601 week starts on Monday and the first week of the year is the week containing the first Thursday
+ * @param {Date} date - The date to calculate the week number for
+ * @returns {number} The ISO 8601 week number
+ */
+function getWeekNumber(date) {
+    // Create a copy of the date in UTC
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    // ISO 8601 week starts on Monday (day 1), Sunday is day 7
+    const dayNum = d.getUTCDay() || 7;
+    // Set to the nearest Thursday (current date + 4 - current day number)
+    // This ensures we're in the correct week according to ISO 8601
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    // Get first day of year
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    // Calculate week number: days since year start divided by 7, rounded up
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+function groupDatesByWeek(dates) {
+    const weeks = {};
+    
+    dates.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const weekNum = getWeekNumber(date);
+        
+        if (!weeks[weekNum]) {
+            weeks[weekNum] = {
+                weekNumber: weekNum,
+                days: []
+            };
+        }
+        weeks[weekNum].days.push(dateStr);
+    });
+    
+    return Object.values(weeks).sort((a, b) => a.weekNumber - b.weekNumber);
+}
+
+function groupDatesByMonth(dates) {
+    const months = {};
+    
+    dates.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!months[monthKey]) {
+            months[monthKey] = {
+                key: monthKey,
+                dates: [],
+                weeks: new Set()
+            };
+        }
+        months[monthKey].dates.push(dateStr);
+        months[monthKey].weeks.add(getWeekNumber(date));
+    });
+    
+    // Convert weeks to sorted array
+    return Object.values(months).map(month => ({
+        ...month,
+        weeks: Array.from(month.weeks).sort((a, b) => a - b)
+    })).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/**
+ * Calculate Easter Sunday for a given year using the Meeus/Jones/Butcher algorithm
+ * @param {number} year - The year to calculate Easter for
+ * @returns {Date} Easter Sunday date
+ */
+function calculateEaster(year) {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+}
+
+/**
+ * Check if a date is a public holiday in Hessen (Germany)
+ * @param {Date} date - The date to check
+ * @returns {boolean} True if the date is a Hessian public holiday
+ */
+function isHessianHoliday(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth(); // 0-indexed
+    const day = date.getDate();
+    
+    // Fixed holidays
+    const fixedHolidays = [
+        [0, 1],   // Neujahr (1. Januar)
+        [4, 1],   // Tag der Arbeit (1. Mai)
+        [9, 3],   // Tag der Deutschen Einheit (3. Oktober)
+        [11, 25], // 1. Weihnachtstag (25. Dezember)
+        [11, 26]  // 2. Weihnachtstag (26. Dezember)
+    ];
+    
+    for (const [m, d] of fixedHolidays) {
+        if (month === m && day === d) {
+            return true;
+        }
+    }
+    
+    // Easter-dependent holidays
+    const easter = calculateEaster(year);
+    const easterTime = easter.getTime();
+    const dateTime = date.getTime();
+    const oneDay = 24 * 60 * 60 * 1000;
+    
+    // Karfreitag (Good Friday) - 2 days before Easter
+    if (dateTime === easterTime - 2 * oneDay) {
+        return true;
+    }
+    
+    // Ostermontag (Easter Monday) - 1 day after Easter
+    if (dateTime === easterTime + 1 * oneDay) {
+        return true;
+    }
+    
+    // Christi Himmelfahrt (Ascension Day) - 39 days after Easter
+    if (dateTime === easterTime + 39 * oneDay) {
+        return true;
+    }
+    
+    // Pfingstmontag (Whit Monday) - 50 days after Easter
+    if (dateTime === easterTime + 50 * oneDay) {
+        return true;
+    }
+    
+    // Fronleichnam (Corpus Christi) - 60 days after Easter (Hessen-specific)
+    if (dateTime === easterTime + 60 * oneDay) {
+        return true;
+    }
+    
+    return false;
 }
 
 async function planShifts() {

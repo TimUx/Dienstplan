@@ -174,6 +174,7 @@ public class ShiftPlanningService : IShiftPlanningService
             }
             
             // If we couldn't fill the requirement, try with relaxed validation
+            // Still check critical safety rules (rest periods, consecutive shifts)
             if (assigned < count)
             {
                 foreach (var employee in sortedEmployees)
@@ -192,13 +193,36 @@ public class ShiftPlanningService : IShiftPlanningService
                         IsManual = false
                     };
                     
-                    // Only check critical rules (not rotation preferences)
+                    // Check critical safety rules (absence, rest periods, consecutive shifts)
                     var hasAbsence = await HasAbsenceOnDate(employee.Id, date);
                     if (!hasAbsence)
                     {
-                        assignments.Add(assignment);
-                        assignedEmployeeIds.Add(employee.Id);
-                        assigned++;
+                        // Check forbidden transitions (rest periods)
+                        var previousShift = await _shiftAssignmentRepository.GetByEmployeeAndDateAsync(
+                            employee.Id, date.AddDays(-1));
+                        
+                        bool isSafeTransition = true;
+                        if (previousShift != null)
+                        {
+                            var previousShiftCode = GetShiftCodeById(previousShift.ShiftTypeId);
+                            if (ShiftRules.ForbiddenTransitions.ContainsKey(previousShiftCode))
+                            {
+                                isSafeTransition = !ShiftRules.ForbiddenTransitions[previousShiftCode].Contains(shiftCode);
+                            }
+                        }
+                        
+                        // Check maximum consecutive shifts
+                        var employeeAllAssignments = (await _shiftAssignmentRepository.GetByEmployeeIdAsync(employee.Id))
+                            .OrderBy(a => a.Date)
+                            .ToList();
+                        var consecutiveShifts = CountConsecutiveShifts(employeeAllAssignments, date);
+                        
+                        if (isSafeTransition && consecutiveShifts < ShiftRules.MaximumConsecutiveShifts)
+                        {
+                            assignments.Add(assignment);
+                            assignedEmployeeIds.Add(employee.Id);
+                            assigned++;
+                        }
                     }
                 }
             }
@@ -412,6 +436,10 @@ public class ShiftPlanningService : IShiftPlanningService
         return await _shiftAssignmentRepository.AddAsync(springerAssignment);
     }
     
+    /// <summary>
+    /// Get shift type ID by code
+    /// Note: These IDs correspond to the seeded shift types in DienstplanDbContext.SeedShiftTypes
+    /// </summary>
     private int GetShiftTypeIdByCode(string code)
     {
         return code switch
@@ -424,6 +452,10 @@ public class ShiftPlanningService : IShiftPlanningService
         };
     }
     
+    /// <summary>
+    /// Get shift code by type ID
+    /// Note: These IDs correspond to the seeded shift types in DienstplanDbContext.SeedShiftTypes
+    /// </summary>
     private string GetShiftCodeById(int id)
     {
         return id switch

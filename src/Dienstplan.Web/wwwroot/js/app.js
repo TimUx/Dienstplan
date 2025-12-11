@@ -386,7 +386,8 @@ function displayWeekView(data, employees) {
     if (dates.length === 0 && data.startDate && data.endDate) {
         const start = new Date(data.startDate);
         const end = new Date(data.endDate);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Create a new Date object for each iteration to prevent mutation issues
+        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
             dates.push(d.toISOString().split('T')[0]);
         }
     }
@@ -467,7 +468,8 @@ function displayMonthView(data, employees) {
     if (dates.length === 0 && data.startDate && data.endDate) {
         const start = new Date(data.startDate);
         const end = new Date(data.endDate);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Create a new Date object for each iteration to prevent mutation issues
+        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
             dates.push(d.toISOString().split('T')[0]);
         }
     }
@@ -550,7 +552,8 @@ function displayYearView(data, employees) {
     if (dates.length === 0 && data.startDate && data.endDate) {
         const start = new Date(data.startDate);
         const end = new Date(data.endDate);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Create a new Date object for each iteration to prevent mutation issues
+        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
             dates.push(d.toISOString().split('T')[0]);
         }
     }

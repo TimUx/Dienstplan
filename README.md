@@ -102,10 +102,6 @@ Das System beachtet folgende Regeln:
 
 ## 📸 Screenshots
 
-### Dienstplan-Ansicht (Woche) - Öffentlich
-![Dienstplan Wochenansicht öffentlich](https://github.com/user-attachments/assets/8fbba678-8a94-4e95-aae2-cfea5dcf19f8)
-*Wochenansicht des Dienstplans - sichtbar für alle Benutzer ohne Anmeldung*
-
 ### Anmeldung
 ![Anmeldedialog](https://github.com/user-attachments/assets/9ca2ea96-c4aa-4dc6-818c-cae725b95a18)
 *Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle (Admin, Disponent, Mitarbeiter)*

@@ -60,6 +60,7 @@ builder.Services.AddScoped<IShiftExchangeRepository, ShiftExchangeRepository>();
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 builder.Services.AddScoped<IPdfExportService, PdfExportService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Add CORS for web interface
 builder.Services.AddCors(options =>

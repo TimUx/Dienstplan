@@ -29,6 +29,8 @@ public class ShiftAssignmentDto
     public int Id { get; set; }
     public int EmployeeId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;
+    public int? TeamId { get; set; }
+    public string? TeamName { get; set; }
     public int ShiftTypeId { get; set; }
     public string ShiftCode { get; set; } = string.Empty;
     public string ShiftName { get; set; } = string.Empty;

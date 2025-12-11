@@ -911,3 +911,192 @@ body.disponent button.admin-only.admin-strict {
     color: var(--text-color);
 }
 
+/* Calendar View Styles */
+
+.calendar-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background: var(--card-bg);
+    box-shadow: var(--shadow);
+}
+
+.calendar-table th,
+.calendar-table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.calendar-table th {
+    background: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.calendar-table .team-column {
+    text-align: left;
+    min-width: 200px;
+    background: var(--primary-color);
+    font-weight: 600;
+}
+
+.calendar-table .date-column,
+.calendar-table .week-column {
+    min-width: 60px;
+    font-size: 0.85rem;
+}
+
+.calendar-table .week-column {
+    background: var(--secondary-color);
+    color: white;
+    font-weight: 600;
+}
+
+.calendar-table .team-row {
+    background: var(--bg-color);
+}
+
+.calendar-table .team-header {
+    text-align: left;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 10px;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border: none;
+}
+
+.calendar-table .employee-row {
+    background: white;
+}
+
+.calendar-table .employee-row:hover {
+    background: #f1f5f9;
+}
+
+.calendar-table .employee-name {
+    text-align: left;
+    padding-left: 20px;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
+.calendar-table .shift-cell {
+    padding: 6px;
+    min-height: 40px;
+}
+
+.calendar-table .week-cell {
+    background: #f8fafc;
+    font-weight: 600;
+    color: var(--secondary-color);
+}
+
+.calendar-table .shift-badge {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    margin: 1px;
+}
+
+/* Week View Specific */
+.week-view .date-column {
+    min-width: 80px;
+}
+
+/* Month View Specific */
+.month-view {
+    font-size: 0.85rem;
+}
+
+.month-view .date-column {
+    min-width: 50px;
+}
+
+.month-header {
+    text-align: center;
+    margin: 20px 0 10px 0;
+}
+
+.month-header h3 {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+/* Year View Specific */
+.year-view-container {
+    margin: 20px 0;
+}
+
+.month-section {
+    margin-bottom: 40px;
+}
+
+.month-title {
+    text-align: center;
+    color: var(--primary-color);
+    font-size: 1.3rem;
+    margin: 20px 0;
+    padding: 10px;
+    background: var(--bg-color);
+    border-radius: 8px;
+}
+
+.year-view .week-column {
+    min-width: 70px;
+}
+
+.year-view .shift-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .calendar-table {
+        font-size: 0.85rem;
+    }
+    
+    .calendar-table .team-column {
+        min-width: 150px;
+    }
+    
+    .calendar-table .date-column,
+    .calendar-table .week-column {
+        min-width: 45px;
+    }
+    
+    .calendar-table .shift-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+    }
+}
+
+@media (max-width: 768px) {
+    .calendar-table {
+        font-size: 0.75rem;
+    }
+    
+    .calendar-table th,
+    .calendar-table td {
+        padding: 4px;
+    }
+    
+    .calendar-table .team-column {
+        min-width: 120px;
+    }
+    
+    .calendar-table .date-column,
+    .calendar-table .week-column {
+        min-width: 35px;
+    }
+    
+    .calendar-table .shift-badge {
+        font-size: 0.65rem;
+        padding: 2px 4px;
+    }
+}
+
+

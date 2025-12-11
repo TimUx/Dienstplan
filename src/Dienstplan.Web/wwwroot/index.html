@@ -15,12 +15,21 @@
                     <div class="divider"></div>
                     <h1>Dienstplan - Schichtverwaltung</h1>
                 </div>
-                <nav>
-                    <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
-                    <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
-                    <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
-                    <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
-                </nav>
+                <div class="header-right">
+                    <nav>
+                        <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
+                        <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
+                        <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
+                        <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
+                    </nav>
+                    <div id="user-info" class="user-info" style="display: none;">
+                        <span id="user-name"></span>
+                        <button onclick="logout()" class="btn-logout">Abmelden</button>
+                    </div>
+                    <div id="login-prompt" class="login-prompt">
+                        <button onclick="showLoginModal()" class="btn-login">Anmelden</button>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -40,6 +49,7 @@
                             <option value="year">Jahr</option>
                         </select>
                         <button onclick="planShifts()" class="btn-primary">Schichten planen</button>
+                        <button onclick="exportScheduleToPdf()" class="btn-secondary">📄 PDF Export</button>
                     </div>
                 </div>
                 
@@ -329,6 +339,40 @@
                     <button type="submit" class="btn-primary">Speichern</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeLoginModal()">&times;</span>
+            <h2>Anmelden</h2>
+            <form id="loginForm" onsubmit="login(event)">
+                <div class="form-group">
+                    <label>E-Mail*</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Passwort*</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="rememberMe">
+                        Angemeldet bleiben
+                    </label>
+                </div>
+                <div id="loginError" class="error-message" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeLoginModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Anmelden</button>
+                </div>
+            </form>
+            <div class="login-info">
+                <p><strong>Standard-Anmeldedaten:</strong></p>
+                <p>E-Mail: admin@fritzwinter.de</p>
+                <p>Passwort: Admin123!</p>
+            </div>
         </div>
     </div>
 

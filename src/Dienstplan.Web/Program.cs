@@ -57,6 +57,7 @@ builder.Services.AddScoped<IAbsenceRepository, AbsenceRepository>();
 // Register services
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();
+builder.Services.AddScoped<IPdfExportService, PdfExportService>();
 
 // Add CORS for web interface
 builder.Services.AddCors(options =>

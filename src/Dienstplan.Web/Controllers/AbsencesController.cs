@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
@@ -7,6 +8,7 @@ namespace Dienstplan.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class AbsencesController : ControllerBase
 {
     private readonly IAbsenceRepository _repository;
@@ -17,6 +19,7 @@ public class AbsencesController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous] // Allow all to view absences
     public async Task<ActionResult<IEnumerable<AbsenceDto>>> GetAll()
     {
         var absences = await _repository.GetAllAsync();
@@ -34,6 +37,7 @@ public class AbsencesController : ControllerBase
     }
 
     [HttpGet("employee/{employeeId}")]
+    [AllowAnonymous] // Allow all to view absences
     public async Task<ActionResult<IEnumerable<AbsenceDto>>> GetByEmployee(int employeeId)
     {
         var absences = await _repository.GetByEmployeeIdAsync(employeeId);
@@ -51,6 +55,7 @@ public class AbsencesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<ActionResult<AbsenceDto>> Create(AbsenceDto dto)
     {
         var absence = new Absence
@@ -68,6 +73,7 @@ public class AbsencesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin,Disponent")]
     public async Task<IActionResult> Delete(int id)
     {
         await _repository.DeleteAsync(id);

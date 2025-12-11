@@ -53,3 +53,10 @@ public interface IEmailSettingsRepository : IRepository<EmailSettings>
 {
     Task<EmailSettings?> GetActiveSettingsAsync();
 }
+
+public interface IAuditLogRepository : IRepository<AuditLog>
+{
+    Task<IEnumerable<AuditLog>> GetByEntityAsync(string entityName, string entityId);
+    Task<IEnumerable<AuditLog>> GetByUserAsync(string userId);
+    Task<IEnumerable<AuditLog>> GetRecentAsync(int count);
+}

@@ -179,6 +179,18 @@
                     </div>
 
                     <div class="admin-section">
+                        <h3>📋 Änderungsprotokoll (Audit Log)</h3>
+                        <p>Protokoll aller Systemänderungen für Nachverfolgbarkeit und Compliance.</p>
+                        <div class="controls">
+                            <button onclick="loadAuditLogs(100)" class="btn-primary">Letzte 100 Einträge laden</button>
+                            <button onclick="loadAuditLogs(500)" class="btn-secondary">Letzte 500 Einträge laden</button>
+                        </div>
+                        <div id="audit-logs-content">
+                            <p class="loading">Lade Änderungsprotokoll...</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-section">
                         <h3>📊 System-Information</h3>
                         <div class="info-box">
                             <p><strong>Version:</strong> 1.2</p>

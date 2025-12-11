@@ -212,6 +212,12 @@ function showView(viewName) {
     }
 }
 
+function loadAdminView() {
+    loadUsers();
+    loadEmailSettings();
+    loadAuditLogs(100);
+}
+
 // Initialize smooth scrolling for manual anchors
 function initializeManualAnchors() {
     document.querySelectorAll('.manual-toc a').forEach(anchor => {
@@ -1634,16 +1640,109 @@ async function loadUsers() {
     const content = document.getElementById('users-content');
     content.innerHTML = '<p class="loading">Lade Benutzer...</p>';
     
-    // Note: ASP.NET Identity doesn't provide a direct API to list all users by default
-    // This is a placeholder that shows the user management is available via the register endpoint
-    content.innerHTML = `
-        <div class="info-box">
-            <p><strong>Benutzerverwaltung</strong></p>
-            <p>Neue Benutzer können über den Button "Benutzer hinzufügen" erstellt werden.</p>
-            <p>Die Verwaltung erfolgt über die ASP.NET Identity API.</p>
-            <p>Standard-Administrator: admin@fritzwinter.de</p>
-        </div>
-    `;
+    try {
+        const response = await fetch(`${API_BASE}/auth/users`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const users = await response.json();
+            displayUsers(users);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
+        } else if (response.status === 403) {
+            content.innerHTML = '<p class="error">Sie haben keine Berechtigung, Benutzer anzuzeigen.</p>';
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Benutzer.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Benutzer.</p>';
+    }
+}
+
+function displayUsers(users) {
+    const content = document.getElementById('users-content');
+    
+    if (!users || users.length === 0) {
+        content.innerHTML = '<p>Keine Benutzer gefunden.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Name</th><th>E-Mail</th><th>Rolle(n)</th><th>Status</th><th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    users.forEach(user => {
+        const isLocked = user.lockoutEnd && new Date(user.lockoutEnd) > new Date();
+        const statusBadge = isLocked 
+            ? '<span class="badge badge-error">Gesperrt</span>' 
+            : '<span class="badge badge-success">Aktiv</span>';
+        
+        html += '<tr>';
+        html += `<td>${escapeHtml(user.fullName || 'N/A')}</td>`;
+        html += `<td>${escapeHtml(user.email || 'N/A')}</td>`;
+        html += `<td>${user.roles.join(', ')}</td>`;
+        html += `<td>${statusBadge}</td>`;
+        html += `<td>`;
+        html += `<button onclick="editUser('${user.id}')" class="btn-small btn-primary">Bearbeiten</button> `;
+        html += `<button onclick="deleteUser('${user.id}', '${escapeHtml(user.email)}')" class="btn-small btn-danger">Löschen</button>`;
+        html += `</td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+async function editUser(userId) {
+    try {
+        const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const user = await response.json();
+            
+            document.getElementById('userId').value = user.id;
+            document.getElementById('userFullName').value = user.fullName;
+            document.getElementById('userEmail').value = user.email;
+            document.getElementById('userRole').value = user.roles[0] || 'Mitarbeiter';
+            document.getElementById('userModalTitle').textContent = 'Benutzer bearbeiten';
+            document.getElementById('passwordGroup').style.display = 'none';
+            document.getElementById('userPassword').required = false;
+            document.getElementById('userModal').style.display = 'block';
+        } else {
+            alert('Fehler beim Laden des Benutzers.');
+        }
+    } catch (error) {
+        console.error('Error loading user:', error);
+        alert('Fehler beim Laden des Benutzers.');
+    }
+}
+
+async function deleteUser(userId, userEmail) {
+    if (!confirm(`Möchten Sie den Benutzer "${userEmail}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            alert('Benutzer erfolgreich gelöscht!');
+            loadUsers();
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Löschen: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert(`Fehler: ${error.message}`);
+    }
 }
 
 async function showAddUserModal() {
@@ -1668,23 +1767,33 @@ function closeUserModal() {
 async function saveUser(event) {
     event.preventDefault();
     
-    const user = {
+    const userId = document.getElementById('userId').value;
+    const isEdit = userId !== '';
+    
+    const userData = {
         fullName: document.getElementById('userFullName').value,
         email: document.getElementById('userEmail').value,
-        password: document.getElementById('userPassword').value,
         role: document.getElementById('userRole').value
     };
     
+    // Only include password for new users
+    if (!isEdit) {
+        userData.password = document.getElementById('userPassword').value;
+    }
+    
     try {
-        const response = await fetch(`${API_BASE}/auth/register`, {
-            method: 'POST',
+        const url = isEdit ? `${API_BASE}/auth/users/${userId}` : `${API_BASE}/auth/register`;
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify(user)
+            body: JSON.stringify(userData)
         });
         
         if (response.ok) {
-            alert('Benutzer erfolgreich erstellt!');
+            alert(isEdit ? 'Benutzer erfolgreich aktualisiert!' : 'Benutzer erfolgreich erstellt!');
             closeUserModal();
             loadUsers();
         } else if (response.status === 401) {
@@ -1693,7 +1802,7 @@ async function saveUser(event) {
             alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Erstellen: ${error.error || 'Unbekannter Fehler'}`);
+            alert(`Fehler beim ${isEdit ? 'Aktualisieren' : 'Erstellen'}: ${error.error || 'Unbekannter Fehler'}`);
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);
@@ -1857,5 +1966,80 @@ function saveGlobalSettings() {
     localStorage.setItem('maxConsecutiveNights', maxConsecutiveNights);
     
     alert(`Globale Einstellungen gespeichert:\n• Max Stunden/Monat: ${maxHoursMonth}\n• Max Stunden/Woche: ${maxHoursWeek}\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Diese Einstellungen werden lokal im Browser gespeichert.`);
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Audit Log functions
+async function loadAuditLogs(count = 100) {
+    const content = document.getElementById('audit-logs-content');
+    content.innerHTML = '<p class="loading">Lade Änderungsprotokoll...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/auditlogs/recent/${count}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const logs = await response.json();
+            displayAuditLogs(logs);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
+        } else if (response.status === 403) {
+            content.innerHTML = '<p class="error">Sie haben keine Berechtigung, das Änderungsprotokoll anzuzeigen.</p>';
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden des Änderungsprotokolls.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading audit logs:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden des Änderungsprotokolls.</p>';
+    }
+}
+
+function displayAuditLogs(logs) {
+    const content = document.getElementById('audit-logs-content');
+    
+    if (!logs || logs.length === 0) {
+        content.innerHTML = '<p>Keine Einträge im Änderungsprotokoll gefunden.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Zeitstempel</th><th>Benutzer</th><th>Aktion</th><th>Entität</th><th>Details</th>';
+    html += '</tr></thead><tbody>';
+    
+    logs.forEach(log => {
+        const timestamp = new Date(log.timestamp).toLocaleString('de-DE');
+        const actionBadge = getActionBadge(log.action);
+        
+        html += '<tr>';
+        html += `<td>${timestamp}</td>`;
+        html += `<td>${escapeHtml(log.userName)}</td>`;
+        html += `<td>${actionBadge}</td>`;
+        html += `<td>${escapeHtml(log.entityName)} (ID: ${escapeHtml(log.entityId)})</td>`;
+        html += `<td><small>${log.changes ? escapeHtml(log.changes.substring(0, 100)) + '...' : '-'}</small></td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+function getActionBadge(action) {
+    switch(action) {
+        case 'Created':
+            return '<span class="badge badge-success">Erstellt</span>';
+        case 'Updated':
+            return '<span class="badge badge-warning">Aktualisiert</span>';
+        case 'Deleted':
+            return '<span class="badge badge-error">Gelöscht</span>';
+        default:
+            return `<span class="badge">${escapeHtml(action)}</span>`;
+    }
 }
 

@@ -57,6 +57,8 @@ builder.Services.AddScoped<IAbsenceRepository, AbsenceRepository>();
 builder.Services.AddScoped<IVacationRequestRepository, VacationRequestRepository>();
 builder.Services.AddScoped<IShiftExchangeRepository, ShiftExchangeRepository>();
 builder.Services.AddScoped<IEmailSettingsRepository, EmailSettingsRepository>();
+builder.Services.AddScoped<IRepository<Team>, Repository<Team>>();
+builder.Services.AddScoped<IRepository<ShiftType>, Repository<ShiftType>>();
 
 // Register services
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();

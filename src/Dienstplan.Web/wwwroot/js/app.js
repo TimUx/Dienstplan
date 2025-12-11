@@ -2214,7 +2214,7 @@ function getActionBadge(action) {
 // Admin Tab Navigation
 // ===========================
 
-function showAdminTab(tabName) {
+function showAdminTab(tabName, clickedElement) {
     // Hide all tab contents
     const allTabContents = document.querySelectorAll('.admin-tab-content');
     allTabContents.forEach(content => content.classList.remove('active'));
@@ -2230,8 +2230,15 @@ function showAdminTab(tabName) {
     }
     
     // Add active class to selected tab
-    const selectedTab = event.target;
-    selectedTab.classList.add('active');
+    // Use clickedElement if provided, otherwise find by onclick attribute
+    if (clickedElement) {
+        clickedElement.classList.add('active');
+    } else {
+        const tabButton = document.querySelector(`.admin-tab[onclick*="${tabName}"]`);
+        if (tabButton) {
+            tabButton.classList.add('active');
+        }
+    }
     
     // Load data for the selected tab if needed
     if (tabName === 'users') {

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
+using Dienstplan.Application.Services;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
 
@@ -14,15 +15,18 @@ public class ShiftsController : ControllerBase
     private readonly IShiftAssignmentRepository _shiftRepository;
     private readonly IAbsenceRepository _absenceRepository;
     private readonly IShiftPlanningService _planningService;
+    private readonly IPdfExportService _pdfExportService;
 
     public ShiftsController(
         IShiftAssignmentRepository shiftRepository,
         IAbsenceRepository absenceRepository,
-        IShiftPlanningService planningService)
+        IShiftPlanningService planningService,
+        IPdfExportService pdfExportService)
     {
         _shiftRepository = shiftRepository;
         _absenceRepository = absenceRepository;
         _planningService = planningService;
+        _pdfExportService = pdfExportService;
     }
 
     [HttpGet("schedule")]
@@ -146,5 +150,27 @@ public class ShiftsController : ControllerBase
             Date = assignment.Date,
             IsSpringerAssignment = true
         });
+    }
+
+    [HttpGet("export/pdf")]
+    [AllowAnonymous] // Allow all to export PDF
+    public async Task<IActionResult> ExportScheduleToPdf(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        var start = startDate ?? DateTime.Today;
+        var end = endDate ?? start.AddDays(30);
+
+        try
+        {
+            var pdfBytes = await _pdfExportService.ExportScheduleToPdfAsync(start, end);
+            
+            var fileName = $"Dienstplan_{start:yyyy-MM-dd}_bis_{end:yyyy-MM-dd}.pdf";
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = $"Fehler beim Erstellen des PDFs: {ex.Message}" });
+        }
     }
 }

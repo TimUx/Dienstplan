@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Dienstplan.Application.DTOs;
 using Dienstplan.Application.Services;
 
@@ -6,6 +7,7 @@ namespace Dienstplan.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class StatisticsController : ControllerBase
 {
     private readonly IStatisticsService _statisticsService;
@@ -16,6 +18,7 @@ public class StatisticsController : ControllerBase
     }
 
     [HttpGet("dashboard")]
+    [AllowAnonymous] // Allow all to view statistics
     public async Task<ActionResult<DashboardStatisticsDto>> GetDashboard(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate)

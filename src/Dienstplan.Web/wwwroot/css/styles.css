@@ -1053,6 +1053,17 @@ body.disponent button.admin-only.admin-strict {
     padding: 2px 6px;
 }
 
+/* Sunday and holiday column highlighting */
+.sunday-column,
+.holiday-column {
+    background: #ffebee !important;
+}
+
+.sunday-cell,
+.holiday-cell {
+    background: #fff5f5 !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 1200px) {
     .calendar-table {

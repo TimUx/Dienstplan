@@ -23,9 +23,29 @@ public class Employee
     public string Personalnummer { get; set; } = string.Empty;
     
     /// <summary>
+    /// Email address for notifications
+    /// </summary>
+    public string? Email { get; set; }
+    
+    /// <summary>
+    /// Birth date (Geburtsdatum)
+    /// </summary>
+    public DateTime? Geburtsdatum { get; set; }
+    
+    /// <summary>
+    /// Function/Role of the employee (e.g., Brandmeldetechniker, Brandschutzbeauftragter)
+    /// </summary>
+    public string? Funktion { get; set; }
+    
+    /// <summary>
     /// Indicates if this employee is a backup worker (Springer)
     /// </summary>
     public bool IsSpringer { get; set; }
+    
+    /// <summary>
+    /// Indicates if this is a temporary worker (Ferienjobber)
+    /// </summary>
+    public bool IsFerienjobber { get; set; }
     
     /// <summary>
     /// Team assignment
@@ -37,6 +57,11 @@ public class Employee
     /// Absences for this employee
     /// </summary>
     public ICollection<Absence> Absences { get; set; } = new List<Absence>();
+    
+    /// <summary>
+    /// Vacation requests for this employee
+    /// </summary>
+    public ICollection<VacationRequest> VacationRequests { get; set; } = new List<VacationRequest>();
     
     /// <summary>
     /// Shift assignments for this employee

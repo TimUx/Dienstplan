@@ -13,6 +13,26 @@ public class ShiftRules
     public const int MinimumRestHours = 11;
     
     /// <summary>
+    /// Maximum consecutive shifts
+    /// </summary>
+    public const int MaximumConsecutiveShifts = 6;
+    
+    /// <summary>
+    /// Maximum consecutive night shifts
+    /// </summary>
+    public const int MaximumConsecutiveNightShifts = 3;
+    
+    /// <summary>
+    /// Maximum hours per month per employee
+    /// </summary>
+    public const int MaximumHoursPerMonth = 192;
+    
+    /// <summary>
+    /// Maximum hours per week per employee
+    /// </summary>
+    public const int MaximumHoursPerWeek = 48;
+    
+    /// <summary>
     /// Forbidden shift transitions
     /// </summary>
     public static readonly Dictionary<string, List<string>> ForbiddenTransitions = new()
@@ -32,7 +52,7 @@ public class ShiftRules
     };
     
     /// <summary>
-    /// Staffing requirements for weekdays
+    /// Staffing requirements for weekdays (Monday-Friday)
     /// </summary>
     public static class WeekdayStaffing
     {
@@ -45,10 +65,11 @@ public class ShiftRules
     }
     
     /// <summary>
-    /// Staffing requirements for weekends
+    /// Staffing requirements for weekends (Saturday-Sunday)
     /// </summary>
     public static class WeekendStaffing
     {
+        public const int MinPerShift = 2;
         public const int MaxPerShift = 3;
     }
 }

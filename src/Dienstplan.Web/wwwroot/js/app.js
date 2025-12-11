@@ -41,6 +41,19 @@ function updateUIForAuthenticatedUser(user) {
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-prompt').style.display = 'none';
     document.getElementById('user-name').textContent = user.fullName || user.email;
+    
+    // Show/hide role-specific elements
+    const isAdmin = userRoles.includes('Admin');
+    const isDisponent = userRoles.includes('Disponent');
+    
+    if (isAdmin) {
+        document.body.classList.add('admin');
+        document.getElementById('nav-admin').style.display = 'inline-block';
+        document.getElementById('nav-vacations').style.display = 'inline-block';
+    } else if (isDisponent) {
+        document.body.classList.add('disponent');
+        document.getElementById('nav-vacations').style.display = 'inline-block';
+    }
 }
 
 function updateUIForAnonymousUser() {
@@ -48,6 +61,9 @@ function updateUIForAnonymousUser() {
     document.getElementById('login-prompt').style.display = 'block';
     currentUser = null;
     userRoles = [];
+    document.body.classList.remove('admin', 'disponent');
+    document.getElementById('nav-admin').style.display = 'none';
+    document.getElementById('nav-vacations').style.display = 'none';
 }
 
 function showLoginModal() {
@@ -152,26 +168,28 @@ function showView(viewName) {
     
     document.getElementById(`${viewName}-view`).classList.add('active');
     
-    // Add active class to the clicked button
-    const buttons = {
-        'schedule': 0,
-        'employees': 1,
-        'statistics': 2,
-        'manual': 3
-    };
-    const buttonIndex = buttons[viewName];
-    if (buttonIndex !== undefined) {
-        document.querySelectorAll('.nav-btn')[buttonIndex].classList.add('active');
-    }
+    // Find and activate the corresponding nav button
+    const navButtons = document.querySelectorAll('.nav-btn');
+    navButtons.forEach(btn => {
+        if (btn.getAttribute('onclick') === `showView('${viewName}')`) {
+            btn.classList.add('active');
+        }
+    });
     
+    // Load content based on view
     if (viewName === 'schedule') {
         loadSchedule();
     } else if (viewName === 'employees') {
         loadEmployees();
+    } else if (viewName === 'teams') {
+        loadTeams();
+    } else if (viewName === 'vacations') {
+        loadVacationRequests('all');
     } else if (viewName === 'statistics') {
         loadStatistics();
+    } else if (viewName === 'admin') {
+        loadAdminView();
     } else if (viewName === 'manual') {
-        // Manual view is static HTML, no loading needed
         initializeManualAnchors();
     }
 }
@@ -510,3 +528,251 @@ function displayStatistics(stats) {
     html += '</div>';
     content.innerHTML = html;
 }
+
+
+// Teams View Functions
+async function loadTeams() {
+    const content = document.getElementById('teams-content');
+    content.innerHTML = '<p class="loading">Lade Teams...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/teams`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const teams = await response.json();
+            displayTeams(teams);
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Teams.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading teams:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Teams.</p>';
+    }
+}
+
+function displayTeams(teams) {
+    const content = document.getElementById('teams-content');
+    
+    if (teams.length === 0) {
+        content.innerHTML = '<p>Keine Teams vorhanden.</p>';
+        return;
+    }
+    
+    let html = '<div class="grid">';
+    teams.forEach(team => {
+        html += `
+            <div class="card">
+                <h3>${team.name}</h3>
+                <p>${team.description || 'Keine Beschreibung'}</p>
+                <p><strong>E-Mail:</strong> ${team.email || 'Nicht angegeben'}</p>
+                <p><strong>Mitarbeiter:</strong> ${team.employeeCount || 0}</p>
+            </div>
+        `;
+    });
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+function showAddTeamModal() {
+    alert('Team hinzufügen - Funktion wird implementiert');
+}
+
+// Vacation Management Functions
+function showVacationTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    
+    if (tabName === 'requests') {
+        document.getElementById('vacation-requests-tab').classList.add('active');
+        loadVacationRequests('all');
+    } else if (tabName === 'exchanges') {
+        document.getElementById('shift-exchanges-tab').classList.add('active');
+        loadShiftExchanges('available');
+    }
+}
+
+async function loadVacationRequests(filter = 'all') {
+    const content = document.getElementById('vacation-requests-content');
+    content.innerHTML = '<p class="loading">Lade Urlaubsanträge...</p>';
+    
+    try {
+        let url = `${API_BASE}/vacationrequests`;
+        if (filter === 'pending') {
+            url += '/pending';
+        }
+        
+        const response = await fetch(url, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const requests = await response.json();
+            displayVacationRequests(requests);
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Urlaubsanträge.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading vacation requests:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Urlaubsanträge.</p>';
+    }
+}
+
+function displayVacationRequests(requests) {
+    const content = document.getElementById('vacation-requests-content');
+    
+    if (requests.length === 0) {
+        content.innerHTML = '<p>Keine Urlaubsanträge vorhanden.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr><th>Mitarbeiter</th><th>Von</th><th>Bis</th><th>Status</th><th>Erstellt</th></tr></thead><tbody>';
+    requests.forEach(req => {
+        const statusClass = req.status === 'Genehmigt' ? 'success' : req.status === 'NichtGenehmigt' ? 'danger' : 'warning';
+        html += `
+            <tr>
+                <td>${req.employeeName}</td>
+                <td>${new Date(req.startDate).toLocaleDateString('de-DE')}</td>
+                <td>${new Date(req.endDate).toLocaleDateString('de-DE')}</td>
+                <td><span class="badge ${statusClass}">${req.status}</span></td>
+                <td>${new Date(req.createdAt).toLocaleDateString('de-DE')}</td>
+            </tr>
+        `;
+    });
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+function showAddVacationRequestModal() {
+    alert('Urlaubsantrag stellen - Funktion wird implementiert');
+}
+
+async function loadShiftExchanges(filter = 'available') {
+    const content = document.getElementById('shift-exchanges-content');
+    content.innerHTML = '<p class="loading">Lade Diensttausch-Angebote...</p>';
+    
+    try {
+        let url = `${API_BASE}/shiftexchanges/${filter}`;
+        
+        const response = await fetch(url, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const exchanges = await response.json();
+            displayShiftExchanges(exchanges);
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Diensttausch-Angebote.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading shift exchanges:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Diensttausch-Angebote.</p>';
+    }
+}
+
+function displayShiftExchanges(exchanges) {
+    const content = document.getElementById('shift-exchanges-content');
+    
+    if (exchanges.length === 0) {
+        content.innerHTML = '<p>Keine Diensttausch-Angebote vorhanden.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr><th>Anbieter</th><th>Schicht-Datum</th><th>Status</th><th>Erstellt</th></tr></thead><tbody>';
+    exchanges.forEach(ex => {
+        html += `
+            <tr>
+                <td>${ex.offeringEmployeeName}</td>
+                <td>${new Date(ex.shiftDate).toLocaleDateString('de-DE')}</td>
+                <td><span class="badge">${ex.status}</span></td>
+                <td>${new Date(ex.createdAt).toLocaleDateString('de-DE')}</td>
+            </tr>
+        `;
+    });
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+function showOfferShiftExchangeModal() {
+    alert('Dienst zum Tausch anbieten - Funktion wird implementiert');
+}
+
+// Admin View Functions
+async function loadAdminView() {
+    loadUsers();
+    loadEmailSettings();
+}
+
+async function loadUsers() {
+    const content = document.getElementById('users-content');
+    content.innerHTML = '<p class="loading">Lade Benutzer...</p>';
+    
+    // For now, show a placeholder
+    content.innerHTML = `
+        <div class="info-box">
+            <p>Benutzerverwaltung über die ASP.NET Identity API.</p>
+            <p>Verwenden Sie die Identity-Endpunkte um Benutzer zu verwalten.</p>
+        </div>
+    `;
+}
+
+function showAddUserModal() {
+    alert('Benutzer hinzufügen - Funktion wird implementiert');
+}
+
+async function loadEmailSettings() {
+    const content = document.getElementById('email-settings-content');
+    
+    try {
+        const response = await fetch(`${API_BASE}/emailsettings/active`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const settings = await response.json();
+            displayEmailSettings(settings);
+        } else {
+            content.innerHTML = `
+                <div class="info-box">
+                    <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
+                    <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading email settings:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der E-Mail-Einstellungen.</p>';
+    }
+}
+
+function displayEmailSettings(settings) {
+    const content = document.getElementById('email-settings-content');
+    content.innerHTML = `
+        <div class="info-box">
+            <p><strong>SMTP Server:</strong> ${settings.smtpServer}:${settings.smtpPort}</p>
+            <p><strong>Protokoll:</strong> ${settings.protocol}</p>
+            <p><strong>Sicherheit:</strong> ${settings.securityProtocol}</p>
+            <p><strong>Absender:</strong> ${settings.senderEmail} (${settings.senderName || 'Kein Name'})</p>
+            <p><strong>Authentifizierung:</strong> ${settings.requiresAuthentication ? 'Ja' : 'Nein'}</p>
+            ${settings.requiresAuthentication ? `<p><strong>Benutzername:</strong> ${settings.username}</p>` : ''}
+            <p><strong>Status:</strong> <span class="badge success">Aktiv</span></p>
+        </div>
+    `;
+}
+
+function showEmailSettingsModal() {
+    alert('E-Mail-Einstellungen bearbeiten - Funktion wird implementiert');
+}
+
+function saveGlobalSettings() {
+    const maxHoursMonth = document.getElementById('setting-max-hours-month').value;
+    const maxHoursWeek = document.getElementById('setting-max-hours-week').value;
+    const maxConsecutiveShifts = document.getElementById('setting-max-consecutive-shifts').value;
+    const maxConsecutiveNights = document.getElementById('setting-max-consecutive-nights').value;
+    
+    alert(`Einstellungen gespeichert:\n- Max Stunden/Monat: ${maxHoursMonth}\n- Max Stunden/Woche: ${maxHoursWeek}\n- Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n- Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}`);
+}
+

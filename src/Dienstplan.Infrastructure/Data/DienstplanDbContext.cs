@@ -17,6 +17,9 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ShiftType> ShiftTypes => Set<ShiftType>();
     public DbSet<ShiftAssignment> ShiftAssignments => Set<ShiftAssignment>();
     public DbSet<Absence> Absences => Set<Absence>();
+    public DbSet<VacationRequest> VacationRequests => Set<VacationRequest>();
+    public DbSet<ShiftExchange> ShiftExchanges => Set<ShiftExchange>();
+    public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,6 +41,7 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(e => e.Vorname).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Personalnummer).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Email).HasMaxLength(255);
             entity.HasIndex(e => e.Personalnummer).IsUnique();
             
             entity.HasOne(e => e.Team)
@@ -51,6 +55,21 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
+            entity.Property(t => t.Email).HasMaxLength(255);
+        });
+        
+        // EmailSettings configuration
+        modelBuilder.Entity<EmailSettings>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SmtpServer).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Protocol).HasMaxLength(50);
+            entity.Property(e => e.SecurityProtocol).HasMaxLength(50);
+            entity.Property(e => e.SenderEmail).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.SenderName).HasMaxLength(100);
+            entity.Property(e => e.ReplyToEmail).HasMaxLength(255);
+            entity.Property(e => e.Username).HasMaxLength(255);
+            entity.Property(e => e.Password).HasMaxLength(500); // Encrypted passwords can be longer
         });
         
         // ShiftType configuration
@@ -91,6 +110,42 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
                 
             entity.HasIndex(a => new { a.EmployeeId, a.StartDate, a.EndDate });
+        });
+        
+        // VacationRequest configuration
+        modelBuilder.Entity<VacationRequest>(entity =>
+        {
+            entity.HasKey(v => v.Id);
+            
+            entity.HasOne(v => v.Employee)
+                .WithMany(e => e.VacationRequests)
+                .HasForeignKey(v => v.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            entity.HasIndex(v => new { v.EmployeeId, v.Status });
+        });
+        
+        // ShiftExchange configuration
+        modelBuilder.Entity<ShiftExchange>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            entity.HasOne(e => e.OfferingEmployee)
+                .WithMany()
+                .HasForeignKey(e => e.OfferingEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+                
+            entity.HasOne(e => e.RequestingEmployee)
+                .WithMany()
+                .HasForeignKey(e => e.RequestingEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+                
+            entity.HasOne(e => e.ShiftAssignment)
+                .WithMany()
+                .HasForeignKey(e => e.ShiftAssignmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+                
+            entity.HasIndex(e => new { e.OfferingEmployeeId, e.Status });
         });
         
         // Seed default shift types
@@ -135,6 +190,24 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
                 StartTime = new TimeSpan(8, 0, 0),
                 EndTime = new TimeSpan(16, 0, 0),
                 ColorCode = "#32CD32"
+            },
+            new ShiftType
+            {
+                Id = 5,
+                Code = "BMT",
+                Name = "Brandmeldetechniker",
+                StartTime = new TimeSpan(6, 0, 0),
+                EndTime = new TimeSpan(14, 0, 0),
+                ColorCode = "#FF8C00"
+            },
+            new ShiftType
+            {
+                Id = 6,
+                Code = "BSB",
+                Name = "Brandschutzbeauftragter",
+                StartTime = new TimeSpan(7, 0, 0),
+                EndTime = new TimeSpan(16, 30, 0),
+                ColorCode = "#DC143C"
             }
         );
     }

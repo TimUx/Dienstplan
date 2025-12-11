@@ -63,7 +63,10 @@ public class ShiftsController : ControllerBase
                 Date = a.Date,
                 IsManual = a.IsManual,
                 IsSpringerAssignment = a.IsSpringerAssignment,
-                Notes = a.Notes
+                IsFixed = a.IsFixed,
+                Notes = a.Notes,
+                CreatedBy = a.CreatedBy,
+                ModifiedBy = a.ModifiedBy
             }).ToList(),
             Absences = absences.Select(a => new AbsenceDto
             {
@@ -112,7 +115,10 @@ public class ShiftsController : ControllerBase
             ShiftTypeId = dto.ShiftTypeId,
             Date = dto.Date,
             IsManual = true,
-            Notes = dto.Notes
+            IsFixed = dto.IsFixed,
+            Notes = dto.Notes,
+            CreatedBy = User.Identity?.Name,
+            CreatedAt = DateTime.UtcNow
         };
 
         var (isValid, errorMessage) = await _planningService.ValidateShiftAssignment(assignment);

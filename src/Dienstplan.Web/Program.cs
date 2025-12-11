@@ -5,6 +5,7 @@ using Dienstplan.Infrastructure.Repositories;
 using Dienstplan.Infrastructure.Identity;
 using Dienstplan.Application.Services;
 using Dienstplan.Domain.Interfaces;
+using Dienstplan.Domain.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,11 +54,17 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IShiftAssignmentRepository, ShiftAssignmentRepository>();
 builder.Services.AddScoped<IAbsenceRepository, AbsenceRepository>();
+builder.Services.AddScoped<IVacationRequestRepository, VacationRequestRepository>();
+builder.Services.AddScoped<IShiftExchangeRepository, ShiftExchangeRepository>();
+builder.Services.AddScoped<IEmailSettingsRepository, EmailSettingsRepository>();
+builder.Services.AddScoped<IRepository<Team>, Repository<Team>>();
+builder.Services.AddScoped<IRepository<ShiftType>, Repository<ShiftType>>();
 
 // Register services
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 builder.Services.AddScoped<IPdfExportService, PdfExportService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Add CORS for web interface
 builder.Services.AddCors(options =>

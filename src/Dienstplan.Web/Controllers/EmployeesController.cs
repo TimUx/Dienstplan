@@ -29,7 +29,11 @@ public class EmployeesController : ControllerBase
             Vorname = e.Vorname,
             Name = e.Name,
             Personalnummer = e.Personalnummer,
+            Email = e.Email,
+            Geburtsdatum = e.Geburtsdatum,
+            Funktion = e.Funktion,
             IsSpringer = e.IsSpringer,
+            IsFerienjobber = e.IsFerienjobber,
             TeamId = e.TeamId,
             TeamName = e.Team?.Name
         });
@@ -50,7 +54,11 @@ public class EmployeesController : ControllerBase
             Vorname = employee.Vorname,
             Name = employee.Name,
             Personalnummer = employee.Personalnummer,
+            Email = employee.Email,
+            Geburtsdatum = employee.Geburtsdatum,
+            Funktion = employee.Funktion,
             IsSpringer = employee.IsSpringer,
+            IsFerienjobber = employee.IsFerienjobber,
             TeamId = employee.TeamId,
             TeamName = employee.Team?.Name
         });
@@ -67,7 +75,11 @@ public class EmployeesController : ControllerBase
             Vorname = e.Vorname,
             Name = e.Name,
             Personalnummer = e.Personalnummer,
+            Email = e.Email,
+            Geburtsdatum = e.Geburtsdatum,
+            Funktion = e.Funktion,
             IsSpringer = e.IsSpringer,
+            IsFerienjobber = e.IsFerienjobber,
             TeamId = e.TeamId,
             TeamName = e.Team?.Name
         });
@@ -83,7 +95,11 @@ public class EmployeesController : ControllerBase
             Vorname = dto.Vorname,
             Name = dto.Name,
             Personalnummer = dto.Personalnummer,
+            Email = dto.Email,
+            Geburtsdatum = dto.Geburtsdatum,
+            Funktion = dto.Funktion,
             IsSpringer = dto.IsSpringer,
+            IsFerienjobber = dto.IsFerienjobber,
             TeamId = dto.TeamId
         };
 
@@ -103,7 +119,11 @@ public class EmployeesController : ControllerBase
         employee.Vorname = dto.Vorname;
         employee.Name = dto.Name;
         employee.Personalnummer = dto.Personalnummer;
+        employee.Email = dto.Email;
+        employee.Geburtsdatum = dto.Geburtsdatum;
+        employee.Funktion = dto.Funktion;
         employee.IsSpringer = dto.IsSpringer;
+        employee.IsFerienjobber = dto.IsFerienjobber;
         employee.TeamId = dto.TeamId;
 
         await _repository.UpdateAsync(employee);

@@ -1,21 +1,44 @@
 # Dienstplan - Automatisches Schichtverwaltungssystem
 
-Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdiensten für 15 Mitarbeiter in 3 Teams.
+**Version 1.2** | Entwickelt von Timo Braun
+
+Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdiensten für bis zu 17 Stammpersonal-Mitarbeiter plus Ferienjobber in 3 Teams.
+
+![Dienstplan Hauptansicht](https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba)
 
 ## 🎯 Funktionsumfang
 
 ### Mitarbeiterverwaltung
 - **Pflichtfelder**: Vorname, Name, Personalnummer
+- **Erweiterte Daten**: Geburtsdatum, Funktion (z.B. Brandmeldetechniker, Brandschutzbeauftragter)
 - **Teamzuordnung**: Mitarbeiter können Teams zugeordnet werden
 - **Springer-System**: Markierung von Backup-Mitarbeitern für automatische Vertretung bei Ausfällen
+- **Ferienjobber**: Unterstützung für temporäre Mitarbeiter (meist in Sommerferien)
 - **Abwesenheiten**: Verwaltung von Krank, Urlaub, Lehrgang
+- **Arbeitszeitregeln**: Maximal 192 Stunden pro Monat, 48 Stunden pro Woche
+
+### Urlaubsverwaltung 🆕
+- **Urlaubsanträge**: Mitarbeiter können Urlaubswünsche einreichen
+- **Status-Workflow**: In Bearbeitung → Genehmigt/Nicht genehmigt
+- **Bearbeitung**: Disponent/Admin kann Anträge genehmigen oder ablehnen
+- **Automatische Umwandlung**: Genehmigte Anträge werden automatisch zu Abwesenheiten
+- **Statusverfolgung**: Mitarbeiter können den Status ihrer Anträge einsehen
+
+### Diensttausch-System 🆕
+- **Dienste anbieten**: Mitarbeiter können einzelne Dienste zum Tausch anbieten
+- **Tauschangebote annehmen**: Andere Mitarbeiter können Dienste anfragen
+- **Genehmigungspflicht**: Alle Tausche müssen vom Disponent genehmigt werden
+- **Automatische Umschichtung**: Nach Genehmigung wird der Dienst automatisch umgetauscht
+- **Nachverfolgung**: Vollständige Historie aller Tauschangebote
 
 ### Schichtarten
 - **Früh**: 05:45–13:45 Uhr
 - **Spät**: 13:45–21:45 Uhr
 - **Nacht**: 21:45–05:45 Uhr
 - **Zwischendienst**: 08:00–16:00 Uhr
-- **Zusatzkürzel**: Flexibel erweiterbar (z.B. SRHT)
+- **Brandmeldetechniker**: 06:00-14:00 Uhr (Mo-Fr) 🆕
+- **Brandschutzbeauftragter**: 07:00-16:30 Uhr (Mo-Fr, 9,5 Stunden) 🆕
+- **Zusatzkürzel**: Flexibel erweiterbar für Sonderaufgaben
 
 ### Schichtbesetzung
 **Montag–Freitag:**
@@ -24,15 +47,19 @@ Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdi
 - Nacht: 3 Personen
 
 **Wochenende:**
-- Alle Schichten: max. 3 Personen
+- Alle Schichten: 2-3 Personen (Minimum 2, Maximum 3)
 
 ### Automatische Schichtplanung
 Das System beachtet folgende Regeln:
 - ✅ Nicht zweimal hintereinander dieselbe Schicht
 - 🚫 Verbotene Wechsel: Spät → Früh, Nacht → Spät
 - ⏰ Gesetzliche Ruhezeiten (11 Stunden Minimum)
+- 📊 Maximal 6 Schichten am Stück 🆕
+- 🌙 Maximal 3 Nachtschichten am Stück 🆕
 - ⚖️ Gleichmäßige Verteilung über alle Mitarbeiter
+- 📅 Gleichmäßige Wochenendverteilung innerhalb der Teams 🆕
 - 🔄 Idealer Rhythmus: Früh → Nacht → Spät
+- 📌 Feste Dienste (z.B. Feiertage) werden respektiert 🆕
 - 🔧 Manuelle Änderungen jederzeit möglich
 - 🆘 Automatischer Springer-Einsatz bei Ausfällen
 
@@ -41,12 +68,30 @@ Das System beachtet folgende Regeln:
 - 📈 Schichtverteilung pro Team
 - 📅 Fehltageübersicht
 - 💼 Team-Workload Analyse
+- 📆 Samstags-/Sonntagsdienste je Mitarbeiter (Nur Disponent/Admin) 🆕
+
+### Änderungsverfolgung 🆕
+- 📝 Jede Schichtänderung wird protokolliert
+- 👤 Wer hat die Änderung vorgenommen?
+- 🕐 Wann wurde die Änderung vorgenommen?
+- 📢 Automatische Benachrichtigungen bei Änderungen (Vorbereitet)
+
+### E-Mail-Benachrichtigungen 🆕
+- **E-Mail-Adressen**: Erfassung von E-Mail-Adressen für Mitarbeiter und Teams
+- **SMTP-Konfiguration**: Flexible Konfiguration der E-Mail-Server-Einstellungen
+  - SMTP Server (DNS/IP), Port, Protokoll (SMTP, SMTPS)
+  - Sicherheit (None, SSL, TLS, STARTTLS)
+  - Authentifizierung (Benutzername/Passwort)
+  - Absender- und Antwortadresse
+- **Benachrichtigungen**: Automatische E-Mails bei Dienstplanänderungen, Urlaubsanträgen und Diensttauschen
+- **Verwaltung**: Admin-Oberfläche für E-Mail-Einstellungen
 
 ### PDF-Export
 - 📄 Professionelle PDF-Generierung von Dienstplänen
 - 🎨 Farbcodierte Schichtarten für bessere Übersichtlichkeit
 - 📋 Zusammenfassung mit Schichtanzahl pro Typ
 - 📅 Flexible Zeitraumauswahl (Woche, Monat, Jahr)
+- 📧 E-Mail-Versand vorbereitet
 
 ### Web-Schnittstelle
 - 📱 Responsive Design (Desktop & Smartphone)
@@ -54,6 +99,28 @@ Das System beachtet folgende Regeln:
 - 🔐 Authentifizierung und Autorisierung
 - 👀 Lesezugriff für alle Mitarbeiter
 - ⚡ Performante REST API
+
+## 📸 Screenshots
+
+### Hauptansicht - Dienstplan
+![Dienstplan Hauptansicht](https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba)
+*Übersichtliche Darstellung des Schichtplans mit Wochen-, Monats- und Jahresansicht*
+
+### Anmeldung
+![Anmeldedialog](https://github.com/user-attachments/assets/e24ff77c-2f6f-4c60-8d48-71c82c29299c)
+*Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle*
+
+### Angemeldet als Administrator
+![Angemeldet](https://github.com/user-attachments/assets/a3936df0-769b-4a00-b683-36a23542e2d4)
+*Nach erfolgreicher Anmeldung mit Administrator-Rechten*
+
+### Mitarbeiterverwaltung
+![Mitarbeiter](https://github.com/user-attachments/assets/ca549d88-f312-4557-8978-a0e49ef92612)
+*Verwaltung von Mitarbeitern, Teams und Abwesenheiten*
+
+### Statistiken & Auswertungen
+![Statistiken](https://github.com/user-attachments/assets/016fab62-3005-40fa-aebd-a6e6c187cc15)
+*Umfassende Statistiken über Arbeitsstunden, Schichtverteilung und Fehltage*
 
 ## 🏗️ Architektur
 
@@ -265,6 +332,126 @@ GET /api/statistics/dashboard?startDate=2024-01-01&endDate=2024-01-31
 Authorization: Optional (öffentlich lesbar)
 ```
 
+#### Wochenend-Schicht-Statistiken (Nur Disponent/Admin) 🆕
+```http
+GET /api/statistics/weekend-shifts?startDate=2024-01-01&endDate=2024-12-31
+Authorization: Required (Admin oder Disponent)
+```
+
+Antwort:
+```json
+[
+  {
+    "employeeId": 1,
+    "employeeName": "Max Mustermann",
+    "saturdayShifts": 12,
+    "sundayShifts": 10,
+    "totalWeekendShifts": 22
+  }
+]
+```
+
+### Urlaubsantrags-Endpoints 🆕
+
+#### Alle Urlaubsanträge abrufen (Admin/Disponent)
+```http
+GET /api/vacationrequests
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Urlaubsanträge eines Mitarbeiters
+```http
+GET /api/vacationrequests/employee/1
+Authorization: Required
+```
+
+#### Offene Urlaubsanträge (Admin/Disponent)
+```http
+GET /api/vacationrequests/pending
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Urlaubsantrag erstellen
+```http
+POST /api/vacationrequests
+Content-Type: application/json
+Authorization: Required
+
+{
+  "employeeId": 1,
+  "startDate": "2024-07-01",
+  "endDate": "2024-07-14",
+  "notes": "Sommerurlaub"
+}
+```
+
+#### Urlaubsantrag-Status ändern (Admin/Disponent)
+```http
+PUT /api/vacationrequests/123/status
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "status": "Genehmigt",
+  "disponentResponse": "Viel Spaß im Urlaub!"
+}
+```
+
+### Diensttausch-Endpoints 🆕
+
+#### Verfügbare Tauschangebote
+```http
+GET /api/shiftexchanges/available
+Authorization: Required
+```
+
+#### Tauschangebote eines Mitarbeiters
+```http
+GET /api/shiftexchanges/employee/1
+Authorization: Required
+```
+
+#### Offene Tauschangebote (Admin/Disponent)
+```http
+GET /api/shiftexchanges/pending
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Dienst zum Tausch anbieten
+```http
+POST /api/shiftexchanges
+Content-Type: application/json
+Authorization: Required
+
+{
+  "shiftAssignmentId": 123,
+  "offeringReason": "Familiäre Verpflichtung"
+}
+```
+
+#### Dienst anfragen
+```http
+POST /api/shiftexchanges/123/request
+Content-Type: application/json
+Authorization: Required
+
+{
+  "requestingEmployeeId": 2
+}
+```
+
+#### Diensttausch genehmigen/ablehnen (Admin/Disponent)
+```http
+PUT /api/shiftexchanges/123/process
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "status": "Genehmigt",
+  "disponentNotes": "Genehmigt, da keine Probleme mit der Besetzung"
+}
+```
+
 ### Abwesenheiten-Endpoints
 
 #### Abwesenheiten abrufen
@@ -378,12 +565,27 @@ Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
 **ShiftAssignment (Schichtzuweisung)**
 - Id, EmployeeId (FK), ShiftTypeId (FK)
 - Date
-- IsManual, IsSpringerAssignment
+- IsManual, IsSpringerAssignment, IsFixed 🆕
+- CreatedBy, ModifiedBy, CreatedAt, ModifiedAt 🆕
 
 **Absence (Abwesenheit)**
 - Id, EmployeeId (FK)
 - Type (Enum: Krank, Urlaub, Lehrgang)
 - StartDate, EndDate
+
+**VacationRequest (Urlaubsantrag)** 🆕
+- Id, EmployeeId (FK)
+- StartDate, EndDate
+- Status (Enum: InBearbeitung, Genehmigt, NichtGenehmigt)
+- Notes, DisponentResponse
+- CreatedAt, UpdatedAt, ProcessedBy
+
+**ShiftExchange (Diensttausch)** 🆕
+- Id, OfferingEmployeeId (FK), RequestingEmployeeId (FK)
+- ShiftAssignmentId (FK)
+- Status (Enum: Angeboten, Angefragt, Genehmigt, Abgelehnt, Zurückgezogen, Abgeschlossen)
+- OfferingReason, DisponentNotes
+- CreatedAt, UpdatedAt, ProcessedBy
 
 ## 🔄 CI/CD Pipeline
 
@@ -447,18 +649,31 @@ Bei Fragen oder Problemen:
 - [x] Automatische Schichtplanung
 - [x] Web-Interface mit Dashboard
 - [x] CI/CD Pipeline
-- [x] **Authentifizierung & Autorisierung** ✅ **Neu in v1.1**
-- [x] **PDF-Export von Dienstplänen** ✅ **Neu in v1.1**
-- [ ] E-Mail-Benachrichtigungen
+- [x] **Authentifizierung & Autorisierung** ✅ **v1.1**
+- [x] **PDF-Export von Dienstplänen** ✅ **v1.1**
+- [x] **Urlaubsverwaltung mit Antrags-Workflow** ✅ **Neu in v1.2**
+- [x] **Diensttausch-System** ✅ **Neu in v1.2**
+- [x] **Erweiterte Mitarbeiterdaten** (Geburtsdatum, Funktion, Ferienjobber) ✅ **Neu in v1.2**
+- [x] **Erweiterte Schichtplanungsregeln** (Max. 6 Schichten, Max. 3 Nachtschichten) ✅ **Neu in v1.2**
+- [x] **Feste Dienste** (z.B. für Feiertage) ✅ **Neu in v1.2**
+- [x] **Änderungsverfolgung** (Audit Trail) ✅ **Neu in v1.2**
+- [x] **Wochenend-Statistiken** ✅ **Neu in v1.2**
+- [x] **Spezielle Schichttypen** (Brandmeldetechniker, Brandschutzbeauftragter) ✅ **Neu in v1.2**
+- [x] **E-Mail-Infrastruktur** (Mitarbeiter-E-Mails, SMTP-Konfiguration) ✅ **Neu in v1.2**
+- [x] **Benachrichtigungs-Service** (Interface vorbereitet) ✅ **Neu in v1.2**
+- [ ] E-Mail-Benachrichtigungen (SMTP-Integration mit MailKit)
 - [ ] Mobile App (React Native)
 
 ### Version 2.x
-- [ ] Erweiterte Regeln (Urlaubssperren, Wunschschichten)
-- [ ] Schichtmarktplatz (Schichttausch)
+- [ ] Wunschschichten
+- [ ] Urlaubssperren
 - [ ] Zeiterfassung Integration
 - [ ] Multi-Mandanten-Fähigkeit
 - [ ] Erweiterte Berichte und Analytics
+- [ ] Real-Time Benachrichtigungen (WebSockets)
 
 ---
 
-**Entwickelt mit ❤️ für effiziente Schichtverwaltung**
+**Version 1.2** | Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
+
+© 2025 Fritz Winter Eisengießerei GmbH & Co. KG

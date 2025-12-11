@@ -33,3 +33,23 @@ public interface IAbsenceRepository : IRepository<Absence>
     Task<IEnumerable<Absence>> GetByEmployeeIdAsync(int employeeId);
     Task<IEnumerable<Absence>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
 }
+
+public interface IVacationRequestRepository : IRepository<VacationRequest>
+{
+    Task<IEnumerable<VacationRequest>> GetByEmployeeIdAsync(int employeeId);
+    Task<IEnumerable<VacationRequest>> GetByStatusAsync(VacationRequestStatus status);
+    Task<IEnumerable<VacationRequest>> GetPendingRequestsAsync();
+}
+
+public interface IShiftExchangeRepository : IRepository<ShiftExchange>
+{
+    Task<IEnumerable<ShiftExchange>> GetByOfferingEmployeeIdAsync(int employeeId);
+    Task<IEnumerable<ShiftExchange>> GetByRequestingEmployeeIdAsync(int employeeId);
+    Task<IEnumerable<ShiftExchange>> GetByStatusAsync(ShiftExchangeStatus status);
+    Task<IEnumerable<ShiftExchange>> GetAvailableExchangesAsync();
+}
+
+public interface IEmailSettingsRepository : IRepository<EmailSettings>
+{
+    Task<EmailSettings?> GetActiveSettingsAsync();
+}

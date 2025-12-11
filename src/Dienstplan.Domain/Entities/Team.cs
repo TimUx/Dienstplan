@@ -12,6 +12,11 @@ public class Team
     public string? Description { get; set; }
     
     /// <summary>
+    /// Email address for team notifications
+    /// </summary>
+    public string? Email { get; set; }
+    
+    /// <summary>
     /// Employees in this team
     /// </summary>
     public ICollection<Employee> Employees { get; set; } = new List<Employee>();

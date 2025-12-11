@@ -24,15 +24,18 @@ public class ShiftPlanningService : IShiftPlanningService
     {
         var assignments = new List<ShiftAssignment>();
         
-        if (!force)
-        {
-            // Check if there are already assignments
-            var existing = await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate);
-            if (existing.Any())
-            {
-                return existing.ToList();
-            }
-        }
+        // Get existing assignments (including fixed ones)
+        var existingAssignments = (await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate)).ToList();
+        
+        // Keep fixed assignments and existing assignments if not forcing
+        var keptAssignments = force 
+            ? existingAssignments.Where(a => a.IsFixed).ToList()
+            : existingAssignments;
+        
+        assignments.AddRange(keptAssignments);
+        
+        // Get dates that already have assignments (to skip if not forcing)
+        var datesWithAssignments = keptAssignments.Select(a => a.Date.Date).Distinct().ToHashSet();
         
         var employees = (await _employeeRepository.GetAllAsync())
             .Where(e => !e.IsSpringer) // Exclude Springers from regular planning
@@ -43,6 +46,12 @@ public class ShiftPlanningService : IShiftPlanningService
         // Plan for each day
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
+            // Skip days that already have assignments (unless forcing and not fixed)
+            if (datesWithAssignments.Contains(date.Date))
+            {
+                continue;
+            }
+            
             var dayAssignments = await PlanDayShifts(date, employees, absences.ToList());
             assignments.AddRange(dayAssignments);
         }
@@ -118,6 +127,20 @@ public class ShiftPlanningService : IShiftPlanningService
 
     public async Task<(bool IsValid, string? ErrorMessage)> ValidateShiftAssignment(ShiftAssignment assignment)
     {
+        // Check if employee is absent
+        var absences = await _absenceRepository.GetByEmployeeIdAsync(assignment.EmployeeId);
+        if (absences.Any(a => a.StartDate <= assignment.Date && a.EndDate >= assignment.Date))
+        {
+            return (false, "Mitarbeiter ist an diesem Tag abwesend");
+        }
+        
+        // Get all assignments for this employee to check consecutive shifts
+        var employeeAssignments = (await _shiftAssignmentRepository.GetByEmployeeIdAsync(assignment.EmployeeId))
+            .OrderBy(a => a.Date)
+            .ToList();
+        
+        var currentShiftCode = GetShiftCodeById(assignment.ShiftTypeId);
+        
         // Get previous shift
         var previousShift = await _shiftAssignmentRepository.GetByEmployeeAndDateAsync(
             assignment.EmployeeId, 
@@ -126,7 +149,6 @@ public class ShiftPlanningService : IShiftPlanningService
         if (previousShift != null)
         {
             var previousShiftCode = GetShiftCodeById(previousShift.ShiftTypeId);
-            var currentShiftCode = GetShiftCodeById(assignment.ShiftTypeId);
             
             // Check forbidden transitions
             if (ShiftRules.ForbiddenTransitions.ContainsKey(previousShiftCode))
@@ -144,14 +166,60 @@ public class ShiftPlanningService : IShiftPlanningService
             }
         }
         
-        // Check if employee is absent
-        var absences = await _absenceRepository.GetByEmployeeIdAsync(assignment.EmployeeId);
-        if (absences.Any(a => a.StartDate <= assignment.Date && a.EndDate >= assignment.Date))
+        // Check maximum consecutive shifts
+        var consecutiveShifts = CountConsecutiveShifts(employeeAssignments, assignment.Date);
+        if (consecutiveShifts >= ShiftRules.MaximumConsecutiveShifts)
         {
-            return (false, "Mitarbeiter ist an diesem Tag abwesend");
+            return (false, $"Maximum von {ShiftRules.MaximumConsecutiveShifts} aufeinanderfolgenden Schichten erreicht");
+        }
+        
+        // Check maximum consecutive night shifts
+        if (currentShiftCode == ShiftTypeCodes.Nacht)
+        {
+            var consecutiveNightShifts = CountConsecutiveNightShifts(employeeAssignments, assignment.Date);
+            if (consecutiveNightShifts >= ShiftRules.MaximumConsecutiveNightShifts)
+            {
+                return (false, $"Maximum von {ShiftRules.MaximumConsecutiveNightShifts} aufeinanderfolgenden Nachtschichten erreicht");
+            }
         }
         
         return (true, null);
+    }
+    
+    private int CountConsecutiveShifts(List<ShiftAssignment> assignments, DateTime fromDate)
+    {
+        int count = 0;
+        var date = fromDate.AddDays(-1);
+        
+        while (assignments.Any(a => a.Date == date))
+        {
+            count++;
+            date = date.AddDays(-1);
+        }
+        
+        return count;
+    }
+    
+    private int CountConsecutiveNightShifts(List<ShiftAssignment> assignments, DateTime fromDate)
+    {
+        int count = 0;
+        var date = fromDate.AddDays(-1);
+        
+        while (true)
+        {
+            var assignment = assignments.FirstOrDefault(a => a.Date == date);
+            if (assignment == null)
+                break;
+            
+            var shiftCode = GetShiftCodeById(assignment.ShiftTypeId);
+            if (shiftCode != ShiftTypeCodes.Nacht)
+                break;
+            
+            count++;
+            date = date.AddDays(-1);
+        }
+        
+        return count;
     }
 
     public async Task<ShiftAssignment?> AssignSpringer(int employeeId, DateTime date)

@@ -213,9 +213,8 @@ function showView(viewName) {
 }
 
 function loadAdminView() {
+    // Load users tab by default (it will be active)
     loadUsers();
-    loadEmailSettings();
-    loadAuditLogs(100);
 }
 
 // Initialize smooth scrolling for manual anchors
@@ -2209,5 +2208,167 @@ function getActionBadge(action) {
         default:
             return `<span class="badge">${escapeHtml(action)}</span>`;
     }
+}
+
+// ===========================
+// Admin Tab Navigation
+// ===========================
+
+function showAdminTab(tabName) {
+    // Hide all tab contents
+    const allTabContents = document.querySelectorAll('.admin-tab-content');
+    allTabContents.forEach(content => content.classList.remove('active'));
+    
+    // Remove active class from all tabs
+    const allTabs = document.querySelectorAll('.admin-tab');
+    allTabs.forEach(tab => tab.classList.remove('active'));
+    
+    // Show selected tab content
+    const selectedContent = document.getElementById(`admin-tab-${tabName}`);
+    if (selectedContent) {
+        selectedContent.classList.add('active');
+    }
+    
+    // Add active class to selected tab
+    const selectedTab = event.target;
+    selectedTab.classList.add('active');
+    
+    // Load data for the selected tab if needed
+    if (tabName === 'users') {
+        loadUsers();
+    } else if (tabName === 'audit-logs') {
+        loadAuditLogs(1, 50);
+    } else if (tabName === 'email') {
+        loadEmailSettings();
+    }
+}
+
+// ===========================
+// Enhanced Audit Log Functions with Pagination and Filtering
+// ===========================
+
+let currentAuditPage = 1;
+let currentAuditPageSize = 50;
+let currentAuditFilters = {};
+
+async function loadAuditLogs(page = 1, pageSize = 50) {
+    const content = document.getElementById('audit-logs-content');
+    content.innerHTML = '<p class="loading">Lade Änderungsprotokoll...</p>';
+    
+    currentAuditPage = page;
+    currentAuditPageSize = pageSize;
+    
+    try {
+        // Build query parameters
+        let queryParams = new URLSearchParams({
+            page: page,
+            pageSize: pageSize
+        });
+        
+        // Add filters if present
+        if (currentAuditFilters.entityName) {
+            queryParams.append('entityName', currentAuditFilters.entityName);
+        }
+        if (currentAuditFilters.action) {
+            queryParams.append('action', currentAuditFilters.action);
+        }
+        if (currentAuditFilters.startDate) {
+            queryParams.append('startDate', currentAuditFilters.startDate);
+        }
+        if (currentAuditFilters.endDate) {
+            queryParams.append('endDate', currentAuditFilters.endDate);
+        }
+        
+        const response = await fetch(`${API_BASE}/auditlogs?${queryParams.toString()}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            displayAuditLogsPaginated(result);
+        } else if (response.status === 401) {
+            content.innerHTML = '<p class="error">Bitte melden Sie sich an.</p>';
+        } else if (response.status === 403) {
+            content.innerHTML = '<p class="error">Sie haben keine Berechtigung, das Änderungsprotokoll anzuzeigen.</p>';
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden des Änderungsprotokolls.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading audit logs:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden des Änderungsprotokolls.</p>';
+    }
+}
+
+function displayAuditLogsPaginated(result) {
+    const content = document.getElementById('audit-logs-content');
+    const pagination = document.getElementById('audit-pagination');
+    
+    if (!result.items || result.items.length === 0) {
+        content.innerHTML = '<p>Keine Einträge im Änderungsprotokoll gefunden.</p>';
+        pagination.style.display = 'none';
+        return;
+    }
+    
+    // Display the audit logs table
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Zeitstempel</th>';
+    html += '<th>Benutzer</th>';
+    html += '<th>Entität</th>';
+    html += '<th>Entität-ID</th>';
+    html += '<th>Aktion</th>';
+    html += '<th>Änderungen</th>';
+    html += '</tr></thead><tbody>';
+    
+    result.items.forEach(log => {
+        html += '<tr>';
+        html += `<td>${new Date(log.timestamp).toLocaleString('de-DE')}</td>`;
+        html += `<td>${escapeHtml(log.userName)}</td>`;
+        html += `<td>${escapeHtml(log.entityName)}</td>`;
+        html += `<td>${escapeHtml(log.entityId)}</td>`;
+        html += `<td>${getActionBadge(log.action)}</td>`;
+        html += `<td><pre class="changes-preview">${escapeHtml(log.changes?.substring(0, 100) || '')}${log.changes?.length > 100 ? '...' : ''}</pre></td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+    
+    // Update pagination
+    pagination.style.display = 'flex';
+    document.getElementById('audit-page-info').textContent = `Seite ${result.page} von ${result.totalPages} (${result.totalCount} Einträge)`;
+    document.getElementById('audit-prev-btn').disabled = !result.hasPreviousPage;
+    document.getElementById('audit-next-btn').disabled = !result.hasNextPage;
+}
+
+function applyAuditFilters() {
+    currentAuditFilters = {
+        entityName: document.getElementById('audit-filter-entity').value,
+        action: document.getElementById('audit-filter-action').value,
+        startDate: document.getElementById('audit-filter-start-date').value,
+        endDate: document.getElementById('audit-filter-end-date').value
+    };
+    
+    // Reset to page 1 when applying filters
+    loadAuditLogs(1, currentAuditPageSize);
+}
+
+function clearAuditFilters() {
+    document.getElementById('audit-filter-entity').value = '';
+    document.getElementById('audit-filter-action').value = '';
+    document.getElementById('audit-filter-start-date').value = '';
+    document.getElementById('audit-filter-end-date').value = '';
+    
+    currentAuditFilters = {};
+    loadAuditLogs(1, currentAuditPageSize);
+}
+
+function loadAuditLogsPreviousPage() {
+    if (currentAuditPage > 1) {
+        loadAuditLogs(currentAuditPage - 1, currentAuditPageSize);
+    }
+}
+
+function loadAuditLogsNextPage() {
+    loadAuditLogs(currentAuditPage + 1, currentAuditPageSize);
 }
 

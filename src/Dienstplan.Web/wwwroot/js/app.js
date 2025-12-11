@@ -333,7 +333,10 @@ function displayWeekView(data) {
                 const shifts = employee.shifts[dateStr] || [];
                 const shiftBadges = shifts.map(s => {
                     const canEdit = canPlanShifts();
-                    const badge = `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}" ${canEdit ? `onclick="editShiftAssignment(${s.id})" style="cursor:pointer;"` : ''}>${s.shiftCode}</span>`;
+                    const shiftId = parseInt(s.id); // Ensure it's a number
+                    const shiftCode = escapeHtml(s.shiftCode);
+                    const shiftName = escapeHtml(s.shiftName);
+                    const badge = `<span class="shift-badge shift-${shiftCode}" title="${shiftName}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${shiftCode}</span>`;
                     return badge;
                 }).join(' ');
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
@@ -1687,11 +1690,11 @@ function displayUsers(users) {
         html += '<tr>';
         html += `<td>${escapeHtml(user.fullName || 'N/A')}</td>`;
         html += `<td>${escapeHtml(user.email || 'N/A')}</td>`;
-        html += `<td>${user.roles.join(', ')}</td>`;
+        html += `<td>${escapeHtml(user.roles.join(', '))}</td>`;
         html += `<td>${statusBadge}</td>`;
         html += `<td>`;
-        html += `<button onclick="editUser('${user.id}')" class="btn-small btn-primary">Bearbeiten</button> `;
-        html += `<button onclick="deleteUser('${user.id}', '${escapeHtml(user.email)}')" class="btn-small btn-danger">Löschen</button>`;
+        html += `<button onclick="editUser('${escapeHtml(user.id)}')" class="btn-small btn-primary">Bearbeiten</button> `;
+        html += `<button onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')" class="btn-small btn-danger">Löschen</button>`;
         html += `</td>`;
         html += '</tr>';
     });

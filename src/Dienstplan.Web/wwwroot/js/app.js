@@ -175,6 +175,39 @@ function initializeDatePickers() {
     lastMonth.setMonth(lastMonth.getMonth() - 1);
     document.getElementById('statsStartDate').value = lastMonth.toISOString().split('T')[0];
     document.getElementById('statsEndDate').value = today;
+    
+    // Initialize month and year selects
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentYear = currentDate.getFullYear();
+    
+    // Set current month for month view
+    if (document.getElementById('monthSelect')) {
+        document.getElementById('monthSelect').value = currentMonth;
+    }
+    
+    // Populate year selects (current year - 1 to current year + 2)
+    const yearSelects = ['monthYearSelect', 'yearSelect', 'planMonthYear', 'planYear'];
+    yearSelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            select.innerHTML = '';
+            for (let year = currentYear - 1; year <= currentYear + 2; year++) {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year === currentYear) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            }
+        }
+    });
+    
+    // Initialize plan month to current month
+    if (document.getElementById('planMonth')) {
+        document.getElementById('planMonth').value = currentMonth;
+    }
 }
 
 // View Navigation
@@ -232,6 +265,23 @@ function initializeManualAnchors() {
 }
 
 // Schedule Management
+function switchScheduleView(view, tabElement) {
+    // Update active tab
+    document.querySelectorAll('.schedule-tab').forEach(t => t.classList.remove('active'));
+    tabElement.classList.add('active');
+    
+    // Update currentView state
+    currentView = view;
+    
+    // Show/hide appropriate controls
+    document.getElementById('week-controls').style.display = view === 'week' ? 'flex' : 'none';
+    document.getElementById('month-controls').style.display = view === 'month' ? 'flex' : 'none';
+    document.getElementById('year-controls').style.display = view === 'year' ? 'flex' : 'none';
+    
+    // Load schedule for new view
+    loadSchedule();
+}
+
 function changeDate(days) {
     const dateInput = document.getElementById('startDate');
     const date = new Date(dateInput.value);
@@ -240,9 +290,53 @@ function changeDate(days) {
     loadSchedule();
 }
 
+function changeMonth(delta) {
+    const monthSelect = document.getElementById('monthSelect');
+    const yearSelect = document.getElementById('monthYearSelect');
+    
+    let month = parseInt(monthSelect.value);
+    let year = parseInt(yearSelect.value);
+    
+    month += delta;
+    
+    if (month > 12) {
+        month = 1;
+        year++;
+    } else if (month < 1) {
+        month = 12;
+        year--;
+    }
+    
+    monthSelect.value = month;
+    yearSelect.value = year;
+    
+    loadSchedule();
+}
+
+function changeYear(delta) {
+    const yearSelect = document.getElementById('yearSelect');
+    let year = parseInt(yearSelect.value);
+    year += delta;
+    yearSelect.value = year;
+    loadSchedule();
+}
+
 async function loadSchedule() {
-    const startDate = document.getElementById('startDate').value;
-    const viewType = document.getElementById('viewType').value;
+    let startDate, viewType;
+    
+    if (currentView === 'week') {
+        startDate = document.getElementById('startDate').value;
+        viewType = 'week';
+    } else if (currentView === 'month') {
+        const month = document.getElementById('monthSelect').value;
+        const year = document.getElementById('monthYearSelect').value;
+        startDate = `${year}-${month.padStart(2, '0')}-01`;
+        viewType = 'month';
+    } else if (currentView === 'year') {
+        const year = document.getElementById('yearSelect').value;
+        startDate = `${year}-01-01`;
+        viewType = 'year';
+    }
     
     const content = document.getElementById('schedule-content');
     content.innerHTML = '<p class="loading">Lade Dienstplan...</p>';
@@ -259,7 +353,7 @@ async function loadSchedule() {
 
 function displaySchedule(data) {
     const content = document.getElementById('schedule-content');
-    const viewType = document.getElementById('viewType').value;
+    const viewType = currentView;
     
     // Store shifts globally for editing
     allShifts = data.assignments;
@@ -701,21 +795,78 @@ function isHessianHoliday(date) {
     return false;
 }
 
-async function planShifts() {
+// Plan Shifts Modal Functions
+function showPlanShiftsModal() {
     if (!canPlanShifts()) {
         alert('Sie haben keine Berechtigung, Schichten zu planen. Bitte melden Sie sich als Admin oder Disponent an.');
         return;
     }
     
-    const startDate = document.getElementById('startDate').value;
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 30); // Plan 30 days ahead
+    document.getElementById('planShiftsModal').style.display = 'block';
+}
+
+function closePlanShiftsModal() {
+    document.getElementById('planShiftsModal').style.display = 'none';
+    document.getElementById('planShiftsForm').reset();
+    document.getElementById('monthPlanFields').style.display = 'none';
+    document.getElementById('yearPlanFields').style.display = 'none';
+}
+
+function updatePlanPeriodFields() {
+    const periodType = document.getElementById('planPeriodType').value;
     
-    const force = confirm('Möchten Sie bestehende Schichten überschreiben?');
+    document.getElementById('monthPlanFields').style.display = periodType === 'month' ? 'block' : 'none';
+    document.getElementById('yearPlanFields').style.display = periodType === 'year' ? 'block' : 'none';
+}
+
+async function executePlanShifts(event) {
+    event.preventDefault();
+    
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten zu planen.');
+        return;
+    }
+    
+    const periodType = document.getElementById('planPeriodType').value;
+    const force = document.getElementById('planForceOverwrite').checked;
+    
+    let startDate, endDate;
+    
+    if (periodType === 'month') {
+        const month = document.getElementById('planMonth').value;
+        const year = document.getElementById('planMonthYear').value;
+        
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 0); // Last day of month
+    } else if (periodType === 'year') {
+        const year = document.getElementById('planYear').value;
+        
+        startDate = new Date(year, 0, 1);
+        endDate = new Date(year, 11, 31);
+    } else {
+        alert('Bitte wählen Sie einen Planungszeitraum aus.');
+        return;
+    }
+    
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    // Show confirmation
+    const periodText = periodType === 'month' 
+        ? `${startDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}`
+        : `Jahr ${startDate.getFullYear()}`;
+    
+    const confirmText = force 
+        ? `Möchten Sie wirklich alle Schichten für ${periodText} neu planen? Bestehende Schichten werden überschrieben (außer feste Schichten).`
+        : `Möchten Sie Schichten für ${periodText} planen? Bereits geplante Tage werden übersprungen.`;
+    
+    if (!confirm(confirmText)) {
+        return;
+    }
     
     try {
         const response = await fetch(
-            `${API_BASE}/shifts/plan?startDate=${startDate}&endDate=${endDate.toISOString().split('T')[0]}&force=${force}`,
+            `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}`,
             { 
                 method: 'POST',
                 credentials: 'include'
@@ -723,51 +874,57 @@ async function planShifts() {
         );
         
         if (response.ok) {
-            alert('Schichten erfolgreich geplant!');
+            const data = await response.json();
+            alert(`Erfolgreich! ${data.length} Schichten wurden geplant.`);
+            closePlanShiftsModal();
             loadSchedule();
         } else if (response.status === 401) {
             alert('Bitte melden Sie sich an, um Schichten zu planen.');
         } else if (response.status === 403) {
             alert('Sie haben keine Berechtigung, Schichten zu planen.');
         } else {
-            alert('Fehler beim Planen der Schichten');
+            const error = await response.json();
+            alert(`Fehler beim Planen der Schichten: ${error.message || 'Unbekannter Fehler'}`);
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);
     }
 }
 
+async function planShifts() {
+    // Legacy function - redirect to modal
+    showPlanShiftsModal();
+}
+
 // PDF Export
 async function exportScheduleToPdf() {
-    const startDateInput = document.getElementById('startDate');
-    const startDate = startDateInput.value;
+    let startDate, endDate;
     
-    if (!startDate) {
-        alert('Bitte wählen Sie ein Startdatum aus.');
-        return;
+    if (currentView === 'week') {
+        const startDateInput = document.getElementById('startDate');
+        startDate = startDateInput.value;
+        
+        if (!startDate) {
+            alert('Bitte wählen Sie ein Startdatum aus.');
+            return;
+        }
+        
+        const end = new Date(startDate);
+        end.setDate(end.getDate() + 7);
+        endDate = end.toISOString().split('T')[0];
+    } else if (currentView === 'month') {
+        const month = document.getElementById('monthSelect').value;
+        const year = document.getElementById('monthYearSelect').value;
+        
+        startDate = `${year}-${month.padStart(2, '0')}-01`;
+        const end = new Date(year, month, 0); // Last day of month
+        endDate = end.toISOString().split('T')[0];
+    } else if (currentView === 'year') {
+        const year = document.getElementById('yearSelect').value;
+        
+        startDate = `${year}-01-01`;
+        endDate = `${year}-12-31`;
     }
-    
-    const viewType = document.getElementById('viewType').value;
-    
-    // Calculate end date based on view type
-    const start = new Date(startDate);
-    let end = new Date(startDate);
-    
-    switch(viewType) {
-        case 'week':
-            end.setDate(end.getDate() + 7);
-            break;
-        case 'month':
-            end.setMonth(end.getMonth() + 1);
-            break;
-        case 'year':
-            end.setFullYear(end.getFullYear() + 1);
-            break;
-        default:
-            end.setDate(end.getDate() + 7);
-    }
-    
-    const endDate = end.toISOString().split('T')[0];
     
     try {
         // Use fetch to download PDF with authentication

@@ -717,6 +717,53 @@ select {
 }
 
 
+/* Schedule View Tabs */
+.schedule-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.schedule-tab {
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--secondary-color);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.schedule-tab:hover {
+    background: var(--hover-bg);
+    color: var(--primary-color);
+}
+
+.schedule-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.date-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.date-controls select {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: white;
+    font-size: 14px;
+}
+
+
 /* Admin View Styles */
 .admin-tabs {
     display: flex;

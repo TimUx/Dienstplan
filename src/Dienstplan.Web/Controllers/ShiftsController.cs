@@ -92,7 +92,35 @@ public class ShiftsController : ControllerBase
     {
         var assignments = await _planningService.PlanShifts(startDate, endDate, force);
         
-        var dtos = assignments.Select(a => new ShiftAssignmentDto
+        // Delete existing non-fixed assignments if force is true
+        if (force)
+        {
+            var existingAssignments = await _shiftRepository.GetByDateRangeAsync(startDate, endDate);
+            var toDelete = existingAssignments.Where(a => !a.IsFixed).ToList();
+            foreach (var assignment in toDelete)
+            {
+                await _shiftRepository.DeleteAsync(assignment.Id);
+            }
+        }
+        
+        // Save new assignments that don't have an ID (new ones)
+        var savedAssignments = new List<ShiftAssignment>();
+        foreach (var assignment in assignments)
+        {
+            if (assignment.Id == 0)
+            {
+                assignment.CreatedBy = User.Identity?.Name;
+                assignment.CreatedAt = DateTime.UtcNow;
+                var saved = await _shiftRepository.AddAsync(assignment);
+                savedAssignments.Add(saved);
+            }
+            else
+            {
+                savedAssignments.Add(assignment);
+            }
+        }
+        
+        var dtos = savedAssignments.Select(a => new ShiftAssignmentDto
         {
             Id = a.Id,
             EmployeeId = a.EmployeeId,

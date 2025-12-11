@@ -66,20 +66,20 @@ public class PdfExportService : IPdfExportService
                         
                         if (groupedByDate.Count == 0)
                         {
-                            column.Item().Text("Keine Schichten im ausgewählten Zeitraum.").FontSize(12);
+                            column.Item().Text("Keine Schichten im ausgewählten Zeitraum.").FontSize(14).Bold();
+                            return;
                         }
-                        else
+                        
+                        column.Item().Table(table =>
                         {
-                            column.Item().Table(table =>
+                            // Define columns
+                            table.ColumnsDefinition(columns =>
                             {
-                                // Define columns
-                                table.ColumnsDefinition(columns =>
-                                {
-                                    columns.RelativeColumn(2); // Date & Day
-                                    columns.RelativeColumn(3); // Employee
-                                    columns.RelativeColumn(2); // Shift
-                                    columns.RelativeColumn(1); // Notes
-                                });
+                                columns.RelativeColumn(2); // Date & Day
+                                columns.RelativeColumn(2); // Employee
+                                columns.RelativeColumn(2); // Shift
+                                columns.RelativeColumn(1); // Notes
+                            });
                                 
                                 // Header
                                 table.Header(header =>
@@ -101,36 +101,37 @@ public class PdfExportService : IPdfExportService
                                         // Get shift color
                                         var shiftColor = GetShiftColor(assignment.ShiftType.Code);
                                         
-                                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(dayName);
-                                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(assignment.Employee.FullName);
+                                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(dayName).FontSize(9);
+                                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(assignment.Employee.FullName).FontSize(9);
                                         table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5)
                                             .Background(shiftColor)
                                             .Text(text =>
                                             {
-                                                text.Span($"{assignment.ShiftType.Code} - {assignment.ShiftType.Name}").Bold();
-                                                text.Span($"\n{assignment.ShiftType.StartTime:hh\\:mm} - {assignment.ShiftType.EndTime:hh\\:mm}");
+                                                text.Span($"{assignment.ShiftType.Code} - {assignment.ShiftType.Name}").FontSize(9).Bold();
+                                                text.Span($"\n{assignment.ShiftType.StartTime:hh\\:mm} - {assignment.ShiftType.EndTime:hh\\:mm}").FontSize(8);
                                             });
                                         table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5)
                                             .Text(text =>
                                             {
                                                 if (assignment.IsSpringerAssignment)
                                                 {
-                                                    text.Span("Springer").FontColor(Colors.Red.Medium).Bold();
+                                                    text.Span("Springer").FontSize(8).FontColor(Colors.Red.Medium).Bold();
                                                 }
                                                 if (!string.IsNullOrEmpty(assignment.Notes))
                                                 {
                                                     text.Span(assignment.IsSpringerAssignment ? "\n" : "");
-                                                    text.Span(assignment.Notes);
+                                                    text.Span(assignment.Notes).FontSize(8);
                                                 }
                                             });
                                     }
                                 }
                             });
-                        }
                         
-                        // Summary section
-                        column.Item().PaddingTop(20).Text("Zusammenfassung").FontSize(14).Bold();
-                        column.Item().Table(table =>
+                        // Summary section (only if there are assignments)
+                        if (groupedByDate.Count > 0)
+                        {
+                            column.Item().PaddingTop(20).Text("Zusammenfassung").FontSize(14).Bold();
+                            column.Item().Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
                             {
@@ -154,7 +155,8 @@ public class PdfExportService : IPdfExportService
                                 table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(item.ShiftType);
                                 table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(item.Count.ToString());
                             }
-                        });
+                            });
+                        }
                     });
                 
                 page.Footer()

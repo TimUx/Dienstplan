@@ -127,76 +127,146 @@
             <!-- Admin View -->
             <div id="admin-view" class="view">
                 <h2>⚙️ Administration</h2>
-                <div class="admin-sections">
-                    <div class="admin-section">
-                        <h3>👥 Benutzerverwaltung</h3>
-                        <p>Verwaltung von Benutzerkonten, Passwörtern und Rollen.</p>
-                        <div class="controls">
-                            <button onclick="showAddUserModal()" class="btn-primary">+ Benutzer hinzufügen</button>
-                        </div>
-                        <div id="users-content">
-                            <p class="loading">Lade Benutzer...</p>
+                
+                <!-- Admin Navigation Tabs -->
+                <div class="admin-tabs">
+                    <button class="admin-tab active" onclick="showAdminTab('users', this)">👥 Benutzerverwaltung</button>
+                    <button class="admin-tab" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
+                    <button class="admin-tab" onclick="showAdminTab('email', this)">📧 E-Mail-Einstellungen</button>
+                    <button class="admin-tab" onclick="showAdminTab('settings', this)">🔧 Globale Einstellungen</button>
+                    <button class="admin-tab" onclick="showAdminTab('system', this)">📊 System-Information</button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="admin-tab-contents">
+                    <!-- Users Tab -->
+                    <div id="admin-tab-users" class="admin-tab-content active">
+                        <div class="admin-section">
+                            <h3>👥 Benutzerverwaltung</h3>
+                            <p>Verwaltung von Benutzerkonten, Passwörtern und Rollen.</p>
+                            <div class="controls">
+                                <button onclick="showAddUserModal()" class="btn-primary">+ Benutzer hinzufügen</button>
+                            </div>
+                            <div id="users-content">
+                                <p class="loading">Lade Benutzer...</p>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="admin-section">
-                        <h3>📧 E-Mail-Einstellungen</h3>
-                        <p>Konfiguration des SMTP-Servers für Benachrichtigungen.</p>
-                        <div class="controls">
-                            <button onclick="showEmailSettingsModal()" class="btn-primary">E-Mail-Einstellungen bearbeiten</button>
-                            <button onclick="loadEmailSettings()" class="btn-secondary">Aktuelle Einstellungen laden</button>
+                    <!-- Audit Logs Tab -->
+                    <div id="admin-tab-audit-logs" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📋 Änderungsprotokoll (Audit Log)</h3>
+                            <p>Protokoll aller Systemänderungen für Nachverfolgbarkeit und Compliance.</p>
+                            
+                            <!-- Filter Controls -->
+                            <div class="audit-filters">
+                                <div class="filter-group">
+                                    <label>Entität:</label>
+                                    <select id="audit-filter-entity">
+                                        <option value="">Alle</option>
+                                        <option value="Employee">Employee</option>
+                                        <option value="ShiftAssignment">ShiftAssignment</option>
+                                        <option value="Team">Team</option>
+                                        <option value="Absence">Absence</option>
+                                        <option value="VacationRequest">VacationRequest</option>
+                                        <option value="ShiftExchange">ShiftExchange</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>Aktion:</label>
+                                    <select id="audit-filter-action">
+                                        <option value="">Alle</option>
+                                        <option value="Created">Created</option>
+                                        <option value="Updated">Updated</option>
+                                        <option value="Deleted">Deleted</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>Von Datum:</label>
+                                    <input type="date" id="audit-filter-start-date">
+                                </div>
+                                <div class="filter-group">
+                                    <label>Bis Datum:</label>
+                                    <input type="date" id="audit-filter-end-date">
+                                </div>
+                                <div class="filter-group">
+                                    <button onclick="applyAuditFilters()" class="btn-primary">Filter anwenden</button>
+                                    <button onclick="clearAuditFilters()" class="btn-secondary">Zurücksetzen</button>
+                                </div>
+                            </div>
+                            
+                            <div class="controls">
+                                <button onclick="loadAuditLogs(1, 50)" class="btn-primary">Einträge laden</button>
+                            </div>
+                            <div id="audit-logs-content">
+                                <p class="loading">Lade Änderungsprotokoll...</p>
+                            </div>
+                            
+                            <!-- Pagination -->
+                            <div id="audit-pagination" class="pagination" style="display: none;">
+                                <button onclick="loadAuditLogsPreviousPage()" id="audit-prev-btn" class="btn-secondary">← Vorherige</button>
+                                <span id="audit-page-info">Seite 1</span>
+                                <button onclick="loadAuditLogsNextPage()" id="audit-next-btn" class="btn-secondary">Nächste →</button>
+                            </div>
                         </div>
-                        <div id="email-settings-content">
+                    </div>
+
+                    <!-- Email Settings Tab -->
+                    <div id="admin-tab-email" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📧 E-Mail-Einstellungen</h3>
+                            <p>Konfiguration des SMTP-Servers für Benachrichtigungen.</p>
+                            <div class="controls">
+                                <button onclick="showEmailSettingsModal()" class="btn-primary">E-Mail-Einstellungen bearbeiten</button>
+                                <button onclick="loadEmailSettings()" class="btn-secondary">Aktuelle Einstellungen laden</button>
+                            </div>
+                            <div id="email-settings-content">
+                                <div class="info-box">
+                                    <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
+                                    <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Global Settings Tab -->
+                    <div id="admin-tab-settings" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>🔧 Globale Einstellungen</h3>
+                            <p>Allgemeine Systemeinstellungen und Parameter.</p>
+                            <div class="settings-grid">
+                                <div class="setting-item">
+                                    <label>Maximale Arbeitsstunden pro Monat:</label>
+                                    <input type="number" id="setting-max-hours-month" value="192" min="1" max="300">
+                                </div>
+                                <div class="setting-item">
+                                    <label>Maximale Arbeitsstunden pro Woche:</label>
+                                    <input type="number" id="setting-max-hours-week" value="48" min="1" max="60">
+                                </div>
+                                <div class="setting-item">
+                                    <label>Maximale aufeinanderfolgende Schichten:</label>
+                                    <input type="number" id="setting-max-consecutive-shifts" value="6" min="1" max="10">
+                                </div>
+                                <div class="setting-item">
+                                    <label>Maximale aufeinanderfolgende Nachtschichten:</label>
+                                    <input type="number" id="setting-max-consecutive-nights" value="3" min="1" max="7">
+                                </div>
+                            </div>
+                            <button onclick="saveGlobalSettings()" class="btn-primary">Einstellungen speichern</button>
+                        </div>
+                    </div>
+
+                    <!-- System Info Tab -->
+                    <div id="admin-tab-system" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📊 System-Information</h3>
                             <div class="info-box">
-                                <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
-                                <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+                                <p><strong>Version:</strong> 1.2</p>
+                                <p><strong>Entwickler:</strong> Timo Braun</p>
+                                <p><strong>Datenbank:</strong> SQLite</p>
+                                <p><strong>Backend:</strong> ASP.NET Core 10.0</p>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="admin-section">
-                        <h3>🔧 Globale Einstellungen</h3>
-                        <p>Allgemeine Systemeinstellungen und Parameter.</p>
-                        <div class="settings-grid">
-                            <div class="setting-item">
-                                <label>Maximale Arbeitsstunden pro Monat:</label>
-                                <input type="number" id="setting-max-hours-month" value="192" min="1" max="300">
-                            </div>
-                            <div class="setting-item">
-                                <label>Maximale Arbeitsstunden pro Woche:</label>
-                                <input type="number" id="setting-max-hours-week" value="48" min="1" max="60">
-                            </div>
-                            <div class="setting-item">
-                                <label>Maximale aufeinanderfolgende Schichten:</label>
-                                <input type="number" id="setting-max-consecutive-shifts" value="6" min="1" max="10">
-                            </div>
-                            <div class="setting-item">
-                                <label>Maximale aufeinanderfolgende Nachtschichten:</label>
-                                <input type="number" id="setting-max-consecutive-nights" value="3" min="1" max="7">
-                            </div>
-                        </div>
-                        <button onclick="saveGlobalSettings()" class="btn-primary">Einstellungen speichern</button>
-                    </div>
-
-                    <div class="admin-section">
-                        <h3>📋 Änderungsprotokoll (Audit Log)</h3>
-                        <p>Protokoll aller Systemänderungen für Nachverfolgbarkeit und Compliance.</p>
-                        <div class="controls">
-                            <button onclick="loadAuditLogs(100)" class="btn-primary">Letzte 100 Einträge laden</button>
-                            <button onclick="loadAuditLogs(500)" class="btn-secondary">Letzte 500 Einträge laden</button>
-                        </div>
-                        <div id="audit-logs-content">
-                            <p class="loading">Lade Änderungsprotokoll...</p>
-                        </div>
-                    </div>
-
-                    <div class="admin-section">
-                        <h3>📊 System-Information</h3>
-                        <div class="info-box">
-                            <p><strong>Version:</strong> 1.2</p>
-                            <p><strong>Entwickler:</strong> Timo Braun</p>
-                            <p><strong>Datenbank:</strong> SQLite</p>
-                            <p><strong>Backend:</strong> ASP.NET Core 10.0</p>
                         </div>
                     </div>
                 </div>

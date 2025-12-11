@@ -19,6 +19,12 @@ public interface IEmployeeRepository : IRepository<Employee>
     Task<IEnumerable<Employee>> GetSpringersAsync();
     Task<IEnumerable<Employee>> GetByTeamIdAsync(int teamId);
     Task<Employee?> GetByPersonalnummerAsync(string personalnummer);
+    Task<(IEnumerable<Employee> Items, int TotalCount)> SearchAsync(
+        int page,
+        int pageSize,
+        string? searchTerm = null,
+        int? teamId = null,
+        bool? isSpringer = null);
 }
 
 public interface IShiftAssignmentRepository : IRepository<ShiftAssignment>
@@ -59,4 +65,13 @@ public interface IAuditLogRepository : IRepository<AuditLog>
     Task<IEnumerable<AuditLog>> GetByEntityAsync(string entityName, string entityId);
     Task<IEnumerable<AuditLog>> GetByUserAsync(string userId);
     Task<IEnumerable<AuditLog>> GetRecentAsync(int count);
+    Task<(IEnumerable<AuditLog> Items, int TotalCount)> GetPagedAsync(int page, int pageSize);
+    Task<(IEnumerable<AuditLog> Items, int TotalCount)> SearchAsync(
+        int page, 
+        int pageSize, 
+        string? entityName = null,
+        string? action = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? userId = null);
 }

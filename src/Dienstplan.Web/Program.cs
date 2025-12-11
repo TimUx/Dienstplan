@@ -14,6 +14,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 
+// Add HttpContextAccessor for audit logging
+builder.Services.AddHttpContextAccessor();
+
 // Configure database
 builder.Services.AddDbContext<DienstplanDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") 
@@ -63,6 +66,7 @@ builder.Services.AddScoped<IRepository<Team>, Repository<Team>>();
 builder.Services.AddScoped<IRepository<ShiftType>, Repository<ShiftType>>();
 
 // Register services
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 builder.Services.AddScoped<IPdfExportService, PdfExportService>();

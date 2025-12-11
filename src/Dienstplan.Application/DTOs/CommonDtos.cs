@@ -41,6 +41,7 @@ public class ShiftAssignmentDto
     public string? Notes { get; set; }
     public string? CreatedBy { get; set; }
     public string? ModifiedBy { get; set; }
+    public string? Warning { get; set; }
 }
 
 public class AbsenceDto
@@ -219,4 +220,28 @@ public class UpdateTeamDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Email { get; set; }
+}
+
+public class PaginatedResult<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
+    public bool HasNextPage => Page < TotalPages;
+    public bool HasPreviousPage => Page > 1;
+}
+
+public class AuditLogDto
+{
+    public int Id { get; set; }
+    public string EntityName { get; set; } = string.Empty;
+    public string EntityId { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string? Changes { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+    public string? IpAddress { get; set; }
 }

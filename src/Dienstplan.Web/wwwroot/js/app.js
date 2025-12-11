@@ -792,10 +792,6 @@ async function loadEmployees() {
         const response = await fetch(`${API_BASE}/employees`);
         const employees = await response.json();
         
-        // Also load teams for the dropdown
-        const teamsResponse = await fetch(`${API_BASE}/teams`);
-        const teams = await response.json();
-        
         displayEmployees(employees);
     } catch (error) {
         content.innerHTML = `<p class="error">Fehler beim Laden: ${error.message}</p>`;

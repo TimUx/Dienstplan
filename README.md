@@ -4,7 +4,7 @@
 
 Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdiensten für bis zu 17 Stammpersonal-Mitarbeiter plus Ferienjobber in 3 Teams.
 
-![Dienstplan Hauptansicht](https://github.com/user-attachments/assets/4ff6b145-6d78-4019-925b-57b28734bfba)
+![Dienstplan Hauptansicht](docs/screenshots/00-main-view.png)
 
 ## 🎯 Funktionsumfang
 
@@ -103,7 +103,7 @@ Das System beachtet folgende Regeln:
 ## 📸 Screenshots
 
 ### Anmeldung
-![Anmeldedialog](https://github.com/user-attachments/assets/9ca2ea96-c4aa-4dc6-818c-cae725b95a18)
+![Anmeldedialog](docs/screenshots/00-login-modal.png)
 *Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle (Admin, Disponent, Mitarbeiter)*
 
 ### Dienstplan-Ansicht (Woche) - Administrator

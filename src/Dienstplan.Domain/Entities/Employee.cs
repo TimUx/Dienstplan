@@ -23,6 +23,11 @@ public class Employee
     public string Personalnummer { get; set; } = string.Empty;
     
     /// <summary>
+    /// Email address for notifications
+    /// </summary>
+    public string? Email { get; set; }
+    
+    /// <summary>
     /// Birth date (Geburtsdatum)
     /// </summary>
     public DateTime? Geburtsdatum { get; set; }

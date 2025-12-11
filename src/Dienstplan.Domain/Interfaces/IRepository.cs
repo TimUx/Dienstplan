@@ -48,3 +48,8 @@ public interface IShiftExchangeRepository : IRepository<ShiftExchange>
     Task<IEnumerable<ShiftExchange>> GetByStatusAsync(ShiftExchangeStatus status);
     Task<IEnumerable<ShiftExchange>> GetAvailableExchangesAsync();
 }
+
+public interface IEmailSettingsRepository : IRepository<EmailSettings>
+{
+    Task<EmailSettings?> GetActiveSettingsAsync();
+}

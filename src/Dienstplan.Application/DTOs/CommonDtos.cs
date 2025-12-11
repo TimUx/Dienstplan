@@ -6,6 +6,7 @@ public class EmployeeDto
     public string Vorname { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Personalnummer { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public DateTime? Geburtsdatum { get; set; }
     public string? Funktion { get; set; }
     public bool IsSpringer { get; set; }
@@ -19,6 +20,7 @@ public class TeamDto
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string? Email { get; set; }
     public int EmployeeCount { get; set; }
 }
 
@@ -171,4 +173,34 @@ public class WeekendShiftStatisticsDto
     public int SaturdayShifts { get; set; }
     public int SundayShifts { get; set; }
     public int TotalWeekendShifts { get; set; }
+}
+
+public class EmailSettingsDto
+{
+    public int Id { get; set; }
+    public string SmtpServer { get; set; } = string.Empty;
+    public int SmtpPort { get; set; }
+    public string Protocol { get; set; } = "SMTP";
+    public string SecurityProtocol { get; set; } = "STARTTLS";
+    public bool RequiresAuthentication { get; set; }
+    public string? Username { get; set; }
+    public string? Password { get; set; }
+    public string SenderEmail { get; set; } = string.Empty;
+    public string? SenderName { get; set; }
+    public string? ReplyToEmail { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class CreateEmailSettingsDto
+{
+    public string SmtpServer { get; set; } = string.Empty;
+    public int SmtpPort { get; set; } = 587;
+    public string Protocol { get; set; } = "SMTP";
+    public string SecurityProtocol { get; set; } = "STARTTLS";
+    public bool RequiresAuthentication { get; set; } = true;
+    public string? Username { get; set; }
+    public string? Password { get; set; }
+    public string SenderEmail { get; set; } = string.Empty;
+    public string? SenderName { get; set; }
+    public string? ReplyToEmail { get; set; }
 }

@@ -19,6 +19,7 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Absence> Absences => Set<Absence>();
     public DbSet<VacationRequest> VacationRequests => Set<VacationRequest>();
     public DbSet<ShiftExchange> ShiftExchanges => Set<ShiftExchange>();
+    public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +41,7 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(e => e.Vorname).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Personalnummer).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Email).HasMaxLength(255);
             entity.HasIndex(e => e.Personalnummer).IsUnique();
             
             entity.HasOne(e => e.Team)
@@ -53,6 +55,21 @@ public class DienstplanDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Name).IsRequired().HasMaxLength(100);
+            entity.Property(t => t.Email).HasMaxLength(255);
+        });
+        
+        // EmailSettings configuration
+        modelBuilder.Entity<EmailSettings>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SmtpServer).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Protocol).HasMaxLength(50);
+            entity.Property(e => e.SecurityProtocol).HasMaxLength(50);
+            entity.Property(e => e.SenderEmail).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.SenderName).HasMaxLength(100);
+            entity.Property(e => e.ReplyToEmail).HasMaxLength(255);
+            entity.Property(e => e.Username).HasMaxLength(255);
+            entity.Property(e => e.Password).HasMaxLength(500); // Encrypted passwords can be longer
         });
         
         // ShiftType configuration

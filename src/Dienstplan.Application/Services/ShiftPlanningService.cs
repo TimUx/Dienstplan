@@ -282,11 +282,11 @@ public class ShiftPlanningService : IShiftPlanningService
     {
         if (isWeekend)
         {
-            // Weekend: minimum staffing for all shifts
+            // Weekend: minimum staffing for all shifts in rotation order (Früh → Nacht → Spät)
             return new List<(string, int)>
             {
                 (ShiftTypeCodes.Frueh, ShiftRules.WeekendStaffing.MinPerShift),
-                (ShiftTypeCodes.Nacht, ShiftRules.WeekendStaffing.MinPerShift),  // Nacht before Spät in rotation
+                (ShiftTypeCodes.Nacht, ShiftRules.WeekendStaffing.MinPerShift),
                 (ShiftTypeCodes.Spaet, ShiftRules.WeekendStaffing.MinPerShift)
             };
         }

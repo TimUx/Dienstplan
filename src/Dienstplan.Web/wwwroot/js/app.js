@@ -384,12 +384,7 @@ function displayWeekView(data, employees) {
     
     // If no assignments yet, generate dates from startDate to endDate
     if (dates.length === 0 && data.startDate && data.endDate) {
-        const start = new Date(data.startDate);
-        const end = new Date(data.endDate);
-        // Create a new Date object for each iteration to prevent mutation issues
-        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
-            dates.push(d.toISOString().split('T')[0]);
-        }
+        dates.push(...generateDateRange(data.startDate, data.endDate));
     }
     
     dates.sort();
@@ -466,12 +461,7 @@ function displayMonthView(data, employees) {
     
     // If no assignments yet, generate dates from startDate to endDate
     if (dates.length === 0 && data.startDate && data.endDate) {
-        const start = new Date(data.startDate);
-        const end = new Date(data.endDate);
-        // Create a new Date object for each iteration to prevent mutation issues
-        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
-            dates.push(d.toISOString().split('T')[0]);
-        }
+        dates.push(...generateDateRange(data.startDate, data.endDate));
     }
     
     dates.sort();
@@ -550,12 +540,7 @@ function displayYearView(data, employees) {
     
     // If no assignments yet, generate dates from startDate to endDate
     if (dates.length === 0 && data.startDate && data.endDate) {
-        const start = new Date(data.startDate);
-        const end = new Date(data.endDate);
-        // Create a new Date object for each iteration to prevent mutation issues
-        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
-            dates.push(d.toISOString().split('T')[0]);
-        }
+        dates.push(...generateDateRange(data.startDate, data.endDate));
     }
     
     dates.sort();
@@ -712,6 +697,24 @@ function getUniqueDates(assignments) {
         dates.add(a.date.split('T')[0]);
     });
     return Array.from(dates);
+}
+
+/**
+ * Generate a range of dates from start to end
+ * @param {Date|string} start - Start date
+ * @param {Date|string} end - End date
+ * @returns {string[]} Array of date strings in ISO format (YYYY-MM-DD)
+ */
+function generateDateRange(start, end) {
+    const dates = [];
+    const startDate = typeof start === 'string' ? new Date(start) : start;
+    const endDate = typeof end === 'string' ? new Date(end) : end;
+    
+    // Create a new Date object for each iteration to prevent mutation issues
+    for (let d = new Date(startDate); d <= endDate; d = new Date(d.getTime() + 86400000)) {
+        dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
 }
 
 /**

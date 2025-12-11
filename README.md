@@ -42,9 +42,16 @@ Das System beachtet folgende Regeln:
 - 📅 Fehltageübersicht
 - 💼 Team-Workload Analyse
 
+### PDF-Export
+- 📄 Professionelle PDF-Generierung von Dienstplänen
+- 🎨 Farbcodierte Schichtarten für bessere Übersichtlichkeit
+- 📋 Zusammenfassung mit Schichtanzahl pro Typ
+- 📅 Flexible Zeitraumauswahl (Woche, Monat, Jahr)
+
 ### Web-Schnittstelle
 - 📱 Responsive Design (Desktop & Smartphone)
 - 📆 Ansichten: Woche, Monat, Jahr
+- 🔐 Authentifizierung und Autorisierung
 - 👀 Lesezugriff für alle Mitarbeiter
 - ⚡ Performante REST API
 
@@ -124,17 +131,81 @@ Navigieren Sie zu: `http://localhost:5000` oder `https://localhost:5001`
 
 ## 📖 API-Dokumentation
 
+### Authentifizierungs-Endpoints
+
+#### Anmelden
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@fritzwinter.de",
+  "password": "Admin123!",
+  "rememberMe": true
+}
+```
+
+Antwort:
+```json
+{
+  "success": true,
+  "user": {
+    "email": "admin@fritzwinter.de",
+    "fullName": "Administrator",
+    "roles": ["Admin"]
+  }
+}
+```
+
+#### Aktuellen Benutzer abrufen
+```http
+GET /api/auth/current-user
+```
+
+#### Abmelden
+```http
+POST /api/auth/logout
+```
+
+#### Neuen Benutzer registrieren (nur Admin)
+```http
+POST /api/auth/register
+Content-Type: application/json
+Authorization: Required (Admin role)
+
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!",
+  "fullName": "Max Mustermann",
+  "role": "Mitarbeiter"
+}
+```
+
+#### Passwort ändern
+```http
+POST /api/auth/change-password
+Content-Type: application/json
+Authorization: Required
+
+{
+  "currentPassword": "OldPass123!",
+  "newPassword": "NewPass123!"
+}
+```
+
 ### Mitarbeiter-Endpoints
 
 #### Alle Mitarbeiter abrufen
 ```http
 GET /api/employees
+Authorization: Optional (öffentlich lesbar)
 ```
 
 #### Mitarbeiter erstellen
 ```http
 POST /api/employees
 Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
 
 {
   "vorname": "Max",
@@ -148,6 +219,7 @@ Content-Type: application/json
 #### Springer abrufen
 ```http
 GET /api/employees/springers
+Authorization: Optional (öffentlich lesbar)
 ```
 
 ### Schicht-Endpoints
@@ -155,6 +227,7 @@ GET /api/employees/springers
 #### Dienstplan anzeigen
 ```http
 GET /api/shifts/schedule?startDate=2024-01-01&view=week
+Authorization: Optional (öffentlich lesbar)
 ```
 Parameter:
 - `startDate`: Startdatum (ISO Format)
@@ -164,11 +237,24 @@ Parameter:
 #### Schichten automatisch planen
 ```http
 POST /api/shifts/plan?startDate=2024-01-01&endDate=2024-01-31&force=false
+Authorization: Required (Admin oder Disponent)
 ```
+
+#### PDF-Export des Dienstplans
+```http
+GET /api/shifts/export/pdf?startDate=2024-01-01&endDate=2024-01-31
+Authorization: Optional (öffentlich verfügbar)
+```
+Parameter:
+- `startDate`: Startdatum (ISO Format)
+- `endDate`: Enddatum (ISO Format)
+
+Antwort: PDF-Datei zum Download
 
 #### Springer zuweisen
 ```http
 POST /api/shifts/springer/123?date=2024-01-15
+Authorization: Required
 ```
 
 ### Statistik-Endpoints
@@ -176,14 +262,22 @@ POST /api/shifts/springer/123?date=2024-01-15
 #### Dashboard-Statistiken
 ```http
 GET /api/statistics/dashboard?startDate=2024-01-01&endDate=2024-01-31
+Authorization: Optional (öffentlich lesbar)
 ```
 
 ### Abwesenheiten-Endpoints
+
+#### Abwesenheiten abrufen
+```http
+GET /api/absences
+Authorization: Optional (öffentlich lesbar)
+```
 
 #### Abwesenheit erfassen
 ```http
 POST /api/absences
 Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
 
 {
   "employeeId": 1,
@@ -222,17 +316,46 @@ Die Lösung beinhaltet Testkategorien für:
 - Integration-Tests der API
 - Repository-Tests
 
-## 🔐 Sicherheit
+## 🔐 Sicherheit & Authentifizierung
 
-### Geplante Features
-- Authentifizierung mit ASP.NET Core Identity
-- Rollenbasierte Autorisierung:
-  - **Admin**: Volle Berechtigung
-  - **Disponent**: Schichtplanung und Bearbeitung
-  - **Lese-Benutzer**: Nur Ansicht des Dienstplans
+### Implementiert
+Version 1.1 implementiert vollständige Authentifizierung und Autorisierung mit ASP.NET Core Identity.
 
-### Aktuelle Einschränkungen
-Version 1.0 implementiert noch keine Authentifizierung. Alle Endpoints sind öffentlich zugänglich.
+#### Rollenbasierte Autorisierung
+- **Admin**: Volle Berechtigung - alle Funktionen
+  - Mitarbeiter erstellen, bearbeiten, löschen
+  - Schichtplanung durchführen
+  - Abwesenheiten verwalten
+  - Neue Benutzer registrieren
+- **Disponent**: Schichtplanung und Bearbeitung
+  - Mitarbeiter erstellen und bearbeiten
+  - Schichtplanung durchführen
+  - Abwesenheiten verwalten
+- **Mitarbeiter**: Nur Lesezugriff
+  - Dienstplan ansehen
+  - Statistiken einsehen
+  - Mitarbeiterliste ansehen
+
+#### Standard-Anmeldedaten
+Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
+- **E-Mail**: admin@fritzwinter.de
+- **Passwort**: Admin123!
+
+**WICHTIG**: Ändern Sie das Standard-Passwort nach der ersten Anmeldung!
+
+#### Funktionen
+- ✅ Cookie-basierte Authentifizierung
+- ✅ Passwort-Hashing (ASP.NET Core Identity)
+- ✅ Account-Sperrung nach fehlgeschlagenen Anmeldeversuchen (5 Versuche)
+- ✅ Sichere Session-Verwaltung
+- ✅ Passwort-Anforderungen: Mind. 8 Zeichen, Groß- und Kleinbuchstaben, Ziffer
+
+### Sicherheitshinweise für Produktion
+1. **Passwörter ändern**: Ändern Sie alle Standard-Passwörter
+2. **HTTPS verwenden**: Aktivieren Sie HTTPS in der Produktion
+3. **CORS konfigurieren**: Beschränken Sie erlaubte Origins in `Program.cs`
+4. **Datenbank schützen**: SQLite-Datei vor unbefugtem Zugriff schützen
+5. **Regular Updates**: Halten Sie alle NuGet-Pakete aktuell
 
 ## 📊 Datenmodell
 
@@ -324,8 +447,8 @@ Bei Fragen oder Problemen:
 - [x] Automatische Schichtplanung
 - [x] Web-Interface mit Dashboard
 - [x] CI/CD Pipeline
-- [ ] Authentifizierung & Autorisierung
-- [ ] PDF-Export von Dienstplänen
+- [x] **Authentifizierung & Autorisierung** ✅ **Neu in v1.1**
+- [x] **PDF-Export von Dienstplänen** ✅ **Neu in v1.1**
 - [ ] E-Mail-Benachrichtigungen
 - [ ] Mobile App (React Native)
 

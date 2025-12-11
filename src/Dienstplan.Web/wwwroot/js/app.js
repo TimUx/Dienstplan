@@ -296,7 +296,14 @@ async function planShifts() {
 
 // PDF Export
 async function exportScheduleToPdf() {
-    const startDate = document.getElementById('startDate').value;
+    const startDateInput = document.getElementById('startDate');
+    const startDate = startDateInput.value;
+    
+    if (!startDate) {
+        alert('Bitte wählen Sie ein Startdatum aus.');
+        return;
+    }
+    
     const viewType = document.getElementById('viewType').value;
     
     // Calculate end date based on view type
@@ -320,9 +327,27 @@ async function exportScheduleToPdf() {
     const endDate = end.toISOString().split('T')[0];
     
     try {
-        // Create a link to download the PDF
-        const url = `${API_BASE}/shifts/export/pdf?startDate=${startDate}&endDate=${endDate}`;
-        window.open(url, '_blank');
+        // Use fetch to download PDF with authentication
+        const response = await fetch(`${API_BASE}/shifts/export/pdf?startDate=${startDate}&endDate=${endDate}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `Dienstplan_${startDate}_bis_${endDate}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an, um den Dienstplan als PDF zu exportieren.');
+        } else {
+            alert('Fehler beim PDF-Export. Bitte versuchen Sie es erneut.');
+        }
     } catch (error) {
         alert(`Fehler beim PDF-Export: ${error.message}`);
     }

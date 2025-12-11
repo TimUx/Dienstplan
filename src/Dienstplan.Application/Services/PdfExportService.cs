@@ -30,7 +30,6 @@ public class PdfExportService : IPdfExportService
     public async Task<byte[]> ExportScheduleToPdfAsync(DateTime startDate, DateTime endDate)
     {
         var assignments = (await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate)).ToList();
-        var employees = (await _employeeRepository.GetAllAsync()).ToList();
         
         var document = Document.Create(container =>
         {

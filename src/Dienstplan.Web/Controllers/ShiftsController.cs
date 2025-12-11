@@ -153,7 +153,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpGet("export/pdf")]
-    [AllowAnonymous] // Allow all to export PDF
+    // Require authentication for PDF export to protect sensitive data
     public async Task<IActionResult> ExportScheduleToPdf(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate)

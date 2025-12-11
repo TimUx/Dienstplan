@@ -43,70 +43,60 @@ dotnet run --urls "http://localhost:5000"
 
 ### Benötigte Screenshots
 
-#### 1. Hauptansicht - Dienstplan
-- **Datei**: `screenshot-01-schedule-week.png`
-- **Ansicht**: Wochenansicht mit Beispieldaten (KW 50, 9.-15. Dez. 2025)
-- **Inhalt**: Vollständiger Dienstplan mit allen Schichten und Mitarbeitern
+#### 1. Hauptansicht - Dienstplan (Public)
+- **Datei**: `01-schedule-week-public.png`
+- **Ansicht**: Wochenansicht mit Beispieldaten (KW 50, 9.-15. Dez. 2025) - Öffentliche Ansicht
+- **Inhalt**: Vollständiger Dienstplan mit allen Schichten und Mitarbeitern, ohne Administratorrechte
 
-#### 2. Hauptansicht - Dienstplan Monatsansicht
-- **Datei**: `screenshot-02-schedule-month.png`
+#### 2. Login-Dialog
+- **Datei**: `02-login-modal.png`
+- **Ansicht**: Anmeldedialog vor dem Einloggen
+- **Inhalt**: Modal mit E-Mail/Passwort-Feldern und Standard-Anmeldedaten
+
+#### 3. Hauptansicht - Dienstplan (Admin)
+- **Datei**: `03-schedule-week-admin.png`
+- **Ansicht**: Wochenansicht nach Administrator-Anmeldung
+- **Inhalt**: Wochenansicht mit vollem Funktionsumfang und "Schichten planen" Button
+
+#### 4. Hauptansicht - Dienstplan Monatsansicht (Admin)
+- **Datei**: `04-schedule-month-admin.png`
 - **Ansicht**: Monatsansicht Dezember 2025
 - **Inhalt**: Monatliche Übersicht der Schichtplanung
 
-#### 3. Login-Dialog
-- **Datei**: `screenshot-03-login.png`
-- **Ansicht**: Anmeldedialog vor dem Einloggen
-- **Inhalt**: Modal mit E-Mail/Passwort-Feldern
+#### 5. Hauptansicht - Dienstplan Jahresansicht (Admin)
+- **Datei**: `05-schedule-year-admin.png`
+- **Ansicht**: Jahresansicht 2025
+- **Inhalt**: Jahresübersicht mit KW-Darstellung
 
-#### 4. Mitarbeiterverwaltung
-- **Datei**: `screenshot-04-employees.png`
+#### 6. Mitarbeiterverwaltung
+- **Datei**: `06-employees-list.png`
 - **Ansicht**: Mitarbeiterübersicht nach dem Login als Admin
-- **Inhalt**: Liste aller 17 Mitarbeiter mit Details
-
-#### 5. Mitarbeiter-Formular
-- **Datei**: `screenshot-05-employee-form.png`
-- **Ansicht**: Dialog zum Hinzufügen/Bearbeiten eines Mitarbeiters
-- **Inhalt**: Formular mit allen Feldern (Name, E-Mail, Geburtsdatum, Funktion, Team, etc.)
-
-#### 6. Teams-Verwaltung
-- **Datei**: `screenshot-06-teams.png`
-- **Ansicht**: Teamübersicht
-- **Inhalt**: Grid mit 3 Teams (Alpha, Beta, Gamma)
+- **Inhalt**: Liste aller 17 Mitarbeiter mit Teams, Personalnummern und Springer-Kennzeichnung
 
 #### 7. Urlaubsverwaltung - Urlaubsanträge
-- **Datei**: `screenshot-07-vacation-requests.png`
+- **Datei**: `07-vacation-requests.png`
 - **Ansicht**: Urlaub-Tab mit Urlaubsanträgen
-- **Inhalt**: Tabelle mit Anträgen und verschiedenen Status
+- **Inhalt**: Tabelle mit Anträgen und verschiedenen Status (In Bearbeitung, Genehmigt, Nicht genehmigt)
 
 #### 8. Urlaubsverwaltung - Diensttausch
-- **Datei**: `screenshot-08-shift-exchanges.png`
+- **Datei**: `08-shift-exchange.png`
 - **Ansicht**: Diensttausch-Tab
-- **Inhalt**: Liste der Tauschangebote
+- **Inhalt**: Mitarbeiter können Dienste zum Tausch anbieten - Genehmigung durch Disponent erforderlich
 
 #### 9. Statistiken
-- **Datei**: `screenshot-09-statistics.png`
+- **Datei**: `09-statistics.png`
 - **Ansicht**: Statistikübersicht
-- **Inhalt**: Arbeitsstunden, Schichtverteilung, Team-Auslastung
+- **Inhalt**: Umfassende Statistiken über Arbeitsstunden, Schichtverteilung, Fehltage und Team-Auslastung
 
-#### 10. Admin-Panel - Übersicht
-- **Datei**: `screenshot-10-admin-overview.png`
-- **Ansicht**: Admin-Panel mit allen Sektionen
-- **Inhalt**: Benutzerverwaltung, E-Mail-Einstellungen, Globale Einstellungen, System-Info
-
-#### 11. Admin - E-Mail-Einstellungen
-- **Datei**: `screenshot-11-admin-email-settings.png`
-- **Ansicht**: E-Mail-Einstellungen Detail
-- **Inhalt**: Aktive SMTP-Konfiguration
-
-#### 12. Admin - Globale Einstellungen
-- **Datei**: `screenshot-12-admin-global-settings.png`
-- **Ansicht**: Globale Einstellungen
-- **Inhalt**: Parameter (Max. Stunden, Max. aufeinanderfolgende Schichten, etc.)
-
-#### 13. Hilfe/Handbuch
-- **Datei**: `screenshot-13-help-manual.png`
+#### 10. Hilfe/Handbuch
+- **Datei**: `10-help-manual.png`
 - **Ansicht**: Hilfe-Seite
-- **Inhalt**: Inhaltsverzeichnis und Einleitung des Handbuchs
+- **Inhalt**: Integriertes Benutzerhandbuch mit ausführlichen Anleitungen zu allen Funktionen
+
+#### 11. Admin-Panel
+- **Datei**: `11-admin-panel.png`
+- **Ansicht**: Admin-Panel mit allen Sektionen
+- **Inhalt**: Benutzerverwaltung, E-Mail-Einstellungen, Globale Einstellungen und System-Info
 
 ## Testdaten-Übersicht
 
@@ -173,9 +163,10 @@ Screenshots in relevanten Sektionen einfügen:
 ## Hinweise
 
 - Screenshots sollten in hoher Qualität (PNG) gespeichert werden
+- **WICHTIG: Screenshots MÜSSEN in Full-HD (1920x1080) erstellt werden**
 - Vollbild-Screenshots für vollständige Seitenansicht
 - Browser-Zoom auf 100% setzen
-- Für bessere Darstellung: Browser-Fenster auf 1920x1080 setzen
+- Browser-Fenster auf exakt 1920x1080 Pixel setzen
 
 ---
 

@@ -6,7 +6,10 @@ public class EmployeeDto
     public string Vorname { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Personalnummer { get; set; } = string.Empty;
+    public DateTime? Geburtsdatum { get; set; }
+    public string? Funktion { get; set; }
     public bool IsSpringer { get; set; }
+    public bool IsFerienjobber { get; set; }
     public int? TeamId { get; set; }
     public string? TeamName { get; set; }
 }
@@ -30,7 +33,10 @@ public class ShiftAssignmentDto
     public DateTime Date { get; set; }
     public bool IsManual { get; set; }
     public bool IsSpringerAssignment { get; set; }
+    public bool IsFixed { get; set; }
     public string? Notes { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? ModifiedBy { get; set; }
 }
 
 public class AbsenceDto
@@ -91,4 +97,78 @@ public class TeamWorkloadDto
     public string TeamName { get; set; } = string.Empty;
     public int TotalShifts { get; set; }
     public double AverageShiftsPerEmployee { get; set; }
+}
+
+public class VacationRequestDto
+{
+    public int Id { get; set; }
+    public int EmployeeId { get; set; }
+    public string EmployeeName { get; set; } = string.Empty;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? Notes { get; set; }
+    public string? DisponentResponse { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public string? ProcessedBy { get; set; }
+}
+
+public class CreateVacationRequestDto
+{
+    public int EmployeeId { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class UpdateVacationRequestStatusDto
+{
+    public string Status { get; set; } = string.Empty;
+    public string? DisponentResponse { get; set; }
+}
+
+public class ShiftExchangeDto
+{
+    public int Id { get; set; }
+    public int OfferingEmployeeId { get; set; }
+    public string OfferingEmployeeName { get; set; } = string.Empty;
+    public int ShiftAssignmentId { get; set; }
+    public DateTime ShiftDate { get; set; }
+    public string ShiftCode { get; set; } = string.Empty;
+    public string ShiftName { get; set; } = string.Empty;
+    public int? RequestingEmployeeId { get; set; }
+    public string? RequestingEmployeeName { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? OfferingReason { get; set; }
+    public string? DisponentNotes { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public string? ProcessedBy { get; set; }
+}
+
+public class CreateShiftExchangeDto
+{
+    public int ShiftAssignmentId { get; set; }
+    public string? OfferingReason { get; set; }
+}
+
+public class RequestShiftExchangeDto
+{
+    public int RequestingEmployeeId { get; set; }
+}
+
+public class ProcessShiftExchangeDto
+{
+    public string Status { get; set; } = string.Empty;
+    public string? DisponentNotes { get; set; }
+}
+
+public class WeekendShiftStatisticsDto
+{
+    public int EmployeeId { get; set; }
+    public string EmployeeName { get; set; } = string.Empty;
+    public int SaturdayShifts { get; set; }
+    public int SundayShifts { get; set; }
+    public int TotalWeekendShifts { get; set; }
 }

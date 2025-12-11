@@ -7,6 +7,7 @@ namespace Dienstplan.Application.Services;
 public interface IStatisticsService
 {
     Task<DashboardStatisticsDto> GetDashboardStatisticsAsync(DateTime startDate, DateTime endDate);
+    Task<List<WeekendShiftStatisticsDto>> GetWeekendShiftStatisticsAsync(DateTime startDate, DateTime endDate);
 }
 
 public class StatisticsService : IStatisticsService
@@ -138,5 +139,31 @@ public class StatisticsService : IStatisticsService
         return absences
             .Where(a => a.Type == type)
             .Sum(a => (a.EndDate - a.StartDate).Days + 1);
+    }
+
+    public async Task<List<WeekendShiftStatisticsDto>> GetWeekendShiftStatisticsAsync(DateTime startDate, DateTime endDate)
+    {
+        var employees = (await _employeeRepository.GetAllAsync()).ToList();
+        var assignments = (await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate)).ToList();
+
+        return employees.Select(e =>
+        {
+            var employeeAssignments = assignments.Where(a => a.EmployeeId == e.Id).ToList();
+            
+            var saturdayShifts = employeeAssignments
+                .Count(a => a.Date.DayOfWeek == DayOfWeek.Saturday);
+            
+            var sundayShifts = employeeAssignments
+                .Count(a => a.Date.DayOfWeek == DayOfWeek.Sunday);
+            
+            return new WeekendShiftStatisticsDto
+            {
+                EmployeeId = e.Id,
+                EmployeeName = e.FullName,
+                SaturdayShifts = saturdayShifts,
+                SundayShifts = sundayShifts,
+                TotalWeekendShifts = saturdayShifts + sundayShifts
+            };
+        }).OrderByDescending(s => s.TotalWeekendShifts).ToList();
     }
 }

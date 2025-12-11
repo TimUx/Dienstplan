@@ -25,5 +25,30 @@ public class ShiftAssignment
     /// </summary>
     public bool IsSpringerAssignment { get; set; }
     
+    /// <summary>
+    /// Indicates if this is a fixed assignment (e.g., for holidays) that should not be changed by automatic planning
+    /// </summary>
+    public bool IsFixed { get; set; }
+    
     public string? Notes { get; set; }
+    
+    /// <summary>
+    /// When the assignment was created
+    /// </summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    /// <summary>
+    /// When the assignment was last modified
+    /// </summary>
+    public DateTime? ModifiedAt { get; set; }
+    
+    /// <summary>
+    /// User who created this assignment
+    /// </summary>
+    public string? CreatedBy { get; set; }
+    
+    /// <summary>
+    /// User who last modified this assignment
+    /// </summary>
+    public string? ModifiedBy { get; set; }
 }

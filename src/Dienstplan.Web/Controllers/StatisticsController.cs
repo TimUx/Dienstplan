@@ -29,4 +29,20 @@ public class StatisticsController : ControllerBase
         var statistics = await _statisticsService.GetDashboardStatisticsAsync(start, end);
         return Ok(statistics);
     }
+
+    /// <summary>
+    /// Get weekend shift statistics - Disponent/Admin only
+    /// </summary>
+    [HttpGet("weekend-shifts")]
+    [Authorize(Roles = "Admin,Disponent")]
+    public async Task<ActionResult<List<WeekendShiftStatisticsDto>>> GetWeekendShiftStatistics(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        var start = startDate ?? DateTime.Today.AddMonths(-3);
+        var end = endDate ?? DateTime.Today;
+
+        var statistics = await _statisticsService.GetWeekendShiftStatisticsAsync(start, end);
+        return Ok(statistics);
+    }
 }

@@ -53,6 +53,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IShiftAssignmentRepository, ShiftAssignmentRepository>();
 builder.Services.AddScoped<IAbsenceRepository, AbsenceRepository>();
+builder.Services.AddScoped<IVacationRequestRepository, VacationRequestRepository>();
+builder.Services.AddScoped<IShiftExchangeRepository, ShiftExchangeRepository>();
 
 // Register services
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();

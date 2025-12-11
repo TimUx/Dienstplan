@@ -265,8 +265,14 @@ function displayWeekView(data) {
         return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
     }
     
-    // Build table
-    let html = '<table class="calendar-table week-view"><thead><tr>';
+    // Get week info from first date for header
+    const firstDate = new Date(dates[0]);
+    const weekNumber = getWeekNumber(firstDate);
+    const year = firstDate.getFullYear();
+    
+    // Build table with header
+    let html = `<div class="month-header"><h3>Woche: KW ${weekNumber} ${year}</h3></div>`;
+    html += '<table class="calendar-table week-view"><thead><tr>';
     html += '<th class="team-column">Team / Person</th>';
     
     // Add date columns
@@ -401,12 +407,17 @@ function displayYearView(data) {
     // Group dates by month
     const monthGroups = groupDatesByMonth(dates);
     
-    let html = '<div class="year-view-container">';
+    // Get year from first date for main header
+    const firstDate = new Date(dates[0]);
+    const year = firstDate.getFullYear();
+    
+    let html = `<div class="month-header"><h3>Jahr: ${year}</h3></div>`;
+    html += '<div class="year-view-container">';
     
     // Create a table for each month
     monthGroups.forEach(month => {
         const monthDate = new Date(month.dates[0]);
-        const monthName = monthDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+        const monthName = monthDate.toLocaleDateString('de-DE', { month: 'long' });
         
         html += `<div class="month-section">`;
         html += `<div class="month-header"><h3>${monthName}</h3></div>`;

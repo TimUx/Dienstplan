@@ -1057,6 +1057,7 @@ body.disponent button.admin-only.admin-strict {
 .sunday-column,
 .holiday-column {
     background: #ffebee !important;
+    color: #c62828 !important;
 }
 
 .sunday-cell,

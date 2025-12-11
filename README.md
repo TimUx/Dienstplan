@@ -111,15 +111,15 @@ Das System beachtet folgende Regeln:
 *Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle (Admin, Disponent, Mitarbeiter)*
 
 ### Dienstplan-Ansicht (Woche) - Administrator
-![Dienstplan Wochenansicht Administrator](https://github.com/user-attachments/assets/b19b9db2-2445-46b9-bf9c-c0fa47f388b8)
+![Dienstplan Wochenansicht Administrator](https://github.com/user-attachments/assets/ac4101b2-856b-4b89-a370-b2c5b1663560)
 *Wochenansicht mit vollem Funktionsumfang nach Administrator-Anmeldung*
 
 ### Dienstplan-Ansicht (Monat)
-![Dienstplan Monatsansicht](https://github.com/user-attachments/assets/8a30f018-7061-4fb9-9bec-2b8eb4263faf)
+![Dienstplan Monatsansicht](https://github.com/user-attachments/assets/5bb766a6-50b0-4e9b-88e8-4985c92499c9)
 *Monatsansicht für besseren Überblick über längere Zeiträume*
 
 ### Dienstplan-Ansicht (Jahr)
-![Dienstplan Jahresansicht](https://github.com/user-attachments/assets/99881f1d-dfbc-4e98-a245-34a737ff6ac7)
+![Dienstplan Jahresansicht](https://github.com/user-attachments/assets/3c137b20-28d4-4335-bbfb-1680fee54f21)
 *Jahresansicht für die Langzeitplanung*
 
 ### Mitarbeiterverwaltung

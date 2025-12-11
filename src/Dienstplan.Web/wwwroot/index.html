@@ -762,6 +762,53 @@
         </div>
     </div>
 
+    <!-- Edit Shift Assignment Modal -->
+    <div id="editShiftModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditShiftModal()">&times;</span>
+            <h2 id="editShiftModalTitle">Schicht bearbeiten</h2>
+            <form id="editShiftForm" onsubmit="saveShiftAssignment(event)">
+                <input type="hidden" id="editShiftId">
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="editShiftEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Datum*</label>
+                    <input type="date" id="editShiftDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Schichttyp*</label>
+                    <select id="editShiftTypeId" required>
+                        <option value="">Schichttyp wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="editShiftIsFixed">
+                        Feste Schicht (wird nicht automatisch geändert)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Notizen</label>
+                    <textarea id="editShiftNotes" rows="3" placeholder="Optional: Notizen zur Schichtzuweisung"></textarea>
+                </div>
+                <div id="editShiftWarning" class="warning-box" style="display: none;">
+                    <p><strong>⚠️ Regelverstoß:</strong></p>
+                    <p id="editShiftWarningText"></p>
+                    <p>Möchten Sie die Änderung trotzdem vornehmen?</p>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeEditShiftModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="button" onclick="deleteShiftAssignment()" class="btn-danger admin-only">Löschen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- User Management Modal -->
     <div id="userModal" class="modal">
         <div class="modal-content">

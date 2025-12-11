@@ -262,6 +262,9 @@ function displaySchedule(data) {
     const content = document.getElementById('schedule-content');
     const viewType = document.getElementById('viewType').value;
     
+    // Store shifts globally for editing
+    allShifts = data.assignments;
+    
     if (data.assignments.length === 0) {
         content.innerHTML = '<p>Keine Schichten geplant. Klicken Sie auf "Schichten planen" um automatisch Schichten zu erstellen.</p>';
         return;
@@ -328,9 +331,11 @@ function displayWeekView(data) {
                 const isSunday = date.getDay() === 0;
                 const isHoliday = isHessianHoliday(date);
                 const shifts = employee.shifts[dateStr] || [];
-                const shiftBadges = shifts.map(s => 
-                    `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
-                ).join(' ');
+                const shiftBadges = shifts.map(s => {
+                    const canEdit = canPlanShifts();
+                    const badge = `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}" ${canEdit ? `onclick="editShiftAssignment(${s.id})" style="cursor:pointer;"` : ''}>${s.shiftCode}</span>`;
+                    return badge;
+                }).join(' ');
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
                 html += `<td class="${cellClass}">${shiftBadges}</td>`;
             });
@@ -1973,6 +1978,166 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Shift assignment editing functions
+let allShiftTypes = [];
+let allShifts = [];
+
+async function loadShiftTypes() {
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes`, {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            allShiftTypes = await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading shift types:', error);
+    }
+}
+
+async function editShiftAssignment(shiftId) {
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten zu bearbeiten.');
+        return;
+    }
+
+    // Find the shift in the cached data
+    const shift = allShifts.find(s => s.id === shiftId);
+    if (!shift) {
+        alert('Schicht nicht gefunden.');
+        return;
+    }
+
+    // Load employees and shift types if not already loaded
+    await loadEmployees();
+    if (allShiftTypes.length === 0) {
+        await loadShiftTypes();
+    }
+
+    // Populate modal
+    document.getElementById('editShiftId').value = shift.id;
+    document.getElementById('editShiftEmployeeId').value = shift.employeeId;
+    document.getElementById('editShiftDate').value = shift.date.split('T')[0];
+    document.getElementById('editShiftTypeId').value = shift.shiftTypeId;
+    document.getElementById('editShiftIsFixed').checked = shift.isFixed || false;
+    document.getElementById('editShiftNotes').value = shift.notes || '';
+    
+    // Populate employee dropdown
+    const employeeSelect = document.getElementById('editShiftEmployeeId');
+    employeeSelect.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+    cachedEmployees.forEach(emp => {
+        const option = document.createElement('option');
+        option.value = emp.id;
+        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        employeeSelect.appendChild(option);
+    });
+    employeeSelect.value = shift.employeeId;
+
+    // Populate shift type dropdown
+    const shiftTypeSelect = document.getElementById('editShiftTypeId');
+    shiftTypeSelect.innerHTML = '<option value="">Schichttyp wählen...</option>';
+    allShiftTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type.id;
+        option.textContent = `${type.name} (${type.code})`;
+        shiftTypeSelect.appendChild(option);
+    });
+    shiftTypeSelect.value = shift.shiftTypeId;
+
+    document.getElementById('editShiftWarning').style.display = 'none';
+    document.getElementById('editShiftModalTitle').textContent = 'Schicht bearbeiten';
+    document.getElementById('editShiftModal').style.display = 'block';
+}
+
+function closeEditShiftModal() {
+    document.getElementById('editShiftModal').style.display = 'none';
+    document.getElementById('editShiftForm').reset();
+    document.getElementById('editShiftWarning').style.display = 'none';
+}
+
+async function saveShiftAssignment(event) {
+    event.preventDefault();
+
+    const shiftId = document.getElementById('editShiftId').value;
+    const shiftData = {
+        id: parseInt(shiftId),
+        employeeId: parseInt(document.getElementById('editShiftEmployeeId').value),
+        date: document.getElementById('editShiftDate').value,
+        shiftTypeId: parseInt(document.getElementById('editShiftTypeId').value),
+        isFixed: document.getElementById('editShiftIsFixed').checked,
+        notes: document.getElementById('editShiftNotes').value
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(shiftData)
+        });
+
+        if (response.ok) {
+            alert('Schicht erfolgreich aktualisiert!');
+            closeEditShiftModal();
+            loadSchedule();
+        } else if (response.status === 400) {
+            const error = await response.json();
+            if (error.warning) {
+                // Show warning and ask for confirmation
+                document.getElementById('editShiftWarningText').textContent = error.error;
+                document.getElementById('editShiftWarning').style.display = 'block';
+                
+                if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
+                    // Override validation - for now just try again
+                    // In a real implementation, you'd add a 'force' parameter
+                    alert('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.');
+                }
+            } else {
+                alert(`Fehler: ${error.error}`);
+            }
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Aktualisieren der Schicht.');
+        }
+    } catch (error) {
+        console.error('Error updating shift:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function deleteShiftAssignment() {
+    const shiftId = document.getElementById('editShiftId').value;
+    
+    if (!confirm('Möchten Sie diese Schichtzuweisung wirklich löschen?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+
+        if (response.ok || response.status === 204) {
+            alert('Schicht erfolgreich gelöscht!');
+            closeEditShiftModal();
+            loadSchedule();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Löschen der Schicht.');
+        }
+    } catch (error) {
+        console.error('Error deleting shift:', error);
+        alert(`Fehler: ${error.message}`);
+    }
 }
 
 // Audit Log functions

@@ -228,12 +228,25 @@ cd Dienstplan
 dotnet build
 ```
 
-#### 3. Anwendung starten
+#### 3. (Optional) Beispieldatenbank generieren
+Für Entwicklung und Tests können Sie eine vorbefüllte Datenbank mit 17 Mitarbeitern und 3 Teams erstellen:
+
+```bash
+# Beispieldatenbank generieren
+dotnet run --project src/SampleDataGenerator
+
+# Als aktive Datenbank verwenden
+cp dienstplan-sample.db dienstplan.db
+```
+
+Siehe [docs/SAMPLE_DATA.md](docs/SAMPLE_DATA.md) für Details zu Beispieldaten und API-Aufrufen.
+
+#### 4. Anwendung starten
 ```bash
 dotnet run --project src/Dienstplan.Web
 ```
 
-#### 4. Browser öffnen
+#### 5. Browser öffnen
 Navigieren Sie zu: `http://localhost:5000` oder `https://localhost:5001`
 
 ### Binaries verwenden

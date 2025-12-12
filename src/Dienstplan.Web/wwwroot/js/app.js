@@ -2467,11 +2467,17 @@ function showAdminTab(tabName, clickedElement) {
     
     // Load data for the selected tab if needed
     if (tabName === 'users') {
+        stopAuditLogAutoRefresh(); // Stop auto-refresh when switching away from audit logs
         loadUsers();
     } else if (tabName === 'audit-logs') {
         loadAuditLogs(1, 50);
+        startAuditLogAutoRefresh(60); // Start auto-refresh with 60 second interval
     } else if (tabName === 'email') {
+        stopAuditLogAutoRefresh(); // Stop auto-refresh when switching away from audit logs
         loadEmailSettings();
+    } else {
+        // Stop auto-refresh for any other tab
+        stopAuditLogAutoRefresh();
     }
 }
 
@@ -2482,6 +2488,8 @@ function showAdminTab(tabName, clickedElement) {
 let currentAuditPage = 1;
 let currentAuditPageSize = 50;
 let currentAuditFilters = {};
+let auditLogRefreshInterval = null; // Store interval ID for cleanup
+let auditLogRefreshIntervalTime = 60000; // 60 seconds in milliseconds
 
 async function loadAuditLogs(page = 1, pageSize = 50) {
     const content = document.getElementById('audit-logs-content');
@@ -2602,5 +2610,79 @@ function loadAuditLogsPreviousPage() {
 
 function loadAuditLogsNextPage() {
     loadAuditLogs(currentAuditPage + 1, currentAuditPageSize);
+}
+
+// ===========================
+// Audit Log Auto-Refresh Functions
+// ===========================
+
+/**
+ * Start automatic refresh of audit logs
+ * @param {number} intervalSeconds - Refresh interval in seconds (default: 60)
+ */
+function startAuditLogAutoRefresh(intervalSeconds = 60) {
+    // Stop any existing refresh interval
+    stopAuditLogAutoRefresh();
+    
+    // Store the interval time
+    auditLogRefreshIntervalTime = intervalSeconds * 1000;
+    
+    // Start the refresh interval
+    auditLogRefreshInterval = setInterval(() => {
+        // Only refresh if the audit logs tab is currently visible
+        const auditLogsTab = document.getElementById('admin-tab-audit-logs');
+        if (auditLogsTab && auditLogsTab.classList.contains('active')) {
+            console.log('Auto-refreshing audit logs...');
+            loadAuditLogs(currentAuditPage, currentAuditPageSize);
+        }
+    }, auditLogRefreshIntervalTime);
+    
+    // Update status indicator
+    const statusElement = document.getElementById('audit-auto-refresh-status');
+    if (statusElement) {
+        statusElement.textContent = `🔄 Auto-Aktualisierung: Aktiv (${intervalSeconds}s)`;
+        statusElement.style.color = '#4CAF50';
+    }
+    
+    console.log(`Audit log auto-refresh started with ${intervalSeconds} second interval`);
+}
+
+/**
+ * Stop automatic refresh of audit logs
+ */
+function stopAuditLogAutoRefresh() {
+    if (auditLogRefreshInterval) {
+        clearInterval(auditLogRefreshInterval);
+        auditLogRefreshInterval = null;
+        
+        // Update status indicator
+        const statusElement = document.getElementById('audit-auto-refresh-status');
+        if (statusElement) {
+            statusElement.textContent = '⏸ Auto-Aktualisierung: Inaktiv';
+            statusElement.style.color = '#999';
+        }
+        
+        console.log('Audit log auto-refresh stopped');
+    }
+}
+
+/**
+ * Change the auto-refresh interval
+ * @param {number} intervalSeconds - New refresh interval in seconds
+ */
+function setAuditLogRefreshInterval(intervalSeconds) {
+    if (intervalSeconds < 5) {
+        console.warn('Minimum refresh interval is 5 seconds');
+        intervalSeconds = 5;
+    }
+    
+    auditLogRefreshIntervalTime = intervalSeconds * 1000;
+    
+    // Restart with new interval if auto-refresh is active
+    if (auditLogRefreshInterval) {
+        startAuditLogAutoRefresh(intervalSeconds);
+    }
+    
+    console.log(`Audit log refresh interval set to ${intervalSeconds} seconds`);
 }
 

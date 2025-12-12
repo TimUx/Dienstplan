@@ -203,6 +203,7 @@
                                         <option value="Absence">Absence</option>
                                         <option value="VacationRequest">VacationRequest</option>
                                         <option value="ShiftExchange">ShiftExchange</option>
+                                        <option value="EmailSettings">EmailSettings</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
@@ -230,6 +231,9 @@
                             
                             <div class="controls">
                                 <button onclick="loadAuditLogs(1, 50)" class="btn-primary">Einträge laden</button>
+                                <div style="display: inline-block; margin-left: 20px;">
+                                    <span id="audit-auto-refresh-status" style="color: #4CAF50;">🔄 Auto-Aktualisierung: Aktiv (60s)</span>
+                                </div>
                             </div>
                             <div id="audit-logs-content">
                                 <p class="loading">Lade Änderungsprotokoll...</p>

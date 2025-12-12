@@ -228,12 +228,40 @@ cd Dienstplan
 dotnet build
 ```
 
-#### 3. Anwendung starten
+#### 3. (Optional) Beispieldatenbank generieren
+Für Entwicklung und Tests können Sie eine vorbefüllte Datenbank mit 17 Mitarbeitern und 3 Teams erstellen:
+
+**Linux/macOS:**
+```bash
+# Einfach das bereitgestellte Skript ausführen
+./generate-sample-db.sh
+```
+
+**Windows:**
+```powershell
+# PowerShell-Skript ausführen
+.\generate-sample-db.ps1
+```
+
+**Manuell (alle Plattformen):**
+```bash
+# Beispieldatenbank generieren
+dotnet run --project src/SampleDataGenerator
+
+# Als aktive Datenbank verwenden
+cp dienstplan-sample.db dienstplan.db  # Linux/macOS
+# oder
+Copy-Item dienstplan-sample.db dienstplan.db  # Windows
+```
+
+Siehe [docs/SAMPLE_DATA.md](docs/SAMPLE_DATA.md) für Details zu Beispieldaten und API-Aufrufen.
+
+#### 4. Anwendung starten
 ```bash
 dotnet run --project src/Dienstplan.Web
 ```
 
-#### 4. Browser öffnen
+#### 5. Browser öffnen
 Navigieren Sie zu: `http://localhost:5000` oder `https://localhost:5001`
 
 ### Binaries verwenden
@@ -685,6 +713,28 @@ Bearbeiten Sie `src/Dienstplan.Domain/Rules/ShiftRules.cs`:
 - `ForbiddenTransitions`: Verbotene Wechsel
 - `IdealRotation`: Gewünschte Reihenfolge
 - Staffing-Anforderungen
+
+### Beispieldaten für Entwicklung
+Für schnelles Testen und Entwicklung steht ein Beispieldaten-Generator zur Verfügung:
+
+```bash
+# Linux/macOS
+./generate-sample-db.sh
+
+# Windows
+.\generate-sample-db.ps1
+```
+
+**Generierte Daten:**
+- 3 Teams (Alpha, Beta, Gamma)
+- 17 Mitarbeiter (15 mit Team, 2 Sonderaufgaben)
+- 4 Springer
+- Administrator-Benutzer
+
+Ausführliche Dokumentation: [docs/SAMPLE_DATA.md](docs/SAMPLE_DATA.md)
+
+**Manuelle API-Aufrufe:**
+Die Dokumentation enthält auch komplette Beispiele für Windows (PowerShell/curl) und Linux (bash/curl) zur Datenerzeugung über die REST API.
 
 ## 🤝 Beitragen
 

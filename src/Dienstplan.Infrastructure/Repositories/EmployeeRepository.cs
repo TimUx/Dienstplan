@@ -37,6 +37,7 @@ public class EmployeeRepository : AuditableRepository<Employee>, IEmployeeReposi
     public async Task<IEnumerable<Employee>> GetSpringersAsync()
     {
         return await _context.Employees
+            .Include(e => e.Team)
             .Where(e => e.IsSpringer)
             .ToListAsync();
     }
@@ -44,6 +45,7 @@ public class EmployeeRepository : AuditableRepository<Employee>, IEmployeeReposi
     public async Task<IEnumerable<Employee>> GetByTeamIdAsync(int teamId)
     {
         return await _context.Employees
+            .Include(e => e.Team)
             .Where(e => e.TeamId == teamId)
             .ToListAsync();
     }

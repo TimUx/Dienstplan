@@ -211,24 +211,56 @@ Automatisch durch EF Core DbContext implementiert:
 
 ## Schichtplanungs-Algorithmus
 
+### Wöchentliche Team-Rotation
+
+Der Algorithmus arbeitet mit einem 3-Wochen-Rotationszyklus:
+
+**KW 1:** Team 1 → Früh, Team 2 → Spät, Team 3 → Nacht  
+**KW 2:** Team 1 → Nacht, Team 2 → Früh, Team 3 → Spät  
+**KW 3:** Team 1 → Spät, Team 2 → Nacht, Team 3 → Früh
+
+Jedes Team arbeitet eine Woche lang die gleiche Schicht, dann rotiert es zur nächsten.
+
 ### Ablauf
 
-1. **Initialisierung**: Lade Mitarbeiter und Abwesenheiten
-2. **Tag-Iteration**: Für jeden Tag im Zeitraum:
-   - Filtere verfügbare Mitarbeiter (ohne Abwesenheit)
-   - Bestimme Schichtanforderungen (Wochentag vs. Wochenende)
-   - Weise Schichten zu nach idealem Rhythmus
-3. **Validierung**: Prüfe jede Zuweisung gegen Regeln
+1. **Initialisierung**: Lade Mitarbeiter (nach Teams gruppiert) und Abwesenheiten
+2. **Wochenweise Iteration**: Für jede Woche im Zeitraum:
+   - Bestimme Team-Rotation für diese Woche (basierend auf Wochennummer)
+   - Plane jeden Tag:
+     - Filtere verfügbare Mitarbeiter des zugewiesenen Teams
+     - Sortiere nach Workload für Fairness
+     - Weise Schichten mit Regelvalidierung zu
+     - Bei Engpässen: Nutze andere Teams als Fallback
+3. **Spezialfunktionen**: Weise BMT und BSB zu (Mo-Fr, qualifizierte Personen)
 4. **Persistierung**: Speichere gültige Zuweisungen
+
+### Regelvalidierung (vor jeder Zuweisung)
+
+- ✓ Maximal 6 aufeinanderfolgende Dienste
+- ✓ Maximal 5 aufeinanderfolgende Nachtschichten
+- ✓ Mindestens 1 Ruhetag nach max. Schichten
+- ✓ 11 Stunden Mindestruhezeit (Spät → Früh verboten, Nacht → Früh verboten)
+- ✓ Keine identische Schicht zweimal hintereinander
+- ✓ Max. 48 Wochenstunden, max. 192 Monatsstunden
+- ✓ Monatsübergreifende Prüfung (30-Tage-Lookback)
+- ✓ Abwesenheiten blockieren vollständig
 
 ### Springer-Logik
 
-Bei Ausfall eines Mitarbeiters:
+Springer werden nicht in die Team-Rotation einbezogen:
+- Können in Teams sein oder teamübergreifend arbeiten
+- Werden nach Workload priorisiert für Ausfallvertretung
+- Mindestens ein Springer muss verfügbar bleiben
+- Bei Springer-Ausfall: Nur andere Springer übernehmen
 
-1. Identifiziere betroffene Schicht
-2. Suche verfügbare Springer (nicht abwesend)
-3. Weise ersten verfügbaren Springer zu
-4. Markiere als `IsSpringerAssignment = true`
+### Fairness
+
+- **Team-Rotation**: Automatisch faire Verteilung aller Schichttypen
+- **Workload-Tracking**: Mitarbeiter mit weniger Schichten werden bevorzugt
+- **Wochenend-Fairness**: Separate Zählung von Samstag/Sonntag-Diensten
+- **Schichttyp-Fairness**: Verhindert zu viele Nachtschichten für einzelne Personen
+
+Detaillierte Dokumentation: [docs/SHIFT_PLANNING_ALGORITHM.md](docs/SHIFT_PLANNING_ALGORITHM.md)
 
 ## API-Design
 

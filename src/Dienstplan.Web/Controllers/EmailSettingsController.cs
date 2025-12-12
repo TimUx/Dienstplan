@@ -11,6 +11,7 @@ namespace Dienstplan.Web.Controllers;
 [Authorize(Roles = "Admin")] // Only admins can manage email settings
 public class EmailSettingsController : ControllerBase
 {
+    private const string PASSWORD_MASK = "***";
     private readonly IEmailSettingsRepository _repository;
     private readonly IAuditService _auditService;
 
@@ -124,7 +125,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***", // Don't log password
+            Password = PASSWORD_MASK, // Don't log password
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,
@@ -160,7 +161,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***", // Don't log password
+            Password = PASSWORD_MASK, // Don't log password
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,
@@ -195,7 +196,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***",
+            Password = PASSWORD_MASK,
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,
@@ -215,7 +216,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***",
+            Password = PASSWORD_MASK,
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,
@@ -256,7 +257,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***",
+            Password = PASSWORD_MASK,
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,
@@ -301,7 +302,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***", // Never return actual password
+            Password = PASSWORD_MASK, // Never return actual password
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,

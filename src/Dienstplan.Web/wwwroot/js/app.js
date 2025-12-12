@@ -2471,7 +2471,7 @@ function showAdminTab(tabName, clickedElement) {
         loadUsers();
     } else if (tabName === 'audit-logs') {
         loadAuditLogs(1, 50);
-        startAuditLogAutoRefresh(60); // Start auto-refresh with 60 second interval
+        startAuditLogAutoRefresh(AUDIT_LOG_DEFAULT_REFRESH_INTERVAL); // Start auto-refresh with default interval
     } else if (tabName === 'email') {
         stopAuditLogAutoRefresh(); // Stop auto-refresh when switching away from audit logs
         loadEmailSettings();
@@ -2485,11 +2485,14 @@ function showAdminTab(tabName, clickedElement) {
 // Enhanced Audit Log Functions with Pagination and Filtering
 // ===========================
 
+const AUDIT_LOG_DEFAULT_REFRESH_INTERVAL = 60; // seconds
+const AUDIT_LOG_MIN_REFRESH_INTERVAL = 5; // seconds
+
 let currentAuditPage = 1;
 let currentAuditPageSize = 50;
 let currentAuditFilters = {};
 let auditLogRefreshInterval = null; // Store interval ID for cleanup
-let auditLogRefreshIntervalTime = 60000; // 60 seconds in milliseconds
+let auditLogRefreshIntervalTime = AUDIT_LOG_DEFAULT_REFRESH_INTERVAL * 1000; // milliseconds
 
 async function loadAuditLogs(page = 1, pageSize = 50) {
     const content = document.getElementById('audit-logs-content');
@@ -2671,9 +2674,9 @@ function stopAuditLogAutoRefresh() {
  * @param {number} intervalSeconds - New refresh interval in seconds
  */
 function setAuditLogRefreshInterval(intervalSeconds) {
-    if (intervalSeconds < 5) {
-        console.warn('Minimum refresh interval is 5 seconds');
-        intervalSeconds = 5;
+    if (intervalSeconds < AUDIT_LOG_MIN_REFRESH_INTERVAL) {
+        console.warn(`Minimum refresh interval is ${AUDIT_LOG_MIN_REFRESH_INTERVAL} seconds`);
+        intervalSeconds = AUDIT_LOG_MIN_REFRESH_INTERVAL;
     }
     
     auditLogRefreshIntervalTime = intervalSeconds * 1000;

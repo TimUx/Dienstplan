@@ -260,8 +260,9 @@ public class ShiftPlanningService : IShiftPlanningService
                 var shiftTypeId = GetShiftTypeIdByCode(shiftCode);
                 
                 // Find which team should work this shift this week
-                var assignedTeamIndex = teamShiftRotation.FirstOrDefault(kvp => kvp.Value == shiftCode).Key;
-                var assignedTeam = teams.ElementAtOrDefault(assignedTeamIndex);
+                var teamEntry = teamShiftRotation.FirstOrDefault(kvp => kvp.Value == shiftCode);
+                var assignedTeamIndex = teamEntry.Value != null ? teamEntry.Key : -1;
+                var assignedTeam = assignedTeamIndex >= 0 ? teams.ElementAtOrDefault(assignedTeamIndex) : null;
                 
                 if (assignedTeam == null)
                 {
@@ -721,12 +722,14 @@ public class ShiftPlanningService : IShiftPlanningService
     
     private DateTime? FindLastRestDay(List<ShiftAssignment> assignments, DateTime upToDate)
     {
-        var date = upToDate.AddDays(-1);
+        // Create a HashSet of dates with assignments for O(1) lookup
+        var datesWithShifts = new HashSet<DateTime>(assignments.Select(a => a.Date.Date));
+        var date = upToDate.AddDays(-1).Date;
         
         // Go back up to 30 days looking for a rest day
         for (int i = 0; i < 30; i++)
         {
-            if (!assignments.Any(a => a.Date.Date == date.Date))
+            if (!datesWithShifts.Contains(date))
             {
                 return date;
             }
@@ -738,25 +741,23 @@ public class ShiftPlanningService : IShiftPlanningService
     
     private int FindLastNightShiftSeries(List<ShiftAssignment> assignments, DateTime upToDate)
     {
+        // Create a dictionary for O(1) lookups by date
+        var assignmentsByDate = assignments
+            .Where(a => a.Date < upToDate)
+            .GroupBy(a => a.Date.Date)
+            .ToDictionary(g => g.Key, g => g.First());
+        
         int count = 0;
-        var date = upToDate.AddDays(-1);
+        var date = upToDate.AddDays(-1).Date;
         
         // Count consecutive night shifts before this one
-        while (assignments.Any(a => a.Date.Date == date.Date))
+        while (assignmentsByDate.TryGetValue(date, out var assignment))
         {
-            var assignment = assignments.FirstOrDefault(a => a.Date.Date == date.Date);
-            if (assignment != null)
+            var shiftCode = GetShiftCodeById(assignment.ShiftTypeId);
+            if (shiftCode == ShiftTypeCodes.Nacht)
             {
-                var shiftCode = GetShiftCodeById(assignment.ShiftTypeId);
-                if (shiftCode == ShiftTypeCodes.Nacht)
-                {
-                    count++;
-                    date = date.AddDays(-1);
-                }
-                else
-                {
-                    break;
-                }
+                count++;
+                date = date.AddDays(-1);
             }
             else
             {

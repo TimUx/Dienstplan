@@ -262,7 +262,8 @@ def add_special_function_constraints(
     bmt_vars: Dict[Tuple[int, date], cp_model.IntVar],
     bsb_vars: Dict[Tuple[int, date], cp_model.IntVar],
     employees: List[Employee],
-    dates: List[date]
+    dates: List[date],
+    absences: List[Absence]
 ):
     """
     Add constraints for special functions (BMT, BSB).
@@ -271,6 +272,7 @@ def add_special_function_constraints(
     - Exactly 1 BSB per weekday (Mon-Fri)
     - Only qualified employees can be assigned
     - Employee cannot have regular shift and special function on same day
+    - Cannot assign when absent
     """
     
     # Get qualified employees
@@ -285,13 +287,33 @@ def add_special_function_constraints(
         
         # Exactly 1 BMT per weekday
         if bmt_qualified:
-            bmt_assigned = [bmt_vars[(emp.id, d)] for emp in bmt_qualified if (emp.id, d) in bmt_vars]
+            bmt_assigned = []
+            for emp in bmt_qualified:
+                if (emp.id, d) in bmt_vars:
+                    # Check if absent
+                    is_absent = any(
+                        abs.employee_id == emp.id and abs.overlaps_date(d)
+                        for abs in absences
+                    )
+                    if not is_absent:
+                        bmt_assigned.append(bmt_vars[(emp.id, d)])
+            
             if bmt_assigned:
                 model.Add(sum(bmt_assigned) == 1)
         
         # Exactly 1 BSB per weekday
         if bsb_qualified:
-            bsb_assigned = [bsb_vars[(emp.id, d)] for emp in bsb_qualified if (emp.id, d) in bsb_vars]
+            bsb_assigned = []
+            for emp in bsb_qualified:
+                if (emp.id, d) in bsb_vars:
+                    # Check if absent
+                    is_absent = any(
+                        abs.employee_id == emp.id and abs.overlaps_date(d)
+                        for abs in absences
+                    )
+                    if not is_absent:
+                        bsb_assigned.append(bsb_vars[(emp.id, d)])
+            
             if bsb_assigned:
                 model.Add(sum(bsb_assigned) == 1)
         
@@ -375,15 +397,16 @@ def add_fairness_objectives(
             model.Add(total == sum(shifts))
             shift_counts.append(total)
     
-    # Add to objective: minimize deviation from average
+    # Add to objective: minimize variance between employees
+    # Instead of calculating average, minimize pairwise differences
     if len(shift_counts) > 1:
-        avg_shifts = sum([sc for sc in shift_counts]) // len(shift_counts)
-        for sc in shift_counts:
-            deviation = model.NewIntVar(-len(dates), len(dates), f"deviation_{sc.Name()}")
-            model.Add(deviation == sc - avg_shifts)
-            abs_deviation = model.NewIntVar(0, len(dates), f"abs_dev_{sc.Name()}")
-            model.AddAbsEquality(abs_deviation, deviation)
-            objective_terms.append(abs_deviation)
+        for i in range(len(shift_counts)):
+            for j in range(i + 1, len(shift_counts)):
+                diff = model.NewIntVar(-len(dates), len(dates), f"diff_{i}_{j}")
+                model.Add(diff == shift_counts[i] - shift_counts[j])
+                abs_diff = model.NewIntVar(0, len(dates), f"abs_diff_{i}_{j}")
+                model.AddAbsEquality(abs_diff, diff)
+                objective_terms.append(abs_diff)
     
     # 2. Prefer ideal rotation (F -> N -> S)
     for emp in employees:

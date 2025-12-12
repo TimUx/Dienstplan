@@ -76,7 +76,7 @@ class ShiftPlanningSolver:
         add_working_hours_constraints(model, x, employees, dates, shift_codes, shift_types)
         
         print("  - Special function constraints (BMT, BSB)")
-        add_special_function_constraints(model, x, bmt_vars, bsb_vars, employees, dates)
+        add_special_function_constraints(model, x, bmt_vars, bsb_vars, employees, dates, absences)
         
         print("  - Springer constraints (at least 1 available)")
         add_springer_constraints(model, x, employees, dates, shift_codes)

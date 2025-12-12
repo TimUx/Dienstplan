@@ -1,6 +1,7 @@
 using ClosedXML.Excel;
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
+using static Dienstplan.Domain.Entities.ShiftTypeCodes;
 
 namespace Dienstplan.Application.Services;
 
@@ -172,12 +173,12 @@ public class ExcelExportService : IExcelExportService
 
         var legendItems = new[]
         {
-            ("F", "Früh (05:45-13:45)", XLColor.Gold),
-            ("S", "Spät (13:45-21:45)", XLColor.Tomato),
-            ("N", "Nacht (21:45-05:45)", XLColor.RoyalBlue),
-            ("ZD", "Zwischendienst (08:00-16:00)", XLColor.LimeGreen),
-            ("BMT", "Brandmeldetechniker", XLColor.Orange),
-            ("BSB", "Brandschutzbeauftragter", XLColor.Crimson),
+            (Frueh, "Früh (05:45-13:45)", XLColor.Gold),
+            (Spaet, "Spät (13:45-21:45)", XLColor.Tomato),
+            (Nacht, "Nacht (21:45-05:45)", XLColor.RoyalBlue),
+            (Zwischendienst, "Zwischendienst (08:00-16:00)", XLColor.LimeGreen),
+            (BMT, "Brandmeldetechniker", XLColor.Orange),
+            (BSB, "Brandschutzbeauftragter", XLColor.Crimson),
             ("Ur", "Urlaub", XLColor.LightPink),
             ("-", "Frei", XLColor.White)
         };
@@ -215,12 +216,12 @@ public class ExcelExportService : IExcelExportService
     {
         return shiftCode switch
         {
-            "F" => XLColor.Gold,
-            "S" => XLColor.Tomato,
-            "N" => XLColor.RoyalBlue,
-            "ZD" => XLColor.LimeGreen,
-            "BMT" => XLColor.Orange,
-            "BSB" => XLColor.Crimson,
+            Frueh => XLColor.Gold,
+            Spaet => XLColor.Tomato,
+            Nacht => XLColor.RoyalBlue,
+            Zwischendienst => XLColor.LimeGreen,
+            BMT => XLColor.Orange,
+            BSB => XLColor.Crimson,
             _ => XLColor.LightGray
         };
     }

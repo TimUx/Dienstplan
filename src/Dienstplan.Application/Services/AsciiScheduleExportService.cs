@@ -11,12 +11,12 @@ public class AsciiScheduleExportService
 {
     private readonly IEmployeeRepository _employeeRepository;
     private readonly IShiftAssignmentRepository _shiftAssignmentRepository;
-    private readonly ITeamRepository _teamRepository;
+    private readonly IRepository<Team> _teamRepository;
 
     public AsciiScheduleExportService(
         IEmployeeRepository employeeRepository,
         IShiftAssignmentRepository shiftAssignmentRepository,
-        ITeamRepository teamRepository)
+        IRepository<Team> teamRepository)
     {
         _employeeRepository = employeeRepository;
         _shiftAssignmentRepository = shiftAssignmentRepository;

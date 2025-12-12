@@ -18,19 +18,22 @@ public class ShiftsController : ControllerBase
     private readonly IShiftPlanningService _planningService;
     private readonly IPdfExportService _pdfExportService;
     private readonly IAuditService _auditService;
+    private readonly AsciiScheduleExportService? _asciiExportService;
 
     public ShiftsController(
         IShiftAssignmentRepository shiftRepository,
         IAbsenceRepository absenceRepository,
         IShiftPlanningService planningService,
         IPdfExportService pdfExportService,
-        IAuditService auditService)
+        IAuditService auditService,
+        AsciiScheduleExportService? asciiExportService = null)
     {
         _shiftRepository = shiftRepository;
         _absenceRepository = absenceRepository;
         _planningService = planningService;
         _pdfExportService = pdfExportService;
         _auditService = auditService;
+        _asciiExportService = asciiExportService;
     }
 
     [HttpGet("schedule")]
@@ -311,6 +314,34 @@ public class ShiftsController : ControllerBase
         catch (Exception ex)
         {
             return BadRequest(new { error = $"Fehler beim Erstellen des PDFs: {ex.Message}" });
+        }
+    }
+    
+    [HttpGet("export/ascii")]
+    [AllowAnonymous] // Allow all to view ASCII export
+    public async Task<IActionResult> ExportScheduleToAscii(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        if (_asciiExportService == null)
+        {
+            return BadRequest(new { error = "ASCII-Export-Service ist nicht verfügbar" });
+        }
+
+        var start = startDate ?? DateTime.Today;
+        var end = endDate ?? start.AddDays(30);
+
+        try
+        {
+            var asciiSchedule = await _asciiExportService.GenerateAsciiSchedule(start, end);
+            
+            var fileName = $"Dienstplan_{start:yyyy-MM-dd}_bis_{end:yyyy-MM-dd}.txt";
+            var bytes = System.Text.Encoding.UTF8.GetBytes(asciiSchedule);
+            return File(bytes, "text/plain; charset=utf-8", fileName);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = $"Fehler beim Erstellen des ASCII-Formats: {ex.Message}" });
         }
     }
 }

@@ -488,5 +488,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
 
 
 if __name__ == "__main__":
+    import os
+    # Only enable debug in development (not in production)
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
     app = create_app()
-    app.run(debug=True, port=5000)
+    app.run(debug=debug_mode, port=5000)

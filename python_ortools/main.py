@@ -153,7 +153,7 @@ def save_assignments_to_database(assignments, db_path: str):
     conn.close()
 
 
-def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "dienstplan.db"):
+def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "dienstplan.db", debug: bool = False):
     """
     Start Flask web server with REST API.
     This provides the backend for the existing .NET Web UI.
@@ -162,6 +162,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         host: Host to bind to
         port: Port to bind to
         db_path: Path to SQLite database
+        debug: Enable debug mode (WARNING: Only use in development!)
     """
     from web_api import create_app
     
@@ -170,13 +171,15 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     print("=" * 60)
     print(f"Starting web server on http://{host}:{port}")
     print(f"Database: {db_path}")
+    if debug:
+        print("⚠️  WARNING: Debug mode enabled - DO NOT use in production!")
     print()
     print("The existing Web UI from .NET version is compatible with this backend.")
     print("=" * 60)
     print()
     
     app = create_app(db_path)
-    app.run(host=host, port=port, debug=True)
+    app.run(host=host, port=port, debug=debug)
 
 
 def main():
@@ -239,6 +242,11 @@ def main():
         default="dienstplan.db",
         help="Path to SQLite database (default: dienstplan.db)"
     )
+    server_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode (WARNING: Only for development!)"
+    )
     
     args = parser.parse_args()
     
@@ -254,7 +262,7 @@ def main():
         )
     
     elif args.command == "serve":
-        start_web_server(args.host, args.port, args.db)
+        start_web_server(args.host, args.port, args.db, args.debug)
         return 0
     
     else:

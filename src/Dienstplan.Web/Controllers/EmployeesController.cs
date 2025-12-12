@@ -12,10 +12,12 @@ namespace Dienstplan.Web.Controllers;
 public class EmployeesController : ControllerBase
 {
     private readonly IEmployeeRepository _repository;
+    private readonly IAuditService _auditService;
 
-    public EmployeesController(IEmployeeRepository repository)
+    public EmployeesController(IEmployeeRepository repository, IAuditService auditService)
     {
         _repository = repository;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -144,6 +146,10 @@ public class EmployeesController : ControllerBase
         };
 
         var created = await _repository.AddAsync(employee);
+        
+        // Log the creation
+        await _auditService.LogCreatedAsync(created, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         dto.Id = created.Id;
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, dto);
     }
@@ -156,6 +162,21 @@ public class EmployeesController : ControllerBase
         if (employee == null)
             return NotFound();
 
+        // Store old entity for audit log
+        var oldEntity = new Employee
+        {
+            Id = employee.Id,
+            Vorname = employee.Vorname,
+            Name = employee.Name,
+            Personalnummer = employee.Personalnummer,
+            Email = employee.Email,
+            Geburtsdatum = employee.Geburtsdatum,
+            Funktion = employee.Funktion,
+            IsSpringer = employee.IsSpringer,
+            IsFerienjobber = employee.IsFerienjobber,
+            TeamId = employee.TeamId
+        };
+
         employee.Vorname = dto.Vorname;
         employee.Name = dto.Name;
         employee.Personalnummer = dto.Personalnummer;
@@ -167,6 +188,10 @@ public class EmployeesController : ControllerBase
         employee.TeamId = dto.TeamId;
 
         await _repository.UpdateAsync(employee);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, employee, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         return Ok(dto);
     }
 
@@ -177,6 +202,9 @@ public class EmployeesController : ControllerBase
         var employee = await _repository.GetByIdAsync(id);
         if (employee == null)
             return NotFound();
+
+        // Log the deletion before deleting
+        await _auditService.LogDeletedAsync(employee, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         await _repository.DeleteAsync(id);
         return NoContent();

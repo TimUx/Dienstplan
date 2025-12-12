@@ -11,11 +11,14 @@ namespace Dienstplan.Web.Controllers;
 [Authorize(Roles = "Admin")] // Only admins can manage email settings
 public class EmailSettingsController : ControllerBase
 {
+    private const string PASSWORD_MASK = "***";
     private readonly IEmailSettingsRepository _repository;
+    private readonly IAuditService _auditService;
 
-    public EmailSettingsController(IEmailSettingsRepository repository)
+    public EmailSettingsController(IEmailSettingsRepository repository, IAuditService auditService)
     {
         _repository = repository;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -93,6 +96,10 @@ public class EmailSettingsController : ControllerBase
         };
 
         var created = await _repository.AddAsync(settings);
+        
+        // Log the creation
+        await _auditService.LogCreatedAsync(created, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
@@ -107,6 +114,23 @@ public class EmailSettingsController : ControllerBase
         {
             return NotFound();
         }
+
+        // Store old entity for audit log (without password for security)
+        var oldEntity = new EmailSettings
+        {
+            Id = settings.Id,
+            SmtpServer = settings.SmtpServer,
+            SmtpPort = settings.SmtpPort,
+            Protocol = settings.Protocol,
+            SecurityProtocol = settings.SecurityProtocol,
+            RequiresAuthentication = settings.RequiresAuthentication,
+            Username = settings.Username,
+            Password = PASSWORD_MASK, // Don't log password
+            SenderEmail = settings.SenderEmail,
+            SenderName = settings.SenderName,
+            ReplyToEmail = settings.ReplyToEmail,
+            IsActive = settings.IsActive
+        };
 
         settings.SmtpServer = dto.SmtpServer;
         settings.SmtpPort = dto.SmtpPort;
@@ -126,6 +150,27 @@ public class EmailSettingsController : ControllerBase
         settings.ReplyToEmail = dto.ReplyToEmail;
 
         await _repository.UpdateAsync(settings);
+        
+        // Create new entity for audit log (without password)
+        var newEntity = new EmailSettings
+        {
+            Id = settings.Id,
+            SmtpServer = settings.SmtpServer,
+            SmtpPort = settings.SmtpPort,
+            Protocol = settings.Protocol,
+            SecurityProtocol = settings.SecurityProtocol,
+            RequiresAuthentication = settings.RequiresAuthentication,
+            Username = settings.Username,
+            Password = PASSWORD_MASK, // Don't log password
+            SenderEmail = settings.SenderEmail,
+            SenderName = settings.SenderName,
+            ReplyToEmail = settings.ReplyToEmail,
+            IsActive = settings.IsActive
+        };
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, newEntity, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         return Ok(MapToDto(settings));
     }
 
@@ -141,8 +186,46 @@ public class EmailSettingsController : ControllerBase
             return NotFound();
         }
 
+        // Store old entity for audit log
+        var oldEntity = new EmailSettings
+        {
+            Id = settings.Id,
+            SmtpServer = settings.SmtpServer,
+            SmtpPort = settings.SmtpPort,
+            Protocol = settings.Protocol,
+            SecurityProtocol = settings.SecurityProtocol,
+            RequiresAuthentication = settings.RequiresAuthentication,
+            Username = settings.Username,
+            Password = PASSWORD_MASK,
+            SenderEmail = settings.SenderEmail,
+            SenderName = settings.SenderName,
+            ReplyToEmail = settings.ReplyToEmail,
+            IsActive = settings.IsActive
+        };
+
         settings.IsActive = true;
         await _repository.UpdateAsync(settings);
+        
+        // Create new entity for audit log
+        var newEntity = new EmailSettings
+        {
+            Id = settings.Id,
+            SmtpServer = settings.SmtpServer,
+            SmtpPort = settings.SmtpPort,
+            Protocol = settings.Protocol,
+            SecurityProtocol = settings.SecurityProtocol,
+            RequiresAuthentication = settings.RequiresAuthentication,
+            Username = settings.Username,
+            Password = PASSWORD_MASK,
+            SenderEmail = settings.SenderEmail,
+            SenderName = settings.SenderName,
+            ReplyToEmail = settings.ReplyToEmail,
+            IsActive = settings.IsActive
+        };
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, newEntity, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         return Ok(MapToDto(settings));
     }
 
@@ -163,6 +246,26 @@ public class EmailSettingsController : ControllerBase
         {
             return BadRequest(new { error = "Aktive E-Mail-Einstellungen können nicht gelöscht werden. Deaktivieren Sie sie zuerst." });
         }
+
+        // Create entity for audit log (without password)
+        var entityToLog = new EmailSettings
+        {
+            Id = settings.Id,
+            SmtpServer = settings.SmtpServer,
+            SmtpPort = settings.SmtpPort,
+            Protocol = settings.Protocol,
+            SecurityProtocol = settings.SecurityProtocol,
+            RequiresAuthentication = settings.RequiresAuthentication,
+            Username = settings.Username,
+            Password = PASSWORD_MASK,
+            SenderEmail = settings.SenderEmail,
+            SenderName = settings.SenderName,
+            ReplyToEmail = settings.ReplyToEmail,
+            IsActive = settings.IsActive
+        };
+        
+        // Log the deletion
+        await _auditService.LogDeletedAsync(entityToLog, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         await _repository.DeleteAsync(id);
         return NoContent();
@@ -199,7 +302,7 @@ public class EmailSettingsController : ControllerBase
             SecurityProtocol = settings.SecurityProtocol,
             RequiresAuthentication = settings.RequiresAuthentication,
             Username = settings.Username,
-            Password = "***", // Never return actual password
+            Password = PASSWORD_MASK, // Never return actual password
             SenderEmail = settings.SenderEmail,
             SenderName = settings.SenderName,
             ReplyToEmail = settings.ReplyToEmail,

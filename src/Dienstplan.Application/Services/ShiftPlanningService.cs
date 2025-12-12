@@ -640,8 +640,10 @@ public class ShiftPlanningService : IShiftPlanningService
                 return weeklyValidation;
         }
         
-        // Get all assignments for this employee to check consecutive shifts
-        var employeeAssignments = (await _shiftAssignmentRepository.GetByEmployeeIdAsync(assignment.EmployeeId))
+        // Get all assignments for this employee (including from previous months for cross-month checks)
+        var lookbackDate = assignment.Date.AddDays(-30); // Look back 30 days for cross-month validation
+        var employeeAssignments = (await _shiftAssignmentRepository.GetByDateRangeAsync(lookbackDate, assignment.Date.AddDays(1)))
+            .Where(a => a.EmployeeId == assignment.EmployeeId)
             .OrderBy(a => a.Date)
             .ToList();
         
@@ -679,6 +681,21 @@ public class ShiftPlanningService : IShiftPlanningService
             return (false, $"Maximum von {ShiftRules.MaximumConsecutiveShifts} aufeinanderfolgenden Schichten erreicht");
         }
         
+        // Check if rest day is required after long shift series
+        if (consecutiveShifts >= ShiftRules.MaximumConsecutiveShifts - 1)
+        {
+            // Check if employee had a rest day recently
+            var lastRestDay = FindLastRestDay(employeeAssignments, assignment.Date);
+            if (lastRestDay.HasValue)
+            {
+                var daysSinceRest = (assignment.Date - lastRestDay.Value).Days;
+                if (daysSinceRest >= ShiftRules.MaximumConsecutiveShifts)
+                {
+                    return (false, $"Nach {ShiftRules.MaximumConsecutiveShifts} Schichten ist mindestens 1 Ruhetag erforderlich");
+                }
+            }
+        }
+        
         // Check maximum consecutive night shifts (cross-month aware)
         if (currentShiftCode == ShiftTypeCodes.Nacht)
         {
@@ -687,9 +704,67 @@ public class ShiftPlanningService : IShiftPlanningService
             {
                 return (false, $"Maximum von {ShiftRules.MaximumConsecutiveNightShifts} aufeinanderfolgenden Nachtschichten erreicht");
             }
+            
+            // After max night shifts, require at least 1 rest day
+            if (consecutiveNightShifts >= ShiftRules.MaximumConsecutiveNightShifts - 1)
+            {
+                var lastNightShiftSeries = FindLastNightShiftSeries(employeeAssignments, assignment.Date);
+                if (lastNightShiftSeries >= ShiftRules.MaximumConsecutiveNightShifts - 1)
+                {
+                    return (false, $"Nach {ShiftRules.MaximumConsecutiveNightShifts} Nachtschichten ist mindestens 1 Ruhetag erforderlich");
+                }
+            }
         }
         
         return (true, null);
+    }
+    
+    private DateTime? FindLastRestDay(List<ShiftAssignment> assignments, DateTime upToDate)
+    {
+        var date = upToDate.AddDays(-1);
+        
+        // Go back up to 30 days looking for a rest day
+        for (int i = 0; i < 30; i++)
+        {
+            if (!assignments.Any(a => a.Date.Date == date.Date))
+            {
+                return date;
+            }
+            date = date.AddDays(-1);
+        }
+        
+        return null;
+    }
+    
+    private int FindLastNightShiftSeries(List<ShiftAssignment> assignments, DateTime upToDate)
+    {
+        int count = 0;
+        var date = upToDate.AddDays(-1);
+        
+        // Count consecutive night shifts before this one
+        while (assignments.Any(a => a.Date.Date == date.Date))
+        {
+            var assignment = assignments.FirstOrDefault(a => a.Date.Date == date.Date);
+            if (assignment != null)
+            {
+                var shiftCode = GetShiftCodeById(assignment.ShiftTypeId);
+                if (shiftCode == ShiftTypeCodes.Nacht)
+                {
+                    count++;
+                    date = date.AddDays(-1);
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        
+        return count;
     }
     
     private int CountConsecutiveShifts(List<ShiftAssignment> assignments, DateTime fromDate)

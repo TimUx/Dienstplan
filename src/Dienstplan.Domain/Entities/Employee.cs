@@ -48,6 +48,16 @@ public class Employee
     public bool IsFerienjobber { get; set; }
     
     /// <summary>
+    /// Indicates if this employee is qualified as Brandmeldetechniker (BMT)
+    /// </summary>
+    public bool IsBrandmeldetechniker { get; set; }
+    
+    /// <summary>
+    /// Indicates if this employee is qualified as Brandschutzbeauftragter (BSB)
+    /// </summary>
+    public bool IsBrandschutzbeauftragter { get; set; }
+    
+    /// <summary>
     /// Team assignment
     /// </summary>
     public int? TeamId { get; set; }

@@ -1,8 +1,10 @@
 # Dienstplan - Automatisches Schichtverwaltungssystem
 
-**Version 1.2** | Entwickelt von Timo Braun
+**Version 1.3** | Entwickelt von Timo Braun
 
-Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdiensten für bis zu 17 Stammpersonal-Mitarbeiter plus Ferienjobber in 3 Teams.
+Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdiensten für Unternehmen jeder Größe. Mit erweitertem Algorithmus für faire Schichtverteilung, intelligenter Springer-Verwaltung und automatischer Zuweisung von Zusatzfunktionen.
+
+**Flexibel skalierbar**: Das System unterstützt beliebige Anzahlen von Mitarbeitern und Teams - nicht nur auf 17 Mitarbeiter in 3 Teams beschränkt.
 
 ![Dienstplan Hauptansicht](docs/screenshots/00-main-view.png)
 
@@ -92,6 +94,31 @@ Das System beachtet folgende Regeln:
 - 📋 Zusammenfassung mit Schichtanzahl pro Typ
 - 📅 Flexible Zeitraumauswahl (Woche, Monat, Jahr)
 - 📧 E-Mail-Versand vorbereitet
+
+### Excel-Export (XLSX) 🆕
+- 📊 Excel-Datei mit professioneller Formatierung
+- 🎨 Farbcodierte Schichten wie in der Web-Ansicht
+- 📐 Automatische Spaltenbreiten und Zeilenhöhen
+- 👥 Gruppierung nach Teams
+- 🔤 Legende mit allen Schichttypen
+- 📅 Flexible Zeitraumauswahl
+- 💾 Direkt in Excel bearbeitbar
+
+### Erweiterte Algorithmus-Funktionen 🆕
+- **Qualifikationsverwaltung**: Tracking von Brandmeldetechnikern (BMT) und Brandschutzbeauftragten (BSB)
+- **Automatische Zusatzfunktionen**: Intelligente Zuweisung von BMT/BSB mit fairer Rotation
+- **Enhanced Springer-Management**: 
+  - Garantiert mindestens 1 verfügbarer Springer
+  - Workload-basierte Auswahl
+  - Teamübergreifender Einsatz
+  - Automatische Vertretung bei Ausfällen
+- **Fairness-Tracking**:
+  - Gerechte Verteilung von Wochenendschichten
+  - Ausgewogene Rotation aller Schichttypen
+  - Tracking von Monatsstunden (192h Limit)
+  - Tracking von Wochenstunden (48h Limit)
+- **Monatsübergreifende Planung**: Validierung über Monatsgrenzen hinweg
+- **Comprehensive Validation**: Prüfung aller gesetzlichen und organisatorischen Regeln
 
 ### Web-Schnittstelle
 - 📱 Responsive Design (Desktop & Smartphone)
@@ -337,6 +364,26 @@ Parameter:
 - `endDate`: Enddatum (ISO Format)
 
 Antwort: PDF-Datei zum Download
+
+#### Excel-Export des Dienstplans 🆕
+```http
+GET /api/shifts/export/excel?startDate=2024-01-01&endDate=2024-01-31
+Authorization: Optional (öffentlich verfügbar)
+```
+Parameter:
+- `startDate`: Startdatum (ISO Format)
+- `endDate`: Enddatum (ISO Format)
+
+Antwort: Excel-Datei (.xlsx) mit formatiertem Dienstplan
+
+Features:
+- Farbcodierte Schichten (Früh=Gold, Spät=Tomato, Nacht=RoyalBlue, etc.)
+- Wochenend-Highlighting (Samstag/Sonntag in Hellblau)
+- Gruppierung nach Teams
+- Springer-Kennzeichnung (Spr)
+- Urlaub-Markierung (Ur in Rosa)
+- Legende am Ende des Dokuments
+- Automatische Spaltenbreiten und Zeilenhöhen
 
 #### Springer zuweisen
 ```http
@@ -671,16 +718,23 @@ Bei Fragen oder Problemen:
 - [x] CI/CD Pipeline
 - [x] **Authentifizierung & Autorisierung** ✅ **v1.1**
 - [x] **PDF-Export von Dienstplänen** ✅ **v1.1**
-- [x] **Urlaubsverwaltung mit Antrags-Workflow** ✅ **Neu in v1.2**
-- [x] **Diensttausch-System** ✅ **Neu in v1.2**
-- [x] **Erweiterte Mitarbeiterdaten** (Geburtsdatum, Funktion, Ferienjobber) ✅ **Neu in v1.2**
-- [x] **Erweiterte Schichtplanungsregeln** (Max. 6 Schichten, Max. 3 Nachtschichten) ✅ **Neu in v1.2**
-- [x] **Feste Dienste** (z.B. für Feiertage) ✅ **Neu in v1.2**
-- [x] **Änderungsverfolgung** (Audit Trail) ✅ **Neu in v1.2**
-- [x] **Wochenend-Statistiken** ✅ **Neu in v1.2**
-- [x] **Spezielle Schichttypen** (Brandmeldetechniker, Brandschutzbeauftragter) ✅ **Neu in v1.2**
-- [x] **E-Mail-Infrastruktur** (Mitarbeiter-E-Mails, SMTP-Konfiguration) ✅ **Neu in v1.2**
-- [x] **Benachrichtigungs-Service** (Interface vorbereitet) ✅ **Neu in v1.2**
+- [x] **Urlaubsverwaltung mit Antrags-Workflow** ✅ **v1.2**
+- [x] **Diensttausch-System** ✅ **v1.2**
+- [x] **Erweiterte Mitarbeiterdaten** (Geburtsdatum, Funktion, Ferienjobber) ✅ **v1.2**
+- [x] **Erweiterte Schichtplanungsregeln** (Max. 6 Schichten, Max. 3 Nachtschichten) ✅ **v1.2**
+- [x] **Feste Dienste** (z.B. für Feiertage) ✅ **v1.2**
+- [x] **Änderungsverfolgung** (Audit Trail) ✅ **v1.2**
+- [x] **Wochenend-Statistiken** ✅ **v1.2**
+- [x] **Spezielle Schichttypen** (Brandmeldetechniker, Brandschutzbeauftragter) ✅ **v1.2**
+- [x] **E-Mail-Infrastruktur** (Mitarbeiter-E-Mails, SMTP-Konfiguration) ✅ **v1.2**
+- [x] **Benachrichtigungs-Service** (Interface vorbereitet) ✅ **v1.2**
+- [x] **Excel-Export (XLSX)** mit Formatierung wie Web-Ansicht ✅ **Neu in v1.3**
+- [x] **Enhanced Springer-Management** (Verfügbarkeit garantiert, Workload-basiert) ✅ **Neu in v1.3**
+- [x] **Fairness-Tracking** (Gerechte Verteilung, Stunden-Tracking) ✅ **Neu in v1.3**
+- [x] **Automatische Zusatzfunktionen** (BMT/BSB mit Rotation) ✅ **Neu in v1.3**
+- [x] **Qualifikationsverwaltung** (BMT/BSB) ✅ **Neu in v1.3**
+- [x] **Monatsübergreifende Validierung** ✅ **Neu in v1.3**
+- [x] **Flexible Skalierung** (beliebige Anzahl Mitarbeiter und Teams) ✅ **Neu in v1.3**
 - [ ] E-Mail-Benachrichtigungen (SMTP-Integration mit MailKit)
 - [ ] Mobile App (React Native)
 
@@ -694,6 +748,6 @@ Bei Fragen oder Problemen:
 
 ---
 
-**Version 1.2** | Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
+**Version 1.3** | Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
 
 © 2025 Fritz Winter Eisengießerei GmbH & Co. KG

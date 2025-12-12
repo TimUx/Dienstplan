@@ -70,7 +70,13 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 builder.Services.AddScoped<IPdfExportService, PdfExportService>();
+builder.Services.AddScoped<IExcelExportService, ExcelExportService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// Register new enhanced services
+builder.Services.AddScoped<SpringerManagementService>();
+builder.Services.AddScoped<FairnessTrackingService>();
+builder.Services.AddScoped<SpecialFunctionService>();
 
 // Add CORS for web interface
 builder.Services.AddCors(options =>

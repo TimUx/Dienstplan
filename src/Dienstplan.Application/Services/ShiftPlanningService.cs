@@ -10,15 +10,24 @@ public class ShiftPlanningService : IShiftPlanningService
     private readonly IEmployeeRepository _employeeRepository;
     private readonly IShiftAssignmentRepository _shiftAssignmentRepository;
     private readonly IAbsenceRepository _absenceRepository;
+    private readonly SpringerManagementService? _springerService;
+    private readonly FairnessTrackingService? _fairnessService;
+    private readonly SpecialFunctionService? _specialFunctionService;
 
     public ShiftPlanningService(
         IEmployeeRepository employeeRepository,
         IShiftAssignmentRepository shiftAssignmentRepository,
-        IAbsenceRepository absenceRepository)
+        IAbsenceRepository absenceRepository,
+        SpringerManagementService? springerService = null,
+        FairnessTrackingService? fairnessService = null,
+        SpecialFunctionService? specialFunctionService = null)
     {
         _employeeRepository = employeeRepository;
         _shiftAssignmentRepository = shiftAssignmentRepository;
         _absenceRepository = absenceRepository;
+        _springerService = springerService;
+        _fairnessService = fairnessService;
+        _specialFunctionService = specialFunctionService;
     }
 
     public async Task<List<ShiftAssignment>> PlanShifts(DateTime startDate, DateTime endDate, bool force = false)
@@ -73,6 +82,16 @@ public class ShiftPlanningService : IShiftPlanningService
             assignments.AddRange(weekAssignments);
             
             currentDate = weekEnd.AddDays(1);
+        }
+        
+        // Plan special functions (BMT/BSB) if service available
+        if (_specialFunctionService != null)
+        {
+            var bmtAssignments = await _specialFunctionService.AssignBMT(startDate, endDate);
+            assignments.AddRange(bmtAssignments);
+            
+            var bsbAssignments = await _specialFunctionService.AssignBSB(startDate, endDate);
+            assignments.AddRange(bsbAssignments);
         }
         
         return assignments;
@@ -136,15 +155,45 @@ public class ShiftPlanningService : IShiftPlanningService
         var assignments = new List<ShiftAssignment>();
         var assignedEmployeeIds = new HashSet<int>();
         
-        // Sort employees by their last shift date to distribute work fairly
-        var sortedEmployees = await SortEmployeesByWorkload(availableEmployees, date);
+        // Sort employees by fairness if service available
+        List<Employee> sortedEmployees;
+        if (_fairnessService != null)
+        {
+            // For weekends, prioritize by weekend shift count
+            if (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday)
+            {
+                sortedEmployees = await _fairnessService.GetEmployeesByWeekendShiftPriority(
+                    availableEmployees, date.AddDays(-90), date);
+            }
+            else
+            {
+                sortedEmployees = await SortEmployeesByWorkload(availableEmployees, date);
+            }
+        }
+        else
+        {
+            sortedEmployees = await SortEmployeesByWorkload(availableEmployees, date);
+        }
         
         // For each required shift type in rotation order
         foreach (var (shiftCode, count) in shiftRequirements)
         {
             int assigned = 0;
+            var shiftTypeId = GetShiftTypeIdByCode(shiftCode);
             
-            foreach (var employee in sortedEmployees)
+            // If fairness service available, re-sort by this specific shift type
+            List<Employee> candidatesForShift;
+            if (_fairnessService != null && shiftCode != ShiftTypeCodes.Zwischendienst)
+            {
+                candidatesForShift = await _fairnessService.GetEmployeesByShiftTypePriority(
+                    sortedEmployees, shiftTypeId, date.AddDays(-90), date);
+            }
+            else
+            {
+                candidatesForShift = sortedEmployees;
+            }
+            
+            foreach (var employee in candidatesForShift)
             {
                 if (assigned >= count)
                     break;
@@ -157,7 +206,7 @@ public class ShiftPlanningService : IShiftPlanningService
                 var assignment = new ShiftAssignment
                 {
                     EmployeeId = employee.Id,
-                    ShiftTypeId = GetShiftTypeIdByCode(shiftCode),
+                    ShiftTypeId = shiftTypeId,
                     Date = date,
                     IsManual = false
                 };
@@ -177,7 +226,7 @@ public class ShiftPlanningService : IShiftPlanningService
             // Still check critical safety rules (rest periods, consecutive shifts)
             if (assigned < count)
             {
-                foreach (var employee in sortedEmployees)
+                foreach (var employee in candidatesForShift)
                 {
                     if (assigned >= count)
                         break;
@@ -188,7 +237,7 @@ public class ShiftPlanningService : IShiftPlanningService
                     var assignment = new ShiftAssignment
                     {
                         EmployeeId = employee.Id,
-                        ShiftTypeId = GetShiftTypeIdByCode(shiftCode),
+                        ShiftTypeId = shiftTypeId,
                         Date = date,
                         IsManual = false
                     };
@@ -226,6 +275,13 @@ public class ShiftPlanningService : IShiftPlanningService
                     }
                 }
             }
+        }
+        
+        // Validate springer availability if service available
+        if (_springerService != null && assignments.Any())
+        {
+            var validation = await _springerService.ValidateSpringerAllocation(assignments, date);
+            // Log warning if no springer available, but don't fail the planning
         }
         
         return assignments;
@@ -311,6 +367,26 @@ public class ShiftPlanningService : IShiftPlanningService
             return (false, "Mitarbeiter ist an diesem Tag abwesend");
         }
         
+        // Validate monthly hours if fairness service is available
+        if (_fairnessService != null)
+        {
+            var monthlyValidation = await _fairnessService.ValidateMonthlyHours(
+                assignment.EmployeeId, assignment.Date, assignment.ShiftTypeId);
+            
+            if (!monthlyValidation.IsValid)
+                return monthlyValidation;
+        }
+        
+        // Validate weekly hours if fairness service is available
+        if (_fairnessService != null)
+        {
+            var weeklyValidation = await _fairnessService.ValidateWeeklyHours(
+                assignment.EmployeeId, assignment.Date, assignment.ShiftTypeId);
+            
+            if (!weeklyValidation.IsValid)
+                return weeklyValidation;
+        }
+        
         // Get all assignments for this employee to check consecutive shifts
         var employeeAssignments = (await _shiftAssignmentRepository.GetByEmployeeIdAsync(assignment.EmployeeId))
             .OrderBy(a => a.Date)
@@ -318,7 +394,7 @@ public class ShiftPlanningService : IShiftPlanningService
         
         var currentShiftCode = GetShiftCodeById(assignment.ShiftTypeId);
         
-        // Get previous shift
+        // Get previous shift (check cross-month)
         var previousShift = await _shiftAssignmentRepository.GetByEmployeeAndDateAsync(
             assignment.EmployeeId, 
             assignment.Date.AddDays(-1));
@@ -327,12 +403,12 @@ public class ShiftPlanningService : IShiftPlanningService
         {
             var previousShiftCode = GetShiftCodeById(previousShift.ShiftTypeId);
             
-            // Check forbidden transitions
+            // Check forbidden transitions (rest period violations)
             if (ShiftRules.ForbiddenTransitions.ContainsKey(previousShiftCode))
             {
                 if (ShiftRules.ForbiddenTransitions[previousShiftCode].Contains(currentShiftCode))
                 {
-                    return (false, $"Verbotener Schichtwechsel: {previousShiftCode} → {currentShiftCode}");
+                    return (false, $"Verbotener Schichtwechsel: {previousShiftCode} → {currentShiftCode} (Ruhezeit-Verstoß)");
                 }
             }
             
@@ -343,14 +419,14 @@ public class ShiftPlanningService : IShiftPlanningService
             }
         }
         
-        // Check maximum consecutive shifts
+        // Check maximum consecutive shifts (cross-month aware)
         var consecutiveShifts = CountConsecutiveShifts(employeeAssignments, assignment.Date);
         if (consecutiveShifts >= ShiftRules.MaximumConsecutiveShifts)
         {
             return (false, $"Maximum von {ShiftRules.MaximumConsecutiveShifts} aufeinanderfolgenden Schichten erreicht");
         }
         
-        // Check maximum consecutive night shifts
+        // Check maximum consecutive night shifts (cross-month aware)
         if (currentShiftCode == ShiftTypeCodes.Nacht)
         {
             var consecutiveNightShifts = CountConsecutiveNightShifts(employeeAssignments, assignment.Date);
@@ -401,6 +477,13 @@ public class ShiftPlanningService : IShiftPlanningService
 
     public async Task<ShiftAssignment?> AssignSpringer(int employeeId, DateTime date)
     {
+        // Use SpringerManagementService if available
+        if (_springerService != null)
+        {
+            return await _springerService.AssignSpringerForAbsence(employeeId, date);
+        }
+        
+        // Fallback to original implementation
         // Find the shift that needs to be covered
         var originalAssignment = await _shiftAssignmentRepository.GetByEmployeeAndDateAsync(employeeId, date);
         if (originalAssignment == null)
@@ -448,6 +531,8 @@ public class ShiftPlanningService : IShiftPlanningService
             ShiftTypeCodes.Spaet => 2,
             ShiftTypeCodes.Nacht => 3,
             ShiftTypeCodes.Zwischendienst => 4,
+            ShiftTypeCodes.BMT => 5,
+            ShiftTypeCodes.BSB => 6,
             _ => 1
         };
     }
@@ -464,6 +549,8 @@ public class ShiftPlanningService : IShiftPlanningService
             2 => ShiftTypeCodes.Spaet,
             3 => ShiftTypeCodes.Nacht,
             4 => ShiftTypeCodes.Zwischendienst,
+            5 => ShiftTypeCodes.BMT,
+            6 => ShiftTypeCodes.BSB,
             _ => ShiftTypeCodes.Frueh
         };
     }

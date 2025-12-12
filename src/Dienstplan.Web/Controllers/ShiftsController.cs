@@ -17,6 +17,7 @@ public class ShiftsController : ControllerBase
     private readonly IAbsenceRepository _absenceRepository;
     private readonly IShiftPlanningService _planningService;
     private readonly IPdfExportService _pdfExportService;
+    private readonly IExcelExportService _excelExportService;
     private readonly IAuditService _auditService;
 
     public ShiftsController(
@@ -24,12 +25,14 @@ public class ShiftsController : ControllerBase
         IAbsenceRepository absenceRepository,
         IShiftPlanningService planningService,
         IPdfExportService pdfExportService,
+        IExcelExportService excelExportService,
         IAuditService auditService)
     {
         _shiftRepository = shiftRepository;
         _absenceRepository = absenceRepository;
         _planningService = planningService;
         _pdfExportService = pdfExportService;
+        _excelExportService = excelExportService;
         _auditService = auditService;
     }
 
@@ -311,6 +314,28 @@ public class ShiftsController : ControllerBase
         catch (Exception ex)
         {
             return BadRequest(new { error = $"Fehler beim Erstellen des PDFs: {ex.Message}" });
+        }
+    }
+    
+    [HttpGet("export/excel")]
+    [AllowAnonymous] // Allow all to export to Excel
+    public async Task<IActionResult> ExportScheduleToExcel(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        var start = startDate ?? DateTime.Today;
+        var end = endDate ?? start.AddDays(30);
+
+        try
+        {
+            var excelBytes = await _excelExportService.ExportScheduleToExcelAsync(start, end);
+            
+            var fileName = $"Dienstplan_{start:yyyy-MM-dd}_bis_{end:yyyy-MM-dd}.xlsx";
+            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = $"Fehler beim Erstellen der Excel-Datei: {ex.Message}" });
         }
     }
 }

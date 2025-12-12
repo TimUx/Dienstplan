@@ -17,23 +17,23 @@ public class ShiftsController : ControllerBase
     private readonly IAbsenceRepository _absenceRepository;
     private readonly IShiftPlanningService _planningService;
     private readonly IPdfExportService _pdfExportService;
+    private readonly IExcelExportService _excelExportService;
     private readonly IAuditService _auditService;
-    private readonly AsciiScheduleExportService? _asciiExportService;
 
     public ShiftsController(
         IShiftAssignmentRepository shiftRepository,
         IAbsenceRepository absenceRepository,
         IShiftPlanningService planningService,
         IPdfExportService pdfExportService,
-        IAuditService auditService,
-        AsciiScheduleExportService? asciiExportService = null)
+        IExcelExportService excelExportService,
+        IAuditService auditService)
     {
         _shiftRepository = shiftRepository;
         _absenceRepository = absenceRepository;
         _planningService = planningService;
         _pdfExportService = pdfExportService;
+        _excelExportService = excelExportService;
         _auditService = auditService;
-        _asciiExportService = asciiExportService;
     }
 
     [HttpGet("schedule")]
@@ -317,31 +317,25 @@ public class ShiftsController : ControllerBase
         }
     }
     
-    [HttpGet("export/ascii")]
-    [AllowAnonymous] // Allow all to view ASCII export
-    public async Task<IActionResult> ExportScheduleToAscii(
+    [HttpGet("export/excel")]
+    [AllowAnonymous] // Allow all to export to Excel
+    public async Task<IActionResult> ExportScheduleToExcel(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate)
     {
-        if (_asciiExportService == null)
-        {
-            return BadRequest(new { error = "ASCII-Export-Service ist nicht verfügbar" });
-        }
-
         var start = startDate ?? DateTime.Today;
         var end = endDate ?? start.AddDays(30);
 
         try
         {
-            var asciiSchedule = await _asciiExportService.GenerateAsciiSchedule(start, end);
+            var excelBytes = await _excelExportService.ExportScheduleToExcelAsync(start, end);
             
-            var fileName = $"Dienstplan_{start:yyyy-MM-dd}_bis_{end:yyyy-MM-dd}.txt";
-            var bytes = System.Text.Encoding.UTF8.GetBytes(asciiSchedule);
-            return File(bytes, "text/plain; charset=utf-8", fileName);
+            var fileName = $"Dienstplan_{start:yyyy-MM-dd}_bis_{end:yyyy-MM-dd}.xlsx";
+            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
         catch (Exception ex)
         {
-            return BadRequest(new { error = $"Fehler beim Erstellen des ASCII-Formats: {ex.Message}" });
+            return BadRequest(new { error = $"Fehler beim Erstellen der Excel-Datei: {ex.Message}" });
         }
     }
 }

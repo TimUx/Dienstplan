@@ -2,7 +2,9 @@
 
 **Version 1.3** | Entwickelt von Timo Braun
 
-Ein vollständiges System zur Verwaltung und automatischen Planung von Schichtdiensten für bis zu 17 Stammpersonal-Mitarbeiter plus Ferienjobber in 3 Teams. Mit erweitertem Algorithmus für faire Schichtverteilung, intelligenter Springer-Verwaltung und automatischer Zuweisung von Zusatzfunktionen.
+Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdiensten für Unternehmen jeder Größe. Mit erweitertem Algorithmus für faire Schichtverteilung, intelligenter Springer-Verwaltung und automatischer Zuweisung von Zusatzfunktionen.
+
+**Flexibel skalierbar**: Das System unterstützt beliebige Anzahlen von Mitarbeitern und Teams - nicht nur auf 17 Mitarbeiter in 3 Teams beschränkt.
 
 ![Dienstplan Hauptansicht](docs/screenshots/00-main-view.png)
 
@@ -93,13 +95,14 @@ Das System beachtet folgende Regeln:
 - 📅 Flexible Zeitraumauswahl (Woche, Monat, Jahr)
 - 📧 E-Mail-Versand vorbereitet
 
-### ASCII-Export 🆕
-- 📝 ASCII-formatierte Dienstplanausgabe für einfache Weitergabe
-- 📊 Strukturierte Darstellung nach Teams
-- 🔧 Separate Springer-Sektion
-- ⚡ Zusatzfunktionen-Block (BMT/BSB)
-- 📜 Legende mit allen Schichtkürzeln
-- 📅 Flexible Zeitraumauswahl (Monat, Jahr)
+### Excel-Export (XLSX) 🆕
+- 📊 Excel-Datei mit professioneller Formatierung
+- 🎨 Farbcodierte Schichten wie in der Web-Ansicht
+- 📐 Automatische Spaltenbreiten und Zeilenhöhen
+- 👥 Gruppierung nach Teams
+- 🔤 Legende mit allen Schichttypen
+- 📅 Flexible Zeitraumauswahl
+- 💾 Direkt in Excel bearbeitbar
 
 ### Erweiterte Algorithmus-Funktionen 🆕
 - **Qualifikationsverwaltung**: Tracking von Brandmeldetechnikern (BMT) und Brandschutzbeauftragten (BSB)
@@ -362,32 +365,25 @@ Parameter:
 
 Antwort: PDF-Datei zum Download
 
-#### ASCII-Export des Dienstplans 🆕
+#### Excel-Export des Dienstplans 🆕
 ```http
-GET /api/shifts/export/ascii?startDate=2024-01-01&endDate=2024-01-31
+GET /api/shifts/export/excel?startDate=2024-01-01&endDate=2024-01-31
 Authorization: Optional (öffentlich verfügbar)
 ```
 Parameter:
 - `startDate`: Startdatum (ISO Format)
 - `endDate`: Enddatum (ISO Format)
 
-Antwort: ASCII-formatierte Textdatei mit strukturierter Darstellung des Dienstplans
+Antwort: Excel-Datei (.xlsx) mit formatiertem Dienstplan
 
-Beispiel-Format:
-```
-KW/Datum  | 01 Mo | 02 Di | 03 Mi | ...
-----------|-------|-------|-------|----
-Team 1
-Müller    | F     | S     | N     | ...
-Schmidt   | N     | F     | S     | ...
-
-Springer (teamübergreifend)
-Hoffmann  | -     | F     | -     | ...
-
-Zusatzfunktionen
-BMT       | BMT   | BMT   | -     | ...
-BSB       | BSB   | BSB   | -     | ...
-```
+Features:
+- Farbcodierte Schichten (Früh=Gold, Spät=Tomato, Nacht=RoyalBlue, etc.)
+- Wochenend-Highlighting (Samstag/Sonntag in Hellblau)
+- Gruppierung nach Teams
+- Springer-Kennzeichnung (Spr)
+- Urlaub-Markierung (Ur in Rosa)
+- Legende am Ende des Dokuments
+- Automatische Spaltenbreiten und Zeilenhöhen
 
 #### Springer zuweisen
 ```http
@@ -732,12 +728,13 @@ Bei Fragen oder Problemen:
 - [x] **Spezielle Schichttypen** (Brandmeldetechniker, Brandschutzbeauftragter) ✅ **v1.2**
 - [x] **E-Mail-Infrastruktur** (Mitarbeiter-E-Mails, SMTP-Konfiguration) ✅ **v1.2**
 - [x] **Benachrichtigungs-Service** (Interface vorbereitet) ✅ **v1.2**
-- [x] **ASCII-Export Format** ✅ **Neu in v1.3**
+- [x] **Excel-Export (XLSX)** mit Formatierung wie Web-Ansicht ✅ **Neu in v1.3**
 - [x] **Enhanced Springer-Management** (Verfügbarkeit garantiert, Workload-basiert) ✅ **Neu in v1.3**
 - [x] **Fairness-Tracking** (Gerechte Verteilung, Stunden-Tracking) ✅ **Neu in v1.3**
 - [x] **Automatische Zusatzfunktionen** (BMT/BSB mit Rotation) ✅ **Neu in v1.3**
 - [x] **Qualifikationsverwaltung** (BMT/BSB) ✅ **Neu in v1.3**
 - [x] **Monatsübergreifende Validierung** ✅ **Neu in v1.3**
+- [x] **Flexible Skalierung** (beliebige Anzahl Mitarbeiter und Teams) ✅ **Neu in v1.3**
 - [ ] E-Mail-Benachrichtigungen (SMTP-Integration mit MailKit)
 - [ ] Mobile App (React Native)
 

@@ -47,41 +47,58 @@ public class ShiftPlanningService : IShiftPlanningService
         // Get dates that already have assignments (to skip if not forcing)
         var datesWithAssignments = keptAssignments.Select(a => a.Date.Date).Distinct().ToHashSet();
         
-        var employees = (await _employeeRepository.GetAllAsync())
-            .Where(e => !e.IsSpringer) // Exclude Springers from regular planning
-            .ToList();
+        // Get all employees (excluding Springers from regular team rotation)
+        var allEmployees = (await _employeeRepository.GetAllAsync()).ToList();
+        var regularEmployees = allEmployees.Where(e => !e.IsSpringer).ToList();
             
-        var absences = await _absenceRepository.GetByDateRangeAsync(startDate, endDate);
+        var absences = (await _absenceRepository.GetByDateRangeAsync(startDate, endDate)).ToList();
         
-        // Plan week by week to ensure proper rotation
-        var currentDate = startDate;
-        while (currentDate <= endDate)
+        // Get teams for weekly rotation
+        var teams = GetTeamsForRotation(regularEmployees);
+        
+        if (teams.Count < 3)
         {
-            var (weekStart, weekEnd) = DateHelper.GetWeekViewDateRange(currentDate);
-            
-            // Don't plan beyond the requested end date
-            if (weekStart > endDate)
-                break;
-            
-            weekEnd = weekEnd > endDate ? endDate : weekEnd;
+            // Fallback to old algorithm if we don't have 3 teams
+            return await PlanShiftsLegacy(startDate, endDate, force, assignments, datesWithAssignments, regularEmployees, absences);
+        }
+        
+        // Plan week by week with team-based rotation
+        var currentDate = DateHelper.GetMondayOfWeek(startDate);
+        var planEndDate = DateHelper.GetSundayOfWeek(endDate);
+        
+        while (currentDate <= planEndDate)
+        {
+            var weekEnd = currentDate.AddDays(6); // Sunday
             
             // Check if this week needs planning
-            var weekDates = Enumerable.Range(0, (weekEnd - weekStart).Days + 1)
-                .Select(d => weekStart.AddDays(d))
-                .ToList();
-            
-            // Skip if all days in this week already have assignments
-            if (!force && weekDates.All(d => datesWithAssignments.Contains(d.Date)))
+            if (!force && Enumerable.Range(0, 7).All(d => datesWithAssignments.Contains(currentDate.AddDays(d).Date)))
             {
-                currentDate = weekEnd.AddDays(1);
+                currentDate = currentDate.AddDays(7);
                 continue;
             }
             
-            // Plan the entire week with rotation pattern
-            var weekAssignments = await PlanWeekWithRotation(weekStart, weekEnd, employees, absences.ToList(), datesWithAssignments);
+            // Determine which shift type each team should work this week based on rotation
+            var weekNumber = GetWeekNumber(currentDate);
+            var teamShiftRotation = GetTeamShiftRotationForWeek(weekNumber);
+            
+            // Plan the entire week with team-based rotation
+            var weekAssignments = await PlanWeekWithTeamRotation(
+                currentDate, 
+                weekEnd, 
+                teams, 
+                teamShiftRotation,
+                absences,
+                datesWithAssignments);
+            
             assignments.AddRange(weekAssignments);
             
-            currentDate = weekEnd.AddDays(1);
+            // Add to dates with assignments
+            foreach (var assignment in weekAssignments)
+            {
+                datesWithAssignments.Add(assignment.Date.Date);
+            }
+            
+            currentDate = currentDate.AddDays(7);
         }
         
         // Plan special functions (BMT/BSB) if service available
@@ -141,6 +158,242 @@ public class ShiftPlanningService : IShiftPlanningService
                 allExistingAssignments.ToList());
             
             assignments.AddRange(dayAssignments);
+        }
+        
+        return assignments;
+    }
+
+    /// <summary>
+    /// Gets teams organized for rotation (ensures 3 teams)
+    /// </summary>
+    private List<TeamRotation> GetTeamsForRotation(List<Employee> employees)
+    {
+        var teamGroups = employees
+            .Where(e => e.TeamId.HasValue)
+            .GroupBy(e => e.TeamId!.Value)
+            .Select(g => new TeamRotation
+            {
+                TeamId = g.Key,
+                TeamName = g.First().Team?.Name ?? $"Team {g.Key}",
+                Members = g.ToList()
+            })
+            .OrderBy(t => t.TeamId)
+            .ToList();
+        
+        return teamGroups;
+    }
+    
+    /// <summary>
+    /// Gets the ISO 8601 week number for a date
+    /// </summary>
+    private int GetWeekNumber(DateTime date)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var calendar = culture.Calendar;
+        var calendarWeekRule = culture.DateTimeFormat.CalendarWeekRule;
+        var firstDayOfWeek = culture.DateTimeFormat.FirstDayOfWeek;
+        
+        return calendar.GetWeekOfYear(date, calendarWeekRule, firstDayOfWeek);
+    }
+    
+    /// <summary>
+    /// Determines which shift type each team (0, 1, 2) should work in a given week
+    /// Following the pattern:
+    /// Week 1: Team 0→Früh, Team 1→Spät, Team 2→Nacht
+    /// Week 2: Team 0→Nacht, Team 1→Früh, Team 2→Spät
+    /// Week 3: Team 0→Spät, Team 1→Nacht, Team 2→Früh
+    /// </summary>
+    private Dictionary<int, string> GetTeamShiftRotationForWeek(int weekNumber)
+    {
+        // 3-week rotation cycle
+        var rotationWeek = ((weekNumber - 1) % 3);
+        
+        var rotation = new Dictionary<int, string>();
+        
+        switch (rotationWeek)
+        {
+            case 0: // Week 1 pattern
+                rotation[0] = ShiftTypeCodes.Frueh;
+                rotation[1] = ShiftTypeCodes.Spaet;
+                rotation[2] = ShiftTypeCodes.Nacht;
+                break;
+            case 1: // Week 2 pattern
+                rotation[0] = ShiftTypeCodes.Nacht;
+                rotation[1] = ShiftTypeCodes.Frueh;
+                rotation[2] = ShiftTypeCodes.Spaet;
+                break;
+            case 2: // Week 3 pattern
+                rotation[0] = ShiftTypeCodes.Spaet;
+                rotation[1] = ShiftTypeCodes.Nacht;
+                rotation[2] = ShiftTypeCodes.Frueh;
+                break;
+        }
+        
+        return rotation;
+    }
+    
+    /// <summary>
+    /// Plans a week using team-based rotation
+    /// </summary>
+    private async Task<List<ShiftAssignment>> PlanWeekWithTeamRotation(
+        DateTime weekStart,
+        DateTime weekEnd,
+        List<TeamRotation> teams,
+        Dictionary<int, string> teamShiftRotation,
+        List<Absence> absences,
+        HashSet<DateTime> datesWithAssignments)
+    {
+        var assignments = new List<ShiftAssignment>();
+        
+        for (var date = weekStart; date <= weekEnd; date = date.AddDays(1))
+        {
+            // Skip if date already has assignments
+            if (datesWithAssignments.Contains(date.Date))
+                continue;
+            
+            var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+            var shiftRequirements = GetShiftRequirements(isWeekend);
+            
+            // For each shift requirement, assign from the appropriate team
+            foreach (var (shiftCode, requiredCount) in shiftRequirements)
+            {
+                var shiftTypeId = GetShiftTypeIdByCode(shiftCode);
+                
+                // Find which team should work this shift this week
+                var assignedTeamIndex = teamShiftRotation.FirstOrDefault(kvp => kvp.Value == shiftCode).Key;
+                var assignedTeam = teams.ElementAtOrDefault(assignedTeamIndex);
+                
+                if (assignedTeam == null)
+                {
+                    // Fallback: distribute across all teams
+                    assignedTeam = teams.FirstOrDefault();
+                    if (assignedTeam == null) continue;
+                }
+                
+                // Get available members from the assigned team
+                var availableMembers = assignedTeam.Members.Where(e =>
+                    !absences.Any(a => a.EmployeeId == e.Id && 
+                                     a.StartDate <= date && 
+                                     a.EndDate >= date)).ToList();
+                
+                // Sort by workload for fairness
+                var sortedMembers = await SortEmployeesByWorkload(availableMembers, date);
+                
+                int assigned = 0;
+                foreach (var employee in sortedMembers)
+                {
+                    if (assigned >= requiredCount)
+                        break;
+                    
+                    // Check if employee already has a shift today
+                    if (assignments.Any(a => a.EmployeeId == employee.Id && a.Date.Date == date.Date))
+                        continue;
+                    
+                    // Create assignment
+                    var assignment = new ShiftAssignment
+                    {
+                        EmployeeId = employee.Id,
+                        ShiftTypeId = shiftTypeId,
+                        Date = date,
+                        IsManual = false
+                    };
+                    
+                    // Validate assignment
+                    var (isValid, _) = await ValidateShiftAssignment(assignment);
+                    
+                    if (isValid)
+                    {
+                        assignments.Add(assignment);
+                        assigned++;
+                    }
+                }
+                
+                // If we couldn't fill requirement from assigned team, use other teams
+                if (assigned < requiredCount)
+                {
+                    var otherTeams = teams.Where(t => t.TeamId != assignedTeam.TeamId).ToList();
+                    
+                    foreach (var otherTeam in otherTeams)
+                    {
+                        if (assigned >= requiredCount)
+                            break;
+                        
+                        var otherAvailableMembers = otherTeam.Members.Where(e =>
+                            !absences.Any(a => a.EmployeeId == e.Id && 
+                                             a.StartDate <= date && 
+                                             a.EndDate >= date) &&
+                            !assignments.Any(a => a.EmployeeId == e.Id && a.Date.Date == date.Date)).ToList();
+                        
+                        var otherSortedMembers = await SortEmployeesByWorkload(otherAvailableMembers, date);
+                        
+                        foreach (var employee in otherSortedMembers)
+                        {
+                            if (assigned >= requiredCount)
+                                break;
+                            
+                            var assignment = new ShiftAssignment
+                            {
+                                EmployeeId = employee.Id,
+                                ShiftTypeId = shiftTypeId,
+                                Date = date,
+                                IsManual = false
+                            };
+                            
+                            var (isValid, _) = await ValidateShiftAssignment(assignment);
+                            
+                            if (isValid)
+                            {
+                                assignments.Add(assignment);
+                                assigned++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return assignments;
+    }
+    
+    /// <summary>
+    /// Fallback to legacy algorithm if teams aren't properly configured
+    /// </summary>
+    private async Task<List<ShiftAssignment>> PlanShiftsLegacy(
+        DateTime startDate,
+        DateTime endDate,
+        bool force,
+        List<ShiftAssignment> assignments,
+        HashSet<DateTime> datesWithAssignments,
+        List<Employee> employees,
+        List<Absence> absences)
+    {
+        // Plan week by week to ensure proper rotation
+        var currentDate = startDate;
+        while (currentDate <= endDate)
+        {
+            var (weekStart, weekEnd) = DateHelper.GetWeekViewDateRange(currentDate);
+            
+            if (weekStart > endDate)
+                break;
+            
+            weekEnd = weekEnd > endDate ? endDate : weekEnd;
+            
+            // Check if this week needs planning
+            var weekDates = Enumerable.Range(0, (weekEnd - weekStart).Days + 1)
+                .Select(d => weekStart.AddDays(d))
+                .ToList();
+            
+            if (!force && weekDates.All(d => datesWithAssignments.Contains(d.Date)))
+            {
+                currentDate = weekEnd.AddDays(1);
+                continue;
+            }
+            
+            // Plan the entire week
+            var weekAssignments = await PlanWeekWithRotation(weekStart, weekEnd, employees, absences, datesWithAssignments);
+            assignments.AddRange(weekAssignments);
+            
+            currentDate = weekEnd.AddDays(1);
         }
         
         return assignments;
@@ -554,4 +807,14 @@ public class ShiftPlanningService : IShiftPlanningService
             _ => ShiftTypeCodes.Frueh
         };
     }
+}
+
+/// <summary>
+/// Helper class to track team rotation
+/// </summary>
+internal class TeamRotation
+{
+    public int TeamId { get; set; }
+    public string TeamName { get; set; } = string.Empty;
+    public List<Employee> Members { get; set; } = new();
 }

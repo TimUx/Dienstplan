@@ -18,9 +18,9 @@ public class ShiftRules
     public const int MaximumConsecutiveShifts = 6;
     
     /// <summary>
-    /// Maximum consecutive night shifts
+    /// Maximum consecutive night shifts (3-5 range, using 5 as maximum)
     /// </summary>
-    public const int MaximumConsecutiveNightShifts = 3;
+    public const int MaximumConsecutiveNightShifts = 5;
     
     /// <summary>
     /// Maximum hours per month per employee

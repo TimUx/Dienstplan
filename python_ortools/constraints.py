@@ -229,16 +229,19 @@ def add_working_hours_constraints(
     
     for emp in employees:
         for week_start, week_dates in weeks.items():
-            # Sum hours for this week
+            # Sum hours for this week (use scaled integers to preserve precision)
+            # Scale by 10 to handle 9.5 hours properly (e.g., 9.5 -> 95)
             hours_vars = []
             for d in week_dates:
                 for s in shift_codes:
                     if (emp.id, d, s) in x and s in shift_hours:
-                        # Multiply boolean var by shift hours
-                        hours_vars.append(x[(emp.id, d, s)] * int(shift_hours[s]))
+                        # Scale hours by 10: 8.0 -> 80, 9.5 -> 95
+                        scaled_hours = int(shift_hours[s] * 10)
+                        hours_vars.append(x[(emp.id, d, s)] * scaled_hours)
             
             if hours_vars:
-                model.Add(sum(hours_vars) <= MAXIMUM_HOURS_PER_WEEK)
+                # Maximum 48 hours = 480 scaled hours
+                model.Add(sum(hours_vars) <= 480)
     
     # Maximum 192 hours per month (approximate as 30 days)
     for emp in employees:
@@ -250,10 +253,13 @@ def add_working_hours_constraints(
                 for d in month_dates:
                     for s in shift_codes:
                         if (emp.id, d, s) in x and s in shift_hours:
-                            hours_vars.append(x[(emp.id, d, s)] * int(shift_hours[s]))
+                            # Scale hours by 10: 8.0 -> 80, 9.5 -> 95
+                            scaled_hours = int(shift_hours[s] * 10)
+                            hours_vars.append(x[(emp.id, d, s)] * scaled_hours)
                 
                 if hours_vars:
-                    model.Add(sum(hours_vars) <= MAXIMUM_HOURS_PER_MONTH)
+                    # Maximum 192 hours = 1920 scaled hours
+                    model.Add(sum(hours_vars) <= 1920)
 
 
 def add_special_function_constraints(

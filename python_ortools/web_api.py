@@ -51,37 +51,43 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/employees', methods=['GET'])
     def get_employees():
         """Get all employees"""
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT e.*, t.Name as TeamName
-            FROM Employees e
-            LEFT JOIN Teams t ON e.TeamId = t.Id
-            ORDER BY e.Name, e.Vorname
-        """)
-        
-        employees = []
-        for row in cursor.fetchall():
-            employees.append({
-                'id': row['Id'],
-                'vorname': row['Vorname'],
-                'name': row['Name'],
-                'personalnummer': row['Personalnummer'],
-                'email': row['Email'],
-                'geburtsdatum': row['Geburtsdatum'],
-                'funktion': row['Funktion'],
-                'isSpringer': bool(row['IsSpringer']),
-                'isFerienjobber': bool(row['IsFerienjobber']),
-                'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
-                'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
-                'teamId': row['TeamId'],
-                'teamName': row['TeamName'],
-                'fullName': f"{row['Vorname']} {row['Name']}"
-            })
-        
-        conn.close()
-        return jsonify(employees)
+        conn = None
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT e.*, t.Name as TeamName
+                FROM Employees e
+                LEFT JOIN Teams t ON e.TeamId = t.Id
+                ORDER BY e.Name, e.Vorname
+            """)
+            
+            employees = []
+            for row in cursor.fetchall():
+                employees.append({
+                    'id': row['Id'],
+                    'vorname': row['Vorname'],
+                    'name': row['Name'],
+                    'personalnummer': row['Personalnummer'],
+                    'email': row['Email'],
+                    'geburtsdatum': row['Geburtsdatum'],
+                    'funktion': row['Funktion'],
+                    'isSpringer': bool(row['IsSpringer']),
+                    'isFerienjobber': bool(row['IsFerienjobber']),
+                    'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
+                    'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
+                    'teamId': row['TeamId'],
+                    'teamName': row['TeamName'],
+                    'fullName': f"{row['Vorname']} {row['Name']}"
+                })
+            
+            return jsonify(employees)
+        except Exception as e:
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+        finally:
+            if conn:
+                conn.close()
     
     @app.route('/api/employees/<int:id>', methods=['GET'])
     def get_employee(id):
@@ -214,7 +220,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         if not start_date_str:
             return jsonify({'error': 'startDate is required'}), 400
         
-        start_date = date.fromisoformat(start_date_str)
+        # Validate and parse dates
+        try:
+            start_date = date.fromisoformat(start_date_str)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid startDate format. Use YYYY-MM-DD'}), 400
         
         # Calculate end date based on view
         if not end_date_str:
@@ -231,72 +241,81 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             else:
                 end_date = start_date + timedelta(days=30)
         else:
-            end_date = date.fromisoformat(end_date_str)
+            try:
+                end_date = date.fromisoformat(end_date_str)
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid endDate format. Use YYYY-MM-DD'}), 400
         
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        
-        # Get assignments
-        cursor.execute("""
-            SELECT sa.*, e.Vorname, e.Name, e.TeamId, e.IsSpringer,
-                   st.Code, st.Name as ShiftName, st.ColorCode
-            FROM ShiftAssignments sa
-            JOIN Employees e ON sa.EmployeeId = e.Id
-            JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-            WHERE sa.Date >= ? AND sa.Date <= ?
-            ORDER BY sa.Date, e.TeamId, e.Name, e.Vorname
-        """, (start_date.isoformat(), end_date.isoformat()))
-        
-        assignments = []
-        for row in cursor.fetchall():
-            assignments.append({
-                'id': row['Id'],
-                'employeeId': row['EmployeeId'],
-                'employeeName': f"{row['Vorname']} {row['Name']}",
-                'teamId': row['TeamId'],
-                'isSpringer': bool(row['IsSpringer']),
-                'shiftTypeId': row['ShiftTypeId'],
-                'shiftCode': row['Code'],
-                'shiftName': row['ShiftName'],
-                'colorCode': row['ColorCode'],
-                'date': row['Date'],
-                'isManual': bool(row['IsManual']),
-                'isSpringerAssignment': bool(row['IsSpringerAssignment']),
-                'isFixed': bool(row['IsFixed']),
-                'notes': row['Notes']
+        conn = None
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get assignments
+            cursor.execute("""
+                SELECT sa.*, e.Vorname, e.Name, e.TeamId, e.IsSpringer,
+                       st.Code, st.Name as ShiftName, st.ColorCode
+                FROM ShiftAssignments sa
+                JOIN Employees e ON sa.EmployeeId = e.Id
+                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                ORDER BY sa.Date, e.TeamId, e.Name, e.Vorname
+            """, (start_date.isoformat(), end_date.isoformat()))
+            
+            assignments = []
+            for row in cursor.fetchall():
+                assignments.append({
+                    'id': row['Id'],
+                    'employeeId': row['EmployeeId'],
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'teamId': row['TeamId'],
+                    'isSpringer': bool(row['IsSpringer']),
+                    'shiftTypeId': row['ShiftTypeId'],
+                    'shiftCode': row['Code'],
+                    'shiftName': row['ShiftName'],
+                    'colorCode': row['ColorCode'],
+                    'date': row['Date'],
+                    'isManual': bool(row['IsManual']),
+                    'isSpringerAssignment': bool(row['IsSpringerAssignment']),
+                    'isFixed': bool(row['IsFixed']),
+                    'notes': row['Notes']
+                })
+            
+            # Get absences
+            cursor.execute("""
+                SELECT a.*, e.Vorname, e.Name, e.TeamId
+                FROM Absences a
+                JOIN Employees e ON a.EmployeeId = e.Id
+                WHERE (a.StartDate <= ? AND a.EndDate >= ?)
+                   OR (a.StartDate >= ? AND a.StartDate <= ?)
+            """, (end_date.isoformat(), start_date.isoformat(), 
+                  start_date.isoformat(), end_date.isoformat()))
+            
+            absences = []
+            for row in cursor.fetchall():
+                absences.append({
+                    'id': row['Id'],
+                    'employeeId': row['EmployeeId'],
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'teamId': row['TeamId'],
+                    'type': ['', 'Krank', 'Urlaub', 'Lehrgang'][row['Type']],
+                    'startDate': row['StartDate'],
+                    'endDate': row['EndDate'],
+                    'notes': row['Notes']
+                })
+            
+            return jsonify({
+                'startDate': start_date.isoformat(),
+                'endDate': end_date.isoformat(),
+                'assignments': assignments,
+                'absences': absences
             })
-        
-        # Get absences
-        cursor.execute("""
-            SELECT a.*, e.Vorname, e.Name, e.TeamId
-            FROM Absences a
-            JOIN Employees e ON a.EmployeeId = e.Id
-            WHERE (a.StartDate <= ? AND a.EndDate >= ?)
-               OR (a.StartDate >= ? AND a.StartDate <= ?)
-        """, (end_date.isoformat(), start_date.isoformat(), 
-              start_date.isoformat(), end_date.isoformat()))
-        
-        absences = []
-        for row in cursor.fetchall():
-            absences.append({
-                'id': row['Id'],
-                'employeeId': row['EmployeeId'],
-                'employeeName': f"{row['Vorname']} {row['Name']}",
-                'teamId': row['TeamId'],
-                'type': ['', 'Krank', 'Urlaub', 'Lehrgang'][row['Type']],
-                'startDate': row['StartDate'],
-                'endDate': row['EndDate'],
-                'notes': row['Notes']
-            })
-        
-        conn.close()
-        
-        return jsonify({
-            'startDate': start_date.isoformat(),
-            'endDate': end_date.isoformat(),
-            'assignments': assignments,
-            'absences': absences
-        })
+            
+        except Exception as e:
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+        finally:
+            if conn:
+                conn.close()
     
     @app.route('/api/shifts/plan', methods=['POST'])
     def plan_shifts():

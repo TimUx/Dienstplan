@@ -127,13 +127,18 @@ def validate_no_work_when_absent(
         emp_id = assignment.employee_id
         d = assignment.date
         
+        # Check if employee exists
+        emp = emp_dict.get(emp_id)
+        if not emp:
+            result.add_violation(f"Employee ID {emp_id} not found in employee list")
+            continue
+        
         # Check if employee is absent
         for absence in absences:
             if absence.employee_id == emp_id and absence.overlaps_date(d):
-                emp_name = emp_dict[emp_id].full_name
                 shift_code = get_shift_type_by_id(assignment.shift_type_id).code
                 result.add_violation(
-                    f"{emp_name} (ID {emp_id}) assigned to {shift_code} shift on {d} but is absent ({absence.absence_type.value})"
+                    f"{emp.full_name} (ID {emp_id}) assigned to {shift_code} shift on {d} but is absent ({absence.absence_type.value})"
                 )
 
 

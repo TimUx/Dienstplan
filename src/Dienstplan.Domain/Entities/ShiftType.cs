@@ -42,4 +42,9 @@ public static class ShiftTypeCodes
     public const string Spaet = "S";
     public const string Nacht = "N";
     public const string Zwischendienst = "ZD";
+    public const string TA = "TA";
+    public const string TD = "TD";
+    public const string EH_A = "EH_A";
+    public const string BMT = "BMT";
+    public const string BSB = "BSB";
 }

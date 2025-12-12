@@ -60,11 +60,11 @@ Führen Sie das mitgelieferte Skript aus:
 ```bash
 # Linux/macOS
 cd /path/to/Dienstplan
-dotnet run --project src/Dienstplan.Web/SampleDataGenerator.csproj
+dotnet run --project src/SampleDataGenerator
 
 # Windows PowerShell
 cd C:\path\to\Dienstplan
-dotnet run --project src\Dienstplan.Web\SampleDataGenerator.csproj
+dotnet run --project src\SampleDataGenerator
 ```
 
 ### Schritt 2: Datenbank verwenden

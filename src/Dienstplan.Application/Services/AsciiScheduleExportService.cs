@@ -39,12 +39,16 @@ public class AsciiScheduleExportService
         GenerateHeader(sb, startDate, endDate);
         
         // Generate team sections
-        foreach (var team in teams.Where(t => t.Employees.Any()))
+        foreach (var team in teams)
         {
-            GenerateTeamSection(sb, team, startDate, endDate, assignments);
+            var teamEmployees = allEmployees.Where(e => e.TeamId == team.Id).ToList();
+            if (teamEmployees.Any())
+            {
+                GenerateTeamSection(sb, team, teamEmployees, startDate, endDate, assignments);
+            }
         }
         
-        // Generate springer section (employees without team or marked as springer)
+        // Generate springer section (employees marked as springer)
         GenerateSpringerSection(sb, allEmployees, startDate, endDate, assignments);
         
         // Generate special functions section
@@ -79,14 +83,14 @@ public class AsciiScheduleExportService
         sb.AppendLine("|");
     }
 
-    private void GenerateTeamSection(StringBuilder sb, Team team, DateTime startDate, DateTime endDate, 
-        List<ShiftAssignment> allAssignments)
+    private void GenerateTeamSection(StringBuilder sb, Team team, List<Employee> teamEmployees, 
+        DateTime startDate, DateTime endDate, List<ShiftAssignment> allAssignments)
     {
         sb.AppendLine($"\n{team.Name}");
         
-        var teamEmployees = team.Employees.Where(e => !e.IsSpringer).OrderBy(e => e.Name).ToList();
+        var nonSpringerEmployees = teamEmployees.Where(e => !e.IsSpringer).OrderBy(e => e.Name).ToList();
         
-        foreach (var employee in teamEmployees)
+        foreach (var employee in nonSpringerEmployees)
         {
             GenerateEmployeeLine(sb, employee, startDate, endDate, allAssignments);
         }

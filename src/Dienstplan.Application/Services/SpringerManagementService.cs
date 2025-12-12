@@ -130,6 +130,10 @@ public class SpringerManagementService
         if (springer == null)
             return null;
 
+        // Get the absent employee name for the note
+        var absentEmployee = await _employeeRepository.GetByIdAsync(absentEmployeeId);
+        var absentEmployeeName = absentEmployee?.FullName ?? $"Mitarbeiter {absentEmployeeId}";
+
         // Create springer assignment
         var springerAssignment = new ShiftAssignment
         {
@@ -138,7 +142,7 @@ public class SpringerManagementService
             Date = date,
             IsManual = false,
             IsSpringerAssignment = true,
-            Notes = $"Vertretung für {absentEmployeeId}"
+            Notes = $"Vertretung für {absentEmployeeName}"
         };
 
         return await _shiftAssignmentRepository.AddAsync(springerAssignment);

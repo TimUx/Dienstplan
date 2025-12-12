@@ -26,25 +26,25 @@ public class FairnessTrackingService
         DateTime startDate, DateTime endDate)
     {
         var assignments = await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, endDate);
-        var result = new Dictionary<int, (int, int)>();
+        var result = new Dictionary<int, (int SaturdayCount, int SundayCount)>();
 
         foreach (var assignment in assignments)
         {
             if (!result.ContainsKey(assignment.EmployeeId))
-                result[assignment.EmployeeId] = (0, 0);
+                result[assignment.EmployeeId] = (SaturdayCount: 0, SundayCount: 0);
 
             if (assignment.Date.DayOfWeek == DayOfWeek.Saturday)
             {
                 result[assignment.EmployeeId] = (
-                    result[assignment.EmployeeId].Item1 + 1,
-                    result[assignment.EmployeeId].Item2
+                    result[assignment.EmployeeId].SaturdayCount + 1,
+                    result[assignment.EmployeeId].SundayCount
                 );
             }
             else if (assignment.Date.DayOfWeek == DayOfWeek.Sunday)
             {
                 result[assignment.EmployeeId] = (
-                    result[assignment.EmployeeId].Item1,
-                    result[assignment.EmployeeId].Item2 + 1
+                    result[assignment.EmployeeId].SaturdayCount,
+                    result[assignment.EmployeeId].SundayCount + 1
                 );
             }
         }

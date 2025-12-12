@@ -17,17 +17,20 @@ public class ShiftsController : ControllerBase
     private readonly IAbsenceRepository _absenceRepository;
     private readonly IShiftPlanningService _planningService;
     private readonly IPdfExportService _pdfExportService;
+    private readonly IAuditService _auditService;
 
     public ShiftsController(
         IShiftAssignmentRepository shiftRepository,
         IAbsenceRepository absenceRepository,
         IShiftPlanningService planningService,
-        IPdfExportService pdfExportService)
+        IPdfExportService pdfExportService,
+        IAuditService auditService)
     {
         _shiftRepository = shiftRepository;
         _absenceRepository = absenceRepository;
         _planningService = planningService;
         _pdfExportService = pdfExportService;
+        _auditService = auditService;
     }
 
     [HttpGet("schedule")]
@@ -121,6 +124,8 @@ public class ShiftsController : ControllerBase
             var toDelete = existingAssignments.Where(a => !a.IsFixed).ToList();
             foreach (var assignment in toDelete)
             {
+                // Log deletions during force replanning
+                await _auditService.LogDeletedAsync(assignment, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
                 await _shiftRepository.DeleteAsync(assignment.Id);
             }
         }
@@ -134,6 +139,10 @@ public class ShiftsController : ControllerBase
                 assignment.CreatedBy = User.Identity?.Name;
                 assignment.CreatedAt = DateTime.UtcNow;
                 var saved = await _shiftRepository.AddAsync(assignment);
+                
+                // Log creation of planned shifts
+                await _auditService.LogCreatedAsync(saved, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+                
                 savedAssignments.Add(saved);
             }
             else
@@ -181,6 +190,10 @@ public class ShiftsController : ControllerBase
         }
 
         var created = await _shiftRepository.AddAsync(assignment);
+        
+        // Log the creation
+        await _auditService.LogCreatedAsync(created, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         dto.Id = created.Id;
         return CreatedAtAction(nameof(GetSchedule), dto);
     }
@@ -194,6 +207,19 @@ public class ShiftsController : ControllerBase
         {
             return NotFound(new { error = "Schichtzuweisung nicht gefunden" });
         }
+
+        // Store old entity for audit log
+        var oldEntity = new ShiftAssignment
+        {
+            Id = existing.Id,
+            EmployeeId = existing.EmployeeId,
+            ShiftTypeId = existing.ShiftTypeId,
+            Date = existing.Date,
+            IsFixed = existing.IsFixed,
+            Notes = existing.Notes,
+            IsManual = existing.IsManual,
+            IsSpringerAssignment = existing.IsSpringerAssignment
+        };
 
         // Update fields
         existing.EmployeeId = dto.EmployeeId;
@@ -212,6 +238,9 @@ public class ShiftsController : ControllerBase
         }
 
         await _shiftRepository.UpdateAsync(existing);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, existing, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
         
         return Ok(new ShiftAssignmentDto
         {
@@ -233,6 +262,13 @@ public class ShiftsController : ControllerBase
     [Authorize(Roles = "Admin,Disponent")]
     public async Task<IActionResult> DeleteAssignment(int id)
     {
+        var assignment = await _shiftRepository.GetByIdAsync(id);
+        if (assignment != null)
+        {
+            // Log the deletion before deleting
+            await _auditService.LogDeletedAsync(assignment, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        }
+        
         await _shiftRepository.DeleteAsync(id);
         return NoContent();
     }

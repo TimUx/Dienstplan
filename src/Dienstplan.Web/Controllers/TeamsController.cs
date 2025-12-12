@@ -12,11 +12,13 @@ public class TeamsController : ControllerBase
 {
     private readonly IRepository<Team> _teamRepository;
     private readonly IRepository<Employee> _employeeRepository;
+    private readonly IAuditService _auditService;
 
-    public TeamsController(IRepository<Team> teamRepository, IRepository<Employee> employeeRepository)
+    public TeamsController(IRepository<Team> teamRepository, IRepository<Employee> employeeRepository, IAuditService auditService)
     {
         _teamRepository = teamRepository;
         _employeeRepository = employeeRepository;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -73,6 +75,9 @@ public class TeamsController : ControllerBase
 
         team = await _teamRepository.AddAsync(team);
         
+        // Log the creation
+        await _auditService.LogCreatedAsync(team, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         var teamDto = new TeamDto
         {
             Id = team.Id,
@@ -95,11 +100,23 @@ public class TeamsController : ControllerBase
             return NotFound();
         }
 
+        // Store old entity for audit log
+        var oldEntity = new Team
+        {
+            Id = team.Id,
+            Name = team.Name,
+            Description = team.Description,
+            Email = team.Email
+        };
+
         team.Name = dto.Name;
         team.Description = dto.Description;
         team.Email = dto.Email;
 
         await _teamRepository.UpdateAsync(team);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, team, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         return NoContent();
     }
@@ -113,6 +130,9 @@ public class TeamsController : ControllerBase
         {
             return NotFound();
         }
+
+        // Log the deletion before deleting
+        await _auditService.LogDeletedAsync(team, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         await _teamRepository.DeleteAsync(id);
 

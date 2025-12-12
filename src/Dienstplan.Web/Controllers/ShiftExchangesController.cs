@@ -17,17 +17,20 @@ public class ShiftExchangesController : ControllerBase
     private readonly IShiftAssignmentRepository _shiftRepository;
     private readonly IEmployeeRepository _employeeRepository;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditService _auditService;
 
     public ShiftExchangesController(
         IShiftExchangeRepository exchangeRepository,
         IShiftAssignmentRepository shiftRepository,
         IEmployeeRepository employeeRepository,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IAuditService auditService)
     {
         _exchangeRepository = exchangeRepository;
         _shiftRepository = shiftRepository;
         _employeeRepository = employeeRepository;
         _userManager = userManager;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -105,6 +108,10 @@ public class ShiftExchangesController : ControllerBase
         };
 
         var created = await _exchangeRepository.AddAsync(exchange);
+        
+        // Log the creation
+        await _auditService.LogCreatedAsync(created, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         var resultDto = MapToDto(created);
         
         return CreatedAtAction(nameof(GetEmployeeExchanges), new { employeeId = shift.EmployeeId }, resultDto);
@@ -140,11 +147,29 @@ public class ShiftExchangesController : ControllerBase
             return BadRequest(new { error = "Sie können Ihre eigene Schicht nicht anfordern" });
         }
 
+        // Store old entity for audit log
+        var oldEntity = new ShiftExchange
+        {
+            Id = exchange.Id,
+            OfferingEmployeeId = exchange.OfferingEmployeeId,
+            ShiftAssignmentId = exchange.ShiftAssignmentId,
+            RequestingEmployeeId = exchange.RequestingEmployeeId,
+            Status = exchange.Status,
+            OfferingReason = exchange.OfferingReason,
+            DisponentNotes = exchange.DisponentNotes,
+            CreatedAt = exchange.CreatedAt,
+            UpdatedAt = exchange.UpdatedAt,
+            ProcessedBy = exchange.ProcessedBy
+        };
+
         exchange.RequestingEmployeeId = dto.RequestingEmployeeId;
         exchange.Status = ShiftExchangeStatus.Angefragt;
         exchange.UpdatedAt = DateTime.UtcNow;
 
         await _exchangeRepository.UpdateAsync(exchange);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, exchange, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
         
         var resultDto = MapToDto(exchange);
         return Ok(resultDto);
@@ -179,12 +204,30 @@ public class ShiftExchangesController : ControllerBase
             return BadRequest(new { error = "Status muss Genehmigt oder Abgelehnt sein" });
         }
 
+        // Store old entity for audit log
+        var oldEntity = new ShiftExchange
+        {
+            Id = exchange.Id,
+            OfferingEmployeeId = exchange.OfferingEmployeeId,
+            ShiftAssignmentId = exchange.ShiftAssignmentId,
+            RequestingEmployeeId = exchange.RequestingEmployeeId,
+            Status = exchange.Status,
+            OfferingReason = exchange.OfferingReason,
+            DisponentNotes = exchange.DisponentNotes,
+            CreatedAt = exchange.CreatedAt,
+            UpdatedAt = exchange.UpdatedAt,
+            ProcessedBy = exchange.ProcessedBy
+        };
+
         exchange.Status = status;
         exchange.DisponentNotes = dto.DisponentNotes;
         exchange.UpdatedAt = DateTime.UtcNow;
         exchange.ProcessedBy = User.Identity?.Name;
 
         await _exchangeRepository.UpdateAsync(exchange);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, exchange, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         // If approved, swap the shift assignment
         if (status == ShiftExchangeStatus.Genehmigt && exchange.RequestingEmployeeId.HasValue)
@@ -233,10 +276,28 @@ public class ShiftExchangesController : ControllerBase
             return BadRequest(new { error = "Dieser Tausch kann nicht mehr zurückgezogen werden" });
         }
 
+        // Store old entity for audit log
+        var oldEntity = new ShiftExchange
+        {
+            Id = exchange.Id,
+            OfferingEmployeeId = exchange.OfferingEmployeeId,
+            ShiftAssignmentId = exchange.ShiftAssignmentId,
+            RequestingEmployeeId = exchange.RequestingEmployeeId,
+            Status = exchange.Status,
+            OfferingReason = exchange.OfferingReason,
+            DisponentNotes = exchange.DisponentNotes,
+            CreatedAt = exchange.CreatedAt,
+            UpdatedAt = exchange.UpdatedAt,
+            ProcessedBy = exchange.ProcessedBy
+        };
+
         exchange.Status = ShiftExchangeStatus.Zurueckgezogen;
         exchange.UpdatedAt = DateTime.UtcNow;
 
         await _exchangeRepository.UpdateAsync(exchange);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, exchange, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
         
         var resultDto = MapToDto(exchange);
         return Ok(resultDto);

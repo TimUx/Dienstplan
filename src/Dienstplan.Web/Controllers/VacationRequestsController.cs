@@ -17,17 +17,20 @@ public class VacationRequestsController : ControllerBase
     private readonly IEmployeeRepository _employeeRepository;
     private readonly IAbsenceRepository _absenceRepository;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditService _auditService;
 
     public VacationRequestsController(
         IVacationRequestRepository vacationRequestRepository,
         IEmployeeRepository employeeRepository,
         IAbsenceRepository absenceRepository,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IAuditService auditService)
     {
         _vacationRequestRepository = vacationRequestRepository;
         _employeeRepository = employeeRepository;
         _absenceRepository = absenceRepository;
         _userManager = userManager;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -106,6 +109,10 @@ public class VacationRequestsController : ControllerBase
         };
 
         var created = await _vacationRequestRepository.AddAsync(vacationRequest);
+        
+        // Log the creation
+        await _auditService.LogCreatedAsync(created, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
+        
         var resultDto = MapToDto(created);
         
         return CreatedAtAction(nameof(GetEmployeeRequests), new { employeeId = dto.EmployeeId }, resultDto);
@@ -124,6 +131,21 @@ public class VacationRequestsController : ControllerBase
             return NotFound(new { error = "Urlaubsantrag nicht gefunden" });
         }
 
+        // Store old entity for audit log
+        var oldEntity = new VacationRequest
+        {
+            Id = request.Id,
+            EmployeeId = request.EmployeeId,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            Status = request.Status,
+            Notes = request.Notes,
+            DisponentResponse = request.DisponentResponse,
+            ProcessedBy = request.ProcessedBy,
+            CreatedAt = request.CreatedAt,
+            UpdatedAt = request.UpdatedAt
+        };
+
         // Parse status
         if (!Enum.TryParse<VacationRequestStatus>(dto.Status, out var status))
         {
@@ -136,6 +158,9 @@ public class VacationRequestsController : ControllerBase
         request.ProcessedBy = User.Identity?.Name;
 
         await _vacationRequestRepository.UpdateAsync(request);
+        
+        // Log the update
+        await _auditService.LogUpdatedAsync(oldEntity, request, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         // If approved, create an Absence entry
         if (status == VacationRequestStatus.Genehmigt)
@@ -173,6 +198,9 @@ public class VacationRequestsController : ControllerBase
         {
             return Forbid();
         }
+
+        // Log the deletion before deleting
+        await _auditService.LogDeletedAsync(request, User.Identity?.Name ?? "System", User.Identity?.Name ?? "System");
 
         await _vacationRequestRepository.DeleteAsync(id);
         return NoContent();

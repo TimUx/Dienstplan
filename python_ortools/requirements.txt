@@ -1,0 +1,15 @@
+# Python OR-Tools Shift Planning System
+# Core dependencies for the shift planning migration
+
+# OR-Tools - Constraint Programming solver
+ortools>=9.8.3296
+
+# Flask - Web framework for REST API
+Flask>=3.0.0
+flask-cors>=4.0.0
+
+# Standard library enhancements
+python-dateutil>=2.8.2
+
+# Database (already using SQLite which is built-in to Python)
+# No additional package needed for SQLite3

@@ -1,6 +1,7 @@
 using Dienstplan.Domain.Entities;
 using Dienstplan.Domain.Interfaces;
 using Dienstplan.Domain.Rules;
+using Dienstplan.Application.Helpers;
 
 namespace Dienstplan.Application.Services;
 
@@ -43,45 +44,116 @@ public class ShiftPlanningService : IShiftPlanningService
             
         var absences = await _absenceRepository.GetByDateRangeAsync(startDate, endDate);
         
-        // Plan for each day
-        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        // Plan week by week to ensure proper rotation
+        var currentDate = startDate;
+        while (currentDate <= endDate)
         {
-            // Skip days that already have assignments (unless forcing and not fixed)
-            if (datesWithAssignments.Contains(date.Date))
+            var (weekStart, weekEnd) = DateHelper.GetWeekViewDateRange(currentDate);
+            
+            // Don't plan beyond the requested end date
+            if (weekStart > endDate)
+                break;
+            
+            weekEnd = weekEnd > endDate ? endDate : weekEnd;
+            
+            // Check if this week needs planning
+            var weekDates = Enumerable.Range(0, (weekEnd - weekStart).Days + 1)
+                .Select(d => weekStart.AddDays(d))
+                .ToList();
+            
+            // Skip if all days in this week already have assignments
+            if (!force && weekDates.All(d => datesWithAssignments.Contains(d.Date)))
             {
+                currentDate = weekEnd.AddDays(1);
                 continue;
             }
             
-            var dayAssignments = await PlanDayShifts(date, employees, absences.ToList());
+            // Plan the entire week with rotation pattern
+            var weekAssignments = await PlanWeekWithRotation(weekStart, weekEnd, employees, absences.ToList(), datesWithAssignments);
+            assignments.AddRange(weekAssignments);
+            
+            currentDate = weekEnd.AddDays(1);
+        }
+        
+        return assignments;
+    }
+
+    private async Task<List<ShiftAssignment>> PlanWeekWithRotation(
+        DateTime weekStart, 
+        DateTime weekEnd, 
+        List<Employee> allEmployees, 
+        List<Absence> absences,
+        HashSet<DateTime> datesWithAssignments)
+    {
+        var assignments = new List<ShiftAssignment>();
+        
+        // Group employees by team for fair distribution
+        var employeesByTeam = allEmployees.GroupBy(e => e.TeamId ?? 0).ToList();
+        
+        // For each day of the week, assign shifts following the rotation pattern
+        for (var date = weekStart; date <= weekEnd; date = date.AddDays(1))
+        {
+            // Skip if date already has assignments (fixed assignments)
+            if (datesWithAssignments.Contains(date.Date))
+                continue;
+            
+            var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+            
+            // Get available employees for this date
+            var availableEmployees = allEmployees.Where(e => 
+                !absences.Any(a => a.EmployeeId == e.Id && 
+                                   a.StartDate <= date && 
+                                   a.EndDate >= date)).ToList();
+            
+            if (availableEmployees.Count == 0)
+                continue;
+            
+            // Determine required shifts and counts
+            var shiftRequirements = GetShiftRequirements(isWeekend);
+            
+            // Get all existing assignments to check rotation and constraints
+            var allExistingAssignments = await _shiftAssignmentRepository.GetByDateRangeAsync(weekStart, date.AddDays(1));
+            
+            // Assign shifts following the ideal rotation: Früh → Nacht → Spät
+            var dayAssignments = await AssignShiftsWithRotation(
+                date, 
+                availableEmployees, 
+                shiftRequirements,
+                allExistingAssignments.ToList());
+            
             assignments.AddRange(dayAssignments);
         }
         
         return assignments;
     }
 
-    private async Task<List<ShiftAssignment>> PlanDayShifts(DateTime date, List<Employee> employees, List<Absence> absences)
+    private async Task<List<ShiftAssignment>> AssignShiftsWithRotation(
+        DateTime date,
+        List<Employee> availableEmployees,
+        List<(string ShiftCode, int Count)> shiftRequirements,
+        List<ShiftAssignment> existingAssignments)
     {
         var assignments = new List<ShiftAssignment>();
-        var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+        var assignedEmployeeIds = new HashSet<int>();
         
-        // Get available employees for this date
-        var availableEmployees = employees.Where(e => 
-            !absences.Any(a => a.EmployeeId == e.Id && 
-                               a.StartDate <= date && 
-                               a.EndDate >= date)).ToList();
+        // Sort employees by their last shift date to distribute work fairly
+        var sortedEmployees = await SortEmployeesByWorkload(availableEmployees, date);
         
-        // Determine required shifts and counts
-        var shiftRequirements = GetShiftRequirements(isWeekend);
-        
-        // Assign shifts following the ideal rotation (Früh → Nacht → Spät)
-        var employeeIndex = 0;
+        // For each required shift type in rotation order
         foreach (var (shiftCode, count) in shiftRequirements)
         {
-            for (int i = 0; i < count && employeeIndex < availableEmployees.Count; i++)
+            int assigned = 0;
+            
+            foreach (var employee in sortedEmployees)
             {
-                var employee = availableEmployees[employeeIndex % availableEmployees.Count];
+                if (assigned >= count)
+                    break;
                 
-                // Check if assignment is valid
+                // Skip if employee already assigned today
+                if (assignedEmployeeIds.Contains(employee.Id))
+                    continue;
+                
+                // Create potential assignment
                 var assignment = new ShiftAssignment
                 {
                     EmployeeId = employee.Id,
@@ -90,37 +162,142 @@ public class ShiftPlanningService : IShiftPlanningService
                     IsManual = false
                 };
                 
+                // Validate assignment against all rules
                 var (isValid, _) = await ValidateShiftAssignment(assignment);
+                
                 if (isValid)
                 {
                     assignments.Add(assignment);
+                    assignedEmployeeIds.Add(employee.Id);
+                    assigned++;
                 }
-                
-                employeeIndex++;
+            }
+            
+            // If we couldn't fill the requirement, try with relaxed validation
+            // Still check critical safety rules (rest periods, consecutive shifts)
+            if (assigned < count)
+            {
+                foreach (var employee in sortedEmployees)
+                {
+                    if (assigned >= count)
+                        break;
+                    
+                    if (assignedEmployeeIds.Contains(employee.Id))
+                        continue;
+                    
+                    var assignment = new ShiftAssignment
+                    {
+                        EmployeeId = employee.Id,
+                        ShiftTypeId = GetShiftTypeIdByCode(shiftCode),
+                        Date = date,
+                        IsManual = false
+                    };
+                    
+                    // Check critical safety rules (absence, rest periods, consecutive shifts)
+                    var hasAbsence = await HasAbsenceOnDate(employee.Id, date);
+                    if (!hasAbsence)
+                    {
+                        // Check forbidden transitions (rest periods)
+                        var previousShift = await _shiftAssignmentRepository.GetByEmployeeAndDateAsync(
+                            employee.Id, date.AddDays(-1));
+                        
+                        bool isSafeTransition = true;
+                        if (previousShift != null)
+                        {
+                            var previousShiftCode = GetShiftCodeById(previousShift.ShiftTypeId);
+                            if (ShiftRules.ForbiddenTransitions.ContainsKey(previousShiftCode))
+                            {
+                                isSafeTransition = !ShiftRules.ForbiddenTransitions[previousShiftCode].Contains(shiftCode);
+                            }
+                        }
+                        
+                        // Check maximum consecutive shifts
+                        var employeeAllAssignments = (await _shiftAssignmentRepository.GetByEmployeeIdAsync(employee.Id))
+                            .OrderBy(a => a.Date)
+                            .ToList();
+                        var consecutiveShifts = CountConsecutiveShifts(employeeAllAssignments, date);
+                        
+                        if (isSafeTransition && consecutiveShifts < ShiftRules.MaximumConsecutiveShifts)
+                        {
+                            assignments.Add(assignment);
+                            assignedEmployeeIds.Add(employee.Id);
+                            assigned++;
+                        }
+                    }
+                }
             }
         }
         
         return assignments;
     }
 
+    private async Task<List<Employee>> SortEmployeesByWorkload(List<Employee> employees, DateTime upToDate)
+    {
+        // Get shift assignments for the past 30 days to calculate workload
+        var startDate = upToDate.AddDays(-30);
+        var allAssignments = await _shiftAssignmentRepository.GetByDateRangeAsync(startDate, upToDate);
+        
+        // Count assignments per employee
+        var workloadMap = employees.ToDictionary(e => e.Id, e => 0);
+        
+        foreach (var assignment in allAssignments)
+        {
+            if (workloadMap.ContainsKey(assignment.EmployeeId))
+            {
+                workloadMap[assignment.EmployeeId]++;
+            }
+        }
+        
+        // Get the last shift for each employee to implement rotation
+        var lastShiftMap = new Dictionary<int, (DateTime Date, string ShiftCode)>();
+        
+        foreach (var employee in employees)
+        {
+            var employeeAssignments = allAssignments
+                .Where(a => a.EmployeeId == employee.Id)
+                .OrderByDescending(a => a.Date)
+                .ToList();
+            
+            if (employeeAssignments.Any())
+            {
+                var lastShift = employeeAssignments.First();
+                var shiftCode = GetShiftCodeById(lastShift.ShiftTypeId);
+                lastShiftMap[employee.Id] = (lastShift.Date, shiftCode);
+            }
+        }
+        
+        // Sort by workload (ascending) and last shift date (ascending)
+        return employees.OrderBy(e => workloadMap[e.Id])
+            .ThenBy(e => lastShiftMap.ContainsKey(e.Id) ? lastShiftMap[e.Id].Date : DateTime.MinValue)
+            .ToList();
+    }
+
+    private async Task<bool> HasAbsenceOnDate(int employeeId, DateTime date)
+    {
+        var absences = await _absenceRepository.GetByEmployeeIdAsync(employeeId);
+        return absences.Any(a => a.StartDate <= date && a.EndDate >= date);
+    }
+
     private List<(string ShiftCode, int Count)> GetShiftRequirements(bool isWeekend)
     {
         if (isWeekend)
         {
+            // Weekend: minimum staffing for all shifts in rotation order (Früh → Nacht → Spät)
             return new List<(string, int)>
             {
-                (ShiftTypeCodes.Frueh, ShiftRules.WeekendStaffing.MaxPerShift),
-                (ShiftTypeCodes.Spaet, ShiftRules.WeekendStaffing.MaxPerShift),
-                (ShiftTypeCodes.Nacht, ShiftRules.WeekendStaffing.MaxPerShift)
+                (ShiftTypeCodes.Frueh, ShiftRules.WeekendStaffing.MinPerShift),
+                (ShiftTypeCodes.Nacht, ShiftRules.WeekendStaffing.MinPerShift),
+                (ShiftTypeCodes.Spaet, ShiftRules.WeekendStaffing.MinPerShift)
             };
         }
         else
         {
+            // Weekday: minimum staffing following rotation pattern Früh → Nacht → Spät
             return new List<(string, int)>
             {
                 (ShiftTypeCodes.Frueh, ShiftRules.WeekdayStaffing.FruehMin),
-                (ShiftTypeCodes.Spaet, ShiftRules.WeekdayStaffing.SpaetMin),
-                (ShiftTypeCodes.Nacht, ShiftRules.WeekdayStaffing.NachtMin)
+                (ShiftTypeCodes.Nacht, ShiftRules.WeekdayStaffing.NachtMin),
+                (ShiftTypeCodes.Spaet, ShiftRules.WeekdayStaffing.SpaetMin)
             };
         }
     }
@@ -259,6 +436,10 @@ public class ShiftPlanningService : IShiftPlanningService
         return await _shiftAssignmentRepository.AddAsync(springerAssignment);
     }
     
+    /// <summary>
+    /// Get shift type ID by code
+    /// Note: These IDs correspond to the seeded shift types in DienstplanDbContext.SeedShiftTypes
+    /// </summary>
     private int GetShiftTypeIdByCode(string code)
     {
         return code switch
@@ -271,6 +452,10 @@ public class ShiftPlanningService : IShiftPlanningService
         };
     }
     
+    /// <summary>
+    /// Get shift code by type ID
+    /// Note: These IDs correspond to the seeded shift types in DienstplanDbContext.SeedShiftTypes
+    /// </summary>
     private string GetShiftCodeById(int id)
     {
         return id switch

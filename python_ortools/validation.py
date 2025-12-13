@@ -1,0 +1,438 @@
+"""
+Validation module for shift planning results.
+Validates all rules and constraints after solving.
+"""
+
+from datetime import date, timedelta
+from typing import List, Dict, Tuple
+from entities import Employee, ShiftAssignment, Absence, STANDARD_SHIFT_TYPES, get_shift_type_by_id
+
+
+class ValidationResult:
+    """Result of validation with any violations found"""
+    
+    def __init__(self):
+        self.is_valid = True
+        self.violations = []
+        self.warnings = []
+    
+    def add_violation(self, message: str):
+        """Add a hard rule violation"""
+        self.is_valid = False
+        self.violations.append(message)
+    
+    def add_warning(self, message: str):
+        """Add a soft rule warning"""
+        self.warnings.append(message)
+    
+    def print_report(self):
+        """Print validation report"""
+        print("\n" + "=" * 60)
+        print("VALIDATION REPORT")
+        print("=" * 60)
+        
+        if self.is_valid and not self.warnings:
+            print("✓ All validations passed!")
+        else:
+            if self.violations:
+                print(f"\n✗ VIOLATIONS FOUND: {len(self.violations)}")
+                for i, violation in enumerate(self.violations, 1):
+                    print(f"  {i}. {violation}")
+            
+            if self.warnings:
+                print(f"\n⚠ WARNINGS: {len(self.warnings)}")
+                for i, warning in enumerate(self.warnings, 1):
+                    print(f"  {i}. {warning}")
+            
+            if not self.violations:
+                print("\n✓ No hard rule violations (warnings only)")
+        
+        print("=" * 60)
+
+
+def validate_shift_plan(
+    assignments: List[ShiftAssignment],
+    employees: List[Employee],
+    absences: List[Absence],
+    start_date: date,
+    end_date: date
+) -> ValidationResult:
+    """
+    Validate the complete shift plan against all rules.
+    
+    Args:
+        assignments: List of shift assignments
+        employees: List of employees
+        absences: List of absences
+        start_date: Start date of planning period
+        end_date: End date of planning period
+        
+    Returns:
+        ValidationResult with any violations or warnings
+    """
+    result = ValidationResult()
+    
+    # Create lookup structures
+    emp_dict = {emp.id: emp for emp in employees}
+    
+    # Group assignments by employee and date
+    assignments_by_emp_date = {}
+    for assignment in assignments:
+        key = (assignment.employee_id, assignment.date)
+        if key not in assignments_by_emp_date:
+            assignments_by_emp_date[key] = []
+        assignments_by_emp_date[key].append(assignment)
+    
+    # Group assignments by date
+    assignments_by_date = {}
+    for assignment in assignments:
+        if assignment.date not in assignments_by_date:
+            assignments_by_date[assignment.date] = []
+        assignments_by_date[assignment.date].append(assignment)
+    
+    # Validate each rule
+    validate_one_shift_per_day(result, assignments_by_emp_date)
+    validate_no_work_when_absent(result, assignments, absences, emp_dict)
+    validate_rest_times(result, assignments, emp_dict)
+    validate_consecutive_shifts(result, assignments, emp_dict)
+    validate_working_hours(result, assignments, emp_dict, start_date, end_date)
+    validate_staffing_requirements(result, assignments_by_date, emp_dict)
+    validate_special_functions(result, assignments, emp_dict)
+    validate_springer_availability(result, assignments, employees)
+    
+    return result
+
+
+def validate_one_shift_per_day(
+    result: ValidationResult,
+    assignments_by_emp_date: Dict[Tuple[int, date], List[ShiftAssignment]]
+):
+    """Validate that each employee has at most one shift per day"""
+    for (emp_id, d), shifts in assignments_by_emp_date.items():
+        if len(shifts) > 1:
+            shift_codes = [get_shift_type_by_id(s.shift_type_id).code for s in shifts]
+            result.add_violation(
+                f"Employee {emp_id} has multiple shifts on {d}: {', '.join(shift_codes)}"
+            )
+
+
+def validate_no_work_when_absent(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    absences: List[Absence],
+    emp_dict: Dict[int, Employee]
+):
+    """Validate that employees don't work when absent"""
+    for assignment in assignments:
+        emp_id = assignment.employee_id
+        d = assignment.date
+        
+        # Check if employee exists
+        emp = emp_dict.get(emp_id)
+        if not emp:
+            result.add_violation(f"Employee ID {emp_id} not found in employee list")
+            continue
+        
+        # Check if employee is absent
+        for absence in absences:
+            if absence.employee_id == emp_id and absence.overlaps_date(d):
+                shift_code = get_shift_type_by_id(assignment.shift_type_id).code
+                result.add_violation(
+                    f"{emp.full_name} (ID {emp_id}) assigned to {shift_code} shift on {d} but is absent ({absence.absence_type.value})"
+                )
+
+
+def validate_rest_times(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    emp_dict: Dict[int, Employee]
+):
+    """Validate 11-hour minimum rest time (forbidden transitions)"""
+    # Group by employee
+    assignments_by_emp = {}
+    for assignment in assignments:
+        emp_id = assignment.employee_id
+        if emp_id not in assignments_by_emp:
+            assignments_by_emp[emp_id] = []
+        assignments_by_emp[emp_id].append(assignment)
+    
+    # Check each employee's assignments
+    for emp_id, emp_assignments in assignments_by_emp.items():
+        # Sort by date
+        emp_assignments.sort(key=lambda x: x.date)
+        
+        # Check consecutive days
+        for i in range(len(emp_assignments) - 1):
+            current = emp_assignments[i]
+            next_assign = emp_assignments[i + 1]
+            
+            # Check if consecutive days
+            if (next_assign.date - current.date).days == 1:
+                current_shift = get_shift_type_by_id(current.shift_type_id).code
+                next_shift = get_shift_type_by_id(next_assign.shift_type_id).code
+                
+                # Check forbidden transitions
+                if current_shift == "S" and next_shift == "F":
+                    emp_name = emp_dict[emp_id].full_name
+                    result.add_violation(
+                        f"{emp_name} has forbidden transition Spät->Früh on {current.date}->{next_assign.date} (only 8h rest)"
+                    )
+                elif current_shift == "N" and next_shift == "F":
+                    emp_name = emp_dict[emp_id].full_name
+                    result.add_violation(
+                        f"{emp_name} has forbidden transition Nacht->Früh on {current.date}->{next_assign.date} (0h rest)"
+                    )
+
+
+def validate_consecutive_shifts(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    emp_dict: Dict[int, Employee]
+):
+    """Validate max consecutive shifts (6 days, 5 nights)"""
+    # Group by employee
+    assignments_by_emp = {}
+    for assignment in assignments:
+        emp_id = assignment.employee_id
+        if emp_id not in assignments_by_emp:
+            assignments_by_emp[emp_id] = []
+        assignments_by_emp[emp_id].append(assignment)
+    
+    for emp_id, emp_assignments in assignments_by_emp.items():
+        emp_assignments.sort(key=lambda x: x.date)
+        emp_name = emp_dict[emp_id].full_name
+        
+        # Check max 6 consecutive working days
+        consecutive_days = 1
+        last_date = None
+        
+        for assignment in emp_assignments:
+            if last_date and (assignment.date - last_date).days == 1:
+                consecutive_days += 1
+                if consecutive_days > 6:
+                    result.add_violation(
+                        f"{emp_name} works more than 6 consecutive days (ends {assignment.date})"
+                    )
+            else:
+                consecutive_days = 1
+            last_date = assignment.date
+        
+        # Check max 5 consecutive night shifts
+        consecutive_nights = 0
+        for assignment in emp_assignments:
+            shift_code = get_shift_type_by_id(assignment.shift_type_id).code
+            if shift_code == "N":
+                consecutive_nights += 1
+                if consecutive_nights > 5:
+                    result.add_violation(
+                        f"{emp_name} works more than 5 consecutive night shifts (ends {assignment.date})"
+                    )
+            else:
+                consecutive_nights = 0
+
+
+def validate_working_hours(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    emp_dict: Dict[int, Employee],
+    start_date: date,
+    end_date: date
+):
+    """Validate working hours limits (48h/week, 192h/month)"""
+    # Group by employee
+    assignments_by_emp = {}
+    for assignment in assignments:
+        emp_id = assignment.employee_id
+        if emp_id not in assignments_by_emp:
+            assignments_by_emp[emp_id] = []
+        assignments_by_emp[emp_id].append(assignment)
+    
+    for emp_id, emp_assignments in assignments_by_emp.items():
+        emp_name = emp_dict[emp_id].full_name
+        
+        # Check weekly hours
+        weeks = {}
+        for assignment in emp_assignments:
+            # Get Monday of the week
+            monday = assignment.date - timedelta(days=assignment.date.weekday())
+            if monday not in weeks:
+                weeks[monday] = 0
+            
+            shift_type = get_shift_type_by_id(assignment.shift_type_id)
+            weeks[monday] += shift_type.hours
+        
+        for week_start, hours in weeks.items():
+            if hours > 48:
+                result.add_violation(
+                    f"{emp_name} works {hours:.1f} hours in week starting {week_start} (max 48h)"
+                )
+        
+        # Check monthly hours (30-day rolling window)
+        dates_with_hours = {}
+        for assignment in emp_assignments:
+            if assignment.date not in dates_with_hours:
+                dates_with_hours[assignment.date] = 0
+            shift_type = get_shift_type_by_id(assignment.shift_type_id)
+            dates_with_hours[assignment.date] += shift_type.hours
+        
+        # Check each 30-day window
+        current = start_date
+        while current <= end_date - timedelta(days=29):
+            window_end = current + timedelta(days=29)
+            hours_in_window = sum(
+                hours for d, hours in dates_with_hours.items()
+                if current <= d <= window_end
+            )
+            if hours_in_window > 192:
+                result.add_violation(
+                    f"{emp_name} works {hours_in_window:.1f} hours in 30-day period {current} to {window_end} (max 192h)"
+                )
+            current += timedelta(days=7)  # Check weekly increments
+
+
+def validate_staffing_requirements(
+    result: ValidationResult,
+    assignments_by_date: Dict[date, List[ShiftAssignment]],
+    emp_dict: Dict[int, Employee]
+):
+    """Validate minimum/maximum staffing per shift"""
+    from constraints import WEEKDAY_STAFFING, WEEKEND_STAFFING
+    
+    for d, day_assignments in assignments_by_date.items():
+        is_weekend = d.weekday() >= 5
+        staffing = WEEKEND_STAFFING if is_weekend else WEEKDAY_STAFFING
+        
+        # Count by shift type
+        shift_counts = {}
+        for assignment in day_assignments:
+            shift_code = get_shift_type_by_id(assignment.shift_type_id).code
+            
+            # Only count F, S, N for staffing requirements
+            if shift_code in ["F", "S", "N"]:
+                # Only count regular team members, not springers
+                emp = emp_dict[assignment.employee_id]
+                if not emp.is_springer:
+                    if shift_code not in shift_counts:
+                        shift_counts[shift_code] = 0
+                    shift_counts[shift_code] += 1
+        
+        # Validate each main shift
+        for shift_code in ["F", "S", "N"]:
+            count = shift_counts.get(shift_code, 0)
+            min_req = staffing[shift_code]["min"]
+            max_req = staffing[shift_code]["max"]
+            
+            if count < min_req:
+                result.add_violation(
+                    f"Insufficient staffing for {shift_code} shift on {d}: {count} (min {min_req})"
+                )
+            elif count > max_req:
+                result.add_violation(
+                    f"Overstaffing for {shift_code} shift on {d}: {count} (max {max_req})"
+                )
+
+
+def validate_special_functions(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    emp_dict: Dict[int, Employee]
+):
+    """Validate special function assignments (BMT, BSB)"""
+    # Group by date
+    by_date = {}
+    for assignment in assignments:
+        if assignment.date not in by_date:
+            by_date[assignment.date] = []
+        by_date[assignment.date].append(assignment)
+    
+    for d, day_assignments in by_date.items():
+        is_weekday = d.weekday() < 5
+        
+        if not is_weekday:
+            continue
+        
+        # Count BMT and BSB assignments
+        bmt_count = 0
+        bsb_count = 0
+        
+        for assignment in day_assignments:
+            shift_type = get_shift_type_by_id(assignment.shift_type_id)
+            emp = emp_dict[assignment.employee_id]
+            
+            if shift_type.code == "BMT":
+                bmt_count += 1
+                if not emp.is_brandmeldetechniker:
+                    result.add_violation(
+                        f"Employee {emp.full_name} assigned to BMT but not qualified on {d}"
+                    )
+            
+            if shift_type.code == "BSB":
+                bsb_count += 1
+                if not emp.is_brandschutzbeauftragter:
+                    result.add_violation(
+                        f"Employee {emp.full_name} assigned to BSB but not qualified on {d}"
+                    )
+        
+        # Should have exactly 1 BMT and 1 BSB on weekdays
+        if bmt_count != 1:
+            result.add_warning(f"BMT count on {d} is {bmt_count} (expected 1)")
+        
+        if bsb_count != 1:
+            result.add_warning(f"BSB count on {d} is {bsb_count} (expected 1)")
+
+
+def validate_springer_availability(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    employees: List[Employee]
+):
+    """Validate that at least one springer is available each day"""
+    springers = [emp for emp in employees if emp.is_springer]
+    
+    if not springers:
+        result.add_warning("No springers defined in the system")
+        return
+    
+    # Group assignments by date
+    by_date = {}
+    for assignment in assignments:
+        if assignment.date not in by_date:
+            by_date[assignment.date] = set()
+        by_date[assignment.date].add(assignment.employee_id)
+    
+    for d, assigned_emp_ids in by_date.items():
+        # Count how many springers are working
+        working_springers = sum(1 for s in springers if s.id in assigned_emp_ids)
+        available_springers = len(springers) - working_springers
+        
+        if available_springers < 1:
+            result.add_violation(
+                f"No springer available on {d} (all {len(springers)} are assigned)"
+            )
+
+
+if __name__ == "__main__":
+    # Test validation
+    from data_loader import generate_sample_data
+    from model import create_shift_planning_model
+    from solver import solve_shift_planning
+    from datetime import timedelta
+    
+    print("Generating sample data...")
+    employees, teams, absences = generate_sample_data()
+    
+    start = date.today()
+    end = start + timedelta(days=13)  # 2 weeks
+    
+    print("Creating and solving model...")
+    planning_model = create_shift_planning_model(employees, start, end, absences)
+    result = solve_shift_planning(planning_model, time_limit_seconds=60)
+    
+    if result:
+        assignments, special_functions = result
+        print(f"\nValidating {len(assignments)} assignments...")
+        
+        validation_result = validate_shift_plan(assignments, employees, absences, start, end)
+        validation_result.print_report()
+    else:
+        print("\nNo solution to validate!")

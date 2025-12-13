@@ -3,12 +3,15 @@ Flask Web API for shift planning system.
 Provides REST API endpoints compatible with the existing .NET Web UI.
 """
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, session
 from flask_cors import CORS
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict
 import sqlite3
 import json
+import hashlib
+import secrets
+from functools import wraps
 
 from data_loader import load_from_database, get_existing_assignments
 from model import create_shift_planning_model
@@ -29,6 +32,79 @@ class Database:
         return conn
 
 
+def hash_password(password: str) -> str:
+    """
+    Hash password using SHA256.
+    
+    Note: This is a simple implementation for development/migration from .NET.
+    For production, consider using bcrypt, scrypt, or Argon2 for better security.
+    """
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify password against hash"""
+    return hash_password(password) == password_hash
+
+
+def get_user_by_email(db, email: str) -> Optional[Dict]:
+    """Get user by email"""
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT u.*, GROUP_CONCAT(r.Name) as roles
+        FROM AspNetUsers u
+        LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+        LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
+        WHERE u.Email = ?
+        GROUP BY u.Id
+    """, (email,))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return {
+        'id': row['Id'],
+        'email': row['Email'],
+        'passwordHash': row['PasswordHash'],
+        'fullName': row['FullName'],
+        'lockoutEnd': row['LockoutEnd'],
+        'accessFailedCount': row['AccessFailedCount'],
+        'roles': row['roles'].split(',') if row['roles'] else []
+    }
+
+
+def require_auth(f):
+    """Decorator to require authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Authentication required'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def require_role(*required_roles):
+    """Decorator to require specific role(s)"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user_id' not in session:
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            user_roles = session.get('user_roles', [])
+            if not any(role in user_roles for role in required_roles):
+                return jsonify({'error': 'Insufficient permissions'}), 403
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
 def create_app(db_path: str = "dienstplan.db") -> Flask:
     """
     Create and configure Flask application.
@@ -40,9 +116,192 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         Configured Flask app
     """
     app = Flask(__name__, static_folder='wwwroot', static_url_path='')
-    CORS(app)  # Enable CORS for all routes
+    
+    # Configure session
+    # Use a consistent secret key (in production, load from environment variable)
+    import os
+    app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+    app.config['SESSION_COOKIE_NAME'] = 'dienstplan_session'
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    
+    CORS(app, supports_credentials=True)  # Enable CORS with credentials
     
     db = Database(db_path)
+    
+    # ============================================================================
+    # AUTHENTICATION ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/auth/login', methods=['POST'])
+    def login():
+        """Authenticate user and create session"""
+        try:
+            data = request.get_json()
+            email = data.get('email')
+            password = data.get('password')
+            remember_me = data.get('rememberMe', False)
+            
+            if not email or not password:
+                return jsonify({'error': 'Email und Passwort sind erforderlich'}), 400
+            
+            # Get user from database
+            user = get_user_by_email(db, email)
+            
+            if not user:
+                return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
+            
+            # Check if account is locked
+            if user['lockoutEnd']:
+                lockout_end = datetime.fromisoformat(user['lockoutEnd'])
+                if lockout_end > datetime.utcnow():
+                    return jsonify({'error': 'Konto ist gesperrt'}), 403
+            
+            # Verify password
+            if not verify_password(password, user['passwordHash']):
+                # Increment failed attempts
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE AspNetUsers 
+                    SET AccessFailedCount = AccessFailedCount + 1
+                    WHERE Id = ?
+                """, (user['id'],))
+                conn.commit()
+                conn.close()
+                
+                return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
+            
+            # Reset failed attempts on successful login
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE AspNetUsers 
+                SET AccessFailedCount = 0
+                WHERE Id = ?
+            """, (user['id'],))
+            conn.commit()
+            conn.close()
+            
+            # Create session
+            session['user_id'] = user['id']
+            session['user_email'] = user['email']
+            session['user_fullname'] = user['fullName']
+            session['user_roles'] = user['roles']
+            
+            if remember_me:
+                session.permanent = True
+            
+            return jsonify({
+                'success': True,
+                'user': {
+                    'email': user['email'],
+                    'fullName': user['fullName'],
+                    'roles': user['roles']
+                }
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Login error: {str(e)}")
+            return jsonify({'error': 'Anmeldefehler aufgetreten'}), 500
+    
+    @app.route('/api/auth/logout', methods=['POST'])
+    def logout():
+        """Logout user and clear session"""
+        session.clear()
+        return jsonify({'success': True})
+    
+    @app.route('/api/auth/current-user', methods=['GET'])
+    def get_current_user():
+        """Get currently authenticated user"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        return jsonify({
+            'email': session.get('user_email'),
+            'fullName': session.get('user_fullname'),
+            'roles': session.get('user_roles', [])
+        })
+    
+    @app.route('/api/auth/users', methods=['GET'])
+    @require_role('Admin')
+    def get_users():
+        """Get all users (Admin only)"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT u.Id, u.Email, u.FullName, u.LockoutEnd, u.AccessFailedCount,
+                   GROUP_CONCAT(r.Name) as roles
+            FROM AspNetUsers u
+            LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+            LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
+            GROUP BY u.Id
+        """)
+        
+        users = []
+        for row in cursor.fetchall():
+            users.append({
+                'id': row['Id'],
+                'email': row['Email'],
+                'fullName': row['FullName'],
+                'lockoutEnd': row['LockoutEnd'],
+                'accessFailedCount': row['AccessFailedCount'],
+                'roles': row['roles'].split(',') if row['roles'] else []
+            })
+        
+        conn.close()
+        return jsonify(users)
+    
+    @app.route('/api/auth/register', methods=['POST'])
+    @require_role('Admin')
+    def register_user():
+        """Register new user (Admin only)"""
+        try:
+            data = request.get_json()
+            email = data.get('email')
+            password = data.get('password')
+            full_name = data.get('fullName')
+            role = data.get('role', 'Mitarbeiter')
+            
+            if not email or not password:
+                return jsonify({'error': 'Email und Passwort sind erforderlich'}), 400
+            
+            # Check if user already exists
+            existing_user = get_user_by_email(db, email)
+            if existing_user:
+                return jsonify({'error': 'Benutzer existiert bereits'}), 400
+            
+            # Create user
+            user_id = secrets.token_hex(16)
+            password_hash = hash_password(password)
+            security_stamp = secrets.token_hex(16)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO AspNetUsers (Id, Email, NormalizedEmail, PasswordHash, SecurityStamp, FullName)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, email, email.upper(), password_hash, security_stamp, full_name))
+            
+            # Assign role
+            cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))
+            role_row = cursor.fetchone()
+            if role_row:
+                cursor.execute("""
+                    INSERT INTO AspNetUserRoles (UserId, RoleId)
+                    VALUES (?, ?)
+                """, (user_id, role_row['Id']))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'userId': user_id})
+            
+        except Exception as e:
+            app.logger.error(f"Register error: {str(e)}")
+            return jsonify({'error': 'Registrierungsfehler'}), 500
     
     # ============================================================================
     # EMPLOYEE ENDPOINTS

@@ -14,7 +14,11 @@ def open_browser(url, delay=2):
     """Open browser after a short delay to let server start"""
     time.sleep(delay)
     print(f"\n🌐 Opening browser at {url}...")
-    webbrowser.open(url)
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        print(f"⚠️  Could not automatically open browser: {e}")
+        print(f"Please manually open your browser and navigate to: {url}")
 
 def main():
     """Main launcher function"""
@@ -67,8 +71,25 @@ def main():
         print("\n\n👋 Shutting down server...")
         print("Thank you for using Dienstplan!")
         sys.exit(0)
+    except OSError as e:
+        if "Address already in use" in str(e) or "WinError 10048" in str(e):
+            print(f"\n❌ Error: Port {port} is already in use!")
+            print("   Another application is using this port.")
+            print("   Please close the other application or use a different port.")
+        else:
+            print(f"\n❌ Network error: {e}")
+        print("\nPress Enter to exit...")
+        input()
+        sys.exit(1)
+    except ImportError as e:
+        print(f"\n❌ Missing dependency: {e}")
+        print("   The application may be corrupted.")
+        print("   Please download a fresh copy from GitHub.")
+        print("\nPress Enter to exit...")
+        input()
+        sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Error starting server: {e}")
+        print(f"\n❌ Unexpected error starting server: {e}")
         print("\nPress Enter to exit...")
         input()
         sys.exit(1)

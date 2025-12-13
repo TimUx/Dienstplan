@@ -39,11 +39,14 @@ echo ""
 echo "[4/4] Finalizing..."
 
 # Determine executable name based on OS
-if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    EXECUTABLE="Dienstplan.exe"
-else
-    EXECUTABLE="Dienstplan"
-fi
+case "$OSTYPE" in
+    msys*|win32*|cygwin*|mingw*)
+        EXECUTABLE="Dienstplan.exe"
+        ;;
+    *)
+        EXECUTABLE="Dienstplan"
+        ;;
+esac
 
 if [ -f "dist/$EXECUTABLE" ]; then
     mv "dist/$EXECUTABLE" .

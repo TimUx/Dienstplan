@@ -50,8 +50,6 @@ if exist dist\Dienstplan.exe (
     echo ============================================================
     echo.
     echo Executable created: Dienstplan.exe
-    echo File size: 
-    dir Dienstplan.exe | find "Dienstplan.exe"
     echo.
     echo You can now distribute this executable.
     echo It includes Python and all dependencies.

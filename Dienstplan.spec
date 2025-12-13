@@ -32,8 +32,6 @@ a = Analysis(
         'flask',
         'flask_cors',
         'ortools',
-        'ortools.sat',
-        'ortools.sat.python',
         'ortools.sat.python.cp_model',
         'sqlite3',
         'dateutil',

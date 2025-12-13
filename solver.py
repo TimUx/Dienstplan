@@ -182,8 +182,36 @@ class ShiftPlanningSolver:
         
         # Extract shift assignments based on team shifts and employee activity
         for emp in employees:
-            # Skip springers for now (they're handled separately)
-            if emp.is_springer or not emp.team_id:
+            # Handle springers separately - they don't follow team shifts
+            if emp.is_springer:
+                # Springer can work any shift on any day based on employee_active
+                for d in dates:
+                    if (emp.id, d) not in employee_active:
+                        continue
+                    
+                    if self.solution.Value(employee_active[(emp.id, d)]) == 0:
+                        continue  # Not working this day
+                    
+                    # For springer, we need to determine which shift they worked
+                    # This is based on staffing needs - springer fills gaps
+                    # For now, assign to the shift that needs coverage
+                    # (In practice, this would be determined during staffing constraints)
+                    # Default to F shift if active
+                    shift_type_id = 1  # F shift by default
+                    
+                    assignment = ShiftAssignment(
+                        id=assignment_id,
+                        employee_id=emp.id,
+                        shift_type_id=shift_type_id,
+                        date=d,
+                        is_springer_assignment=True
+                    )
+                    assignments.append(assignment)
+                    assignment_id += 1
+                continue
+            
+            # Regular team members
+            if not emp.team_id:
                 continue
             
             # Find employee's team

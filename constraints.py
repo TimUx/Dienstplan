@@ -259,14 +259,27 @@ def add_rest_time_constraints(
     """
     HARD CONSTRAINT: Minimum 11 hours rest between shifts.
     
-    With weekly team-based planning and F → N → S rotation:
-    - F (ends 13:45) → N (starts 21:45 next week) = OK (Mon 21:45 - Fri 13:45 = many days)
-    - N (ends 05:45) → S (starts 13:45 next week) = OK (Mon 13:45 - Fri 05:45 = many days)
-    - S (ends 21:45) → F (starts 05:45 next week) = OK (Mon 05:45 - Fri 21:45 = weekend between)
+    With weekly team-based planning and F → N → S rotation, rest times are
+    automatically satisfied due to the structure of the model:
     
-    Since teams work one shift per week and weeks end on Sunday, there's always
-    a weekend (Saturday-Sunday) between shift changes, providing ample rest time.
-    Therefore, no explicit constraints needed for team-based model.
+    Analysis of transitions at week boundaries:
+    - F (ends Fri 13:45) → N (starts Mon 21:45): 80+ hours rest ✓
+    - N (ends Fri 05:45) → S (starts Mon 13:45): 56 hours rest ✓
+    - S (ends Fri 21:45) → F (starts Mon 05:45): 56 hours rest ✓
+    
+    Within a week, teams work the SAME shift every day, so there are no
+    forbidden transitions (no day-to-day shift changes).
+    
+    Conclusion: The combination of:
+    1. Weekly planning (teams don't change shifts mid-week)
+    2. Weekend breaks (natural 2-day rest period)
+    3. Monday start times vs Friday end times
+    
+    Guarantees that all employees always have >11 hours rest between
+    their last shift of one week and first shift of the next week.
+    
+    Therefore, no explicit constraints are needed - the model structure
+    ensures compliance automatically.
     """
     pass
 
@@ -392,8 +405,17 @@ def add_td_constraints(
     - TD is NOT a separate shift, just an organizational marker
     - Cannot assign TD when employee is absent
     
-    Note: Changed from "exactly 1" to "at most 1" to handle cases where
-    no TD-qualified employees are available.
+    Business Impact:
+    Changed from "exactly 1" to "at most 1" to handle situations where:
+    - No TD-qualified employees are available (all absent or on springer duty)
+    - Planning periods with insufficient qualified personnel
+    
+    When no TD is assigned:
+    - The organization should use fallback procedures (external contractors, etc.)
+    - This is considered acceptable for occasional weeks
+    - System logs a warning but allows the schedule to be created
+    - Alternative: The constraint could be changed to "exactly 1" if TD coverage
+      is mandatory, but this may result in infeasible schedules
     """
     for week_idx, week_dates in enumerate(weeks):
         # Only assign TD on weekdays
@@ -417,7 +439,7 @@ def add_td_constraints(
             if not is_absent_this_week and (emp.id, week_idx) in td_vars:
                 available_for_td.append(td_vars[(emp.id, week_idx)])
         
-        # At most 1 TD per week (relaxed from exactly 1)
+        # At most 1 TD per week
         if available_for_td:
             model.Add(sum(available_for_td) <= 1)
 

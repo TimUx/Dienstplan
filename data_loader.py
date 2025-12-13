@@ -124,24 +124,39 @@ def load_from_database(db_path: str = "dienstplan.db"):
         FROM Employees
     """)
     employees = []
+    
+    # Define column indices for clarity
+    COL_ID = 0
+    COL_VORNAME = 1
+    COL_NAME = 2
+    COL_PERSONALNUMMER = 3
+    COL_EMAIL = 4
+    COL_GEBURTSDATUM = 5
+    COL_FUNKTION = 6
+    COL_IS_SPRINGER = 7
+    COL_IS_FERIENJOBBER = 8
+    COL_IS_BMT = 9
+    COL_IS_BSB = 10
+    COL_TEAM_ID = 11
+    
     for row in cursor.fetchall():
         # TD qualification: employee is qualified if they have either BMT or BSB qualification
-        is_td = bool(row[9]) or bool(row[10])
+        is_td = bool(row[COL_IS_BMT]) or bool(row[COL_IS_BSB])
         
         emp = Employee(
-            id=row[0],
-            vorname=row[1],
-            name=row[2],
-            personalnummer=row[3],
-            email=row[4],
-            geburtsdatum=date.fromisoformat(row[5]) if row[5] else None,
-            funktion=row[6],
-            is_springer=bool(row[7]),
-            is_ferienjobber=bool(row[8]),
-            is_brandmeldetechniker=bool(row[9]),
-            is_brandschutzbeauftragter=bool(row[10]),
+            id=row[COL_ID],
+            vorname=row[COL_VORNAME],
+            name=row[COL_NAME],
+            personalnummer=row[COL_PERSONALNUMMER],
+            email=row[COL_EMAIL],
+            geburtsdatum=date.fromisoformat(row[COL_GEBURTSDATUM]) if row[COL_GEBURTSDATUM] else None,
+            funktion=row[COL_FUNKTION],
+            is_springer=bool(row[COL_IS_SPRINGER]),
+            is_ferienjobber=bool(row[COL_IS_FERIENJOBBER]),
+            is_brandmeldetechniker=bool(row[COL_IS_BMT]),
+            is_brandschutzbeauftragter=bool(row[COL_IS_BSB]),
             is_td_qualified=is_td,
-            team_id=row[11]
+            team_id=row[COL_TEAM_ID]
         )
         employees.append(emp)
         

@@ -2,9 +2,9 @@
 OR-Tools CP-SAT model builder for shift planning.
 Creates decision variables and orchestrates constraint addition.
 
-CRITICAL: This model implements TEAM-BASED shift planning where:
+Important: This model implements team-based shift planning where:
 - Teams are the primary planning unit, not individual employees
-- All members of a team work the SAME shift during a week
+- All members of a team work the same shift during a week
 - Teams rotate weekly in fixed pattern: F → N → S
 """
 
@@ -94,13 +94,13 @@ class ShiftPlanningModel:
         """
         Create all decision variables for the model.
         
-        TEAM-BASED MODEL:
+        Team-based model structure:
         - team_shift[team_id, week_idx, shift]: Team has this shift in this week
         - employee_active[emp_id, date]: Employee works on this date (derived from team shift)
         - td_vars[emp_id, week_idx]: Employee has TD (Tagdienst) duty in this week
         
-        CRITICAL: Employees do NOT have individual shift variables.
-        Their shifts are ALWAYS determined by their team's shift.
+        Important: Employees do not have individual shift variables.
+        Their shifts are always determined by their team's shift.
         """
         
         # CORE VARIABLE: Team shift assignment per week

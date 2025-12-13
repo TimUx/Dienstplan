@@ -22,14 +22,19 @@ def open_browser(url, delay=2):
 
 def main():
     """Main launcher function"""
-    # Note: application_path is prepared for future resource loading
-    # Currently not used as Flask serves static files from wwwroot
+    # Determine application and data paths
     if getattr(sys, 'frozen', False):
         # Running in a bundle (PyInstaller)
         application_path = Path(sys._MEIPASS)
+        # Data directory is next to the executable
+        data_dir = Path(sys.executable).parent / "data"
     else:
         # Running in normal Python environment
         application_path = Path(__file__).parent
+        data_dir = application_path / "data"
+    
+    # Ensure data directory exists
+    data_dir.mkdir(exist_ok=True)
     
     print("=" * 60)
     print("DIENSTPLAN - Schichtverwaltungssystem")
@@ -42,7 +47,7 @@ def main():
     # Configuration
     host = "127.0.0.1"  # localhost only for security
     port = 5000
-    db_path = "dienstplan.db"
+    db_path = str(data_dir / "dienstplan.db")
     
     # Check if database exists, if not initialize it
     if not os.path.exists(db_path):

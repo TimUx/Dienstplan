@@ -11,6 +11,7 @@ from pathlib import Path
 # Get the application directory
 app_dir = Path(SPECPATH)
 wwwroot_dir = app_dir / 'wwwroot'
+data_dir = app_dir / 'data'
 
 # Collect all wwwroot files
 wwwroot_files = []
@@ -21,13 +22,25 @@ if wwwroot_dir.exists():
             rel_path = file_path.relative_to(app_dir)
             wwwroot_files.append((str(file_path), str(rel_path.parent)))
 
+# Collect data directory files (database)
+data_files = []
+if data_dir.exists():
+    for root, dirs, files in os.walk(data_dir):
+        for file in files:
+            file_path = Path(root) / file
+            rel_path = file_path.relative_to(app_dir)
+            data_files.append((str(file_path), str(rel_path.parent)))
+
+# Combine all data files
+all_data_files = wwwroot_files + data_files
+
 block_cipher = None
 
 a = Analysis(
     ['launcher.py'],
     pathex=[],
     binaries=[],
-    datas=wwwroot_files,
+    datas=all_data_files,
     hiddenimports=[
         'flask',
         'flask_cors',

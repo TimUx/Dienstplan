@@ -33,7 +33,12 @@ class Database:
 
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA256"""
+    """
+    Hash password using SHA256.
+    
+    Note: This is a simple implementation for development/migration from .NET.
+    For production, consider using bcrypt, scrypt, or Argon2 for better security.
+    """
     return hashlib.sha256(password.encode()).hexdigest()
 
 
@@ -113,7 +118,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     app = Flask(__name__, static_folder='wwwroot', static_url_path='')
     
     # Configure session
-    app.config['SECRET_KEY'] = secrets.token_hex(32)
+    # Use a consistent secret key (in production, load from environment variable)
+    import os
+    app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['SESSION_COOKIE_NAME'] = 'dienstplan_session'
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'

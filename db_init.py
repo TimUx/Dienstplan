@@ -223,7 +223,9 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
 def hash_password(password: str) -> str:
     """
     Simple password hashing using SHA256.
-    Note: In production, use bcrypt or Argon2.
+    
+    Note: This matches the web_api.py implementation for consistency.
+    For production, consider upgrading to bcrypt, scrypt, or Argon2.
     """
     return hashlib.sha256(password.encode()).hexdigest()
 

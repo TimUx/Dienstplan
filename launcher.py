@@ -22,7 +22,8 @@ def open_browser(url, delay=2):
 
 def main():
     """Main launcher function"""
-    # Set up paths for bundled application
+    # Note: application_path is prepared for future resource loading
+    # Currently not used as Flask serves static files from wwwroot
     if getattr(sys, 'frozen', False):
         # Running in a bundle (PyInstaller)
         application_path = Path(sys._MEIPASS)

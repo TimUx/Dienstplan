@@ -16,6 +16,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Check Python version is 3.9 or higher
+python -c "import sys; exit(0 if sys.version_info >= (3, 9) else 1)" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Python 3.9 or higher is required
+    echo Current version:
+    python --version
+    pause
+    exit /b 1
+)
+
 echo [1/4] Installing dependencies...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt

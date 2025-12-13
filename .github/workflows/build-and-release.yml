@@ -74,8 +74,11 @@ jobs:
         echo "CHANGELOG<<EOF" >> $env:GITHUB_OUTPUT
         echo "## Changes in this release" >> $env:GITHUB_OUTPUT
         echo "" >> $env:GITHUB_OUTPUT
-        git log --pretty=format:"- %s (%h)" -10 >> $env:GITHUB_OUTPUT
-        if ($LASTEXITCODE -ne 0) { echo "- Initial release" >> $env:GITHUB_OUTPUT }
+        try {
+          git log --pretty=format:"- %s (%h)" -10 >> $env:GITHUB_OUTPUT
+        } catch {
+          echo "- Initial release" >> $env:GITHUB_OUTPUT
+        }
         echo "" >> $env:GITHUB_OUTPUT
         echo "EOF" >> $env:GITHUB_OUTPUT
     

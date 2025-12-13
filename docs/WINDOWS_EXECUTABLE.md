@@ -123,7 +123,7 @@ Um auf eine neue Version zu aktualisieren:
 Falls Sie die Executable selbst bauen möchten:
 
 **Voraussetzungen:**
-- Python 3.9+ installiert
+- Python 3.11+ installiert (empfohlen) oder mindestens Python 3.9
 - Git installiert
 
 **Schritte:**

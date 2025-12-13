@@ -5,7 +5,7 @@ This guide explains how to build the Dienstplan Windows standalone executable fr
 ## Prerequisites
 
 - **Windows OS** (or cross-compilation setup)
-- **Python 3.9 or higher** installed
+- **Python 3.11 or higher** recommended (minimum 3.9)
 - **Git** (optional, for cloning the repository)
 - **Internet connection** (for downloading dependencies)
 

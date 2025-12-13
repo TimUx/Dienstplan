@@ -71,10 +71,10 @@ class ShiftPlanningSolver:
         add_rest_time_constraints(model, x, employees, dates, shift_codes)
         
         print("  - Consecutive shifts constraints (max 6 days, max 5 nights)")
-        add_consecutive_shifts_constraints(model, x, employees, dates, shift_codes)
+        add_consecutive_shifts_constraints(model, x, bmt_vars, bsb_vars, employees, dates, shift_codes)
         
         print("  - Working hours constraints (48h/week, 192h/month)")
-        add_working_hours_constraints(model, x, employees, dates, shift_codes, shift_types)
+        add_working_hours_constraints(model, x, bmt_vars, bsb_vars, employees, dates, shift_codes, shift_types)
         
         print("  - Special function constraints (BMT, BSB)")
         add_special_function_constraints(model, x, bmt_vars, bsb_vars, employees, dates, absences)

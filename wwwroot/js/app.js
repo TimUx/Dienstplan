@@ -1187,11 +1187,12 @@ function displayEmployees(employees) {
                     <span><strong>Personalnr:</strong> ${e.personalnummer}</span>
                     ${e.email ? `<span><strong>E-Mail:</strong> ${e.email}</span>` : ''}
                     ${e.geburtsdatum ? `<span><strong>Geburtsdatum:</strong> ${birthdateStr}</span>` : ''}
-                    ${e.funktion ? `<span><strong>Funktion:</strong> ${e.funktion}</span>` : ''}
                     <span><strong>Team:</strong> ${e.teamName || 'Kein Team'}</span>
                     <div class="badge-row">
                         ${e.isSpringer ? '<span class="badge badge-springer">Springer</span>' : ''}
                         ${e.isFerienjobber ? '<span class="badge badge-ferienjobber">Ferienjobber</span>' : ''}
+                        ${e.isBrandmeldetechniker ? '<span class="badge badge-bmt">BMT</span>' : ''}
+                        ${e.isBrandschutzbeauftragter ? '<span class="badge badge-bsb">BSB</span>' : ''}
                     </div>
                 </div>
                 ${canEdit ? `
@@ -1250,10 +1251,11 @@ async function editEmployee(id) {
         document.getElementById('personalnummer').value = employee.personalnummer;
         document.getElementById('email').value = employee.email || '';
         document.getElementById('geburtsdatum').value = employee.geburtsdatum ? employee.geburtsdatum.split('T')[0] : '';
-        document.getElementById('funktion').value = employee.funktion || '';
         document.getElementById('teamId').value = employee.teamId || '';
         document.getElementById('isSpringer').checked = employee.isSpringer;
         document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
+        document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
+        document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
         
         document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
         document.getElementById('employeeModal').style.display = 'block';
@@ -1323,10 +1325,11 @@ async function saveEmployee(event) {
         personalnummer: document.getElementById('personalnummer').value,
         email: document.getElementById('email').value || null,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
-        funktion: document.getElementById('funktion').value || null,
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
         isSpringer: document.getElementById('isSpringer').checked,
-        isFerienjobber: document.getElementById('isFerienjobber').checked
+        isFerienjobber: document.getElementById('isFerienjobber').checked,
+        isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
+        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
     };
     
     try {

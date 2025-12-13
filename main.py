@@ -190,6 +190,20 @@ def main():
     
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
     
+    # Database initialization command
+    init_parser = subparsers.add_parser("init-db", help="Initialize database schema")
+    init_parser.add_argument(
+        "--db",
+        type=str,
+        default="dienstplan.db",
+        help="Path to SQLite database (default: dienstplan.db)"
+    )
+    init_parser.add_argument(
+        "--with-sample-data",
+        action="store_true",
+        help="Include sample teams and data"
+    )
+    
     # CLI planning command
     plan_parser = subparsers.add_parser("plan", help="Run shift planning")
     plan_parser.add_argument(
@@ -250,7 +264,12 @@ def main():
     
     args = parser.parse_args()
     
-    if args.command == "plan":
+    if args.command == "init-db":
+        from db_init import initialize_database
+        initialize_database(args.db, with_sample_data=args.with_sample_data)
+        return 0
+    
+    elif args.command == "plan":
         start_date = date.fromisoformat(args.start_date)
         end_date = date.fromisoformat(args.end_date)
         return run_cli_planning(

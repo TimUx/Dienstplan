@@ -52,6 +52,10 @@ def main():
             from db_init import initialize_database
             initialize_database(db_path, with_sample_data=True)
             print()
+        except ImportError as e:
+            print(f"⚠️  Could not import database initialization module: {e}")
+            print("   The application may be corrupted.")
+            print()
         except Exception as e:
             print(f"⚠️  Error initializing database: {e}")
             print("   The application may not work correctly.")

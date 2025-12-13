@@ -1148,17 +1148,6 @@ async function exportScheduleToCsv() {
         alert(`Fehler beim CSV-Export: ${error.message}`);
     }
 }
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an, um den Dienstplan als Excel zu exportieren.');
-        } else {
-            alert('Fehler beim Excel-Export. Bitte versuchen Sie es erneut.');
-        }
-    } catch (error) {
-        alert(`Fehler beim Excel-Export: ${error.message}`);
-    }
-}
 
 // Employee Management
 async function loadEmployees() {

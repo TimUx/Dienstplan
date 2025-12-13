@@ -15,6 +15,12 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     """
     Generate sample data for testing the shift planning system.
     
+    According to requirements:
+    - 17 employees total
+    - 3 teams with 5 members each (15 employees)
+    - 2 springers (not in teams)
+    - TD-qualified employees (combining BMT/BSB roles)
+    
     Returns:
         Tuple of (employees, teams, absences)
     """
@@ -26,10 +32,10 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     
     teams = [team_alpha, team_beta, team_gamma]
     
-    # Create employees (15 regular + 2 springers + 2 special roles)
+    # Create employees (15 in teams + 2 springers = 17 total)
     employees = []
     
-    # Team Alpha (5 members) - NO special functions for team members
+    # Team Alpha (5 members)
     employees.extend([
         Employee(1, "Max", "Müller", "1001", team_id=1),
         Employee(2, "Anna", "Schmidt", "1002", team_id=1),
@@ -38,7 +44,7 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(5, "Tom", "Wagner", "1005", team_id=1),
     ])
     
-    # Team Beta (5 members) - NO special functions for team members
+    # Team Beta (5 members)
     employees.extend([
         Employee(6, "Julia", "Becker", "2001", team_id=2),
         Employee(7, "Michael", "Schulz", "2002", team_id=2),
@@ -47,7 +53,7 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(10, "Laura", "Bauer", "2005", team_id=2),
     ])
     
-    # Team Gamma (5 members) - NO special functions for team members
+    # Team Gamma (5 members)
     employees.extend([
         Employee(11, "Markus", "Richter", "3001", team_id=3),
         Employee(12, "Stefanie", "Klein", "3002", team_id=3),
@@ -56,18 +62,10 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(15, "Christian", "Neumann", "3005", team_id=3),
     ])
     
-    # Springers (backup workers - 2 people without functions)
+    # Springers (2 backup workers, one is TD-qualified)
     employees.extend([
-        Employee(16, "Robert", "Franke", "S001", is_springer=True, team_id=None),
+        Employee(16, "Robert", "Franke", "S001", is_springer=True, team_id=None, is_td_qualified=True),
         Employee(17, "Thomas", "Zimmermann", "S002", is_springer=True, team_id=None),
-    ])
-    
-    # People OUTSIDE teams with special functions (3 people)
-    employees.extend([
-        Employee(18, "Maria", "Lange", "F001", team_id=None, is_brandmeldetechniker=True),
-        Employee(19, "Katharina", "Krüger", "F002", team_id=None, is_brandschutzbeauftragter=True),
-        # Employee with BOTH special functions
-        Employee(20, "Stefan", "Bauer", "F003", team_id=None, is_brandmeldetechniker=True, is_brandschutzbeauftragter=True),
     ])
     
     # Assign employees to teams
@@ -127,6 +125,9 @@ def load_from_database(db_path: str = "dienstplan.db"):
     """)
     employees = []
     for row in cursor.fetchall():
+        # TD qualification: employee is qualified if they have either BMT or BSB qualification
+        is_td = bool(row[9]) or bool(row[10])
+        
         emp = Employee(
             id=row[0],
             vorname=row[1],
@@ -139,6 +140,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
             is_ferienjobber=bool(row[8]),
             is_brandmeldetechniker=bool(row[9]),
             is_brandschutzbeauftragter=bool(row[10]),
+            is_td_qualified=is_td,
             team_id=row[11]
         )
         employees.append(emp)
@@ -229,6 +231,8 @@ if __name__ == "__main__":
             qualifications = []
             if emp.is_springer:
                 qualifications.append("Springer")
+            if emp.is_td_qualified:
+                qualifications.append("TD")
             if emp.is_brandmeldetechniker:
                 qualifications.append("BMT")
             if emp.is_brandschutzbeauftragter:

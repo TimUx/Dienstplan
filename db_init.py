@@ -320,6 +320,55 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     print("✅ Sample teams initialized")
 
 
+def initialize_sample_employees(db_path: str = "dienstplan.db"):
+    """Initialize sample employees"""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Sample employees data
+    employees = [
+        # Team Alpha (TeamId=1)
+        ("Max", "Müller", "1001", "max.mueller@fritzwinter.de", "1985-03-15", "Techniker", 0, 0, 0, 0, 1),
+        ("Anna", "Schmidt", "1002", "anna.schmidt@fritzwinter.de", "1990-07-22", "Techniker", 0, 0, 1, 0, 1),
+        ("Peter", "Weber", "1003", "peter.weber@fritzwinter.de", "1988-11-03", "Techniker", 0, 0, 0, 0, 1),
+        ("Lisa", "Meyer", "1004", "lisa.meyer@fritzwinter.de", "1992-05-18", "Techniker", 0, 0, 0, 1, 1),
+        ("Tom", "Wagner", "1005", "tom.wagner@fritzwinter.de", "1987-09-27", "Techniker", 0, 0, 0, 0, 1),
+        
+        # Team Beta (TeamId=2)
+        ("Julia", "Becker", "2001", "julia.becker@fritzwinter.de", "1991-01-10", "Techniker", 0, 0, 1, 0, 2),
+        ("Michael", "Schulz", "2002", "michael.schulz@fritzwinter.de", "1986-06-14", "Techniker", 0, 0, 0, 0, 2),
+        ("Sarah", "Hoffmann", "2003", "sarah.hoffmann@fritzwinter.de", "1989-12-08", "Techniker", 0, 0, 0, 0, 2),
+        ("Daniel", "Koch", "2004", "daniel.koch@fritzwinter.de", "1993-04-25", "Techniker", 0, 0, 0, 1, 2),
+        ("Laura", "Bauer", "2005", "laura.bauer@fritzwinter.de", "1990-08-17", "Techniker", 0, 0, 0, 0, 2),
+        
+        # Team Gamma (TeamId=3)
+        ("Markus", "Richter", "3001", "markus.richter@fritzwinter.de", "1984-02-20", "Techniker", 0, 0, 0, 0, 3),
+        ("Stefanie", "Klein", "3002", "stefanie.klein@fritzwinter.de", "1992-10-05", "Techniker", 0, 0, 1, 0, 3),
+        ("Andreas", "Wolf", "3003", "andreas.wolf@fritzwinter.de", "1988-07-12", "Techniker", 0, 0, 0, 0, 3),
+        ("Nicole", "Schröder", "3004", "nicole.schroeder@fritzwinter.de", "1991-03-29", "Techniker", 0, 0, 0, 0, 3),
+        ("Christian", "Neumann", "3005", "christian.neumann@fritzwinter.de", "1987-11-16", "Techniker", 0, 0, 0, 1, 3),
+        
+        # Springers (no team)
+        ("Robert", "Franke", "S001", "robert.franke@fritzwinter.de", "1985-05-08", "Springer", 1, 0, 0, 0, None),
+        ("Maria", "Lange", "S002", "maria.lange@fritzwinter.de", "1990-09-24", "Springer", 1, 0, 1, 0, None),
+        ("Thomas", "Zimmermann", "S003", "thomas.zimmermann@fritzwinter.de", "1986-12-11", "Springer", 1, 0, 0, 0, None),
+        ("Katharina", "Krüger", "S004", "katharina.krueger@fritzwinter.de", "1989-06-30", "Springer", 1, 0, 0, 1, None),
+    ]
+    
+    for vorname, name, personalnummer, email, geburtsdatum, funktion, is_springer, is_ferienjobber, is_bmt, is_bsb, team_id in employees:
+        cursor.execute("""
+            INSERT OR IGNORE INTO Employees 
+            (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
+             IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, TeamId)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (vorname, name, personalnummer, email, geburtsdatum, funktion, 
+              is_springer, is_ferienjobber, is_bmt, is_bsb, team_id))
+    
+    conn.commit()
+    conn.close()
+    print("✅ Sample employees initialized")
+
+
 def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool = True):
     """
     Initialize complete database with schema and optional sample data.
@@ -346,6 +395,8 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
     if with_sample_data:
         # Initialize sample teams
         initialize_sample_teams(db_path)
+        # Initialize sample employees
+        initialize_sample_employees(db_path)
     
     print("=" * 60)
     print("✅ Database initialization complete!")

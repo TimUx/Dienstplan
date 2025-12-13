@@ -32,6 +32,7 @@ This command will:
 - ✅ Create default admin user
 - ✅ Add standard shift types (F, S, N, Z, BMT, BSB, K, U, L)
 - ✅ Add sample teams (Team Alpha, Beta, Gamma)
+- ✅ Add 19 sample employees (15 regular + 4 springers with qualifications)
 
 **Default Admin Credentials:**
 - **Email**: `admin@fritzwinter.de`
@@ -41,13 +42,13 @@ This command will:
 
 ### Alternative: Initialize Without Sample Data
 
-If you don't want sample teams:
+If you don't want sample teams and employees:
 
 ```bash
 python main.py init-db
 ```
 
-This will only create the schema, roles, admin user, and shift types.
+This will only create the schema, roles, admin user, and shift types (no sample teams or employees).
 
 ## Step 3: Start the Web Server
 
@@ -184,11 +185,13 @@ python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --db /path/to/
 
 ### Database Table Errors
 
-If you see errors like "no such table: Teams", you need to initialize the database:
+If you see errors like "no such table: Teams" or "no such table: AspNetUsers", you need to initialize the database:
 
 ```bash
 python main.py init-db --with-sample-data
 ```
+
+This will create all required tables and populate them with sample data.
 
 ### Port Already in Use
 

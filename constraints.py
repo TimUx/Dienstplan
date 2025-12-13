@@ -582,11 +582,15 @@ def add_team_rotation_constraints(
             
             # HARD CONSTRAINT: Each team member can ONLY work their team's assigned shift
             # (or no shift due to absence, BMT/BSB, etc.)
+            # Optimization: Create one constraint per (employee, week) that sums all non-assigned shifts = 0
             for emp in team_emps:
+                # Collect all shift variables for non-assigned shifts this week
+                non_assigned_shifts = []
                 for d in weekday_dates:
-                    # For each shift type that is NOT the assigned shift
                     for other_shift in shift_codes:
-                        if other_shift != assigned_shift:
-                            # Team member cannot work other shifts this week
-                            if (emp.id, d, other_shift) in x:
-                                model.Add(x[(emp.id, d, other_shift)] == 0)
+                        if other_shift != assigned_shift and (emp.id, d, other_shift) in x:
+                            non_assigned_shifts.append(x[(emp.id, d, other_shift)])
+                
+                # Single constraint: sum of all non-assigned shifts must be 0
+                if non_assigned_shifts:
+                    model.Add(sum(non_assigned_shifts) == 0)

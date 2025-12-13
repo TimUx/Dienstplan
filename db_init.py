@@ -411,6 +411,14 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
 
 if __name__ == "__main__":
     import sys
+    import argparse
     
-    db_path = sys.argv[1] if len(sys.argv) > 1 else "dienstplan.db"
-    initialize_database(db_path, with_sample_data=True)
+    parser = argparse.ArgumentParser(description='Initialize Dienstplan database')
+    parser.add_argument('db_path', nargs='?', default='dienstplan.db', 
+                       help='Path to database file (default: dienstplan.db)')
+    parser.add_argument('--with-sample-data', '--sample-data', action='store_true',
+                       help='Include sample data (teams and employees)')
+    
+    args = parser.parse_args()
+    
+    initialize_database(args.db_path, with_sample_data=args.with_sample_data)

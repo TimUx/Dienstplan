@@ -28,6 +28,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Create production database
+      run: |
+        mkdir -p data
+        python db_init.py data\dienstplan.db
+    
     - name: Test Python modules
       run: |
         python -c "import ortools; print('OR-Tools:', ortools.__version__)"
@@ -51,6 +56,7 @@ jobs:
       run: |
         mkdir release
         Copy-Item dist\Dienstplan.exe release\
+        Copy-Item -Recurse data release\
         Copy-Item README.md release\
         Copy-Item LICENSE release\
         echo "Dienstplan v${{ steps.version.outputs.VERSION }}" > release\VERSION.txt
@@ -59,6 +65,14 @@ jobs:
         echo "1. Double-click Dienstplan.exe" >> release\VERSION.txt
         echo "2. The web browser will open automatically" >> release\VERSION.txt
         echo "3. Default URL: http://localhost:5000" >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "Database Location: data\dienstplan.db" >> release\VERSION.txt
+        echo "The database is persistent and will retain all your data." >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "Default Login:" >> release\VERSION.txt
+        echo "  Email: admin@fritzwinter.de" >> release\VERSION.txt
+        echo "  Password: Admin123!" >> release\VERSION.txt
+        echo "  IMPORTANT: Change the password after first login!" >> release\VERSION.txt
         echo "" >> release\VERSION.txt
         echo "No Python installation required!" >> release\VERSION.txt
     
@@ -106,20 +120,30 @@ jobs:
           
           **Keine Installation von Python oder anderen Abhängigkeiten erforderlich!**
           
+          ### Datenbank
+          - **Speicherort**: `data/dienstplan.db`
+          - **Persistenz**: Die Datenbank ist persistent und behält alle Ihre Daten
+          - **Standard-Login**:
+            - E-Mail: `admin@fritzwinter.de`
+            - Passwort: `Admin123!`
+            - ⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
+          
           ### Alternative: Python (für alle Betriebssysteme)
           Falls Sie Python bereits installiert haben oder eine andere Plattform verwenden:
           ```bash
           pip install -r requirements.txt
+          python main.py init-db
           python main.py serve
           ```
           
           ## ✨ Features
           - ✅ Standalone Windows Executable (keine Abhängigkeiten)
+          - ✅ Produktionsfähige, persistente SQLite-Datenbank
           - ✅ Automatischer Start des Webservers
           - ✅ Automatisches Öffnen des Browsers
           - ✅ Google OR-Tools für optimale Schichtplanung
           - ✅ Responsive Web-UI für Desktop & Mobile
-          - ✅ SQLite Datenbank (keine Serverinstallation nötig)
+          - ✅ Vollständige Benutzerverwaltung mit Rollen
           
           ${{ steps.changelog.outputs.CHANGELOG }}
         files: |

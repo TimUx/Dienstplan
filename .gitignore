@@ -34,6 +34,9 @@ launcher
 *.db-shm
 *.db-wal
 
+# BUT: Allow the production database template
+!data/dienstplan.db
+
 # Build artifacts
 publish/
 release/

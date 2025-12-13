@@ -1,11 +1,20 @@
 @echo off
 REM Build script for creating standalone Windows executable
 REM This script uses PyInstaller to bundle the application
+REM
+REM Usage:
+REM   build_windows.bat              - Build with empty database (default)
+REM   build_windows.bat --sample-data - Build with sample data included
 
 echo ============================================================
 echo Dienstplan - Windows Executable Builder
 echo ============================================================
 echo.
+
+REM Parse command line arguments
+set INCLUDE_SAMPLE_DATA=0
+if "%1"=="--sample-data" set INCLUDE_SAMPLE_DATA=1
+if "%1"=="--with-sample-data" set INCLUDE_SAMPLE_DATA=1
 
 REM Check if Python is installed
 python --version >nul 2>&1
@@ -36,13 +45,30 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] Cleaning previous build...
+echo [2/5] Cleaning previous build...
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist Dienstplan.exe del /q Dienstplan.exe
+if exist data\dienstplan.db del /q data\dienstplan.db
 
 echo.
-echo [3/4] Building executable with PyInstaller...
+echo [3/5] Creating production database...
+if not exist data mkdir data
+if %INCLUDE_SAMPLE_DATA%==1 (
+    echo Creating database WITH sample data...
+    python db_init.py data\dienstplan.db --with-sample-data
+) else (
+    echo Creating empty production database...
+    python db_init.py data\dienstplan.db
+)
+if errorlevel 1 (
+    echo ERROR: Failed to create database
+    pause
+    exit /b 1
+)
+
+echo.
+echo [4/5] Building executable with PyInstaller...
 python -m PyInstaller Dienstplan.spec
 if errorlevel 1 (
     echo ERROR: PyInstaller build failed
@@ -51,7 +77,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/4] Finalizing...
+echo [5/5] Finalizing...
 if exist dist\Dienstplan.exe (
     move dist\Dienstplan.exe .
     echo.
@@ -60,8 +86,13 @@ if exist dist\Dienstplan.exe (
     echo ============================================================
     echo.
     echo Executable created: Dienstplan.exe
+    if %INCLUDE_SAMPLE_DATA%==1 (
+        echo Database: data\dienstplan.db (WITH sample data)
+    ) else (
+        echo Database: data\dienstplan.db (empty, production-ready)
+    )
     echo.
-    echo You can now distribute this executable.
+    echo You can now distribute this executable with the data folder.
     echo It includes Python and all dependencies.
     echo.
     echo To test: Double-click Dienstplan.exe

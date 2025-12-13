@@ -25,16 +25,29 @@ def main():
     # Determine application and data paths
     if getattr(sys, 'frozen', False):
         # Running in a bundle (PyInstaller)
-        application_path = Path(sys._MEIPASS)
-        # Data directory is next to the executable
-        data_dir = Path(sys.executable).parent / "data"
+        bundle_dir = Path(sys._MEIPASS)
+        # Data directory should be next to the executable for persistence
+        exe_dir = Path(sys.executable).parent
+        data_dir = exe_dir / "data"
+        
+        # If data directory doesn't exist next to executable, create it
+        if not data_dir.exists():
+            data_dir.mkdir(exist_ok=True)
+            
+        # Check if we need to copy the bundled database template
+        db_path = data_dir / "dienstplan.db"
+        bundled_db = bundle_dir / "data" / "dienstplan.db"
+        
+        if not db_path.exists() and bundled_db.exists():
+            # Copy bundled database template to persistent location
+            import shutil
+            print(f"📋 Copying database template to: {data_dir}")
+            shutil.copy2(bundled_db, db_path)
     else:
         # Running in normal Python environment
         application_path = Path(__file__).parent
         data_dir = application_path / "data"
-    
-    # Ensure data directory exists
-    data_dir.mkdir(exist_ok=True)
+        data_dir.mkdir(exist_ok=True)
     
     print("=" * 60)
     print("DIENSTPLAN - Schichtverwaltungssystem")
@@ -55,7 +68,8 @@ def main():
         print()
         try:
             from db_init import initialize_database
-            initialize_database(db_path, with_sample_data=True)
+            # Initialize without sample data (production-ready empty database)
+            initialize_database(db_path, with_sample_data=False)
             print()
         except ImportError as e:
             print(f"⚠️  Could not import database initialization module: {e}")

@@ -44,11 +44,22 @@ def main():
     port = 5000
     db_path = "dienstplan.db"
     
-    # Check if database exists, if not inform user
+    # Check if database exists, if not initialize it
     if not os.path.exists(db_path):
-        print("ℹ️  No database found. A new database will be created.")
-        print("   Sample data can be generated via the web interface or CLI.")
+        print("ℹ️  No database found. Initializing new database...")
         print()
+        try:
+            from db_init import initialize_database
+            initialize_database(db_path, with_sample_data=True)
+            print()
+        except ImportError as e:
+            print(f"⚠️  Could not import database initialization module: {e}")
+            print("   The application may be corrupted.")
+            print()
+        except Exception as e:
+            print(f"⚠️  Error initializing database: {e}")
+            print("   The application may not work correctly.")
+            print()
     
     # Start browser opener in background thread
     url = f"http://{host}:{port}"

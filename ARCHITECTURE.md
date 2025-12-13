@@ -2,450 +2,500 @@
 
 ## Übersicht
 
-Das Dienstplan-System folgt einer mehrschichtigen Clean Architecture mit klarer Trennung der Verantwortlichkeiten.
+Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schichtplanung mit Google OR-Tools als Constraint-Solver. Die Architektur folgt klaren Prinzipien der Trennung von Verantwortlichkeiten.
 
 ## Architekturprinzipien
 
-### 1. Layer-Trennung
+### 1. Modulare Struktur
 
 ```
-┌─────────────────────────────────────────┐
-│         Dienstplan.Web                  │
-│    (Presentation Layer)                 │
-│  - Controllers (REST API)               │
-│  - Web UI (HTML/CSS/JS)                 │
-└─────────────┬───────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────┐
-│      Dienstplan.Application             │
-│    (Application Layer)                  │
-│  - Services (Business Logic)            │
-│  - DTOs (Data Transfer)                 │
-└─────────────┬───────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────┐
-│      Dienstplan.Domain                  │
-│    (Domain Layer)                       │
-│  - Entities (Core Models)               │
-│  - Rules (Business Rules)               │
-│  - Interfaces                           │
-└─────────────────────────────────────────┘
-              ▲
-              │
-┌─────────────┴───────────────────────────┐
-│    Dienstplan.Infrastructure            │
-│    (Infrastructure Layer)               │
-│  - DbContext (EF Core)                  │
-│  - Repositories (Data Access)           │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                     Web Layer                            │
+│                    (web_api.py)                          │
+│  - Flask REST API                                        │
+│  - Static File Serving (wwwroot/)                       │
+│  - CORS Configuration                                    │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                  Application Layer                       │
+│                    (main.py)                             │
+│  - CLI Interface                                         │
+│  - Server Orchestration                                  │
+│  - Command Routing                                       │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+         ┌─────────────┼─────────────┐
+         ▼             ▼             ▼
+┌─────────────┐ ┌─────────────┐ ┌────────────────┐
+│  Solver     │ │   Model     │ │  Validation    │
+│ (solver.py) │ │ (model.py)  │ │(validation.py) │
+│             │ │             │ │                │
+│ - OR-Tools  │ │ - Variables │ │ - Rule Check   │
+│ - Config    │ │ - Objective │ │ - Reporting    │
+│ - Execute   │ │ - Problem   │ │ - Verify       │
+└──────┬──────┘ └──────┬──────┘ └────────┬───────┘
+       │               │                  │
+       │               ▼                  │
+       │      ┌──────────────────┐       │
+       │      │   Constraints    │       │
+       └──────┤ (constraints.py) │───────┘
+              │                  │
+              │ - Hard Rules     │
+              │ - Soft Rules     │
+              │ - Logic          │
+              └────────┬─────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Data Layer                            │
+│              (data_loader.py, entities.py)               │
+│  - Database Access (SQLite)                              │
+│  - Data Models                                           │
+│  - Sample Data Generation                                │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### 2. Dependency Rule
+### 2. Komponentenbeschreibung
 
-- **Domain** hat keine Abhängigkeiten zu anderen Projekten
-- **Application** hängt nur von Domain ab
-- **Infrastructure** implementiert Domain-Interfaces
-- **Web** koordiniert alle Layer
+#### Web Layer
+**Datei:** `web_api.py`
 
-### 3. Inversion of Control
+- **Zweck**: REST API und Web-Schnittstelle
+- **Technologie**: Flask + Flask-CORS
+- **Verantwortlichkeiten**:
+  - HTTP Endpoints (REST API)
+  - Static File Serving (HTML/CSS/JS)
+  - Request/Response Handling
+  - CORS-Konfiguration
 
-Abhängigkeiten werden über Dependency Injection aufgelöst:
-```csharp
-// In Program.cs
-builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
-builder.Services.AddScoped<IShiftPlanningService, ShiftPlanningService>();
+**Hauptendpoints:**
+- `/api/employees` - Mitarbeiterverwaltung
+- `/api/teams` - Teamverwaltung
+- `/api/shifts/*` - Schichtplanung und Abfrage
+- `/api/statistics/*` - Statistiken und Reports
+- `/api/absences` - Abwesenheitsverwaltung
+- `/*` - Static Files (Web UI)
+
+#### Application Layer
+**Datei:** `main.py`
+
+- **Zweck**: Haupteinstiegspunkt und Orchestrierung
+- **Verantwortlichkeiten**:
+  - CLI-Interface (argparse)
+  - Server-Start
+  - Kommando-Routing (plan, serve)
+  - Parameter-Verarbeitung
+
+**Kommandos:**
+```bash
+python main.py serve [--host HOST] [--port PORT] [--db PATH]
+python main.py plan --start-date DATE --end-date DATE [--sample-data] [--db PATH]
 ```
 
-## Domain Layer
+#### Solver Layer
+**Dateien:** `solver.py`, `model.py`, `constraints.py`
 
-### Entities
+**solver.py:**
+- OR-Tools CP-SAT Solver Konfiguration
+- Solver-Parameter (Zeitlimit, Worker)
+- Lösungsextraktion
 
-**Kerngeschäftsobjekte ohne Infrastrukturabhängigkeiten:**
+**model.py:**
+- Modellaufbau (Variablen, Zielfunktion)
+- Problem-Formulierung
+- Variable-Definition
 
-- `Employee`: Repräsentiert einen Mitarbeiter
-- `Team`: Gruppierung von Mitarbeitern
-- `ShiftType`: Definition einer Schichtart
-- `ShiftAssignment`: Zuweisung einer Schicht zu einem Mitarbeiter
-- `Absence`: Abwesenheit eines Mitarbeiters
+**constraints.py:**
+- Alle Geschäftsregeln als Constraints
+- Harte Constraints (MUST)
+- Weiche Constraints (SHOULD)
 
-### Rules
+**Implementierte Constraints:**
 
-**ShiftRules** definiert alle Geschäftsregeln:
+*Harte Constraints:*
+- Genau 1 Schicht pro Person und Tag (oder keine)
+- Keine Arbeit während Abwesenheit
+- Mindestbesetzung für alle Schichttypen
+- Verbotene Schichtwechsel (Spät→Früh, Nacht→Früh)
+- Ruhezeiten (11 Stunden minimum)
+- Max. 6 aufeinanderfolgende Schichten
+- Max. 5 aufeinanderfolgende Nachtschichten
+- Max. 48h pro Woche
+- Max. 192h pro Monat
+- Mindestens 1 Springer verfügbar
+- Qualifikations-Anforderungen (BMT/BSB)
 
-```csharp
-public static class ShiftRules
-{
-    public const int MinimumRestHours = 11;
-    
-    public static readonly Dictionary<string, List<string>> ForbiddenTransitions = new()
-    {
-        { ShiftTypeCodes.Spaet, new List<string> { ShiftTypeCodes.Frueh } },
-        { ShiftTypeCodes.Nacht, new List<string> { ShiftTypeCodes.Spaet } }
-    };
-    
-    // ... weitere Regeln
-}
+*Weiche Constraints (Optimierung):*
+- Faire Schichtverteilung
+- Bevorzugter Rhythmus (Früh→Nacht→Spät)
+- Minimierung von Abweichungen
+
+#### Validation Layer
+**Datei:** `validation.py`
+
+- **Zweck**: Ergebnis-Validierung
+- **Verantwortlichkeiten**:
+  - Überprüfung aller Regeln
+  - Fehlerreporting
+  - Qualitätssicherung
+
+**Validierungen:**
+- Schichtkonflikte
+- Ruhezeiten
+- Arbeitszeit-Limits
+- Besetzungsstärken
+- Springer-Verfügbarkeit
+
+#### Data Layer
+**Dateien:** `data_loader.py`, `entities.py`
+
+**entities.py:**
+- Datenmodelle (Dataclasses)
+- Employee, Team, ShiftType, Absence, etc.
+- Enum-Definitionen (AbsenceType)
+
+**data_loader.py:**
+- Datenbankzugriff (SQLite)
+- Sample-Data-Generierung
+- Daten-Import/-Export
+
+**Datenmodelle:**
+```python
+@dataclass
+class Employee:
+    id: int
+    vorname: str
+    name: str
+    personalnummer: str
+    is_springer: bool
+    team_id: Optional[int]
+    is_bmt: bool = False  # Brandmeldetechniker
+    is_bsb: bool = False  # Brandschutzbeauftragter
+
+@dataclass
+class Team:
+    id: int
+    name: str
+    description: str
+
+@dataclass
+class ShiftType:
+    id: int
+    code: str
+    name: str
+    start_time: str
+    end_time: str
+    duration_hours: float
+
+@dataclass
+class Absence:
+    id: int
+    employee_id: int
+    type: AbsenceType
+    start_date: date
+    end_date: date
+
+@dataclass
+class ShiftAssignment:
+    id: int
+    employee_id: int
+    shift_type_id: int
+    date: date
+    is_manual: bool
+    is_springer: bool
 ```
 
-### Interfaces
+## 3. Datenfluss
 
-Repository-Interfaces definieren Datenoperationen ohne Implementierungsdetails:
-
-```csharp
-public interface IEmployeeRepository : IRepository<Employee>
-{
-    Task<IEnumerable<Employee>> GetSpringersAsync();
-    Task<Employee?> GetByPersonalnummerAsync(string personalnummer);
-}
+### Schichtplanung (CLI)
+```
+main.py (CLI)
+    ↓
+data_loader.py (Load Data)
+    ↓
+model.py (Build Model)
+    ↓
+constraints.py (Add Rules)
+    ↓
+solver.py (Solve)
+    ↓
+validation.py (Verify)
+    ↓
+data_loader.py (Save Results)
 ```
 
-## Application Layer
-
-### Services
-
-**ShiftPlanningService**: Kernlogik für Schichtplanung
-
-- `PlanShifts()`: Automatische Schichtplanung für Zeitraum
-- `ValidateShiftAssignment()`: Prüfung gegen Regeln
-- `AssignSpringer()`: Automatische Springer-Zuweisung
-
-**StatisticsService**: Berechnung von Statistiken
-
-- `GetDashboardStatisticsAsync()`: Aggregierte Statistiken
-- Berechnet Arbeitsstunden, Schichtverteilung, Fehltage, Workload
-
-### DTOs
-
-Data Transfer Objects für API-Kommunikation:
-- Entkopplung von Domain-Modellen
-- Kontrolle über exponierte Daten
-- Vereinfachte Serialisierung
-
-## Infrastructure Layer
-
-### Database Context
-
-**DienstplanDbContext** konfiguriert EF Core:
-
-```csharp
-public class DienstplanDbContext : DbContext
-{
-    public DbSet<Employee> Employees => Set<Employee>();
-    public DbSet<Team> Teams => Set<Team>();
-    // ... weitere DbSets
-    
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        // Konfiguration der Entities
-        // Seed-Daten für ShiftTypes
-    }
-}
+### Web-Anfrage (API)
+```
+Client (Browser)
+    ↓ HTTP Request
+web_api.py (Flask Endpoint)
+    ↓
+data_loader.py (Database Query)
+    ↓
+web_api.py (JSON Response)
+    ↓ HTTP Response
+Client (Browser)
 ```
 
-### Repositories
-
-Implementierung der Repository-Interfaces:
-- Kapseln Datenbankzugriff
-- Verwenden EF Core
-- Bieten typsichere Queries
-
-## Web Layer
-
-### Controllers
-
-REST API Endpoints nach Ressourcen:
-
-- **EmployeesController**: CRUD für Mitarbeiter
-- **ShiftsController**: Schichtplanung und Anzeige
-- **AbsencesController**: Abwesenheitsverwaltung
-- **StatisticsController**: Dashboard-Daten
-
-### Web UI
-
-Single-Page Application mit Vanilla JavaScript:
-
+### Automatische Planung (API)
 ```
-wwwroot/
-├── index.html          # Haupt-HTML
-├── css/
-│   └── styles.css     # Responsive Styling
-└── js/
-    └── app.js         # Client-seitige Logik
+Client (Browser)
+    ↓ POST /api/shifts/plan
+web_api.py (Flask Endpoint)
+    ↓
+data_loader.py (Load Data)
+    ↓
+solver.py → model.py → constraints.py
+    ↓
+validation.py (Verify)
+    ↓
+data_loader.py (Save Results)
+    ↓
+web_api.py (JSON Response)
+    ↓ HTTP Response
+Client (Browser)
 ```
 
-**Features:**
-- Responsive Design (Mobile-First)
-- Asynchrone API-Aufrufe
-- Dynamisches Rendering
-- Modal-Dialoge
+## 4. Technologie-Stack
 
-## Datenzugriffsmuster
+### Backend
+- **Python**: 3.9+
+- **OR-Tools**: Google Constraint Programming Solver
+- **Flask**: Web Framework
+- **Flask-CORS**: Cross-Origin Resource Sharing
 
-### Repository Pattern
+### Frontend
+- **HTML5**: Struktur
+- **CSS3**: Styling
+- **JavaScript (Vanilla)**: Interaktivität
+- **Fetch API**: AJAX-Requests
 
-Abstrahiert Datenzugriff:
+### Datenbank
+- **SQLite**: Eingebettete Datenbank
+- **Schema**: Kompatibel mit ursprünglicher .NET-Version
 
-```csharp
-public class EmployeeRepository : IEmployeeRepository
-{
-    private readonly DienstplanDbContext _context;
-    
-    public async Task<Employee?> GetByIdAsync(int id)
-    {
-        return await _context.Employees
-            .Include(e => e.Team)
-            .Include(e => e.Absences)
-            .FirstOrDefaultAsync(e => e.Id == id);
-    }
-}
+### Dependencies
+```
+ortools>=9.8.0        # Constraint Solver
+Flask>=3.0.0          # Web Framework
+flask-cors>=4.0.0     # CORS Support
 ```
 
-### Unit of Work
+## 5. Design-Patterns
 
-Automatisch durch EF Core DbContext implementiert:
-- Transaktionsmanagement
-- Change Tracking
-- Optimistic Concurrency
+### 1. Constraint Programming Pattern
+- **Deklarative Problemformulierung**
+- **Separation of Concerns**: Constraints getrennt von Solver
+- **Composable**: Constraints können aktiviert/deaktiviert werden
 
-## Schichtplanungs-Algorithmus
+### 2. Repository Pattern
+- **data_loader.py** agiert als Data Access Layer
+- Abstraktion der Datenbankzugriffe
+- Wiederverwendbare Lade-/Speicher-Funktionen
 
-### Wöchentliche Team-Rotation
+### 3. Service Layer Pattern
+- **web_api.py** als Service-Schicht
+- Business-Logik (Solver) getrennt von API-Layer
+- Klare Endpoint-Definition
 
-Der Algorithmus arbeitet mit einem 3-Wochen-Rotationszyklus:
+### 4. Factory Pattern
+- **create_app()** in web_api.py
+- Konfigurierbare App-Erstellung
+- Dependency Injection (db_path)
 
-**KW 1:** Team 1 → Früh, Team 2 → Spät, Team 3 → Nacht  
-**KW 2:** Team 1 → Nacht, Team 2 → Früh, Team 3 → Spät  
-**KW 3:** Team 1 → Spät, Team 2 → Nacht, Team 3 → Früh
+### 5. Command Pattern
+- **main.py** CLI-Commands (serve, plan)
+- Klare Kommando-Struktur
+- Erweiterbar für neue Commands
 
-Jedes Team arbeitet eine Woche lang die gleiche Schicht, dann rotiert es zur nächsten.
+## 6. Konfiguration
 
-### Ablauf
+### Umgebungsvariablen
+Keine Umgebungsvariablen erforderlich. Konfiguration über CLI-Parameter.
 
-1. **Initialisierung**: Lade Mitarbeiter (nach Teams gruppiert) und Abwesenheiten
-2. **Wochenweise Iteration**: Für jede Woche im Zeitraum:
-   - Bestimme Team-Rotation für diese Woche (basierend auf Wochennummer)
-   - Plane jeden Tag:
-     - Filtere verfügbare Mitarbeiter des zugewiesenen Teams
-     - Sortiere nach Workload für Fairness
-     - Weise Schichten mit Regelvalidierung zu
-     - Bei Engpässen: Nutze andere Teams als Fallback
-3. **Spezialfunktionen**: Weise BMT und BSB zu (Mo-Fr, qualifizierte Personen)
-4. **Persistierung**: Speichere gültige Zuweisungen
+### CLI-Parameter
 
-### Regelvalidierung (vor jeder Zuweisung)
+**Server-Modus:**
+- `--host`: Host-Adresse (default: localhost)
+- `--port`: Port-Nummer (default: 5000)
+- `--db`: Datenbank-Pfad (default: dienstplan.db)
 
-- ✓ Maximal 6 aufeinanderfolgende Dienste
-- ✓ Maximal 5 aufeinanderfolgende Nachtschichten
-- ✓ Mindestens 1 Ruhetag nach max. Schichten
-- ✓ 11 Stunden Mindestruhezeit (Spät → Früh verboten, Nacht → Früh verboten)
-- ✓ Keine identische Schicht zweimal hintereinander
-- ✓ Max. 48 Wochenstunden, max. 192 Monatsstunden
-- ✓ Monatsübergreifende Prüfung (30-Tage-Lookback)
-- ✓ Abwesenheiten blockieren vollständig
+**Planungs-Modus:**
+- `--start-date`: Start-Datum (ISO Format)
+- `--end-date`: End-Datum (ISO Format)
+- `--db`: Datenbank-Pfad (default: dienstplan.db)
+- `--sample-data`: Verwende generierte Sample-Daten
+- `--time-limit`: Solver-Zeitlimit in Sekunden (default: 300)
 
-### Springer-Logik
-
-Springer werden nicht in die Team-Rotation einbezogen:
-- Können in Teams sein oder teamübergreifend arbeiten
-- Werden nach Workload priorisiert für Ausfallvertretung
-- Mindestens ein Springer muss verfügbar bleiben
-- Bei Springer-Ausfall: Nur andere Springer übernehmen
-
-### Fairness
-
-- **Team-Rotation**: Automatisch faire Verteilung aller Schichttypen
-- **Workload-Tracking**: Mitarbeiter mit weniger Schichten werden bevorzugt
-- **Wochenend-Fairness**: Separate Zählung von Samstag/Sonntag-Diensten
-- **Schichttyp-Fairness**: Verhindert zu viele Nachtschichten für einzelne Personen
-
-Detaillierte Dokumentation: [docs/SHIFT_PLANNING_ALGORITHM.md](docs/SHIFT_PLANNING_ALGORITHM.md)
-
-## API-Design
-
-### REST-Prinzipien
-
-- **Ressourcen-basiert**: `/api/employees`, `/api/shifts`
-- **HTTP-Verben**: GET, POST, PUT, DELETE
-- **Status-Codes**: 200, 201, 204, 400, 404
-- **JSON**: Content-Type: application/json
-
-### Fehlerbehandlung
-
-```csharp
-if (!isValid)
-{
-    return BadRequest(new { error = errorMessage });
-}
+### Solver-Konfiguration
+In `solver.py`:
+```python
+solver.parameters.max_time_in_seconds = 300  # 5 Minuten
+solver.parameters.num_search_workers = 8     # Parallele Worker
+solver.parameters.log_search_progress = True # Logging
 ```
 
-### Pagination
+## 7. Datenbankschema
 
-Für große Datenmengen geplant (aktuell noch nicht implementiert):
+### Tabellen
+- **Employees**: Mitarbeiter
+- **Teams**: Teams
+- **ShiftTypes**: Schichtarten
+- **ShiftAssignments**: Schichtzuweisungen
+- **Absences**: Abwesenheiten
+- **VacationRequests**: Urlaubsanträge
+- **ShiftExchanges**: Diensttausch
+- **AspNetUsers**: Benutzer (Identity)
+- **AspNetRoles**: Rollen (Identity)
+
+### Wichtige Relationen
 ```
-GET /api/employees?page=1&pageSize=20
+Employees ───┐
+             ├──→ ShiftAssignments
+ShiftTypes ──┘
+
+Employees ──→ Absences
+
+Employees ──→ Teams
 ```
 
-## Sicherheitsarchitektur
+## 8. Skalierbarkeit
 
-### Geplante Implementierung
+### Horizontale Skalierung
+- Mehrere Flask-Instanzen hinter Load Balancer
+- Shared SQLite-Datenbank oder Migration zu PostgreSQL/MySQL
+- Stateless API-Design
 
-1. **Authentication**: ASP.NET Core Identity
-2. **Authorization**: Policy-basiert
-3. **Claims**: Rolleninformationen (Admin, Disponent, Read-Only)
+### Vertikale Skalierung
+- OR-Tools nutzt mehrere CPU-Cores (num_search_workers)
+- Speicher-Anforderungen: ~100MB + 10MB pro 100 Mitarbeiter/Monat
+- Optimierungen für größere Probleminstanzen möglich
 
-### CORS
+### Performance-Optimierungen
+- **Solver**: Zeitlimit anpassen
+- **Datenbank**: Indizes auf häufig abgefragte Spalten
+- **Web**: Caching für statische Daten
+- **API**: Paginierung für große Listen
 
-Aktuell: Offene Konfiguration für Entwicklung
-Produktion: Whitelist spezifischer Origins
+## 9. Sicherheit
 
-## Performance-Überlegungen
+### Implementiert
+- ✅ Cookie-basierte Authentifizierung (über Web UI)
+- ✅ Rollenbasierte Autorisierung
+- ✅ SQL-Injection-Schutz (Parametrisierte Queries)
+- ✅ CORS-Konfiguration
 
-### Database
+### Empfohlene Erweiterungen
+- [ ] HTTPS (via Reverse Proxy)
+- [ ] Rate Limiting
+- [ ] Input Validation (strict)
+- [ ] API Token Authentication
+- [ ] Audit Logging
 
-- **Indizes**: Auf häufig abgefragte Felder (PersonalNummer, EmployeeId+Date)
-- **Eager Loading**: Include() für verwandte Daten
-- **Connection Pooling**: Automatisch durch EF Core
-
-### Caching
-
-Zukünftige Optimierung:
-- Response Caching für statische Daten
-- In-Memory Cache für häufige Abfragen
-
-### API
-
-- **Asynchrone Operationen**: Alle I/O-Operationen async
-- **Minimale Datenübertragung**: DTOs statt voller Entities
-
-## Erweiterbarkeit
-
-### Neue Schichtart hinzufügen
-
-1. Seed-Daten in `DienstplanDbContext` ergänzen
-2. Konstante in `ShiftTypeCodes` hinzufügen (optional)
-3. CSS-Klasse für Farbe definieren
-4. Keine Code-Änderung in Business-Logik nötig
-
-### Neue Regel implementieren
-
-1. In `ShiftRules` definieren
-2. In `ShiftPlanningService.ValidateShiftAssignment()` prüfen
-3. Unit-Tests hinzufügen
-
-### Neue Statistik
-
-1. Methode in `StatisticsService` hinzufügen
-2. DTO erweitern
-3. Controller-Endpoint erstellen
-4. UI-Komponente implementieren
-
-## Testing-Strategie
+## 10. Testing
 
 ### Unit Tests
-
-- Domain-Logik (Regeln, Validierung)
-- Service-Logik (ohne DB)
-- Mock-Repositories
+- Jede Komponente einzeln testbar
+- Mock-Data für isolierte Tests
+- `pytest` Framework empfohlen
 
 ### Integration Tests
+- CLI-Tests mit Sample-Data
+- API-Tests mit HTTP-Requests
+- End-to-End-Tests
 
-- Controller mit echter DB
-- Repository-Implementierungen
-- End-to-End API-Tests
+### Test-Strategien
+```python
+# Model-Test
+python model.py
 
-### UI Tests
+# Solver-Test mit Sample-Data
+python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --sample-data
 
-- Geplant: Playwright/Selenium
-- Aktuell: Manuelle Tests
-
-## Deployment-Architektur
-
-### Self-Contained Deployment
-
-```
-dotnet publish -c Release -r win-x64 --self-contained true
+# Validation-Test
+python validation.py
 ```
 
-Vorteile:
-- Keine .NET-Installation erforderlich
-- Version-Isolation
-- Einfache Distribution
+## 11. Deployment-Optionen
 
-### Database
+### Docker Container
+**Vorteile:**
+- Isolierte Umgebung
+- Einfaches Deployment
+- Reproduzierbare Builds
 
-SQLite für Einfachheit:
-- Single-File Database
-- Keine separate Installation
-- Einfaches Backup
+### Systemd Service
+**Vorteile:**
+- Native Linux-Integration
+- Automatischer Neustart
+- Log-Management
 
-Migrierbar zu SQL Server, PostgreSQL, MySQL durch EF Core Abstraktion.
+### Cloud-Plattformen
+**Unterstützte Plattformen:**
+- Heroku
+- AWS Elastic Beanstalk
+- Google Cloud Run
+- Azure App Service
 
-## Monitoring & Logging
+## 12. Monitoring & Logging
 
 ### Logging
-
-ASP.NET Core Logging Framework:
-- Console Logger (Entwicklung)
-- File Logger (Produktion geplant)
-- Log-Levels: Trace, Debug, Info, Warning, Error, Critical
-
-### Health Checks
-
-Geplant:
-```csharp
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<DienstplanDbContext>();
+Flask Standard-Logging:
+```python
+app.logger.info("Message")
+app.logger.warning("Warning")
+app.logger.error("Error")
 ```
 
-## Technologie-Entscheidungen
+### Monitoring
+Empfohlene Tools:
+- **Prometheus**: Metriken
+- **Grafana**: Dashboards
+- **Sentry**: Error Tracking
 
-### Warum ASP.NET Core?
+## 13. Erweiterbarkeit
 
-✅ Performant und modern
-✅ Cross-Platform (Windows, Linux, macOS)
-✅ Integrierte DI und Middleware
-✅ Große Community und Support
+### Neue Constraints hinzufügen
+1. Funktion in `constraints.py` erstellen
+2. In `solver.py` aufrufen
+3. In `validation.py` prüfen
 
-### Warum SQLite?
+### Neue API-Endpoints
+1. Route in `web_api.py` definieren
+2. Business-Logik implementieren
+3. JSON-Response zurückgeben
 
-✅ Zero-Configuration
-✅ Serverless
-✅ Portable
-✅ Ausreichend für < 1000 Benutzer
+### Neue Datenmodelle
+1. Dataclass in `entities.py` erstellen
+2. Lade-/Speicher-Funktionen in `data_loader.py`
+3. API-Endpoints in `web_api.py`
 
-### Warum Vanilla JavaScript?
+## 14. Migration von .NET
 
-✅ Keine Build-Tools nötig
-✅ Schnelles Laden
-✅ Einfach zu verstehen
-✅ Keine Framework-Overhead
+### Beibehaltene Konzepte
+- ✅ Datenbank-Schema
+- ✅ REST API-Struktur
+- ✅ Web UI (HTML/CSS/JS)
+- ✅ Geschäftsregeln
 
-## Best Practices
+### Neue Konzepte
+- 🆕 Constraint Programming (OR-Tools)
+- 🆕 Deklarative Regel-Definition
+- 🆕 Optimale Lösungsfindung
+- 🆕 Python-basierte Architektur
 
-### Code-Organisation
+### Vorteile der neuen Architektur
+- ✅ Einfachere Wartung
+- ✅ Bessere Lösungsqualität
+- ✅ Flexible Erweiterbarkeit
+- ✅ Plattformunabhängigkeit
 
-- Eine Klasse pro Datei
-- Namespaces entsprechen Ordnerstruktur
-- Interfaces in eigenem Ordner
+---
 
-### Naming Conventions
+**Version 2.0 - Python Edition**
 
-- PascalCase für public Members
-- camelCase für private Members
-- Descriptive Namen (GetEmployeesByTeam statt Get)
+Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
 
-### Error Handling
-
-- Exceptions nur für außergewöhnliche Fälle
-- Validation mit Result-Pattern
-- Structured Logging
-
-## Zukünftige Verbesserungen
-
-1. **CQRS**: Command/Query Separation für komplexe Operationen
-2. **Event Sourcing**: Für Audit Trail
-3. **GraphQL**: Alternative zu REST
-4. **WebSockets**: Real-Time Updates
-5. **Microservices**: Bei Skalierung über 10.000 Mitarbeiter
+© 2025 Fritz Winter Eisengießerei GmbH & Co. KG

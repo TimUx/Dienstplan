@@ -39,7 +39,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     Returns:
         Configured Flask app
     """
-    app = Flask(__name__, static_folder='../src/Dienstplan.Web/wwwroot', static_url_path='')
+    app = Flask(__name__, static_folder='wwwroot', static_url_path='')
     CORS(app)  # Enable CORS for all routes
     
     db = Database(db_path)

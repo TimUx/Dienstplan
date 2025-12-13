@@ -1,279 +1,361 @@
-# Schichtplanung - Implementierung und Nutzung
+# Dienstplan - Benutzerhandbuch
 
-## Was wurde implementiert
+## Übersicht
 
-Dieser PR behebt die Probleme mit der automatischen Schichtplanung und implementiert ein neues wöchentliches Team-Rotationssystem.
+Dieses Handbuch beschreibt die Nutzung des Dienstplan-Systems für die automatische Schichtplanung mit Python und Google OR-Tools.
 
-## Behobene Probleme
+## Installation
 
-### 1. Team-Namen werden nicht angezeigt
-**Problem:** In den Kalenderansichten wurde überall "ohne Team" angezeigt.  
-**Lösung:** Navigation Properties in EmployeeRepository wurden korrigiert (.Include(e => e.Team) hinzugefügt).
+### Voraussetzungen
+- Python 3.9 oder höher
+- pip (Python Package Manager)
 
-### 2. Automatische Schichtplanung hält Regeln nicht ein
-**Problem:** Der alte Algorithmus verteilte Schichten nicht regelkonform.  
-**Lösung:** Komplette Neuentwicklung mit strikter Regelvalidierung vor jeder Zuweisung.
+### Schnellinstallation
+```bash
+# Repository klonen
+git clone https://github.com/TimUx/Dienstplan.git
+cd Dienstplan
 
-### 3. Wöchentliche Team-Rotation implementiert
-**Neu:** Teams rotieren wöchentlich durch Schichttypen für faire Verteilung.
+# Virtuelle Umgebung erstellen (empfohlen)
+python3 -m venv venv
+source venv/bin/activate  # Linux/macOS
+# oder
+venv\Scripts\activate     # Windows
 
-## Neues Rotationssystem
-
-### 3-Wochen-Zyklus
-
+# Abhängigkeiten installieren
+pip install -r requirements.txt
 ```
-KW 1:
-  • Team 1 → Frühdienst
-  • Team 2 → Spätdienst
-  • Team 3 → Nachtdienst
-
-KW 2:
-  • Team 1 → Nachtdienst
-  • Team 2 → Frühdienst
-  • Team 3 → Spätdienst
-
-KW 3:
-  • Team 1 → Spätdienst
-  • Team 2 → Nachtdienst
-  • Team 3 → Frühdienst
-
-Dann wiederholt sich der Zyklus...
-```
-
-### Vorteile
-- ✓ Faire Verteilung aller Schichttypen
-- ✓ Keine Überlastung einzelner Teams mit Nachtschichten
-- ✓ Vorhersehbare Arbeitszeiten für Mitarbeiter
-- ✓ Automatische Einhaltung aller Regeln
-
-## Implementierte Regeln
-
-### Dienstserien
-- ✅ Maximal 6 Dienste am Stück
-- ✅ Nachtschichten maximal 3-5 am Stück
-- ✅ Danach zwingend mindestens 1 Ruhetag
-- ✅ Keine identische Schicht zweimal hintereinander
-
-### Arbeitszeiten
-- ✅ Maximal 48 Wochenstunden
-- ✅ Maximal 192 Stunden pro Monat
-- ✅ Mindestruhezeit von 11 Stunden
-- ✅ Monatsübergreifende Prüfung (30-Tage-Lookback)
-
-### Verbotene Übergänge
-- ❌ Spät → Früh (nur 8 Stunden Pause)
-- ❌ Nacht → Früh (0 Stunden Pause)
-
-### Mindestbesetzungen
-- **Werktags**: Früh min. 4, Spät min. 3, Nacht min. 3
-- **Wochenende**: Alle Schichten min. 2
-
-### Springer
-- ✅ Können in Teams sein oder teamübergreifend
-- ✅ Mindestens ein Springer bleibt verfügbar
-- ✅ Nur Springer übernehmen, wenn regulärer Springer ausfällt
-- ✅ Fair nach Workload verteilt
-
-### Sonderfunktionen
-- ✅ BMT: Mo-Fr 06:00-14:00, genau 1 Person
-- ✅ BSB: Mo-Fr 9,5h täglich, genau 1 Person
-- ✅ Keine Überschneidung mit regulären Schichten
 
 ## Verwendung
 
-### 1. Teams einrichten
+### 1. Web-Server starten
 
-Stelle sicher, dass du 3 Teams mit je ca. 5 Mitarbeitern hast:
+Der einfachste Weg, das System zu nutzen, ist über die Web-Oberfläche:
 
+```bash
+python main.py serve
 ```
-POST /api/teams
+
+Standardmäßig läuft der Server auf `http://localhost:5000`
+
+**Optionale Parameter:**
+```bash
+# Auf anderem Port
+python main.py serve --port 8080
+
+# Auf anderer Adresse (z.B. für Zugriff im Netzwerk)
+python main.py serve --host 0.0.0.0 --port 8080
+
+# Mit spezifischer Datenbank
+python main.py serve --db /pfad/zur/datenbank.db
+```
+
+### 2. Erstanmeldung
+
+Beim ersten Start wird automatisch ein Administrator-Konto erstellt:
+
+- **E-Mail**: admin@fritzwinter.de
+- **Passwort**: Admin123!
+
+**WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
+
+### 3. Mitarbeiter und Teams verwalten
+
+#### Mitarbeiter hinzufügen
+1. Navigieren Sie zu **Mitarbeiter** im Menü
+2. Klicken Sie auf **Neuer Mitarbeiter**
+3. Füllen Sie die Pflichtfelder aus:
+   - Vorname
+   - Name
+   - Personalnummer
+4. Optional:
+   - Team zuordnen
+   - Als Springer markieren
+   - Qualifikationen festlegen (BMT/BSB)
+
+#### Teams erstellen
+1. Navigieren Sie zu **Teams** im Menü
+2. Klicken Sie auf **Neues Team**
+3. Geben Sie Namen und Beschreibung ein
+
+### 4. Schichtplanung durchführen
+
+#### Automatische Planung über Web UI
+1. Wechseln Sie zur **Dienstplan**-Ansicht
+2. Wählen Sie den gewünschten Zeitraum
+3. Klicken Sie auf **Automatisch planen**
+4. Warten Sie auf die Berechnung
+5. Überprüfen Sie das Ergebnis
+
+#### Automatische Planung über CLI
+Für größere Planungszeiträume oder Batch-Verarbeitung:
+
+```bash
+# Mit vorhandener Datenbank
+python main.py plan \
+  --start-date 2025-01-01 \
+  --end-date 2025-01-31 \
+  --db dienstplan.db
+
+# Mit Test-Daten (für Entwicklung)
+python main.py plan \
+  --start-date 2025-01-01 \
+  --end-date 2025-01-31 \
+  --sample-data
+
+# Mit erhöhtem Zeitlimit (für komplexe Planungen)
+python main.py plan \
+  --start-date 2025-01-01 \
+  --end-date 2025-01-31 \
+  --time-limit 600
+```
+
+### 5. Abwesenheiten verwalten
+
+#### Abwesenheit erfassen
+1. Navigieren Sie zu **Abwesenheiten**
+2. Klicken Sie auf **Neue Abwesenheit**
+3. Wählen Sie:
+   - Mitarbeiter
+   - Art (Urlaub, Krank, Lehrgang)
+   - Start- und Enddatum
+4. Optional: Notizen hinzufügen
+
+#### Urlaubsanträge bearbeiten (Admin/Disponent)
+1. Navigieren Sie zu **Urlaubsanträge**
+2. Sehen Sie alle offenen Anträge
+3. Genehmigen oder ablehnen Sie Anträge
+4. Genehmigte Anträge werden automatisch zu Abwesenheiten
+
+### 6. Diensttausch-System
+
+#### Als Mitarbeiter: Dienst zum Tausch anbieten
+1. Navigieren Sie zu **Diensttausch**
+2. Wählen Sie einen Ihrer Dienste
+3. Geben Sie einen Grund an
+4. Warten Sie auf Interessenten
+
+#### Als anderer Mitarbeiter: Dienst anfragen
+1. Sehen Sie verfügbare Tauschangebote
+2. Wählen Sie einen Dienst aus
+3. Stellen Sie eine Anfrage
+
+#### Als Disponent/Admin: Tausch genehmigen
+1. Navigieren Sie zu **Diensttausch**
+2. Sehen Sie offene Anfragen
+3. Genehmigen oder ablehnen Sie den Tausch
+4. Nach Genehmigung werden die Dienste automatisch getauscht
+
+## Planungsalgorithmus
+
+### Automatische Schichtplanung mit OR-Tools
+
+Das System verwendet den **Google OR-Tools CP-SAT Constraint Solver** für optimale Schichtplanung.
+
+### Implementierte Regeln
+
+#### Harte Constraints (müssen eingehalten werden)
+
+**Grundregeln:**
+- ✅ Maximal 1 Schicht pro Mitarbeiter und Tag
+- ✅ Keine Arbeit während Abwesenheit
+
+**Mindestbesetzung:**
+- ✅ Früh: 4-5 Personen (Mo-Fr), 2-3 (Sa-So)
+- ✅ Spät: 3-4 Personen (Mo-Fr), 2-3 (Sa-So)
+- ✅ Nacht: 3 Personen (Mo-Fr), 2-3 (Sa-So)
+
+**Ruhezeiten:**
+- ✅ Minimum 11 Stunden zwischen Schichten
+- ✅ Verbotene Übergänge: Spät→Früh, Nacht→Früh
+
+**Arbeitszeitbeschränkungen:**
+- ✅ Max. 6 aufeinanderfolgende Dienste
+- ✅ Max. 5 aufeinanderfolgende Nachtdienste
+- ✅ Max. 48 Stunden pro Woche
+- ✅ Max. 192 Stunden pro Monat
+
+**Zusatzfunktionen:**
+- ✅ 1 BMT (Brandmeldetechniker) pro Werktag (Mo-Fr)
+- ✅ 1 BSB (Brandschutzbeauftragter) pro Werktag (Mo-Fr)
+- ✅ Nur qualifizierte Mitarbeiter
+
+**Springer-Logik:**
+- ✅ Mindestens 1 Springer muss verfügbar bleiben
+- ✅ Teamübergreifender Einsatz möglich
+
+#### Weiche Constraints (werden optimiert)
+
+**Fairness:**
+- ⚖️ Gleichmäßige Schichtverteilung über alle Mitarbeiter
+- ⚖️ Bevorzugter Rhythmus: Früh → Nacht → Spät
+
+### Solver-Konfiguration
+
+Die Solver-Parameter können in `solver.py` angepasst werden:
+
+```python
+# Zeitlimit (in Sekunden)
+solver.parameters.max_time_in_seconds = 300  # 5 Minuten
+
+# Anzahl paralleler Worker
+solver.parameters.num_search_workers = 8
+
+# Such-Fortschritt loggen
+solver.parameters.log_search_progress = True
+```
+
+## REST API
+
+### Authentifizierung
+
+#### Anmelden
+```http
+POST /api/auth/login
+Content-Type: application/json
+
 {
-  "name": "Team Alpha",
-  "description": "Erste Schichtgruppe"
+  "email": "admin@fritzwinter.de",
+  "password": "Admin123!",
+  "rememberMe": true
 }
 ```
 
-### 2. Mitarbeiter Teams zuweisen
+### Mitarbeiter
 
+#### Alle Mitarbeiter abrufen
+```http
+GET /api/employees
 ```
-PUT /api/employees/{id}
+
+#### Mitarbeiter erstellen
+```http
+POST /api/employees
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
 {
-  "teamId": 1,
-  "isSpringer": false
+  "vorname": "Max",
+  "name": "Mustermann",
+  "personalnummer": "12345",
+  "isSpringer": false,
+  "teamId": 1
 }
 ```
 
-**Wichtig:** Weise jedem regulären Mitarbeiter ein Team zu!
+### Schichtplanung
 
-### 3. Springer kennzeichnen
-
-```
-PUT /api/employees/{id}
-{
-  "teamId": null,  // oder ein Team
-  "isSpringer": true
-}
+#### Dienstplan anzeigen
+```http
+GET /api/shifts/schedule?startDate=2025-01-01&view=week
 ```
 
-### 4. Automatische Planung starten
+Parameter:
+- `startDate`: Startdatum (ISO Format: YYYY-MM-DD)
+- `view`: week, month, oder year
+- `endDate`: Optional, überschreibt view
 
-```
-POST /api/shifts/plan?startDate=2026-01-01&endDate=2026-01-31&force=true
-```
-
-**Parameter:**
-- `startDate`: Startdatum der Planung (YYYY-MM-DD)
-- `endDate`: Enddatum der Planung (YYYY-MM-DD)
-- `force`: true = überschreibt bestehende Zuweisungen (außer fixierte)
-
-### 5. Ergebnis überprüfen
-
-```
-GET /api/shifts/schedule?view=month&startDate=2026-01-01
+#### Automatisch planen
+```http
+POST /api/shifts/plan?startDate=2025-01-01&endDate=2025-01-31&force=false
+Authorization: Required (Admin oder Disponent)
 ```
 
-## Beispiel-Wochenplan
+Parameter:
+- `startDate`: Startdatum
+- `endDate`: Enddatum
+- `force`: Vorhandene Schichten überschreiben (optional, default: false)
 
-```
-KW 1 (6. - 12. Januar 2026):
+### Statistiken
 
-Montag:
-  Früh: Anna (T1), Max (T1), Lisa (T1), Thomas (T1)
-  Spät: Julia (T2), Michael (T2), Daniel (T2)
-  Nacht: Markus (T3), Petra (T3), Andreas (T3)
-
-Dienstag:
-  Früh: Max (T1), Lisa (T1), Thomas (T1), Anna (T1)
-  Spät: Michael (T2), Daniel (T2), Julia (T2)
-  Nacht: Petra (T3), Andreas (T3), Markus (T3)
-
-... (ähnlich für Mi-Fr)
-
-Samstag:
-  Früh: Anna (T1), Max (T1)
-  Spät: Julia (T2), Michael (T2)
-  Nacht: Markus (T3), Petra (T3)
-
-Sonntag:
-  Früh: Lisa (T1), Thomas (T1)
-  Spät: Daniel (T2), Julia (T2)
-  Nacht: Andreas (T3), Markus (T3)
+#### Dashboard
+```http
+GET /api/statistics/dashboard?startDate=2025-01-01&endDate=2025-01-31
 ```
 
-In **KW 2** würde dann Team 1 auf Nacht wechseln, Team 2 auf Früh, etc.
-
-## Abwesenheiten und fixierte Zuweisungen
-
-### Abwesenheit eintragen
-
-```
-POST /api/absences
-{
-  "employeeId": 1,
-  "type": "Urlaub",
-  "startDate": "2026-01-15",
-  "endDate": "2026-01-20"
-}
+#### Wochenend-Statistiken
+```http
+GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31
+Authorization: Required (Admin oder Disponent)
 ```
 
-Der Algorithmus überspringt automatisch abwesende Mitarbeiter.
+## Tipps & Best Practices
 
-### Fixierte Zuweisung (z.B. Feiertage)
+### Schichtplanung
 
-```
-POST /api/shifts/assignments
-{
-  "employeeId": 5,
-  "shiftTypeId": 1,
-  "date": "2026-01-01",
-  "isFixed": true
-}
-```
-
-Fixierte Zuweisungen werden nie überschrieben, auch nicht mit `force=true`.
-
-## Fehlerbehandlung
-
-### Warnung: "Regelverstoß"
-
-Wenn eine Zuweisung gegen Regeln verstößt, wird eine Warnung zurückgegeben:
-
-```json
-{
-  "warning": "Maximum von 6 aufeinanderfolgenden Schichten erreicht"
-}
-```
-
-Du kannst mit `forceOverride=true` trotzdem zuweisen (nicht empfohlen).
-
-### Keine Assignments erstellt
-
-**Mögliche Ursachen:**
-- Zu wenige Mitarbeiter verfügbar (Abwesenheiten)
-- Teams nicht korrekt zugewiesen
-- Zu viele fixierte Assignments blockieren
-
-**Lösung:**
-1. Prüfe Teamzuweisungen: `GET /api/employees`
-2. Prüfe Abwesenheiten: `GET /api/absences`
-3. Prüfe verfügbare Mitarbeiter pro Team
-
-## Best Practices
-
-### 1. Team-Größen ausbalancieren
-- Jedes Team sollte 4-6 Mitarbeiter haben
-- Mehr Teams = mehr Flexibilität
-- Weniger Teams = einfachere Planung
-
-### 2. Springer-Pool aufrechterhalten
-- Mindestens 2-3 Springer für Flexibilität
-- Nicht alle Springer gleichzeitig verplanen
-- Springer können auch in Teams sein
-
-### 3. Regelmäßige Neu-Planung
-- Monatlich neu planen mit `force=true`
-- Vor neuen Monaten prüfen
-- Nach größeren Änderungen (neue Mitarbeiter, Teams)
-
-### 4. Fixierte Assignments sparsam nutzen
-- Nur für Sonderfälle (Feiertage, Schulungen)
-- Zu viele fixierte Assignments schränken Algorithmus ein
-
-### 5. Validierung nach manuellen Änderungen
-- Manuelle Änderungen können Regeln verletzen
-- Prüfe mit API-Validierung vor dem Speichern
-- Besser: Automatische Planung nutzen
-
-## Technische Details
+1. **Planen Sie rechtzeitig**: Erstellen Sie Pläne mindestens 2 Wochen im Voraus
+2. **Überprüfen Sie Abwesenheiten**: Stellen Sie sicher, dass alle bekannten Abwesenheiten erfasst sind
+3. **Nutzen Sie Springer**: Markieren Sie geeignete Mitarbeiter als Springer für Flexibilität
+4. **Zeitlimits anpassen**: Bei komplexen Planungen erhöhen Sie das Solver-Zeitlimit
 
 ### Performance
-- O(1) Lookups durch HashSet/Dictionary
-- Batch-Queries für bessere Datenbanknutzung
-- Optimiert für große Mitarbeiter-Zahlen
+
+1. **Planungszeiträume**: Planen Sie nicht mehr als 2 Monate auf einmal
+2. **Sample-Data für Tests**: Verwenden Sie `--sample-data` für Entwicklung und Tests
+3. **Datenbank-Wartung**: Löschen Sie alte Daten regelmäßig (z.B. älter als 2 Jahre)
 
 ### Sicherheit
-- CodeQL Scan: 0 Vulnerabilities
-- Alle Eingaben validiert
-- Keine SQL-Injection möglich (EF Core)
 
-### Wartbarkeit
-- Klare Trennung: Algorithmus, Validierung, Persistierung
-- Unit-testbar durch Dependency Injection
-- Dokumentierte Konstanten in ShiftRules
+1. **Passwörter ändern**: Ändern Sie Standard-Passwörter sofort
+2. **HTTPS verwenden**: Setzen Sie einen Reverse Proxy (nginx/Apache) vor Flask
+3. **Backups**: Sichern Sie die Datenbank regelmäßig
+4. **Updates**: Halten Sie Python und alle Packages aktuell
 
-## Weitere Dokumentation
+## Fehlerbehebung
 
-- **Algorithmus-Details:** [docs/SHIFT_PLANNING_ALGORITHM.md](SHIFT_PLANNING_ALGORITHM.md)
-- **Architektur:** [ARCHITECTURE.md](../ARCHITECTURE.md)
-- **API-Dokumentation:** OpenAPI/Swagger unter `/swagger`
+### Problem: Keine Lösung gefunden
+
+**Ursachen:**
+- Zu viele Abwesenheiten für den Zeitraum
+- Zu wenige Mitarbeiter
+- Zu restriktive Constraints
+
+**Lösungen:**
+- Zeitlimit erhöhen: `--time-limit 600`
+- Zeitraum verkürzen (z.B. 2 Wochen statt Monat)
+- Mehr Springer hinzufügen
+- Abwesenheiten überprüfen
+
+### Problem: Server startet nicht
+
+**Ursachen:**
+- Port bereits belegt
+- Datenbank nicht gefunden
+- Dependencies nicht installiert
+
+**Lösungen:**
+```bash
+# Anderen Port verwenden
+python main.py serve --port 8080
+
+# Dependencies neu installieren
+pip install -r requirements.txt --force-reinstall
+
+# Datenbank-Pfad prüfen
+python main.py serve --db ./dienstplan.db
+```
+
+### Problem: Web UI zeigt keine Daten
+
+**Ursachen:**
+- Datenbank leer
+- Falsche Datenbank verwendet
+- CORS-Problem
+
+**Lösungen:**
+- Datenbank mit Sample-Daten erstellen
+- Datenbank-Pfad überprüfen
+- Browser-Konsole auf Fehler prüfen
 
 ## Support
 
-Bei Problemen oder Fragen:
-1. Prüfe Logs in der Anwendung
-2. Konsultiere Dokumentation
-3. Erstelle Issue mit Details zu:
-   - Erwartetes Verhalten
-   - Tatsächliches Verhalten
-   - Schritte zur Reproduktion
-   - Relevante Daten (Teams, Mitarbeiter-Anzahl, etc.)
+Bei weiteren Fragen:
+- **GitHub Issues**: https://github.com/TimUx/Dienstplan/issues
+- **Dokumentation**: README.md, ARCHITECTURE.md
+- **Migration-Info**: MIGRATION.md
+
+---
+
+**Version 2.0 - Python Edition**
+
+© 2025 Fritz Winter Eisengießerei GmbH & Co. KG

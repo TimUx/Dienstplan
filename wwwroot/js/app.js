@@ -1325,7 +1325,6 @@ async function saveEmployee(event) {
         personalnummer: document.getElementById('personalnummer').value,
         email: document.getElementById('email').value || null,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
-        funktion: null, // No longer used - replaced by individual flags
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
         isSpringer: document.getElementById('isSpringer').checked,
         isFerienjobber: document.getElementById('isFerienjobber').checked,

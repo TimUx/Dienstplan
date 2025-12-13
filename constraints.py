@@ -168,8 +168,8 @@ def add_consecutive_shifts_constraints(
     """
     Add maximum consecutive shifts constraints.
     
-    - Maximum 6 consecutive working days (including BMT/BSB assignments)
-    - Maximum 5 consecutive night shifts
+    - Maximum MAXIMUM_CONSECUTIVE_SHIFTS consecutive working days (including BMT/BSB assignments)
+    - Maximum MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS consecutive night shifts
     """
     
     # Maximum 6 consecutive working days
@@ -223,8 +223,8 @@ def add_working_hours_constraints(
     """
     Add working hours constraints.
     
-    - Maximum 48 hours per week (including BMT/BSB hours)
-    - Maximum 192 hours per month (including BMT/BSB hours)
+    - Maximum MAXIMUM_HOURS_PER_WEEK hours per week (including BMT/BSB hours)
+    - Maximum MAXIMUM_HOURS_PER_MONTH hours per month (including BMT/BSB hours)
     """
     
     # Create shift hours lookup

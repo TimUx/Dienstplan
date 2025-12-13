@@ -171,7 +171,9 @@ function initializeDatePickers() {
     // Get Monday of current week
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days
+    // Calculate days to Monday: Sunday needs to go back 6 days, other days use (1 - dayOfWeek)
+    const DAYS_FROM_SUNDAY_TO_MONDAY = -6;
+    const daysToMonday = dayOfWeek === 0 ? DAYS_FROM_SUNDAY_TO_MONDAY : 1 - dayOfWeek;
     const monday = new Date(today);
     monday.setDate(today.getDate() + daysToMonday);
     

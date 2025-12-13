@@ -5,6 +5,7 @@ Starts the web server and automatically opens the browser.
 
 import sys
 import os
+import shutil
 import webbrowser
 import threading
 import time
@@ -40,7 +41,6 @@ def main():
         
         if not db_path.exists() and bundled_db.exists():
             # Copy bundled database template to persistent location
-            import shutil
             print(f"📋 Copying database template to: {data_dir}")
             shutil.copy2(bundled_db, db_path)
     else:

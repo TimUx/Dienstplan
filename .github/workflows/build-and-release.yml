@@ -31,7 +31,7 @@ jobs:
     - name: Create production database
       run: |
         mkdir -p data
-        python db_init.py data\dienstplan.db
+        python db_init.py data/dienstplan.db
     
     - name: Test Python modules
       run: |

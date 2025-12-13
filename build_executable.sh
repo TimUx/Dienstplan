@@ -24,7 +24,7 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-echo "[1/4] Installing dependencies..."
+echo "[1/5] Installing dependencies..."
 python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 if [ $? -ne 0 ]; then

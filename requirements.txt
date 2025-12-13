@@ -13,3 +13,6 @@ python-dateutil>=2.8.2
 
 # Database (already using SQLite which is built-in to Python)
 # No additional package needed for SQLite3
+
+# Build tools for creating standalone executable
+pyinstaller>=6.0.0

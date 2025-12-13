@@ -168,13 +168,21 @@ function canPlanShifts() {
 }
 
 function initializeDatePickers() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('startDate').value = today;
+    // Get Monday of current week
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + daysToMonday);
     
+    const mondayStr = monday.toISOString().split('T')[0];
+    document.getElementById('startDate').value = mondayStr;
+    
+    const todayStr = new Date().toISOString().split('T')[0];
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
     document.getElementById('statsStartDate').value = lastMonth.toISOString().split('T')[0];
-    document.getElementById('statsEndDate').value = today;
+    document.getElementById('statsEndDate').value = todayStr;
     
     // Initialize month and year selects
     const currentDate = new Date();
@@ -629,7 +637,7 @@ function groupByTeamAndEmployee(assignments, allEmployees) {
         }
         
         const teamId = emp.teamId || UNASSIGNED_TEAM_ID;
-        const teamName = emp.team?.name || 'Ohne Team';
+        const teamName = emp.teamName || 'Ohne Team';
         
         if (!teams[teamId]) {
             teams[teamId] = {
@@ -654,7 +662,7 @@ function groupByTeamAndEmployee(assignments, allEmployees) {
         
         // Ensure team exists (in case assignment has a team not in allEmployees)
         if (!teams[teamId]) {
-            const teamName = a.teamName || 'Ohne Team';
+            const teamName = 'Ohne Team'; // Will be updated if we find the employee
             teams[teamId] = {
                 teamId: teamId,
                 teamName: teamName,
@@ -664,6 +672,11 @@ function groupByTeamAndEmployee(assignments, allEmployees) {
         
         // Ensure employee exists in the team
         if (!teams[teamId].employees[a.employeeId]) {
+            // Find employee to get team name
+            const employee = allEmployees.find(e => e.id === a.employeeId);
+            const correctTeamName = employee?.teamName || 'Ohne Team';
+            teams[teamId].teamName = correctTeamName;
+            
             teams[teamId].employees[a.employeeId] = {
                 id: a.employeeId,
                 name: a.employeeName,

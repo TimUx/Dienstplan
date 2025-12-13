@@ -234,7 +234,27 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-##### 4. Anwendung starten
+##### 4. Datenbank initialisieren (Wichtig!)
+
+Vor dem ersten Start müssen Sie die Datenbank initialisieren:
+
+```bash
+python main.py init-db --with-sample-data
+```
+
+Dies erstellt:
+- ✅ Alle erforderlichen Datenbanktabellen
+- ✅ Standard-Rollen (Admin, Disponent, Mitarbeiter)
+- ✅ Admin-Benutzer (admin@fritzwinter.de / Admin123!)
+- ✅ Standard-Schichttypen
+- ✅ Beispiel-Teams (optional mit --with-sample-data)
+
+**Ohne Sample-Daten:**
+```bash
+python main.py init-db
+```
+
+##### 5. Anwendung starten
 
 **Web-Server-Modus:**
 ```bash
@@ -244,6 +264,17 @@ python main.py serve
 # Mit eigener Konfiguration
 python main.py serve --host 0.0.0.0 --port 8080 --db dienstplan.db
 ```
+
+##### 6. Browser öffnen
+Navigieren Sie zu: `http://localhost:5000`
+
+**Standard-Anmeldedaten:**
+- E-Mail: `admin@fritzwinter.de`
+- Passwort: `Admin123!`
+
+⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
+
+---
 
 **CLI-Modus: Schichtplanung**
 ```bash
@@ -256,9 +287,6 @@ python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --db dienstpla
 # Mit Zeitlimit (in Sekunden)
 python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --time-limit 600
 ```
-
-##### 5. Browser öffnen
-Navigieren Sie zu: `http://localhost:5000`
 
 ### (Optional) Sample-Datenbank generieren
 

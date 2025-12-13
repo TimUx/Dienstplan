@@ -159,6 +159,8 @@ def add_rest_time_constraints(
 def add_consecutive_shifts_constraints(
     model: cp_model.CpModel,
     x: Dict[Tuple[int, date, str], cp_model.IntVar],
+    bmt_vars: Dict[Tuple[int, date], cp_model.IntVar],
+    bsb_vars: Dict[Tuple[int, date], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
     shift_codes: List[str]
@@ -166,19 +168,30 @@ def add_consecutive_shifts_constraints(
     """
     Add maximum consecutive shifts constraints.
     
-    - Maximum 6 consecutive working days
+    - Maximum 6 consecutive working days (including BMT/BSB assignments)
     - Maximum 5 consecutive night shifts
     """
     
     # Maximum 6 consecutive working days
     for emp in employees:
         for i in range(len(dates) - MAXIMUM_CONSECUTIVE_SHIFTS):
-            # Sum of all shifts in next 7 days
+            # Sum of all shifts in next 7 days (including regular shifts AND special functions)
             shifts_in_period = []
             for j in range(MAXIMUM_CONSECUTIVE_SHIFTS + 1):
+                current_date = dates[i + j]
+                
+                # Add regular shift variables
                 for s in shift_codes:
-                    if (emp.id, dates[i + j], s) in x:
-                        shifts_in_period.append(x[(emp.id, dates[i + j], s)])
+                    if (emp.id, current_date, s) in x:
+                        shifts_in_period.append(x[(emp.id, current_date, s)])
+                
+                # Add BMT variable if exists
+                if (emp.id, current_date) in bmt_vars:
+                    shifts_in_period.append(bmt_vars[(emp.id, current_date)])
+                
+                # Add BSB variable if exists
+                if (emp.id, current_date) in bsb_vars:
+                    shifts_in_period.append(bsb_vars[(emp.id, current_date)])
             
             if shifts_in_period:
                 # At least one day off in every 7-day period
@@ -200,6 +213,8 @@ def add_consecutive_shifts_constraints(
 def add_working_hours_constraints(
     model: cp_model.CpModel,
     x: Dict[Tuple[int, date, str], cp_model.IntVar],
+    bmt_vars: Dict[Tuple[int, date], cp_model.IntVar],
+    bsb_vars: Dict[Tuple[int, date], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
     shift_codes: List[str],
@@ -208,8 +223,8 @@ def add_working_hours_constraints(
     """
     Add working hours constraints.
     
-    - Maximum 48 hours per week
-    - Maximum 192 hours per month
+    - Maximum 48 hours per week (including BMT/BSB hours)
+    - Maximum 192 hours per month (including BMT/BSB hours)
     """
     
     # Create shift hours lookup
@@ -233,11 +248,20 @@ def add_working_hours_constraints(
             # Scale by 10 to handle 9.5 hours properly (e.g., 9.5 -> 95)
             hours_vars = []
             for d in week_dates:
+                # Add regular shift hours
                 for s in shift_codes:
                     if (emp.id, d, s) in x and s in shift_hours:
                         # Scale hours by 10: 8.0 -> 80, 9.5 -> 95
                         scaled_hours = int(shift_hours[s] * 10)
                         hours_vars.append(x[(emp.id, d, s)] * scaled_hours)
+                
+                # Add BMT hours (8 hours)
+                if (emp.id, d) in bmt_vars:
+                    hours_vars.append(bmt_vars[(emp.id, d)] * 80)  # 8.0 * 10
+                
+                # Add BSB hours (9.5 hours)
+                if (emp.id, d) in bsb_vars:
+                    hours_vars.append(bsb_vars[(emp.id, d)] * 95)  # 9.5 * 10
             
             if hours_vars:
                 # Maximum 48 hours = 480 scaled hours
@@ -251,11 +275,20 @@ def add_working_hours_constraints(
                 month_dates = dates[i:i + 30]
                 hours_vars = []
                 for d in month_dates:
+                    # Add regular shift hours
                     for s in shift_codes:
                         if (emp.id, d, s) in x and s in shift_hours:
                             # Scale hours by 10: 8.0 -> 80, 9.5 -> 95
                             scaled_hours = int(shift_hours[s] * 10)
                             hours_vars.append(x[(emp.id, d, s)] * scaled_hours)
+                    
+                    # Add BMT hours (8 hours)
+                    if (emp.id, d) in bmt_vars:
+                        hours_vars.append(bmt_vars[(emp.id, d)] * 80)
+                    
+                    # Add BSB hours (9.5 hours)
+                    if (emp.id, d) in bsb_vars:
+                        hours_vars.append(bsb_vars[(emp.id, d)] * 95)
                 
                 if hours_vars:
                     # Maximum 192 hours = 1920 scaled hours
@@ -487,12 +520,15 @@ def add_team_rotation_constraints(
     """
     Add team-based rotation constraints for weekly shift planning.
     
-    Teams should rotate through shifts on a weekly basis:
-    - Week 1: Team Alpha on early shifts, Team Beta on late, Team Gamma on night
-    - Week 2: Teams rotate (Alpha -> late, Beta -> night, Gamma -> early)
-    - Week 3: Teams rotate again
+    HARD CONSTRAINTS:
+    - All team members work the SAME shift type during a given week
+    - Shift assignment is weekly, not daily
+    - Teams rotate weekly in pattern: Früh → Nacht → Spät
     
-    This ensures teams work together and rotate fairly.
+    Example:
+    - Week 1: Team Alpha = F (all week), Team Beta = N (all week), Team Gamma = S (all week)
+    - Week 2: Team Alpha = N (all week), Team Beta = S (all week), Team Gamma = F (all week)
+    - Week 3: Team Alpha = S (all week), Team Beta = F (all week), Team Gamma = N (all week)
     """
     
     # Group employees by team (excluding springers and employees without team)
@@ -519,48 +555,38 @@ def add_team_rotation_constraints(
     if current_week:
         weeks.append(current_week)
     
-    # For each team and each week, assign them primarily to one shift type
-    # This creates a natural rotation pattern
+    # Define rotation pattern: F → N → S
+    shift_rotation = ["F", "N", "S"]
+    
+    # For each team and each week, enforce same shift for all team members
     for week_idx, week_dates in enumerate(weeks):
-        weekday_dates = [d for d in week_dates if d.weekday() < 5]  # Mon-Fri only
+        # Only enforce on weekdays (Mon-Fri), weekends can be more flexible
+        weekday_dates = [d for d in week_dates if d.weekday() < 5]
         
         if not weekday_dates:
             continue
         
-        # Determine which shift each team should work this week (rotation)
+        # Get sorted team IDs for consistent rotation
         team_ids = sorted(team_employees.keys())
-        shift_types = ["F", "S", "N"]  # Early, Late, Night
-        
-        # Ensure we have enough shift types for all teams
-        if len(team_ids) > len(shift_types):
-            continue
         
         for team_idx, team_id in enumerate(team_ids):
-            # Rotate shift assignment based on week number
-            assigned_shift = shift_types[(week_idx + team_idx) % len(shift_types)]
+            # Determine assigned shift for this team in this week
+            # Rotation: (week_number + team_offset) % 3
+            assigned_shift_idx = (week_idx + team_idx) % len(shift_rotation)
+            assigned_shift = shift_rotation[assigned_shift_idx]
             
             if assigned_shift not in shift_codes:
                 continue
             
             team_emps = team_employees[team_id]
             
-            # For this team in this week, strongly prefer the assigned shift
-            # Count total shifts for team members on their assigned shift
-            for d in weekday_dates:
-                # At least one team member should work the assigned shift each day
-                team_on_assigned_shift = []
-                for emp in team_emps:
-                    if (emp.id, d, assigned_shift) in x:
-                        team_on_assigned_shift.append(x[(emp.id, d, assigned_shift)])
-                
-                # Soft constraint: prefer team members on their assigned shift
-                # This is achieved through the objective function
-                if team_on_assigned_shift:
-                    # Soft constraint: encourage at least one team member on assigned shift
-                    # This is handled through the objective function in add_fairness_objectives
-                    # to maintain solver flexibility
-                    total = sum(team_on_assigned_shift)
-                    
-                # Note: Team cohesion is encouraged through the staffing constraints
-                # and objective function, not through hard constraints here
-                # This maintains solver flexibility while promoting team rotation
+            # HARD CONSTRAINT: Each team member can ONLY work their team's assigned shift
+            # (or no shift due to absence, BMT/BSB, etc.)
+            for emp in team_emps:
+                for d in weekday_dates:
+                    # For each shift type that is NOT the assigned shift
+                    for other_shift in shift_codes:
+                        if other_shift != assigned_shift:
+                            # Team member cannot work other shifts this week
+                            if (emp.id, d, other_shift) in x:
+                                model.Add(x[(emp.id, d, other_shift)] == 0)

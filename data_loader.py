@@ -29,39 +29,43 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     # Create employees (15 regular + 2 springers + 2 special roles)
     employees = []
     
-    # Team Alpha (5 members)
+    # Team Alpha (5 members) - NO special functions for team members
     employees.extend([
         Employee(1, "Max", "Müller", "1001", team_id=1),
-        Employee(2, "Anna", "Schmidt", "1002", team_id=1, is_brandmeldetechniker=True),
+        Employee(2, "Anna", "Schmidt", "1002", team_id=1),
         Employee(3, "Peter", "Weber", "1003", team_id=1),
-        Employee(4, "Lisa", "Meyer", "1004", team_id=1, is_brandschutzbeauftragter=True),
+        Employee(4, "Lisa", "Meyer", "1004", team_id=1),
         Employee(5, "Tom", "Wagner", "1005", team_id=1),
     ])
     
-    # Team Beta (5 members)
+    # Team Beta (5 members) - NO special functions for team members
     employees.extend([
-        Employee(6, "Julia", "Becker", "2001", team_id=2, is_brandmeldetechniker=True),
+        Employee(6, "Julia", "Becker", "2001", team_id=2),
         Employee(7, "Michael", "Schulz", "2002", team_id=2),
         Employee(8, "Sarah", "Hoffmann", "2003", team_id=2),
-        Employee(9, "Daniel", "Koch", "2004", team_id=2, is_brandschutzbeauftragter=True),
+        Employee(9, "Daniel", "Koch", "2004", team_id=2),
         Employee(10, "Laura", "Bauer", "2005", team_id=2),
     ])
     
-    # Team Gamma (5 members)
+    # Team Gamma (5 members) - NO special functions for team members
     employees.extend([
         Employee(11, "Markus", "Richter", "3001", team_id=3),
-        Employee(12, "Stefanie", "Klein", "3002", team_id=3, is_brandmeldetechniker=True),
+        Employee(12, "Stefanie", "Klein", "3002", team_id=3),
         Employee(13, "Andreas", "Wolf", "3003", team_id=3),
         Employee(14, "Nicole", "Schröder", "3004", team_id=3),
-        Employee(15, "Christian", "Neumann", "3005", team_id=3, is_brandschutzbeauftragter=True),
+        Employee(15, "Christian", "Neumann", "3005", team_id=3),
     ])
     
-    # Springers (backup workers - 4 people)
+    # Springers (backup workers - 2 people without functions)
     employees.extend([
         Employee(16, "Robert", "Franke", "S001", is_springer=True, team_id=None),
-        Employee(17, "Maria", "Lange", "S002", is_springer=True, team_id=None, is_brandmeldetechniker=True),
-        Employee(18, "Thomas", "Zimmermann", "S003", is_springer=True, team_id=None),
-        Employee(19, "Katharina", "Krüger", "S004", is_springer=True, team_id=None, is_brandschutzbeauftragter=True),
+        Employee(17, "Thomas", "Zimmermann", "S002", is_springer=True, team_id=None),
+    ])
+    
+    # People OUTSIDE teams with special functions (2 people)
+    employees.extend([
+        Employee(18, "Maria", "Lange", "F001", team_id=None, is_brandmeldetechniker=True),
+        Employee(19, "Katharina", "Krüger", "F002", team_id=None, is_brandschutzbeauftragter=True),
     ])
     
     # Assign employees to teams

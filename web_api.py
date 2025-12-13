@@ -918,6 +918,73 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/api/shifts/export/csv', methods=['GET'])
+    def export_schedule_csv():
+        """Export schedule to CSV format"""
+        start_date_str = request.args.get('startDate')
+        end_date_str = request.args.get('endDate')
+        
+        if not start_date_str or not end_date_str:
+            return jsonify({'error': 'startDate and endDate are required'}), 400
+        
+        try:
+            start_date = date.fromisoformat(start_date_str)
+            end_date = date.fromisoformat(end_date_str)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get assignments
+            cursor.execute("""
+                SELECT sa.Date, e.Vorname, e.Name, e.Personalnummer, 
+                       t.Name as TeamName, st.Code, st.Name as ShiftName
+                FROM ShiftAssignments sa
+                JOIN Employees e ON sa.EmployeeId = e.Id
+                LEFT JOIN Teams t ON e.TeamId = t.Id
+                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                ORDER BY sa.Date, t.Name, e.Name, e.Vorname
+            """, (start_date.isoformat(), end_date.isoformat()))
+            
+            # Build CSV
+            import io
+            output = io.StringIO()
+            output.write("Datum,Team,Mitarbeiter,Personalnummer,Schichttyp,Schichtname\n")
+            
+            for row in cursor.fetchall():
+                team_name = row['TeamName'] or 'Ohne Team'
+                output.write(f"{row['Date']},{team_name},{row['Vorname']} {row['Name']},{row['Personalnummer']},{row['Code']},{row['ShiftName']}\n")
+            
+            conn.close()
+            
+            # Return as downloadable file
+            from flask import make_response
+            csv_data = output.getvalue()
+            output.close()
+            
+            response = make_response(csv_data)
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=Dienstplan_{start_date_str}_bis_{end_date_str}.csv'
+            return response
+            
+        except Exception as e:
+            app.logger.error(f"CSV export error: {str(e)}")
+            return jsonify({'error': f'Export-Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/shifts/export/pdf', methods=['GET'])
+    def export_schedule_pdf():
+        """PDF export - not yet implemented"""
+        return jsonify({
+            'error': 'PDF-Export ist noch nicht implementiert. Bitte verwenden Sie CSV-Export oder drucken Sie die Ansicht.'
+        }), 501
+    
+    @app.route('/api/shifts/export/excel', methods=['GET'])
+    def export_schedule_excel():
+        """Excel export - not yet implemented"""
+        return jsonify({
+            'error': 'Excel-Export ist noch nicht implementiert. Bitte verwenden Sie CSV-Export oder drucken Sie die Ansicht.'
+        }), 501
+    
     # ============================================================================
     # ABSENCE ENDPOINTS
     # ============================================================================

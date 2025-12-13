@@ -1026,6 +1026,9 @@ async function exportScheduleToPdf() {
             document.body.removeChild(a);
         } else if (response.status === 401) {
             alert('Bitte melden Sie sich an, um den Dienstplan als PDF zu exportieren.');
+        } else if (response.status === 501) {
+            const error = await response.json();
+            alert(error.error || 'PDF-Export ist noch nicht implementiert.');
         } else {
             alert('Fehler beim PDF-Export. Bitte versuchen Sie es erneut.');
         }
@@ -1078,6 +1081,73 @@ async function exportScheduleToExcel() {
             a.download = `Dienstplan_${startDate}_bis_${endDate}.xlsx`;
             document.body.appendChild(a);
             a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an, um den Dienstplan als Excel zu exportieren.');
+        } else if (response.status === 501) {
+            const error = await response.json();
+            alert(error.error || 'Excel-Export ist noch nicht implementiert.');
+        } else {
+            alert('Fehler beim Excel-Export. Bitte versuchen Sie es erneut.');
+        }
+    } catch (error) {
+        alert(`Fehler beim Excel-Export: ${error.message}`);
+    }
+}
+
+async function exportScheduleToCsv() {
+    let startDate, endDate;
+    
+    if (currentView === 'week') {
+        const startDateInput = document.getElementById('startDate');
+        startDate = startDateInput.value;
+        
+        if (!startDate) {
+            alert('Bitte wählen Sie ein Startdatum aus.');
+            return;
+        }
+        
+        const end = new Date(startDate);
+        end.setDate(end.getDate() + 7);
+        endDate = end.toISOString().split('T')[0];
+    } else if (currentView === 'month') {
+        const month = document.getElementById('monthSelect').value;
+        const year = document.getElementById('monthYearSelect').value;
+        
+        startDate = `${year}-${month.padStart(2, '0')}-01`;
+        const end = new Date(year, month, 0); // Last day of month
+        endDate = end.toISOString().split('T')[0];
+    } else if (currentView === 'year') {
+        const year = document.getElementById('yearSelect').value;
+        
+        startDate = `${year}-01-01`;
+        endDate = `${year}-12-31`;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/shifts/export/csv?startDate=${startDate}&endDate=${endDate}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `Dienstplan_${startDate}_bis_${endDate}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else {
+            alert('Fehler beim CSV-Export. Bitte versuchen Sie es erneut.');
+        }
+    } catch (error) {
+        alert(`Fehler beim CSV-Export: ${error.message}`);
+    }
+}
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } else if (response.status === 401) {

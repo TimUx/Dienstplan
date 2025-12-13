@@ -415,17 +415,181 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         conn.close()
         return jsonify(springers)
     
+    @app.route('/api/employees', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def create_employee():
+        """Create new employee"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('vorname') or not data.get('name') or not data.get('personalnummer'):
+                return jsonify({'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}), 400
+            
+            # Validate Funktion field - only allow specific values
+            funktion = data.get('funktion')
+            if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
+                return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker, Springer'}), 400
+            
+            # Auto-set BMT/BSB flags based on Funktion
+            is_bmt = 1 if funktion == 'Brandmeldetechniker' else 0
+            is_bsb = 1 if funktion == 'Brandschutzbeauftragter' else 0
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if Personalnummer already exists
+            cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ?", (data.get('personalnummer'),))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Personalnummer bereits vorhanden'}), 400
+            
+            cursor.execute("""
+                INSERT INTO Employees 
+                (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
+                 IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, TeamId)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('vorname'),
+                data.get('name'),
+                data.get('personalnummer'),
+                data.get('email'),
+                data.get('geburtsdatum'),
+                funktion,
+                1 if data.get('isSpringer') else 0,
+                1 if data.get('isFerienjobber') else 0,
+                is_bmt,
+                is_bsb,
+                data.get('teamId')
+            ))
+            
+            employee_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': employee_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create employee error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/employees/<int:id>', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def update_employee(id):
+        """Update employee"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('vorname') or not data.get('name') or not data.get('personalnummer'):
+                return jsonify({'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}), 400
+            
+            # Validate Funktion field
+            funktion = data.get('funktion')
+            if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
+                return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker, Springer'}), 400
+            
+            # Auto-set BMT/BSB flags based on Funktion
+            is_bmt = 1 if funktion == 'Brandmeldetechniker' else 0
+            is_bsb = 1 if funktion == 'Brandschutzbeauftragter' else 0
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if employee exists
+            cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
+            
+            # Check if Personalnummer is taken by another employee
+            cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ? AND Id != ?", 
+                          (data.get('personalnummer'), id))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}), 400
+            
+            cursor.execute("""
+                UPDATE Employees 
+                SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, Geburtsdatum = ?, 
+                    Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
+                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, TeamId = ?
+                WHERE Id = ?
+            """, (
+                data.get('vorname'),
+                data.get('name'),
+                data.get('personalnummer'),
+                data.get('email'),
+                data.get('geburtsdatum'),
+                funktion,
+                1 if data.get('isSpringer') else 0,
+                1 if data.get('isFerienjobber') else 0,
+                is_bmt,
+                is_bsb,
+                data.get('teamId'),
+                id
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update employee error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/employees/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_employee(id):
+        """Delete employee (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if employee exists
+            cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
+            
+            # Check if employee has assignments
+            cursor.execute("SELECT COUNT(*) as count FROM ShiftAssignments WHERE EmployeeId = ?", (id,))
+            assignment_count = cursor.fetchone()['count']
+            
+            if assignment_count > 0:
+                conn.close()
+                return jsonify({'error': f'Mitarbeiter hat {assignment_count} Schichtzuweisungen und kann nicht gelöscht werden'}), 400
+            
+            # Delete employee
+            cursor.execute("DELETE FROM Employees WHERE Id = ?", (id,))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete employee error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
     # ============================================================================
     # TEAM ENDPOINTS
     # ============================================================================
     
     @app.route('/api/teams', methods=['GET'])
     def get_teams():
-        """Get all teams"""
+        """Get all teams with employee count"""
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT * FROM Teams ORDER BY Name")
+        cursor.execute("""
+            SELECT t.Id, t.Name, t.Description, t.Email,
+                   COUNT(e.Id) as EmployeeCount
+            FROM Teams t
+            LEFT JOIN Employees e ON t.Id = e.TeamId
+            GROUP BY t.Id, t.Name, t.Description, t.Email
+            ORDER BY t.Name
+        """)
         
         teams = []
         for row in cursor.fetchall():
@@ -433,11 +597,118 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'id': row['Id'],
                 'name': row['Name'],
                 'description': row['Description'],
-                'email': row['Email']
+                'email': row['Email'],
+                'employeeCount': row['EmployeeCount']
             })
         
         conn.close()
         return jsonify(teams)
+    
+    @app.route('/api/teams', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def create_team():
+        """Create new team"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('name'):
+                return jsonify({'error': 'Teamname ist Pflichtfeld'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO Teams (Name, Description, Email)
+                VALUES (?, ?, ?)
+            """, (
+                data.get('name'),
+                data.get('description'),
+                data.get('email')
+            ))
+            
+            team_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': team_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create team error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/teams/<int:id>', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def update_team(id):
+        """Update team"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('name'):
+                return jsonify({'error': 'Teamname ist Pflichtfeld'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if team exists
+            cursor.execute("SELECT Id FROM Teams WHERE Id = ?", (id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Team nicht gefunden'}), 404
+            
+            cursor.execute("""
+                UPDATE Teams 
+                SET Name = ?, Description = ?, Email = ?
+                WHERE Id = ?
+            """, (
+                data.get('name'),
+                data.get('description'),
+                data.get('email'),
+                id
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update team error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/teams/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_team(id):
+        """Delete team (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if team exists
+            cursor.execute("SELECT Id FROM Teams WHERE Id = ?", (id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Team nicht gefunden'}), 404
+            
+            # Check if team has employees
+            cursor.execute("SELECT COUNT(*) as count FROM Employees WHERE TeamId = ?", (id,))
+            employee_count = cursor.fetchone()['count']
+            
+            if employee_count > 0:
+                conn.close()
+                return jsonify({'error': f'Team hat {employee_count} Mitarbeiter und kann nicht gelöscht werden'}), 400
+            
+            # Delete team
+            cursor.execute("DELETE FROM Teams WHERE Id = ?", (id,))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete team error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
     # ============================================================================
     # SHIFT TYPE ENDPOINTS
@@ -646,6 +917,73 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/shifts/export/csv', methods=['GET'])
+    def export_schedule_csv():
+        """Export schedule to CSV format"""
+        start_date_str = request.args.get('startDate')
+        end_date_str = request.args.get('endDate')
+        
+        if not start_date_str or not end_date_str:
+            return jsonify({'error': 'startDate and endDate are required'}), 400
+        
+        try:
+            start_date = date.fromisoformat(start_date_str)
+            end_date = date.fromisoformat(end_date_str)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get assignments
+            cursor.execute("""
+                SELECT sa.Date, e.Vorname, e.Name, e.Personalnummer, 
+                       t.Name as TeamName, st.Code, st.Name as ShiftName
+                FROM ShiftAssignments sa
+                JOIN Employees e ON sa.EmployeeId = e.Id
+                LEFT JOIN Teams t ON e.TeamId = t.Id
+                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                ORDER BY sa.Date, t.Name, e.Name, e.Vorname
+            """, (start_date.isoformat(), end_date.isoformat()))
+            
+            # Build CSV
+            import io
+            output = io.StringIO()
+            output.write("Datum,Team,Mitarbeiter,Personalnummer,Schichttyp,Schichtname\n")
+            
+            for row in cursor.fetchall():
+                team_name = row['TeamName'] or 'Ohne Team'
+                output.write(f"{row['Date']},{team_name},{row['Vorname']} {row['Name']},{row['Personalnummer']},{row['Code']},{row['ShiftName']}\n")
+            
+            conn.close()
+            
+            # Return as downloadable file
+            from flask import make_response
+            csv_data = output.getvalue()
+            output.close()
+            
+            response = make_response(csv_data)
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=Dienstplan_{start_date_str}_bis_{end_date_str}.csv'
+            return response
+            
+        except Exception as e:
+            app.logger.error(f"CSV export error: {str(e)}")
+            return jsonify({'error': f'Export-Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/shifts/export/pdf', methods=['GET'])
+    def export_schedule_pdf():
+        """PDF export - not yet implemented"""
+        return jsonify({
+            'error': 'PDF-Export ist noch nicht implementiert. Bitte verwenden Sie CSV-Export oder drucken Sie die Ansicht.'
+        }), 501
+    
+    @app.route('/api/shifts/export/excel', methods=['GET'])
+    def export_schedule_excel():
+        """Excel export - not yet implemented"""
+        return jsonify({
+            'error': 'Excel-Export ist noch nicht implementiert. Bitte verwenden Sie CSV-Export oder drucken Sie die Ansicht.'
+        }), 501
     
     # ============================================================================
     # ABSENCE ENDPOINTS

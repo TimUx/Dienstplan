@@ -16,10 +16,19 @@ This guide explains how to build the Dienstplan Windows standalone executable fr
 1. Open Command Prompt or PowerShell in the Dienstplan directory
 2. Run the build script:
    ```cmd
+   REM Build with empty database (production-ready, default)
    build_windows.bat
+   
+   REM Build with sample data (for testing/demo)
+   build_windows.bat --sample-data
    ```
 3. Wait for the build to complete (~2-5 minutes)
 4. The executable `Dienstplan.exe` will be created in the current directory
+5. The database will be in the `data/` directory
+
+**Output:**
+- `Dienstplan.exe` - The standalone executable
+- `data/dienstplan.db` - Pre-initialized, persistent database
 
 ### Option 2: Manual Build
 
@@ -28,8 +37,16 @@ REM Install dependencies
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
+REM Create production database (empty)
+mkdir data
+python db_init.py data\dienstplan.db
+
+REM OR: Create database with sample data
+python db_init.py data\dienstplan.db --with-sample-data
+
 REM Clean previous builds
 rmdir /s /q build dist
+if exist Dienstplan.exe del /q Dienstplan.exe
 
 REM Build with PyInstaller
 python -m PyInstaller Dienstplan.spec
@@ -44,8 +61,17 @@ While primarily for Windows, you can build a Linux/macOS executable:
 
 ```bash
 chmod +x build_executable.sh
+
+# Build with empty database (production-ready, default)
 ./build_executable.sh
+
+# Build with sample data (for testing/demo)
+./build_executable.sh --sample-data
 ```
+
+**Output:**
+- `Dienstplan` (or `Dienstplan.exe` on Windows with WSL)
+- `data/dienstplan.db` - Pre-initialized, persistent database
 
 ## Understanding the Build Process
 
@@ -56,24 +82,34 @@ The script installs all Python packages from `requirements.txt`:
 - **flask-cors** - CORS support
 - **PyInstaller** - Executable builder
 
-### Step 2: PyInstaller Analysis
+### Step 2: Create Production Database
+The script creates a pre-initialized SQLite database:
+- **Location**: `data/dienstplan.db`
+- **Schema**: All tables, indexes, and constraints
+- **Default data**: Admin user, roles, shift types
+- **Optional**: Sample data (teams, employees) with `--sample-data` flag
+
+### Step 3: PyInstaller Analysis
 PyInstaller analyzes the `launcher.py` script and all its dependencies:
 - Identifies all imported modules
 - Collects binary dependencies
 - Bundles the `wwwroot` directory (web UI files)
+- Bundles the `data` directory (database)
 
-### Step 3: Bundle Creation
+### Step 4: Bundle Creation
 PyInstaller creates a single executable containing:
 - Python 3.11 runtime
 - All Python packages
 - Web UI assets
+- Pre-initialized database template
 - Application code
 
-### Step 4: Executable Generation
+### Step 5: Executable Generation
 The final `Dienstplan.exe` is created with:
 - Size: ~120-150 MB (includes Python runtime and all libraries)
 - Format: Windows PE executable
 - Console: Visible (shows server logs)
+- Database: Persistent in `data/` directory next to executable
 
 ## Build Configuration
 
@@ -172,6 +208,68 @@ pip install --upgrade -r requirements.txt
 - Submit the executable to antivirus vendors as false positive
 - Sign the executable with a code signing certificate (advanced)
 
+## Production Database
+
+### Database Location
+The production database is stored in the `data/` directory:
+- **Path**: `data/dienstplan.db`
+- **Persistence**: The database persists between runs
+- **Bundled**: The database is included in the PyInstaller bundle
+
+### Default Database Contents
+The pre-initialized database includes:
+- ✅ All database tables and indexes
+- ✅ Default roles (Admin, Disponent, Mitarbeiter)
+- ✅ Admin user (`admin@fritzwinter.de` / `Admin123!`)
+- ✅ Standard shift types (F, S, N, Z, BMT, BSB, K, U, L)
+- ❌ No teams (empty by default)
+- ❌ No employees (empty by default)
+
+### Building with Sample Data
+To include sample data for testing/demo purposes:
+
+**Windows:**
+```cmd
+build_windows.bat --sample-data
+```
+
+**Linux/macOS:**
+```bash
+./build_executable.sh --sample-data
+```
+
+This adds:
+- ✅ 3 sample teams (Alpha, Beta, Gamma)
+- ✅ 19 sample employees (15 regular + 4 springers)
+- ✅ Various roles and qualifications
+
+### Customizing the Database
+To create a custom database before building:
+
+1. Create your database:
+   ```bash
+   python db_init.py data/dienstplan.db
+   ```
+
+2. Populate with your data:
+   ```bash
+   python main.py serve --db data/dienstplan.db
+   # Use the web interface to add your teams, employees, etc.
+   ```
+
+3. Build the executable:
+   ```bash
+   build_windows.bat
+   ```
+
+The custom database will be bundled with the executable.
+
+### Database Migration
+When users first run the executable:
+1. The bundled database template is copied to `data/dienstplan.db` next to the executable
+2. All subsequent data is stored in this persistent location
+3. Users can backup/restore by copying the `data/` folder
+
 ## CI/CD Build (GitHub Actions)
 
 The executable is automatically built on GitHub Actions when pushing to `main`:
@@ -196,11 +294,14 @@ git push origin v2.0.1
 
 ### What to Include in Distribution
 
-**Minimal:**
+**Minimal (Required):**
 - `Dienstplan.exe` - The standalone executable
+- `data/` - Directory containing the database
+  - `data/dienstplan.db` - Pre-initialized database
 
 **Recommended:**
 - `Dienstplan.exe` - The standalone executable
+- `data/` - Directory with database
 - `README.md` - General documentation
 - `LICENSE` - License file
 - `VERSION.txt` - Version information
@@ -216,12 +317,14 @@ mkdir release
 
 REM Copy files
 copy Dienstplan.exe release\
+xcopy /E /I data release\data
 copy README.md release\
 copy LICENSE release\
 
 REM Create version file
 echo Dienstplan v2.0.1 > release\VERSION.txt
 echo No Python installation required! >> release\VERSION.txt
+echo Database location: data\dienstplan.db >> release\VERSION.txt
 
 REM Create ZIP
 powershell Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v2.0.1.zip

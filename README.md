@@ -189,20 +189,43 @@ Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx
 - ✅ Keine manuellen Abhängigkeiten
 - ✅ Automatischer Browser-Start
 - ✅ Sofort einsatzbereit
+- ✅ Persistente Datenbank in `data/` Ordner
+- ✅ Produktionsfertig mit Admin-Benutzer
+
+**Standard-Anmeldung:**
+- E-Mail: `admin@fritzwinter.de`
+- Passwort: `Admin123!`
+- ⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
 
 #### Eigene Executable erstellen
 Falls Sie die Executable selbst bauen möchten:
 
 **Windows:**
 ```cmd
+REM Mit leerer Datenbank (Standard, produktionsfertig)
 build_windows.bat
+
+REM Mit Beispieldaten (für Tests)
+build_windows.bat --sample-data
 ```
 
 **Linux/macOS:**
 ```bash
 chmod +x build_executable.sh
+
+# Mit leerer Datenbank (Standard, produktionsfertig)
 ./build_executable.sh
+
+# Mit Beispieldaten (für Tests)
+./build_executable.sh --sample-data
 ```
+
+Die Executable enthält:
+- Python Runtime (keine separate Installation nötig)
+- Alle Python-Bibliotheken (Flask, OR-Tools, etc.)
+- Web UI Dateien (wwwroot)
+- Vorkonfigurierte SQLite-Datenbank (data/dienstplan.db)
+- Automatischer Server-Start und Browser-Öffnung
 
 ### Option 2: Python-Installation (Für alle Betriebssysteme)
 

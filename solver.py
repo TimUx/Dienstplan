@@ -16,6 +16,7 @@ from constraints import (
     add_working_hours_constraints,
     add_special_function_constraints,
     add_springer_constraints,
+    add_team_rotation_constraints,
     add_fairness_objectives
 )
 
@@ -80,6 +81,9 @@ class ShiftPlanningSolver:
         
         print("  - Springer constraints (at least 1 available)")
         add_springer_constraints(model, x, employees, dates, shift_codes)
+        
+        print("  - Team rotation constraints (weekly rotation)")
+        add_team_rotation_constraints(model, x, employees, dates, shift_codes)
         
         # Soft constraints (optimization objectives)
         print("  - Fairness objectives")

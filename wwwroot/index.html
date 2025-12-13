@@ -715,13 +715,18 @@
                     <input type="date" id="geburtsdatum">
                 </div>
                 <div class="form-group">
-                    <label>Funktion/Rolle</label>
-                    <select id="funktion">
-                        <option value="">Keine</option>
-                        <option value="Brandmeldetechniker">Brandmeldetechniker</option>
-                        <option value="Brandschutzbeauftragter">Brandschutzbeauftragter</option>
-                    </select>
-                    <small class="field-note">BMT und BSB Funktionen ermöglichen entsprechende Schichtzuweisungen</small>
+                    <label>Sonderfunktionen</label>
+                    <div style="margin-top: 8px;">
+                        <label style="display: block; margin-bottom: 8px;">
+                            <input type="checkbox" id="isBrandmeldetechniker" style="margin-right: 8px;">
+                            Brandmeldetechniker (BMT)
+                        </label>
+                        <label style="display: block;">
+                            <input type="checkbox" id="isBrandschutzbeauftragter" style="margin-right: 8px;">
+                            Brandschutzbeauftragter (BSB)
+                        </label>
+                    </div>
+                    <small class="field-note">Mitarbeiter können mehrere Sonderfunktionen haben</small>
                 </div>
                 <div class="form-group">
                     <label>Team</label>

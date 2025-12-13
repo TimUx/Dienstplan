@@ -62,10 +62,12 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(17, "Thomas", "Zimmermann", "S002", is_springer=True, team_id=None),
     ])
     
-    # People OUTSIDE teams with special functions (2 people)
+    # People OUTSIDE teams with special functions (3 people)
     employees.extend([
         Employee(18, "Maria", "Lange", "F001", team_id=None, is_brandmeldetechniker=True),
         Employee(19, "Katharina", "Krüger", "F002", team_id=None, is_brandschutzbeauftragter=True),
+        # Employee with BOTH special functions
+        Employee(20, "Stefan", "Bauer", "F003", team_id=None, is_brandmeldetechniker=True, is_brandschutzbeauftragter=True),
     ])
     
     # Assign employees to teams

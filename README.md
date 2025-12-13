@@ -170,19 +170,55 @@ Dienstplan/
 
 ## 🚀 Installation & Ausführung
 
-### Voraussetzungen
+### Option 1: Windows Standalone Executable (Empfohlen für Windows-Nutzer) 🎯
+
+**Keine Installation erforderlich!** Einfach herunterladen und starten.
+
+#### Download
+Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter:
+- **Dienstplan-Windows-v2.0.x.zip**
+
+#### Installation & Start
+1. ZIP-Datei entpacken
+2. Doppelklick auf `Dienstplan.exe`
+3. Der Webserver startet automatisch und öffnet Ihren Browser
+4. Fertig! Das System ist unter `http://localhost:5000` erreichbar
+
+**Vorteile:**
+- ✅ Keine Python-Installation erforderlich
+- ✅ Keine manuellen Abhängigkeiten
+- ✅ Automatischer Browser-Start
+- ✅ Sofort einsatzbereit
+
+#### Eigene Executable erstellen
+Falls Sie die Executable selbst bauen möchten:
+
+**Windows:**
+```cmd
+build_windows.bat
+```
+
+**Linux/macOS:**
+```bash
+chmod +x build_executable.sh
+./build_executable.sh
+```
+
+### Option 2: Python-Installation (Für alle Betriebssysteme)
+
+#### Voraussetzungen
 - Python 3.9 oder höher
 - pip (Python Package Manager)
 
-### Schnellstart
+#### Schnellstart
 
-#### 1. Repository klonen
+##### 1. Repository klonen
 ```bash
 git clone https://github.com/TimUx/Dienstplan.git
 cd Dienstplan
 ```
 
-#### 2. Virtuelle Umgebung erstellen (empfohlen)
+##### 2. Virtuelle Umgebung erstellen (empfohlen)
 ```bash
 # Linux/macOS:
 python3 -m venv venv
@@ -193,12 +229,12 @@ python -m venv venv
 venv\Scripts\activate
 ```
 
-#### 3. Abhängigkeiten installieren
+##### 3. Abhängigkeiten installieren
 ```bash
 pip install -r requirements.txt
 ```
 
-#### 4. Anwendung starten
+##### 4. Anwendung starten
 
 **Web-Server-Modus:**
 ```bash
@@ -221,7 +257,7 @@ python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --db dienstpla
 python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --time-limit 600
 ```
 
-#### 5. Browser öffnen
+##### 5. Browser öffnen
 Navigieren Sie zu: `http://localhost:5000`
 
 ### (Optional) Sample-Datenbank generieren
@@ -416,7 +452,30 @@ Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
 
 ## 🐳 Deployment
 
-### Option 1: Docker Container
+### Option 1: Windows Standalone Executable (Empfohlen für Desktop) ⭐
+
+Die einfachste Methode für Windows-Anwender:
+
+1. Laden Sie das neueste Release von GitHub herunter
+2. Entpacken Sie die ZIP-Datei
+3. Starten Sie `Dienstplan.exe`
+
+**Für Entwickler:** Erstellen Sie Ihre eigene Executable mit:
+```bash
+# Windows
+build_windows.bat
+
+# Linux/macOS
+./build_executable.sh
+```
+
+Die Executable enthält:
+- Python Runtime (keine separate Installation nötig)
+- Alle Python-Bibliotheken (Flask, OR-Tools, etc.)
+- Web UI Dateien (wwwroot)
+- Automatischer Server-Start und Browser-Öffnung
+
+### Option 2: Docker Container (Für Server-Deployment)
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
@@ -431,7 +490,7 @@ docker build -t dienstplan .
 docker run -p 5000:5000 -v ./data:/app/data dienstplan
 ```
 
-### Option 2: Systemd Service (Linux)
+### Option 3: Systemd Service (Linux Server)
 ```ini
 [Unit]
 Description=Dienstplan Python OR-Tools
@@ -446,12 +505,6 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-```
-
-### Option 3: PyInstaller (Standalone Executable)
-```bash
-pip install pyinstaller
-pyinstaller --onefile --add-data "wwwroot:wwwroot" main.py
 ```
 
 ## 🛠️ Entwicklung

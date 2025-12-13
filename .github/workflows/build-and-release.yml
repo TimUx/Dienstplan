@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
+  build-python-windows:
+    runs-on: windows-latest
     permissions:
       contents: write
     
@@ -18,75 +18,67 @@ jobs:
       with:
         fetch-depth: 0
     
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+    - name: Setup Python
+      uses: actions/setup-python@v5
       with:
-        dotnet-version: '10.0.x'
+        python-version: '3.11'
     
-    - name: Restore dependencies
-      run: dotnet restore
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
     
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-    
-    - name: Test
-      run: dotnet test --configuration Release --no-build --verbosity normal
+    - name: Test Python modules
+      run: |
+        python -c "import ortools; print('OR-Tools:', ortools.__version__)"
+        python -c "import flask; print('Flask:', flask.__version__)"
       continue-on-error: true
     
     - name: Get version
       id: version
       run: |
         # Extract version from main project file or use date-based version
-        VERSION="1.0.${{ github.run_number }}"
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        $VERSION = "2.0.${{ github.run_number }}"
+        echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Building version $VERSION"
     
-    - name: Publish Windows build
+    - name: Build Windows executable with PyInstaller
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        dotnet publish src/Dienstplan.Web/Dienstplan.Web.csproj \
-          -c Release \
-          -r win-x64 \
-          --self-contained true \
-          -p:PublishSingleFile=true \
-          -p:Version=${{ steps.version.outputs.VERSION }} \
-          -o ./publish/win-x64
+        python -m PyInstaller Dienstplan.spec
     
-    - name: Publish Linux build
+    - name: Prepare Windows release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        dotnet publish src/Dienstplan.Web/Dienstplan.Web.csproj \
-          -c Release \
-          -r linux-x64 \
-          --self-contained true \
-          -p:PublishSingleFile=true \
-          -p:Version=${{ steps.version.outputs.VERSION }} \
-          -o ./publish/linux-x64
+        mkdir release
+        Copy-Item dist\Dienstplan.exe release\
+        Copy-Item README.md release\
+        Copy-Item LICENSE release\
+        echo "Dienstplan v${{ steps.version.outputs.VERSION }}" > release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "To start the application:" >> release\VERSION.txt
+        echo "1. Double-click Dienstplan.exe" >> release\VERSION.txt
+        echo "2. The web browser will open automatically" >> release\VERSION.txt
+        echo "3. Default URL: http://localhost:5000" >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "No Python installation required!" >> release\VERSION.txt
     
     - name: Create Windows ZIP
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        cd publish/win-x64
-        zip -r ../../Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip .
-        cd ../..
-    
-    - name: Create Linux TAR.GZ
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: |
-        cd publish/linux-x64
-        tar -czf ../../Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz .
-        cd ../..
+        Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
     
     - name: Generate changelog
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       id: changelog
       run: |
-        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-        echo "## Changes in this release" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        git log --pretty=format:"- %s (%h)" -10 >> $GITHUB_OUTPUT || echo "- Initial release" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "CHANGELOG<<EOF" >> $env:GITHUB_OUTPUT
+        echo "## Changes in this release" >> $env:GITHUB_OUTPUT
+        echo "" >> $env:GITHUB_OUTPUT
+        git log --pretty=format:"- %s (%h)" -10 >> $env:GITHUB_OUTPUT
+        if ($LASTEXITCODE -ne 0) { echo "- Initial release" >> $env:GITHUB_OUTPUT }
+        echo "" >> $env:GITHUB_OUTPUT
+        echo "EOF" >> $env:GITHUB_OUTPUT
     
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -97,30 +89,39 @@ jobs:
         body: |
           # Dienstplan Release v${{ steps.version.outputs.VERSION }}
           
-          Automatisch generiertes Release vom Build-System.
+          **Version 2.0 - Python Edition mit standalone Windows executable**
           
           ## 📦 Downloads
-          - **Windows**: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
-          - **Linux**: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+          - **Windows**: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip (keine Python-Installation erforderlich!)
           
-          ## 🚀 Installation
+          ## 🚀 Installation & Verwendung
           
-          ### Windows
+          ### Windows (Standalone Executable - Empfohlen!)
           1. Download und entpacken Sie die ZIP-Datei
-          2. Führen Sie `Dienstplan.Web.exe` aus
-          3. Öffnen Sie einen Browser und navigieren Sie zu `http://localhost:5000`
+          2. Doppelklicken Sie auf `Dienstplan.exe`
+          3. Das Programm startet automatisch den Webserver und öffnet Ihren Browser
+          4. Standard-URL: `http://localhost:5000`
           
-          ### Linux
+          **Keine Installation von Python oder anderen Abhängigkeiten erforderlich!**
+          
+          ### Alternative: Python (für alle Betriebssysteme)
+          Falls Sie Python bereits installiert haben oder eine andere Plattform verwenden:
           ```bash
-          tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
-          chmod +x Dienstplan.Web
-          ./Dienstplan.Web
+          pip install -r requirements.txt
+          python main.py serve
           ```
+          
+          ## ✨ Features
+          - ✅ Standalone Windows Executable (keine Abhängigkeiten)
+          - ✅ Automatischer Start des Webservers
+          - ✅ Automatisches Öffnen des Browsers
+          - ✅ Google OR-Tools für optimale Schichtplanung
+          - ✅ Responsive Web-UI für Desktop & Mobile
+          - ✅ SQLite Datenbank (keine Serverinstallation nötig)
           
           ${{ steps.changelog.outputs.CHANGELOG }}
         files: |
           Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
-          Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
         draft: false
         prerelease: false
       env:

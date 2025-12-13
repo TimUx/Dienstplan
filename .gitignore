@@ -17,6 +17,11 @@ dist/
 build/
 *.egg-info/
 
+# PyInstaller output (but keep the .spec file)
+Dienstplan.exe
+Dienstplan
+launcher
+
 # IDEs
 .vscode/
 .idea/
@@ -31,6 +36,7 @@ build/
 
 # Build artifacts
 publish/
+release/
 *.zip
 *.tar.gz
 

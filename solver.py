@@ -1,5 +1,5 @@
 """
-Solver for the shift planning problem using OR-Tools CP-SAT.
+Solver for the TEAM-BASED shift planning problem using OR-Tools CP-SAT.
 Configures and runs the solver, returns solution.
 """
 
@@ -9,14 +9,15 @@ from typing import List, Dict, Tuple, Optional
 from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES
 from model import ShiftPlanningModel
 from constraints import (
-    add_basic_constraints,
+    add_team_shift_assignment_constraints,
+    add_team_rotation_constraints,
+    add_employee_team_linkage_constraints,
     add_staffing_constraints,
     add_rest_time_constraints,
     add_consecutive_shifts_constraints,
     add_working_hours_constraints,
-    add_special_function_constraints,
+    add_td_constraints,
     add_springer_constraints,
-    add_team_rotation_constraints,
     add_fairness_objectives
 )
 
@@ -48,46 +49,53 @@ class ShiftPlanningSolver:
     
     def add_all_constraints(self):
         """
-        Add all constraints to the model.
+        Add all constraints to the TEAM-BASED model.
         """
         model = self.planning_model.get_model()
-        x, bmt_vars, bsb_vars = self.planning_model.get_variables()
+        team_shift, employee_active, td_vars = self.planning_model.get_variables()
         employees = self.planning_model.employees
+        teams = self.planning_model.teams
         dates = self.planning_model.dates
+        weeks = self.planning_model.weeks
         shift_codes = self.planning_model.shift_codes
         absences = self.planning_model.absences
         shift_types = self.planning_model.shift_types
         
         print("Adding constraints...")
         
-        # Hard constraints (must be satisfied)
-        print("  - Basic constraints (one shift per day, no work when absent)")
-        add_basic_constraints(model, x, employees, dates, shift_codes, absences)
+        # CORE TEAM-BASED CONSTRAINTS
+        print("  - Team shift assignment (exactly one shift per team per week)")
+        add_team_shift_assignment_constraints(model, team_shift, teams, weeks, shift_codes)
         
+        print("  - Team rotation (F → N → S pattern)")
+        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes)
+        
+        print("  - Employee-team linkage (derive employee activity from team shifts)")
+        add_employee_team_linkage_constraints(model, team_shift, employee_active, employees, teams, dates, weeks, shift_codes, absences)
+        
+        # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift)")
-        add_staffing_constraints(model, x, employees, dates, shift_codes)
+        add_staffing_constraints(model, employee_active, team_shift, employees, teams, dates, weeks, shift_codes)
         
         print("  - Rest time constraints (11 hours minimum)")
-        add_rest_time_constraints(model, x, employees, dates, shift_codes)
+        add_rest_time_constraints(model, employee_active, team_shift, employees, dates, weeks, shift_codes)
         
-        print("  - Consecutive shifts constraints (max 6 days, max 5 nights)")
-        add_consecutive_shifts_constraints(model, x, bmt_vars, bsb_vars, employees, dates, shift_codes)
+        print("  - Consecutive shifts constraints (max 6 days)")
+        add_consecutive_shifts_constraints(model, employee_active, td_vars, employees, dates, shift_codes)
         
         print("  - Working hours constraints (48h/week, 192h/month)")
-        add_working_hours_constraints(model, x, bmt_vars, bsb_vars, employees, dates, shift_codes, shift_types)
+        add_working_hours_constraints(model, employee_active, team_shift, td_vars, employees, dates, weeks, shift_codes, shift_types)
         
-        print("  - Special function constraints (BMT, BSB)")
-        add_special_function_constraints(model, x, bmt_vars, bsb_vars, employees, dates, absences)
+        # SPECIAL FUNCTIONS
+        print("  - TD constraints (Tagdienst = organizational marker)")
+        add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)
         
         print("  - Springer constraints (at least 1 available)")
-        add_springer_constraints(model, x, employees, dates, shift_codes)
+        add_springer_constraints(model, employee_active, employees, dates)
         
-        print("  - Team rotation constraints (weekly rotation)")
-        add_team_rotation_constraints(model, x, employees, dates, shift_codes)
-        
-        # Soft constraints (optimization objectives)
+        # SOFT CONSTRAINTS (OPTIMIZATION)
         print("  - Fairness objectives")
-        objective_terms = add_fairness_objectives(model, x, employees, dates, shift_codes)
+        objective_terms = add_fairness_objectives(model, employee_active, team_shift, td_vars, employees, teams, dates, weeks, shift_codes)
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
@@ -153,76 +161,97 @@ class ShiftPlanningSolver:
     
     def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
         """
-        Extract shift assignments from the solution.
+        Extract shift assignments from the TEAM-BASED solution.
         
         Returns:
             Tuple of (shift_assignments, special_functions)
-            where special_functions is a dict mapping (employee_id, date) to function type ("BMT" or "BSB")
+            where special_functions is a dict mapping (employee_id, date) to "TD"
         """
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}
         
-        x, bmt_vars, bsb_vars = self.planning_model.get_variables()
+        team_shift, employee_active, td_vars = self.planning_model.get_variables()
         employees = self.planning_model.employees
+        teams = self.planning_model.teams
         dates = self.planning_model.dates
+        weeks = self.planning_model.weeks
         shift_codes = self.planning_model.shift_codes
         
         assignments = []
         assignment_id = 1
         
-        # Extract regular shift assignments
+        # Extract shift assignments based on team shifts and employee activity
         for emp in employees:
+            # Skip springers for now (they're handled separately)
+            if emp.is_springer or not emp.team_id:
+                continue
+            
+            # Find employee's team
+            team = None
+            for t in teams:
+                if t.id == emp.team_id:
+                    team = t
+                    break
+            
+            if not team:
+                continue
+            
+            # For each date, check if employee is active
             for d in dates:
+                if (emp.id, d) not in employee_active:
+                    continue
+                
+                if self.solution.Value(employee_active[(emp.id, d)]) == 0:
+                    continue  # Not working this day
+                
+                # Find which week this date belongs to
+                week_idx = self.planning_model.get_week_index(d)
+                
+                # Find which shift the team has this week
+                team_shift_code = None
                 for shift_code in shift_codes:
-                    if (emp.id, d, shift_code) in x:
-                        if self.solution.Value(x[(emp.id, d, shift_code)]) == 1:
-                            # Find shift type ID
-                            shift_type_id = None
-                            for st in STANDARD_SHIFT_TYPES:
-                                if st.code == shift_code:
-                                    shift_type_id = st.id
-                                    break
-                            
-                            assignment = ShiftAssignment(
-                                id=assignment_id,
-                                employee_id=emp.id,
-                                shift_type_id=shift_type_id,
-                                date=d,
-                                is_springer_assignment=emp.is_springer
-                            )
-                            assignments.append(assignment)
-                            assignment_id += 1
+                    if (team.id, week_idx, shift_code) in team_shift:
+                        if self.solution.Value(team_shift[(team.id, week_idx, shift_code)]) == 1:
+                            team_shift_code = shift_code
+                            break
+                
+                if not team_shift_code:
+                    continue  # No shift found
+                
+                # Find shift type ID
+                shift_type_id = None
+                for st in STANDARD_SHIFT_TYPES:
+                    if st.code == team_shift_code:
+                        shift_type_id = st.id
+                        break
+                
+                if shift_type_id:
+                    assignment = ShiftAssignment(
+                        id=assignment_id,
+                        employee_id=emp.id,
+                        shift_type_id=shift_type_id,
+                        date=d,
+                        is_springer_assignment=False
+                    )
+                    assignments.append(assignment)
+                    assignment_id += 1
         
-        # Extract special function assignments
+        # Extract TD assignments
         special_functions = {}
         
         for emp in employees:
-            for d in dates:
-                if (emp.id, d) in bmt_vars:
-                    if self.solution.Value(bmt_vars[(emp.id, d)]) == 1:
-                        special_functions[(emp.id, d)] = "BMT"
-                        # Also create a shift assignment
-                        assignment = ShiftAssignment(
-                            id=assignment_id,
-                            employee_id=emp.id,
-                            shift_type_id=5,  # BMT shift type ID
-                            date=d
-                        )
-                        assignments.append(assignment)
-                        assignment_id += 1
+            if not emp.can_do_td:
+                continue
+            
+            for week_idx, week_dates in enumerate(weeks):
+                if (emp.id, week_idx) not in td_vars:
+                    continue
                 
-                if (emp.id, d) in bsb_vars:
-                    if self.solution.Value(bsb_vars[(emp.id, d)]) == 1:
-                        special_functions[(emp.id, d)] = "BSB"
-                        # Also create a shift assignment
-                        assignment = ShiftAssignment(
-                            id=assignment_id,
-                            employee_id=emp.id,
-                            shift_type_id=6,  # BSB shift type ID
-                            date=d
-                        )
-                        assignments.append(assignment)
-                        assignment_id += 1
+                if self.solution.Value(td_vars[(emp.id, week_idx)]) == 1:
+                    # Mark TD for all weekdays in this week
+                    for d in week_dates:
+                        if d.weekday() < 5:  # Monday to Friday
+                            special_functions[(emp.id, d)] = "TD"
         
         return assignments, special_functions
     
@@ -283,7 +312,7 @@ if __name__ == "__main__":
     end = start + timedelta(days=13)  # 2 weeks
     
     print("Creating model...")
-    planning_model = create_shift_planning_model(employees, start, end, absences)
+    planning_model = create_shift_planning_model(employees, teams, start, end, absences)
     planning_model.print_model_statistics()
     
     print("\nSolving...")
@@ -293,6 +322,6 @@ if __name__ == "__main__":
         assignments, special_functions = result
         print(f"\n✓ Solution found!")
         print(f"  - Total assignments: {len(assignments)}")
-        print(f"  - Special functions: {len(special_functions)}")
+        print(f"  - TD assignments: {len(special_functions)}")
     else:
         print("\n✗ No solution found!")

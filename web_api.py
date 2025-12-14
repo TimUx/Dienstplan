@@ -866,7 +866,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Create model
             planning_model = create_shift_planning_model(
-                employees, start_date, end_date, absences
+                employees, teams, start_date, end_date, absences
             )
             
             # Solve

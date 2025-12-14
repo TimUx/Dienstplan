@@ -63,6 +63,7 @@ class ShiftPlanningModel:
         # Decision variables
         self.team_shift = {}  # team_shift[team_id, week_idx, shift_code] = 0 or 1
         self.employee_active = {}  # employee_active[employee_id, date] = 0 or 1 (derived from team shift)
+        self.employee_weekend_shift = {}  # employee_weekend_shift[emp_id, date, shift_code] = 0 or 1 (WEEKEND ONLY)
         self.td_vars = {}  # td[employee_id, week_idx] = 0 or 1 (Tagdienst assignment)
         
         # Build the model
@@ -95,15 +96,17 @@ class ShiftPlanningModel:
         Create all decision variables for the model.
         
         Team-based model structure:
-        - team_shift[team_id, week_idx, shift]: Team has this shift in this week
-        - employee_active[emp_id, date]: Employee works on this date (derived from team shift)
+        - team_shift[team_id, week_idx, shift]: Team has this shift in this week (Mon-Fri)
+        - employee_active[emp_id, date]: Employee works on this date (Mon-Fri: derived from team shift)
+        - employee_weekend_shift[emp_id, date, shift]: Employee works this shift on weekend (Sat-Sun ONLY)
         - td_vars[emp_id, week_idx]: Employee has TD (Tagdienst) duty in this week
         
-        Important: Employees do not have individual shift variables.
-        Their shifts are always determined by their team's shift.
+        Important: 
+        - Weekday shifts (Mon-Fri) are determined by team's shift
+        - Weekend shifts (Sat-Sun) are individually assigned via separate variables
         """
         
-        # CORE VARIABLE: Team shift assignment per week
+        # CORE VARIABLE: Team shift assignment per week (WEEKDAYS ONLY)
         # team_shift[team_id, week_idx, shift_code] ∈ {0, 1}
         for team in self.teams:
             for week_idx in range(len(self.weeks)):
@@ -111,12 +114,28 @@ class ShiftPlanningModel:
                     var_name = f"team_{team.id}_week{week_idx}_shift{shift_code}"
                     self.team_shift[(team.id, week_idx, shift_code)] = self.model.NewBoolVar(var_name)
         
-        # Employee active variables (derived from team shifts + springer assignments)
+        # Employee active variables for WEEKDAYS (Mon-Fri: derived from team shifts)
         # employee_active[emp_id, date] ∈ {0, 1}
         for emp in self.employees:
             for d in self.dates:
-                var_name = f"emp{emp.id}_active_date{d}"
-                self.employee_active[(emp.id, d)] = self.model.NewBoolVar(var_name)
+                # Only create for weekdays - weekends use employee_weekend_shift
+                if d.weekday() < 5:  # Monday to Friday
+                    var_name = f"emp{emp.id}_active_date{d}"
+                    self.employee_active[(emp.id, d)] = self.model.NewBoolVar(var_name)
+        
+        # WEEKEND VARIABLE: Individual weekend shift assignment (WEEKENDS ONLY)
+        # employee_weekend_shift[emp_id, date, shift_code] ∈ {0, 1}
+        for emp in self.employees:
+            # Exclude temporary workers (Ferienjobber) from weekend rotation
+            if emp.is_ferienjobber:
+                continue
+            
+            for d in self.dates:
+                # Only create for weekends
+                if d.weekday() >= 5:  # Saturday or Sunday
+                    for shift_code in self.shift_codes:
+                        var_name = f"emp{emp.id}_weekend_{d}_shift{shift_code}"
+                        self.employee_weekend_shift[(emp.id, d, shift_code)] = self.model.NewBoolVar(var_name)
         
         # TD (Tagdienst) variables - weekly assignment on Monday-Friday
         # td_vars[emp_id, week_idx] ∈ {0, 1}
@@ -138,15 +157,16 @@ class ShiftPlanningModel:
     def get_variables(self) -> Tuple[
         Dict[Tuple[int, int, str], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
+        Dict[Tuple[int, date, str], cp_model.IntVar],
         Dict[Tuple[int, int], cp_model.IntVar]
     ]:
         """
         Get all decision variables.
         
         Returns:
-            Tuple of (team_shift, employee_active, td_vars)
+            Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars)
         """
-        return self.team_shift, self.employee_active, self.td_vars
+        return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars
     
     def get_team_by_id(self, team_id: int) -> Team:
         """Get team by ID"""
@@ -198,9 +218,10 @@ class ShiftPlanningModel:
         print()
         print(f"Decision variables:")
         print(f"  - Team shift variables: {len(self.team_shift)}")
-        print(f"  - Employee active variables: {len(self.employee_active)}")
+        print(f"  - Employee active variables (weekdays): {len(self.employee_active)}")
+        print(f"  - Employee weekend shift variables: {len(self.employee_weekend_shift)}")
         print(f"  - TD variables: {len(self.td_vars)}")
-        print(f"  - Total variables: {len(self.team_shift) + len(self.employee_active) + len(self.td_vars)}")
+        print(f"  - Total variables: {len(self.team_shift) + len(self.employee_active) + len(self.employee_weekend_shift) + len(self.td_vars)}")
         print("=" * 60)
 
 

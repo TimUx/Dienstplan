@@ -13,6 +13,13 @@ import hashlib
 import secrets
 from functools import wraps
 
+# PDF export dependencies
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+
 from data_loader import load_from_database, get_existing_assignments
 from model import create_shift_planning_model
 from solver import solve_shift_planning
@@ -981,18 +988,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': 'startDate and endDate are required'}), 400
         
         try:
-            # Import PDF library
-            try:
-                from reportlab.lib import colors
-                from reportlab.lib.pagesizes import A4, landscape
-                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-                from reportlab.lib.styles import getSampleStyleSheet
-                from reportlab.lib.units import cm
-            except ImportError:
-                return jsonify({
-                    'error': 'PDF-Export erfordert reportlab. Bitte installieren Sie es mit: pip install reportlab'
-                }), 501
-            
             start_date = date.fromisoformat(start_date_str)
             end_date = date.fromisoformat(end_date_str)
             

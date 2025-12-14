@@ -871,7 +871,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'notes': row['Notes']
                 })
             
-            # Get absences
+            # Get absences from Absences table
             cursor.execute("""
                 SELECT a.*, e.Vorname, e.Name, e.TeamId
                 FROM Absences a
@@ -892,6 +892,31 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'startDate': row['StartDate'],
                     'endDate': row['EndDate'],
                     'notes': row['Notes']
+                })
+            
+            # Also get approved vacation requests and add them as absences
+            cursor.execute("""
+                SELECT vr.Id, vr.EmployeeId, vr.StartDate, vr.EndDate, vr.Notes,
+                       e.Vorname, e.Name, e.TeamId
+                FROM VacationRequests vr
+                JOIN Employees e ON vr.EmployeeId = e.Id
+                WHERE vr.Status = 'Genehmigt'
+                  AND ((vr.StartDate <= ? AND vr.EndDate >= ?)
+                   OR (vr.StartDate >= ? AND vr.StartDate <= ?))
+            """, (end_date.isoformat(), start_date.isoformat(),
+                  start_date.isoformat(), end_date.isoformat()))
+            
+            vacation_id_offset = 10000  # Offset to avoid ID conflicts
+            for row in cursor.fetchall():
+                absences.append({
+                    'id': vacation_id_offset + row['Id'],
+                    'employeeId': row['EmployeeId'],
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'teamId': row['TeamId'],
+                    'type': 'Urlaub',
+                    'startDate': row['StartDate'],
+                    'endDate': row['EndDate'],
+                    'notes': row['Notes'] or 'Genehmigter Urlaub'
                 })
             
             return jsonify({

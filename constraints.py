@@ -406,14 +406,14 @@ def add_consecutive_shifts_constraints(
                         shifts_in_period.append(employee_active[(emp.id, current_date)])
                 else:  # Weekend
                     # Working on weekend if assigned to ANY shift
-                    weekend_working = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
                     weekend_shift_vars = []
                     for shift_code in shift_codes:
                         if (emp.id, current_date, shift_code) in employee_weekend_shift:
                             weekend_shift_vars.append(employee_weekend_shift[(emp.id, current_date, shift_code)])
                     
                     if weekend_shift_vars:
-                        # weekend_working = 1 if any weekend shift is assigned
+                        # Since max 1 shift per day, sum ∈ {0,1} works as boolean
+                        weekend_working = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
                         model.Add(weekend_working == sum(weekend_shift_vars))
                         shifts_in_period.append(weekend_working)
             
@@ -601,13 +601,14 @@ def add_springer_constraints(
                     springer_working.append(employee_active[(emp.id, d)])
             else:  # Weekend
                 # Springer works if assigned to any shift
-                working_any_shift = model.NewBoolVar(f"springer{emp.id}_working_{d}")
                 shift_vars = []
                 for shift_code in shift_codes:
                     if (emp.id, d, shift_code) in employee_weekend_shift:
                         shift_vars.append(employee_weekend_shift[(emp.id, d, shift_code)])
                 
                 if shift_vars:
+                    # Since max 1 shift per day, sum ∈ {0,1} works as boolean
+                    working_any_shift = model.NewBoolVar(f"springer{emp.id}_working_{d}")
                     model.Add(working_any_shift == sum(shift_vars))
                     springer_working.append(working_any_shift)
         
@@ -677,6 +678,10 @@ def add_fairness_objectives(
                 model.AddAbsEquality(abs_diff, diff)
                 objective_terms.append(abs_diff)
     
+    # Count total weeks and weekend days for proper variable bounds
+    num_weeks = len(weeks)
+    num_weekend_days = len([d for d in dates if d.weekday() >= 5])
+    
     # 2. Fair distribution of weekend work per employee
     weekend_counts = []
     for emp in employees:
@@ -691,8 +696,7 @@ def add_fairness_objectives(
                         weekend_shifts.append(employee_weekend_shift[(emp.id, d, shift_code)])
         
         if weekend_shifts:
-            total_weekends = model.NewIntVar(0, len([d for d in dates if d.weekday() >= 5]), 
-                                            f"weekends_{emp.id}")
+            total_weekends = model.NewIntVar(0, num_weekend_days, f"weekends_{emp.id}")
             model.Add(total_weekends == sum(weekend_shifts))
             weekend_counts.append(total_weekends)
     
@@ -700,12 +704,10 @@ def add_fairness_objectives(
     if len(weekend_counts) > 1:
         for i in range(len(weekend_counts)):
             for j in range(i + 1, len(weekend_counts)):
-                diff = model.NewIntVar(-len([d for d in dates if d.weekday() >= 5]), 
-                                      len([d for d in dates if d.weekday() >= 5]), 
+                diff = model.NewIntVar(-num_weekend_days, num_weekend_days, 
                                       f"weekend_diff_{i}_{j}")
                 model.Add(diff == weekend_counts[i] - weekend_counts[j])
-                abs_diff = model.NewIntVar(0, len([d for d in dates if d.weekday() >= 5]), 
-                                          f"weekend_abs_diff_{i}_{j}")
+                abs_diff = model.NewIntVar(0, num_weekend_days, f"weekend_abs_diff_{i}_{j}")
                 model.AddAbsEquality(abs_diff, diff)
                 objective_terms.append(abs_diff * 3)  # Weight weekend fairness higher
     
@@ -714,12 +716,12 @@ def add_fairness_objectives(
         night_counts = []
         for team in teams:
             night_weeks = []
-            for week_idx in range(len(weeks)):
+            for week_idx in range(num_weeks):
                 if (team.id, week_idx, "N") in team_shift:
                     night_weeks.append(team_shift[(team.id, week_idx, "N")])
             
             if night_weeks:
-                total_nights = model.NewIntVar(0, len(weeks), f"nights_{team.id}")
+                total_nights = model.NewIntVar(0, num_weeks, f"nights_{team.id}")
                 model.Add(total_nights == sum(night_weeks))
                 night_counts.append(total_nights)
         
@@ -727,9 +729,9 @@ def add_fairness_objectives(
         if len(night_counts) > 1:
             for i in range(len(night_counts)):
                 for j in range(i + 1, len(night_counts)):
-                    diff = model.NewIntVar(-len(weeks), len(weeks), f"night_diff_{i}_{j}")
+                    diff = model.NewIntVar(-num_weeks, num_weeks, f"night_diff_{i}_{j}")
                     model.Add(diff == night_counts[i] - night_counts[j])
-                    abs_diff = model.NewIntVar(0, len(weeks), f"night_abs_diff_{i}_{j}")
+                    abs_diff = model.NewIntVar(0, num_weeks, f"night_abs_diff_{i}_{j}")
                     model.AddAbsEquality(abs_diff, diff)
                     objective_terms.append(abs_diff * 2)  # Weight night fairness higher
     
@@ -741,12 +743,12 @@ def add_fairness_objectives(
                 continue
             
             emp_td_weeks = []
-            for week_idx in range(len(weeks)):
+            for week_idx in range(num_weeks):
                 if (emp.id, week_idx) in td_vars:
                     emp_td_weeks.append(td_vars[(emp.id, week_idx)])
             
             if emp_td_weeks:
-                total_td = model.NewIntVar(0, len(weeks), f"td_total_{emp.id}")
+                total_td = model.NewIntVar(0, num_weeks, f"td_total_{emp.id}")
                 model.Add(total_td == sum(emp_td_weeks))
                 td_counts.append(total_td)
         
@@ -754,9 +756,9 @@ def add_fairness_objectives(
         if len(td_counts) > 1:
             for i in range(len(td_counts)):
                 for j in range(i + 1, len(td_counts)):
-                    diff = model.NewIntVar(-len(weeks), len(weeks), f"td_diff_{i}_{j}")
+                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{i}_{j}")
                     model.Add(diff == td_counts[i] - td_counts[j])
-                    abs_diff = model.NewIntVar(0, len(weeks), f"td_abs_diff_{i}_{j}")
+                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{i}_{j}")
                     model.AddAbsEquality(abs_diff, diff)
                     objective_terms.append(abs_diff)
     

@@ -1487,16 +1487,20 @@ function displayTeams(teams) {
     let html = '<div class="grid">';
     teams.forEach(team => {
         const virtualBadge = team.isVirtual ? '<span style="background: #999; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 8px;">Virtuell</span>' : '';
+        const teamName = escapeHtml(team.name);
+        const teamDesc = escapeHtml(team.description || 'Keine Beschreibung');
+        const teamEmail = escapeHtml(team.email || 'Nicht angegeben');
+        
         html += `
             <div class="card">
-                <h3>${team.name}${virtualBadge}</h3>
-                <p>${team.description || 'Keine Beschreibung'}</p>
-                <p><strong>E-Mail:</strong> ${team.email || 'Nicht angegeben'}</p>
+                <h3>${teamName}${virtualBadge}</h3>
+                <p>${teamDesc}</p>
+                <p><strong>E-Mail:</strong> ${teamEmail}</p>
                 <p><strong>Mitarbeiter:</strong> ${team.employeeCount || 0}</p>
                 ${canEdit ? `
                     <div class="card-actions">
                         <button onclick="editTeam(${team.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
-                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${team.name}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${teamName.replace(/'/g, "\\'")}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
                     </div>
                 ` : ''}
             </div>

@@ -1958,10 +1958,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Build WHERE clause
+            # Build WHERE clause with parameterized queries for safety
             where_clauses = []
             params = []
             
+            # Whitelist valid filters to prevent any potential SQL injection
             if entity_name:
                 where_clauses.append("EntityName = ?")
                 params.append(entity_name)
@@ -1978,25 +1979,27 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 where_clauses.append("DATE(Timestamp) <= ?")
                 params.append(end_date)
             
+            # Safe: only joining static WHERE clauses, all values are parameterized
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
             
             # Get total count
-            cursor.execute(f"SELECT COUNT(*) as total FROM AuditLogs WHERE {where_sql}", params)
+            count_query = f"SELECT COUNT(*) as total FROM AuditLogs WHERE {where_sql}"
+            cursor.execute(count_query, params)
             total_count = cursor.fetchone()['total']
             
             # Calculate pagination
             total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
             offset = (page - 1) * page_size
             
-            # Get paginated results
-            query = f"""
+            # Get paginated results - safe: WHERE clause uses only parameterized queries
+            select_query = f"""
                 SELECT Id, Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes
                 FROM AuditLogs
                 WHERE {where_sql}
                 ORDER BY Timestamp DESC
                 LIMIT ? OFFSET ?
             """
-            cursor.execute(query, params + [page_size, offset])
+            cursor.execute(select_query, params + [page_size, offset])
             
             items = []
             for row in cursor.fetchall():

@@ -32,7 +32,7 @@ def test_weekday_consistency():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Group by employee and week
     emp_weekday_shifts = defaultdict(lambda: defaultdict(set))
@@ -99,7 +99,7 @@ def test_weekend_team_consistency():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Group assignments by employee and week
     emp_week_shifts = defaultdict(lambda: defaultdict(lambda: {'weekday': set(), 'weekend': set()}))
@@ -201,7 +201,7 @@ def test_team_rotation():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Group by team and week
     team_shifts = defaultdict(lambda: defaultdict(set))
@@ -292,7 +292,7 @@ def test_td_assignment():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # TD is in special_functions, not in shift assignments
     print(f"TD assignments: {len(special_functions)}")
@@ -327,7 +327,7 @@ def test_staffing_requirements():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Count staff per shift per day
     staffing_by_day = defaultdict(lambda: defaultdict(int))

@@ -1486,9 +1486,10 @@ function displayTeams(teams) {
     
     let html = '<div class="grid">';
     teams.forEach(team => {
+        const virtualBadge = team.isVirtual ? '<span style="background: #999; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 8px;">Virtuell</span>' : '';
         html += `
             <div class="card">
-                <h3>${team.name}</h3>
+                <h3>${team.name}${virtualBadge}</h3>
                 <p>${team.description || 'Keine Beschreibung'}</p>
                 <p><strong>E-Mail:</strong> ${team.email || 'Nicht angegeben'}</p>
                 <p><strong>Mitarbeiter:</strong> ${team.employeeCount || 0}</p>
@@ -1524,7 +1525,9 @@ async function editTeam(id) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/teams/${id}`);
+        const response = await fetch(`${API_BASE}/teams/${id}`, {
+            credentials: 'include'
+        });
         if (!response.ok) {
             alert('Fehler beim Laden der Teamdaten');
             return;
@@ -1536,6 +1539,7 @@ async function editTeam(id) {
         document.getElementById('teamName').value = team.name;
         document.getElementById('teamDescription').value = team.description || '';
         document.getElementById('teamEmail').value = team.email || '';
+        document.getElementById('teamIsVirtual').checked = team.isVirtual || false;
         
         document.getElementById('teamModalTitle').textContent = 'Team bearbeiten';
         document.getElementById('teamModal').style.display = 'block';
@@ -1587,7 +1591,8 @@ async function saveTeam(event) {
     const team = {
         name: document.getElementById('teamName').value,
         description: document.getElementById('teamDescription').value || null,
-        email: document.getElementById('teamEmail').value || null
+        email: document.getElementById('teamEmail').value || null,
+        isVirtual: document.getElementById('teamIsVirtual').checked
     };
     
     try {

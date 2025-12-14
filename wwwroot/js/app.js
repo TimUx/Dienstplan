@@ -617,9 +617,17 @@ function displayYearView(data, employees) {
                         }
                     });
                     
-                    const shiftBadges = shifts.map(s => 
-                        `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
-                    ).join(' ');
+                    const shiftBadges = shifts.map(s => {
+                        const canEdit = canPlanShifts();
+                        const shiftId = parseInt(s.id); // Ensure it's a number
+                        const shiftCode = escapeHtml(s.shiftCode);
+                        const shiftName = escapeHtml(s.shiftName);
+                        const isFixed = s.isFixed;
+                        const lockIcon = isFixed ? '🔒' : '';
+                        const badgeClass = isFixed ? 'shift-badge-fixed' : '';
+                        const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;
+                        return badge;
+                    }).join(' ');
                     html += `<td class="shift-cell">${shiftBadges}</td>`;
                 });
                 
@@ -1170,6 +1178,9 @@ async function loadEmployees() {
     try {
         const response = await fetch(`${API_BASE}/employees`);
         const employees = await response.json();
+        
+        // Cache employees for shift assignment modal
+        cachedEmployees = employees;
         
         displayEmployees(employees);
     } catch (error) {
@@ -2356,6 +2367,7 @@ function escapeHtml(text) {
 // Shift assignment editing functions
 let allShiftTypes = [];
 let allShifts = [];
+let cachedEmployees = [];
 
 async function loadShiftTypes() {
     try {

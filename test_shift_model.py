@@ -71,14 +71,21 @@ def test_weekday_consistency():
         return False
 
 
-def test_weekend_independence():
+def test_weekend_team_consistency():
     """
-    Requirement 2.3: Weekend (Saturday / Sunday) – Individual Assignment
-    Weekend shifts are assigned individually.
-    Weekend shifts do NOT affect weekday shifts.
+    CRITICAL REQUIREMENT: Weekend shifts MUST match team's weekly shift type.
+    
+    If Team Alpha has 'F' (Early) shift in week W:
+    - All members working Sat/Sun in week W must work 'F' shift
+    - NOT 'S' or 'N'
+    
+    This prevents illegal transitions like:
+    - Fri: Early (F)
+    - Sat: Late (S)   <- VIOLATION
+    - Mon: Night (N)
     """
     print("\n" + "=" * 70)
-    print("TEST 2: Weekend Shift Independence")
+    print("TEST 2: Weekend Team Consistency (CRITICAL)")
     print("=" * 70)
     
     employees, teams, absences = generate_sample_data()
@@ -94,46 +101,85 @@ def test_weekend_independence():
     
     assignments, special_functions = result
     
-    # Count weekend vs weekday assignments
-    weekday_count = sum(1 for a in assignments if a.date.weekday() < 5)
-    weekend_count = sum(1 for a in assignments if a.date.weekday() >= 5)
+    # Group assignments by employee and week
+    emp_week_shifts = defaultdict(lambda: defaultdict(lambda: {'weekday': set(), 'weekend': set()}))
     
-    print(f"Total assignments: {len(assignments)}")
-    print(f"  Weekday: {weekday_count}")
-    print(f"  Weekend: {weekend_count}")
+    # Determine weeks
+    weeks = []
+    current_week = []
+    for d_val in [start + timedelta(days=i) for i in range((end - start).days + 1)]:
+        if d_val.weekday() == 0 and current_week:
+            weeks.append(current_week)
+            current_week = []
+        current_week.append(d_val)
+    if current_week:
+        weeks.append(current_week)
     
-    # Check that weekends have different shifts from weekdays for some employees
-    emp_weekday_shifts = defaultdict(set)
-    emp_weekend_shifts = defaultdict(set)
-    
+    # Collect shifts per employee per week
     for assignment in assignments:
         emp_id = assignment.employee_id
         emp = next((e for e in employees if e.id == emp_id), None)
-        if not emp or emp.is_springer:
+        if not emp or emp.is_springer or not emp.team_id:
             continue
         
         shift_type = get_shift_type_by_id(assignment.shift_type_id)
-        if not shift_type:
+        if not shift_type or shift_type.code not in ['F', 'S', 'N']:
             continue
         
-        if assignment.date.weekday() < 5:
-            emp_weekday_shifts[emp_id].add(shift_type.code)
-        else:
-            emp_weekend_shifts[emp_id].add(shift_type.code)
+        # Find which week this date belongs to
+        week_idx = None
+        for w_idx, week_dates in enumerate(weeks):
+            if assignment.date in week_dates:
+                week_idx = w_idx
+                break
+        
+        if week_idx is None:
+            continue
+        
+        if assignment.date.weekday() < 5:  # Weekday
+            emp_week_shifts[emp_id][week_idx]['weekday'].add(shift_type.code)
+        else:  # Weekend
+            emp_week_shifts[emp_id][week_idx]['weekend'].add(shift_type.code)
     
-    independence_count = 0
-    for emp_id in emp_weekday_shifts:
-        if emp_id in emp_weekend_shifts:
-            if emp_weekday_shifts[emp_id] != emp_weekend_shifts[emp_id]:
-                independence_count += 1
+    # Verify: For each employee/week, weekend shifts must match weekday shifts
+    violations = []
+    for emp_id, weeks_data in emp_week_shifts.items():
+        emp = next((e for e in employees if e.id == emp_id), None)
+        for week_idx, shifts_data in weeks_data.items():
+            weekday_shifts = shifts_data['weekday']
+            weekend_shifts = shifts_data['weekend']
+            
+            if weekend_shifts and weekday_shifts:
+                # Weekend shifts MUST be subset of (or equal to) weekday shifts
+                if not weekend_shifts.issubset(weekday_shifts):
+                    violations.append(
+                        f"{emp.full_name} week {week_idx}: weekday={weekday_shifts}, weekend={weekend_shifts}"
+                    )
+                # Note: If weekend_shifts != weekday_shifts but is still a subset,
+                # that's OK - employee might work different days but same shift type
     
-    if weekend_count > 0 and independence_count > 0:
-        print(f"✅ PASS: Weekend shifts are individually assigned")
-        print(f"   {independence_count} employees have different weekend shifts from weekday shifts")
-        return True
-    else:
-        print(f"❌ FAIL: Weekend shifts not properly independent")
+    if violations:
+        print("❌ FAIL: Weekend shifts do NOT match team weekly shift type!")
+        for v in violations:
+            print(f"   VIOLATION: {v}")
         return False
+    else:
+        print("✅ PASS: All weekend shifts match their team's weekly shift type")
+        
+        # Count weekend assignments
+        weekend_count = sum(1 for a in assignments if a.date.weekday() >= 5)
+        print(f"   Checked {weekend_count} weekend assignments")
+        
+        # Show examples
+        print("\n   Examples:")
+        for emp_id in list(emp_week_shifts.keys())[:3]:
+            emp = next((e for e in employees if e.id == emp_id), None)
+            for week_idx in sorted(emp_week_shifts[emp_id].keys())[:2]:
+                shifts = emp_week_shifts[emp_id][week_idx]
+                if shifts['weekend']:
+                    print(f"   - {emp.full_name} week {week_idx}: weekday={shifts['weekday']}, weekend={shifts['weekend']}")
+        
+        return True
 
 
 def test_team_rotation():
@@ -332,7 +378,7 @@ def run_all_tests():
     
     tests = [
         ("Weekday Consistency", test_weekday_consistency),
-        ("Weekend Independence", test_weekend_independence),
+        ("Weekend Team Consistency", test_weekend_team_consistency),
         ("Team Rotation", test_team_rotation),
         ("Ferienjobber Exclusion", test_ferienjobber_exclusion),
         ("TD Assignment", test_td_assignment),

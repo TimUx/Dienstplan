@@ -26,7 +26,10 @@ class ShiftPlanningModel:
         start_date: date,
         end_date: date,
         absences: List[Absence],
-        shift_types: List[ShiftType] = None
+        shift_types: List[ShiftType] = None,
+        locked_team_shift: Dict[Tuple[int, int], str] = None,
+        locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
+        locked_td: Dict[Tuple[int, int], bool] = None
     ):
         """
         Initialize the shift planning model.
@@ -38,6 +41,9 @@ class ShiftPlanningModel:
             end_date: End date of planning period
             absences: List of employee absences
             shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
+            locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
+            locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
+            locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
         """
         self.model = cp_model.CpModel()
         self.employees = employees
@@ -46,6 +52,11 @@ class ShiftPlanningModel:
         self.end_date = end_date
         self.absences = absences
         self.shift_types = shift_types or STANDARD_SHIFT_TYPES
+        
+        # Manual overrides (locked assignments)
+        self.locked_team_shift = locked_team_shift or {}
+        self.locked_employee_weekend = locked_employee_weekend or {}
+        self.locked_td = locked_td or {}
         
         # Generate list of dates
         self.dates = []
@@ -63,11 +74,42 @@ class ShiftPlanningModel:
         # Decision variables
         self.team_shift = {}  # team_shift[team_id, week_idx, shift_code] = 0 or 1
         self.employee_active = {}  # employee_active[employee_id, date] = 0 or 1 (derived from team shift)
-        self.employee_weekend_shift = {}  # employee_weekend_shift[emp_id, date, shift_code] = 0 or 1 (WEEKEND ONLY)
+        self.employee_weekend_shift = {}  # employee_weekend_shift[emp_id, date] = 0 or 1 (WEEKEND ONLY - shift type from team)
         self.td_vars = {}  # td[employee_id, week_idx] = 0 or 1 (Tagdienst assignment)
         
         # Build the model
         self._create_decision_variables()
+        self._apply_locked_assignments()
+    
+    
+    def _apply_locked_assignments(self):
+        """
+        Apply manual overrides (locked assignments) as hard constraints.
+        
+        When administrators or dispatchers fix certain assignments:
+        - locked_team_shift: Forces a team to a specific shift in a week
+        - locked_employee_weekend: Forces employee presence/absence on weekend
+        - locked_td: Forces TD assignment to specific employee in a week
+        """
+        # Apply locked team shift assignments
+        for (team_id, week_idx), shift_code in self.locked_team_shift.items():
+            if (team_id, week_idx, shift_code) in self.team_shift:
+                # Force this team to have this shift in this week
+                # Note: Other shifts for this team/week are implicitly set to 0
+                # by the "exactly one shift per team per week" constraint
+                self.model.Add(self.team_shift[(team_id, week_idx, shift_code)] == 1)
+        
+        # Apply locked employee weekend work
+        for (emp_id, d), is_working in self.locked_employee_weekend.items():
+            if (emp_id, d) in self.employee_weekend_shift:
+                # Force employee to work (1) or not work (0) on this weekend day
+                self.model.Add(self.employee_weekend_shift[(emp_id, d)] == (1 if is_working else 0))
+        
+        # Apply locked TD assignments
+        for (emp_id, week_idx), has_td in self.locked_td.items():
+            if (emp_id, week_idx) in self.td_vars:
+                # Force TD assignment (1) or no TD (0) for this employee in this week
+                self.model.Add(self.td_vars[(emp_id, week_idx)] == (1 if has_td else 0))
     
     
     def _generate_weeks(self) -> List[List[date]]:
@@ -98,12 +140,12 @@ class ShiftPlanningModel:
         Team-based model structure:
         - team_shift[team_id, week_idx, shift]: Team has this shift in this week (Mon-Fri)
         - employee_active[emp_id, date]: Employee works on this date (Mon-Fri: derived from team shift)
-        - employee_weekend_shift[emp_id, date, shift]: Employee works this shift on weekend (Sat-Sun ONLY)
+        - employee_weekend_shift[emp_id, date]: Employee works on weekend (Sat-Sun ONLY, shift type from team)
         - td_vars[emp_id, week_idx]: Employee has TD (Tagdienst) duty in this week
         
         Important: 
         - Weekday shifts (Mon-Fri) are determined by team's shift
-        - Weekend shifts (Sat-Sun) are individually assigned via separate variables
+        - Weekend shifts (Sat-Sun): PRESENCE is individually assigned, but shift TYPE matches team's weekly shift
         """
         
         # CORE VARIABLE: Team shift assignment per week (WEEKDAYS ONLY)
@@ -123,19 +165,30 @@ class ShiftPlanningModel:
                     var_name = f"emp{emp.id}_active_date{d}"
                     self.employee_active[(emp.id, d)] = self.model.NewBoolVar(var_name)
         
-        # WEEKEND VARIABLE: Individual weekend shift assignment (WEEKENDS ONLY)
-        # employee_weekend_shift[emp_id, date, shift_code] ∈ {0, 1}
+        # WEEKEND VARIABLE: Individual weekend work indicator (WEEKENDS ONLY)
+        # employee_weekend_shift[emp_id, date] ∈ {0, 1}
+        # Note: Shift TYPE is determined by team's weekly shift, only PRESENCE is variable
+        # 
+        # Design decision: Springers are excluded from weekend variables because they
+        # don't have a team (no team shift type to derive from). This is a known
+        # limitation that keeps the model consistent. Springers primarily cover weekday
+        # shifts. If weekend springer coverage is needed, extend the model to support
+        # flexible weekend shift types for springers.
         for emp in self.employees:
             # Exclude temporary workers (Ferienjobber) from weekend rotation
             if emp.is_ferienjobber:
                 continue
             
+            # Only for employees with a team (non-springers)
+            # Springers excluded: no team = no shift type to derive for weekends
+            if not emp.team_id or emp.is_springer:
+                continue
+            
             for d in self.dates:
                 # Only create for weekends
                 if d.weekday() >= 5:  # Saturday or Sunday
-                    for shift_code in self.shift_codes:
-                        var_name = f"emp{emp.id}_weekend_{d}_shift{shift_code}"
-                        self.employee_weekend_shift[(emp.id, d, shift_code)] = self.model.NewBoolVar(var_name)
+                    var_name = f"emp{emp.id}_weekend_work_{d}"
+                    self.employee_weekend_shift[(emp.id, d)] = self.model.NewBoolVar(var_name)
         
         # TD (Tagdienst) variables - weekly assignment on Monday-Friday
         # td_vars[emp_id, week_idx] ∈ {0, 1}
@@ -157,7 +210,7 @@ class ShiftPlanningModel:
     def get_variables(self) -> Tuple[
         Dict[Tuple[int, int, str], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
-        Dict[Tuple[int, date, str], cp_model.IntVar],
+        Dict[Tuple[int, date], cp_model.IntVar],
         Dict[Tuple[int, int], cp_model.IntVar]
     ]:
         """
@@ -165,6 +218,7 @@ class ShiftPlanningModel:
         
         Returns:
             Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars)
+            where employee_weekend_shift is now keyed by (emp_id, date) only
         """
         return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars
     
@@ -231,7 +285,10 @@ def create_shift_planning_model(
     start_date: date,
     end_date: date,
     absences: List[Absence],
-    shift_types: List[ShiftType] = None
+    shift_types: List[ShiftType] = None,
+    locked_team_shift: Dict[Tuple[int, int], str] = None,
+    locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
+    locked_td: Dict[Tuple[int, int], bool] = None
 ) -> ShiftPlanningModel:
     """
     Factory function to create a shift planning model.
@@ -243,11 +300,17 @@ def create_shift_planning_model(
         end_date: End date of planning period
         absences: List of employee absences
         shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
+        locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
+        locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
+        locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
         
     Returns:
         ShiftPlanningModel instance
     """
-    return ShiftPlanningModel(employees, teams, start_date, end_date, absences, shift_types)
+    return ShiftPlanningModel(
+        employees, teams, start_date, end_date, absences, shift_types,
+        locked_team_shift, locked_employee_weekend, locked_td
+    )
 
 
 if __name__ == "__main__":

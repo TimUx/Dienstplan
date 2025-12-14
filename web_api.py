@@ -455,7 +455,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Use checkbox values directly from frontend for BMT/BSB flags
             is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
-            is_td = 1 if data.get('isTdQualified') else 0
+            # TD qualification is automatically set if BMT or BSB is true
+            is_td = 1 if (is_bmt or is_bsb) else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -515,7 +516,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Use checkbox values directly from frontend for BMT/BSB flags
             is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
-            is_td = 1 if data.get('isTdQualified') else 0
+            # TD qualification is automatically set if BMT or BSB is true
+            is_td = 1 if (is_bmt or is_bsb) else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()

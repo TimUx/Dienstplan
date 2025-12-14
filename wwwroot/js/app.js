@@ -1274,7 +1274,7 @@ async function editEmployee(id) {
         document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
-        document.getElementById('isTdQualified').checked = employee.isTdQualified || false;
+        // TD qualification is now automatic based on BMT or BSB
         
         document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
         document.getElementById('employeeModal').style.display = 'block';
@@ -1348,8 +1348,8 @@ async function saveEmployee(event) {
         isSpringer: document.getElementById('isSpringer').checked,
         isFerienjobber: document.getElementById('isFerienjobber').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
-        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked,
-        isTdQualified: document.getElementById('isTdQualified').checked
+        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
+        // isTdQualified is calculated automatically on the server based on BMT or BSB
     };
     
     try {
@@ -1500,7 +1500,7 @@ function displayTeams(teams) {
                 ${canEdit ? `
                     <div class="card-actions">
                         <button onclick="editTeam(${team.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
-                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${teamName.replace(/'/g, "\\'")}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, ${JSON.stringify(team.name)})" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
                     </div>
                 ` : ''}
             </div>

@@ -194,6 +194,25 @@ def load_from_database(db_path: str = "dienstplan.db"):
         )
         absences.append(absence)
     
+    # Load approved vacation requests and convert them to absences
+    # This ensures the solver considers them when creating shift plans
+    cursor.execute("""
+        SELECT Id, EmployeeId, StartDate, EndDate, Notes
+        FROM VacationRequests
+        WHERE Status = 'Genehmigt'
+    """)
+    vacation_id_offset = 10000  # Offset to avoid ID conflicts with Absences table
+    for row in cursor.fetchall():
+        absence = Absence(
+            id=vacation_id_offset + row[0],
+            employee_id=row[1],
+            absence_type=AbsenceType.URLAUB,
+            start_date=date.fromisoformat(row[2]),
+            end_date=date.fromisoformat(row[3]),
+            notes=row[4] or "Genehmigter Urlaub"
+        )
+        absences.append(absence)
+    
     conn.close()
     
     return employees, teams, absences

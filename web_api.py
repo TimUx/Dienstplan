@@ -1947,9 +1947,18 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     def get_audit_logs():
         """Get audit logs with pagination and filters"""
         try:
-            # Get pagination parameters
-            page = int(request.args.get('page', 1))
-            page_size = int(request.args.get('pageSize', 50))
+            # Get and validate pagination parameters
+            try:
+                page = int(request.args.get('page', 1))
+                page_size = int(request.args.get('pageSize', 50))
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid pagination parameters'}), 400
+            
+            # Validate pagination ranges
+            if page < 1:
+                page = 1
+            if page_size < 1 or page_size > 100:
+                page_size = min(max(page_size, 1), 100)
             
             # Get filter parameters
             entity_name = request.args.get('entityName')

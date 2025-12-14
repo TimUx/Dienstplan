@@ -74,7 +74,8 @@ def add_team_rotation_constraints(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     teams: List[Team],
     weeks: List[List[date]],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    locked_team_shift: Dict[Tuple[int, int], str] = None
 ):
     """
     HARD CONSTRAINT: Teams follow fixed rotation pattern F → N → S.
@@ -84,9 +85,13 @@ def add_team_rotation_constraints(
     Week 1: Team 1=N, Team 2=S, Team 3=F
     Week 2: Team 1=S, Team 2=F, Team 3=N
     Week 3: Team 1=F, Team 2=N, Team 3=S (repeats)
+    
+    Manual overrides (locked assignments) take precedence over rotation.
     """
     if "F" not in shift_codes or "N" not in shift_codes or "S" not in shift_codes:
         return  # Cannot enforce rotation if shifts are missing
+    
+    locked_team_shift = locked_team_shift or {}
     
     # Define the rotation cycle
     rotation = ["F", "N", "S"]
@@ -96,8 +101,12 @@ def add_team_rotation_constraints(
     
     for team_idx, team in enumerate(sorted_teams):
         for week_idx in range(len(weeks)):
+            # Check if this assignment is locked (manual override)
+            if (team.id, week_idx) in locked_team_shift:
+                # Skip - locked assignment will be applied by _apply_locked_assignments()
+                continue
+            
             # Calculate which shift this team should have this week
-            # rotation_idx = (week_idx + team_idx) % 3
             rotation_idx = (week_idx + team_idx) % len(rotation)
             assigned_shift = rotation[rotation_idx]
             

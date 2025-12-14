@@ -61,6 +61,9 @@ class ShiftPlanningSolver:
         absences = self.planning_model.absences
         shift_types = self.planning_model.shift_types
         
+        # Get locked assignments
+        locked_team_shift = self.planning_model.locked_team_shift
+        
         print("Adding constraints...")
         
         # CORE TEAM-BASED CONSTRAINTS
@@ -68,7 +71,7 @@ class ShiftPlanningSolver:
         add_team_shift_assignment_constraints(model, team_shift, teams, weeks, shift_codes)
         
         print("  - Team rotation (F → N → S pattern)")
-        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes)
+        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
         add_employee_team_linkage_constraints(model, team_shift, employee_active, employees, teams, dates, weeks, shift_codes, absences)

@@ -55,7 +55,8 @@ def validate_shift_plan(
     employees: List[Employee],
     absences: List[Absence],
     start_date: date,
-    end_date: date
+    end_date: date,
+    teams: List = None
 ) -> ValidationResult:
     """
     Validate the complete shift plan against all rules.
@@ -66,6 +67,7 @@ def validate_shift_plan(
         absences: List of absences
         start_date: Start date of planning period
         end_date: End date of planning period
+        teams: List of teams (optional, for enhanced weekend validation)
         
     Returns:
         ValidationResult with any violations or warnings
@@ -99,6 +101,10 @@ def validate_shift_plan(
     validate_staffing_requirements(result, assignments_by_date, emp_dict)
     validate_special_functions(result, assignments, emp_dict)
     validate_springer_availability(result, assignments, employees)
+    
+    # NEW: Validate weekend team consistency
+    if teams:
+        validate_weekend_team_consistency(result, assignments, employees, teams, start_date, end_date)
     
     return result
 
@@ -409,6 +415,106 @@ def validate_springer_availability(
             result.add_violation(
                 f"No springer available on {d} (all {len(springers)} are assigned)"
             )
+
+
+def validate_weekend_team_consistency(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    employees: List[Employee],
+    teams: List,
+    start_date: date,
+    end_date: date
+):
+    """
+    CRITICAL: Validate that weekend shifts match team's weekly shift type.
+    
+    This is the most important validation to prevent illegal shift transitions.
+    Weekend shifts MUST use the same shift type as the team's weekday shift.
+    
+    Example violation:
+    - Team Alpha: Week 1 = 'F' (Early)
+    - Employee Max: Fri='F', Sat='S' <- VIOLATION!
+    
+    Correct:
+    - Team Alpha: Week 1 = 'F' (Early)
+    - Employee Max: Fri='F', Sat='F', Sun='F' <- All 'F' within the week
+    """
+    from collections import defaultdict
+    
+    # Generate weeks from dates
+    dates = []
+    current = start_date
+    while current <= end_date:
+        dates.append(current)
+        current += timedelta(days=1)
+    
+    weeks = []
+    current_week = []
+    for d in dates:
+        if d.weekday() == 0 and current_week:
+            weeks.append(current_week)
+            current_week = []
+        current_week.append(d)
+    if current_week:
+        weeks.append(current_week)
+    
+    # Group assignments by employee and week
+    emp_week_shifts = defaultdict(lambda: defaultdict(lambda: {'weekday': set(), 'weekend': set()}))
+    
+    for assignment in assignments:
+        emp_id = assignment.employee_id
+        emp = next((e for e in employees if e.id == emp_id), None)
+        
+        # Only check regular team members (not springers)
+        if not emp or emp.is_springer or not emp.team_id:
+            continue
+        
+        shift_type = get_shift_type_by_id(assignment.shift_type_id)
+        if not shift_type or shift_type.code not in ['F', 'S', 'N']:
+            continue
+        
+        # Find which week this date belongs to
+        week_idx = None
+        for w_idx, week_dates in enumerate(weeks):
+            if assignment.date in week_dates:
+                week_idx = w_idx
+                break
+        
+        if week_idx is None:
+            continue
+        
+        if assignment.date.weekday() < 5:  # Weekday
+            emp_week_shifts[emp_id][week_idx]['weekday'].add(shift_type.code)
+        else:  # Weekend
+            emp_week_shifts[emp_id][week_idx]['weekend'].add(shift_type.code)
+    
+    # Check consistency: weekend shifts must match weekday shifts
+    for emp_id, weeks_data in emp_week_shifts.items():
+        emp = next((e for e in employees if e.id == emp_id), None)
+        
+        for week_idx, shifts_data in weeks_data.items():
+            weekday_shifts = shifts_data['weekday']
+            weekend_shifts = shifts_data['weekend']
+            
+            if not weekend_shifts:
+                continue  # No weekend work, nothing to check
+            
+            if not weekday_shifts:
+                # Weekend work but no weekday work - this shouldn't happen
+                result.add_warning(
+                    f"{emp.full_name} works weekend in week {week_idx} but no weekdays"
+                )
+                continue
+            
+            # CRITICAL CHECK: Weekend shifts MUST be subset of weekday shifts
+            # (should be exactly same shift type, but subset handles partial week work)
+            if not weekend_shifts.issubset(weekday_shifts):
+                result.add_violation(
+                    f"WEEKEND VIOLATION: {emp.full_name} week {week_idx}: "
+                    f"weekday shifts={sorted(weekday_shifts)}, "
+                    f"weekend shifts={sorted(weekend_shifts)}. "
+                    f"Weekend must match team's weekly shift!"
+                )
 
 
 if __name__ == "__main__":

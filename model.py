@@ -26,7 +26,10 @@ class ShiftPlanningModel:
         start_date: date,
         end_date: date,
         absences: List[Absence],
-        shift_types: List[ShiftType] = None
+        shift_types: List[ShiftType] = None,
+        locked_team_shift: Dict[Tuple[int, int], str] = None,
+        locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
+        locked_td: Dict[Tuple[int, int], bool] = None
     ):
         """
         Initialize the shift planning model.
@@ -38,6 +41,9 @@ class ShiftPlanningModel:
             end_date: End date of planning period
             absences: List of employee absences
             shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
+            locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
+            locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
+            locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
         """
         self.model = cp_model.CpModel()
         self.employees = employees
@@ -46,6 +52,11 @@ class ShiftPlanningModel:
         self.end_date = end_date
         self.absences = absences
         self.shift_types = shift_types or STANDARD_SHIFT_TYPES
+        
+        # Manual overrides (locked assignments)
+        self.locked_team_shift = locked_team_shift or {}
+        self.locked_employee_weekend = locked_employee_weekend or {}
+        self.locked_td = locked_td or {}
         
         # Generate list of dates
         self.dates = []
@@ -68,6 +79,35 @@ class ShiftPlanningModel:
         
         # Build the model
         self._create_decision_variables()
+        self._apply_locked_assignments()
+    
+    
+    def _apply_locked_assignments(self):
+        """
+        Apply manual overrides (locked assignments) as hard constraints.
+        
+        When administrators or dispatchers fix certain assignments:
+        - locked_team_shift: Forces a team to a specific shift in a week
+        - locked_employee_weekend: Forces employee presence/absence on weekend
+        - locked_td: Forces TD assignment to specific employee in a week
+        """
+        # Apply locked team shift assignments
+        for (team_id, week_idx), shift_code in self.locked_team_shift.items():
+            if (team_id, week_idx, shift_code) in self.team_shift:
+                # Force this team to have this shift in this week
+                self.model.Add(self.team_shift[(team_id, week_idx, shift_code)] == 1)
+        
+        # Apply locked employee weekend work
+        for (emp_id, d), is_working in self.locked_employee_weekend.items():
+            if (emp_id, d) in self.employee_weekend_shift:
+                # Force employee to work (1) or not work (0) on this weekend day
+                self.model.Add(self.employee_weekend_shift[(emp_id, d)] == (1 if is_working else 0))
+        
+        # Apply locked TD assignments
+        for (emp_id, week_idx), has_td in self.locked_td.items():
+            if (emp_id, week_idx) in self.td_vars:
+                # Force TD assignment (1) or no TD (0) for this employee in this week
+                self.model.Add(self.td_vars[(emp_id, week_idx)] == (1 if has_td else 0))
     
     
     def _generate_weeks(self) -> List[List[date]]:
@@ -236,7 +276,10 @@ def create_shift_planning_model(
     start_date: date,
     end_date: date,
     absences: List[Absence],
-    shift_types: List[ShiftType] = None
+    shift_types: List[ShiftType] = None,
+    locked_team_shift: Dict[Tuple[int, int], str] = None,
+    locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
+    locked_td: Dict[Tuple[int, int], bool] = None
 ) -> ShiftPlanningModel:
     """
     Factory function to create a shift planning model.
@@ -248,11 +291,17 @@ def create_shift_planning_model(
         end_date: End date of planning period
         absences: List of employee absences
         shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
+        locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
+        locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
+        locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
         
     Returns:
         ShiftPlanningModel instance
     """
-    return ShiftPlanningModel(employees, teams, start_date, end_date, absences, shift_types)
+    return ShiftPlanningModel(
+        employees, teams, start_date, end_date, absences, shift_types,
+        locked_team_shift, locked_employee_weekend, locked_td
+    )
 
 
 if __name__ == "__main__":

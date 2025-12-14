@@ -162,16 +162,20 @@ class ShiftPlanningSolver:
         
         return True
     
-    def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
+    def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]:
         """
         Extract shift assignments from the TEAM-BASED solution.
         
         Returns:
-            Tuple of (shift_assignments, special_functions)
-            where special_functions is a dict mapping (employee_id, date) to "TD"
+            Tuple of (shift_assignments, special_functions, complete_schedule)
+            where:
+            - shift_assignments: List of ShiftAssignment objects
+            - special_functions: dict mapping (employee_id, date) to "TD"
+            - complete_schedule: dict mapping (employee_id, date) to shift_code or "OFF"
+                                This ensures ALL employees appear for ALL days
         """
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            return [], {}
+            return [], {}, {}
         
         team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
         employees = self.planning_model.employees
@@ -179,9 +183,13 @@ class ShiftPlanningSolver:
         dates = self.planning_model.dates
         weeks = self.planning_model.weeks
         shift_codes = self.planning_model.shift_codes
+        absences = self.planning_model.absences
         
         assignments = []
         assignment_id = 1
+        
+        # Complete schedule: every employee, every day
+        complete_schedule = {}
         
         # Extract shift assignments based on team shifts and employee activity
         for emp in employees:
@@ -331,7 +339,38 @@ class ShiftPlanningSolver:
                         if d.weekday() < 5:  # Monday to Friday
                             special_functions[(emp.id, d)] = "TD"
         
-        return assignments, special_functions
+        # Build complete schedule: every employee for every day
+        # This ensures ALL employees appear in the output, even without shifts
+        for emp in employees:
+            for d in dates:
+                # Check if employee has TD on this day
+                if (emp.id, d) in special_functions:
+                    complete_schedule[(emp.id, d)] = "TD"
+                    continue
+                
+                # Check if employee has a shift assignment
+                has_assignment = False
+                for assignment in assignments:
+                    if assignment.employee_id == emp.id and assignment.date == d:
+                        # Get shift code
+                        shift_type = next((st for st in STANDARD_SHIFT_TYPES if st.id == assignment.shift_type_id), None)
+                        if shift_type:
+                            complete_schedule[(emp.id, d)] = shift_type.code
+                            has_assignment = True
+                            break
+                
+                # Check if employee is absent
+                if not has_assignment:
+                    is_absent = any(
+                        abs.employee_id == emp.id and abs.overlaps_date(d)
+                        for abs in absences
+                    )
+                    if is_absent:
+                        complete_schedule[(emp.id, d)] = "ABSENT"
+                    else:
+                        complete_schedule[(emp.id, d)] = "OFF"
+        
+        return assignments, special_functions, complete_schedule
     
     def get_statistics(self) -> Dict[str, any]:
         """
@@ -356,7 +395,7 @@ def solve_shift_planning(
     planning_model: ShiftPlanningModel,
     time_limit_seconds: int = 300,
     num_workers: int = 8
-) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]]:
+) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]]:
     """
     Solve the shift planning problem.
     
@@ -366,7 +405,12 @@ def solve_shift_planning(
         num_workers: Number of parallel workers
         
     Returns:
-        Tuple of (shift_assignments, special_functions) if solution found, None otherwise
+        Tuple of (shift_assignments, special_functions, complete_schedule) if solution found, None otherwise
+        where:
+        - shift_assignments: List of ShiftAssignment objects for employees who work
+        - special_functions: dict mapping (employee_id, date) to "TD" for day duty assignments
+        - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"/"TD"
+                            ensuring ALL employees appear for ALL days
     """
     solver = ShiftPlanningSolver(planning_model, time_limit_seconds, num_workers)
     solver.add_all_constraints()
@@ -397,9 +441,10 @@ if __name__ == "__main__":
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if result:
-        assignments, special_functions = result
+        assignments, special_functions, complete_schedule = result
         print(f"\n✓ Solution found!")
         print(f"  - Total assignments: {len(assignments)}")
         print(f"  - TD assignments: {len(special_functions)}")
+        print(f"  - Complete schedule entries: {len(complete_schedule)}")
     else:
         print("\n✗ No solution found!")

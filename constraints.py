@@ -57,8 +57,14 @@ def add_team_shift_assignment_constraints(
     
     Constraint: For each team and week:
         Sum(team_shift[team][week][shift] for all shifts) == 1
+    
+    EXCLUDES virtual team "Fire Alarm System" (ID 99) which doesn't participate in rotation.
     """
     for team in teams:
+        # Skip virtual team for TD-qualified employees
+        if team.id == 99:  # Fire Alarm System virtual team
+            continue
+            
         for week_idx in range(len(weeks)):
             shift_vars = []
             for shift_code in shift_codes:
@@ -87,6 +93,8 @@ def add_team_rotation_constraints(
     Week 3: Team 1=F, Team 2=N, Team 3=S (repeats)
     
     Manual overrides (locked assignments) take precedence over rotation.
+    
+    EXCLUDES virtual team "Fire Alarm System" (ID 99) which doesn't participate in rotation.
     """
     if "F" not in shift_codes or "N" not in shift_codes or "S" not in shift_codes:
         return  # Cannot enforce rotation if shifts are missing
@@ -97,7 +105,9 @@ def add_team_rotation_constraints(
     rotation = ["F", "N", "S"]
     
     # For each team, assign shifts based on rotation
-    sorted_teams = sorted(teams, key=lambda t: t.id)
+    # EXCLUDE virtual team ID 99
+    regular_teams = [t for t in teams if t.id != 99]
+    sorted_teams = sorted(regular_teams, key=lambda t: t.id)
     
     for team_idx, team in enumerate(sorted_teams):
         for week_idx in range(len(weeks)):
@@ -133,11 +143,26 @@ def add_employee_team_linkage_constraints(
     - Employees CANNOT work if their team doesn't have a shift
     - Employees cannot work when absent
     - Springers are flexible and handled separately
+    - Employees in virtual team "Fire Alarm System" (ID 99) do NOT work regular shifts
     """
     # For each team member
     for emp in employees:
-        if emp.is_springer or not emp.team_id:
-            continue  # Springers handled separately
+        # Springers handled separately
+        if emp.is_springer:
+            continue
+            
+        # Employees without team skip
+        if not emp.team_id:
+            continue
+        
+        # Employees in virtual team "Fire Alarm System" (ID 99) do NOT work regular shifts
+        # They are only assigned TD
+        if emp.team_id == 99:
+            # Force all regular shift variables to 0
+            for d in dates:
+                if (emp.id, d) in employee_active:
+                    model.Add(employee_active[(emp.id, d)] == 0)
+            continue
         
         # Find employee's team
         team = None
@@ -459,22 +484,14 @@ def add_td_constraints(
     TD combines BMT (Brandmeldetechniker) and BSB (Brandschutzbeauftragter).
     
     Rules:
-    - At most 1 TD per week (Monday-Friday)
-    - TD can be combined with regular shift work
+    - Exactly 1 TD per week (Monday-Friday)
+    - TD replaces regular shift work for that employee
     - TD is NOT a separate shift, just an organizational marker
     - Cannot assign TD when employee is absent
     
-    Business Impact:
-    Changed from "exactly 1" to "at most 1" to handle situations where:
-    - No TD-qualified employees are available (all absent or on springer duty)
-    - Planning periods with insufficient qualified personnel
-    
-    When no TD is assigned:
-    - The organization should use fallback procedures (external contractors, etc.)
-    - This is considered acceptable for occasional weeks
-    - System logs a warning but allows the schedule to be created
-    - Alternative: The constraint could be changed to "exactly 1" if TD coverage
-      is mandatory, but this may result in infeasible schedules
+    When TD is assigned to an employee for a week:
+    - That employee does NOT work regular shifts that week
+    - TD is marked as special function, not a shift assignment
     """
     for week_idx, week_dates in enumerate(weeks):
         # Only assign TD on weekdays
@@ -498,9 +515,26 @@ def add_td_constraints(
             if not is_absent_this_week and (emp.id, week_idx) in td_vars:
                 available_for_td.append(td_vars[(emp.id, week_idx)])
         
-        # At most 1 TD per week
+        # Exactly 1 TD per week
         if available_for_td:
-            model.Add(sum(available_for_td) <= 1)
+            model.Add(sum(available_for_td) == 1)
+        
+        # TD blocks regular shift work for that employee that week
+        # When employee has TD, they should not be active on weekdays
+        for emp in employees:
+            if not emp.can_do_td:
+                continue
+            
+            if (emp.id, week_idx) not in td_vars:
+                continue
+            
+            # If employee has TD this week, they should not work regular shifts
+            for d in weekday_dates:
+                if (emp.id, d) in employee_active:
+                    # employee_active[emp, d] == 0 when td_vars[emp, week] == 1
+                    # This means: NOT(td_vars[emp, week] AND employee_active[emp, d])
+                    # Equivalent to: employee_active[emp, d] <= 1 - td_vars[emp, week]
+                    model.Add(employee_active[(emp.id, d)] <= 1 - td_vars[(emp.id, week_idx)])
 
 
 def add_springer_constraints(

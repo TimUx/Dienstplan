@@ -55,7 +55,6 @@ a = Analysis(
     excludes=[
         'matplotlib',
         'scipy',
-        'PIL',
         'tkinter',
         'PyQt5',
         'PyQt6',

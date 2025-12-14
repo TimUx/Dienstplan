@@ -182,6 +182,7 @@ def add_employee_team_linkage_constraints(
 def add_staffing_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
@@ -195,7 +196,8 @@ def add_staffing_constraints(
     Weekdays: F: 4-5, S: 3-4, N: 3
     Weekends: All: 2-3
     
-    Count active team members per shift based on team assignments.
+    Weekdays (Mon-Fri): Count active team members per shift based on team assignments.
+    Weekends (Sat-Sun): Count employees assigned to each shift individually.
     """
     for d in dates:
         is_weekend = d.weekday() >= 5
@@ -215,41 +217,76 @@ def add_staffing_constraints(
             if shift not in staffing:
                 continue
             
-            # Count team members who work this shift on this day
-            # A member works this shift if:
-            # 1. Their team has this shift this week
-            # 2. They are active on this day
-            assigned = []
-            
-            for team in teams:
-                if (team.id, week_idx, shift) not in team_shift:
-                    continue
-                
-                # Count active members of this team on this day
+            if is_weekend:
+                # WEEKEND: Count individual assignments
+                assigned = []
                 for emp in employees:
-                    if emp.team_id != team.id or emp.is_springer:
-                        continue  # Only count regular team members
-                    
-                    if (emp.id, d) not in employee_active:
+                    # Exclude temporary workers from weekend rotation
+                    if emp.is_ferienjobber:
                         continue
                     
-                    # This employee works this shift if team has shift AND employee is active
-                    is_on_shift = model.NewBoolVar(f"emp{emp.id}_onshift{shift}_date{d}")
-                    model.AddMultiplicationEquality(
-                        is_on_shift,
-                        [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
-                    )
-                    assigned.append(is_on_shift)
+                    if (emp.id, d, shift) in employee_weekend_shift:
+                        assigned.append(employee_weekend_shift[(emp.id, d, shift)])
+                
+                if assigned:
+                    total_assigned = sum(assigned)
+                    model.Add(total_assigned >= staffing[shift]["min"])
+                    model.Add(total_assigned <= staffing[shift]["max"])
+            else:
+                # WEEKDAY: Count team members who work this shift on this day
+                # A member works this shift if:
+                # 1. Their team has this shift this week
+                # 2. They are active on this day
+                assigned = []
+                
+                for team in teams:
+                    if (team.id, week_idx, shift) not in team_shift:
+                        continue
+                    
+                    # Count active members of this team on this day
+                    for emp in employees:
+                        if emp.team_id != team.id or emp.is_springer:
+                            continue  # Only count regular team members
+                        
+                        if (emp.id, d) not in employee_active:
+                            continue
+                        
+                        # This employee works this shift if team has shift AND employee is active
+                        is_on_shift = model.NewBoolVar(f"emp{emp.id}_onshift{shift}_date{d}")
+                        model.AddMultiplicationEquality(
+                            is_on_shift,
+                            [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
+                        )
+                        assigned.append(is_on_shift)
+                
+                if assigned:
+                    total_assigned = sum(assigned)
+                    model.Add(total_assigned >= staffing[shift]["min"])
+                    model.Add(total_assigned <= staffing[shift]["max"])
+    
+    # Additional constraint: Each employee works at most ONE shift per weekend day
+    for emp in employees:
+        if emp.is_ferienjobber:
+            continue  # Temporary workers excluded
+        
+        for d in dates:
+            if d.weekday() < 5:
+                continue  # Skip weekdays
             
-            if assigned:
-                total_assigned = sum(assigned)
-                model.Add(total_assigned >= staffing[shift]["min"])
-                model.Add(total_assigned <= staffing[shift]["max"])
+            weekend_shifts_this_day = []
+            for shift_code in shift_codes:
+                if (emp.id, d, shift_code) in employee_weekend_shift:
+                    weekend_shifts_this_day.append(employee_weekend_shift[(emp.id, d, shift_code)])
+            
+            if weekend_shifts_this_day:
+                # At most 1 shift per weekend day
+                model.Add(sum(weekend_shifts_this_day) <= 1)
 
 
 def add_rest_time_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
@@ -270,23 +307,81 @@ def add_rest_time_constraints(
     Within a week, teams work the SAME shift every day, so there are no
     forbidden transitions (no day-to-day shift changes).
     
-    Conclusion: The combination of:
-    1. Weekly planning (teams don't change shifts mid-week)
-    2. Weekend breaks (natural 2-day rest period)
-    3. Monday start times vs Friday end times
+    Weekend transitions need checking:
+    - Fri shift → Sat shift: Check forbidden transitions
+    - Sat shift → Sun shift: Check forbidden transitions  
+    - Sun shift → Mon shift: Check forbidden transitions
     
-    Guarantees that all employees always have >11 hours rest between
-    their last shift of one week and first shift of the next week.
-    
-    Therefore, no explicit constraints are needed - the model structure
-    ensures compliance automatically.
+    Forbidden transitions (violate 11-hour rest):
+    - S → F (Spät 21:45 → Früh 05:45 = 8 hours)
+    - N → F (Nacht 05:45 → Früh 05:45 = 0 hours, but N ends next morning)
     """
-    pass
+    # Implement weekend transition checks
+    for emp in employees:
+        # Skip temporary workers
+        if emp.is_ferienjobber:
+            continue
+        
+        for i, d in enumerate(dates[:-1]):
+            next_d = dates[i + 1]
+            
+            # Only check transitions involving weekends
+            if d.weekday() < 5 and next_d.weekday() < 5:
+                # Both weekdays - covered by team rotation
+                continue
+            
+            # Get shifts for current and next day
+            curr_shifts = []
+            next_shifts = []
+            
+            if d.weekday() < 5:  # Current day is weekday
+                if emp.team_id and not emp.is_springer:
+                    # Get team shift
+                    week_idx = None
+                    for w_idx, week_dates in enumerate(weeks):
+                        if d in week_dates:
+                            week_idx = w_idx
+                            break
+                    if week_idx is not None:
+                        for shift_code in shift_codes:
+                            if (emp.team_id, week_idx, shift_code) in team_shift:
+                                curr_shifts.append((shift_code, team_shift[(emp.team_id, week_idx, shift_code)]))
+            else:  # Current day is weekend
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_weekend_shift:
+                        curr_shifts.append((shift_code, employee_weekend_shift[(emp.id, d, shift_code)]))
+            
+            if next_d.weekday() < 5:  # Next day is weekday
+                if emp.team_id and not emp.is_springer:
+                    # Get team shift
+                    week_idx = None
+                    for w_idx, week_dates in enumerate(weeks):
+                        if next_d in week_dates:
+                            week_idx = w_idx
+                            break
+                    if week_idx is not None:
+                        for shift_code in shift_codes:
+                            if (emp.team_id, week_idx, shift_code) in team_shift:
+                                next_shifts.append((shift_code, team_shift[(emp.team_id, week_idx, shift_code)]))
+            else:  # Next day is weekend
+                for shift_code in shift_codes:
+                    if (emp.id, next_d, shift_code) in employee_weekend_shift:
+                        next_shifts.append((shift_code, employee_weekend_shift[(emp.id, next_d, shift_code)]))
+            
+            # Add forbidden transition constraints
+            for curr_shift_code, curr_var in curr_shifts:
+                if curr_shift_code in FORBIDDEN_TRANSITIONS:
+                    for forbidden_next in FORBIDDEN_TRANSITIONS[curr_shift_code]:
+                        for next_shift_code, next_var in next_shifts:
+                            if next_shift_code == forbidden_next:
+                                # Cannot have curr_shift AND forbidden_next on consecutive days
+                                model.Add(curr_var + next_var <= 1)
 
 
 def add_consecutive_shifts_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
@@ -305,9 +400,22 @@ def add_consecutive_shifts_constraints(
             for j in range(MAXIMUM_CONSECUTIVE_SHIFTS + 1):
                 current_date = dates[i + j]
                 
-                # Add employee active variable
-                if (emp.id, current_date) in employee_active:
-                    shifts_in_period.append(employee_active[(emp.id, current_date)])
+                # Check if working this day
+                if current_date.weekday() < 5:  # Weekday
+                    if (emp.id, current_date) in employee_active:
+                        shifts_in_period.append(employee_active[(emp.id, current_date)])
+                else:  # Weekend
+                    # Working on weekend if assigned to ANY shift
+                    weekend_shift_vars = []
+                    for shift_code in shift_codes:
+                        if (emp.id, current_date, shift_code) in employee_weekend_shift:
+                            weekend_shift_vars.append(employee_weekend_shift[(emp.id, current_date, shift_code)])
+                    
+                    if weekend_shift_vars:
+                        # Since max 1 shift per day, sum ∈ {0,1} works as boolean
+                        weekend_working = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
+                        model.Add(weekend_working == sum(weekend_shift_vars))
+                        shifts_in_period.append(weekend_working)
             
             if shifts_in_period:
                 model.Add(sum(shifts_in_period) <= MAXIMUM_CONSECUTIVE_SHIFTS)
@@ -316,6 +424,7 @@ def add_consecutive_shifts_constraints(
 def add_working_hours_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
@@ -346,6 +455,7 @@ def add_working_hours_constraints(
             # Calculate hours for this week
             hours_terms = []
             
+            # WEEKDAY HOURS (Mon-Fri)
             # For each shift type, calculate hours if team has that shift
             for shift_code in shift_codes:
                 if (emp.team_id, week_idx, shift_code) not in team_shift:
@@ -353,24 +463,26 @@ def add_working_hours_constraints(
                 if shift_code not in shift_hours:
                     continue
                 
-                # Count active days this week for this employee
-                active_days = []
+                # Count active weekdays for this employee
+                active_weekdays = []
                 for d in week_dates:
-                    if (emp.id, d) in employee_active:
-                        active_days.append(employee_active[(emp.id, d)])
+                    if d.weekday() < 5 and (emp.id, d) in employee_active:
+                        active_weekdays.append(employee_active[(emp.id, d)])
                 
-                if not active_days:
+                if not active_weekdays:
                     continue
                 
                 # If team has this shift, hours = days_active * hours_per_shift
                 # We need: team_shift * sum(active_days) * hours
                 
                 # First: count active days this week
-                days_active = model.NewIntVar(0, len(week_dates), f"emp{emp.id}_week{week_idx}_days")
-                model.Add(days_active == sum(active_days))
+                days_active = model.NewIntVar(0, len([d for d in week_dates if d.weekday() < 5]), 
+                                              f"emp{emp.id}_week{week_idx}_weekdays")
+                model.Add(days_active == sum(active_weekdays))
                 
                 # Second: multiply by team_shift to get conditional active days
-                conditional_days = model.NewIntVar(0, len(week_dates), f"emp{emp.id}_week{week_idx}_shift{shift_code}_days")
+                conditional_days = model.NewIntVar(0, len([d for d in week_dates if d.weekday() < 5]), 
+                                                   f"emp{emp.id}_week{week_idx}_shift{shift_code}_days")
                 model.AddMultiplicationEquality(
                     conditional_days,
                     [team_shift[(emp.team_id, week_idx, shift_code)], days_active]
@@ -379,6 +491,21 @@ def add_working_hours_constraints(
                 # Third: multiply by hours (scaled by 10)
                 scaled_hours = int(shift_hours[shift_code] * 10)
                 hours_terms.append(conditional_days * scaled_hours)
+            
+            # WEEKEND HOURS (Sat-Sun)
+            for d in week_dates:
+                if d.weekday() < 5:
+                    continue  # Skip weekdays
+                
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) not in employee_weekend_shift:
+                        continue
+                    if shift_code not in shift_hours:
+                        continue
+                    
+                    # If employee works this shift on this weekend day, add hours
+                    scaled_hours = int(shift_hours[shift_code] * 10)
+                    hours_terms.append(employee_weekend_shift[(emp.id, d, shift_code)] * scaled_hours)
             
             if hours_terms:
                 # Maximum 48 hours = 480 scaled hours
@@ -447,6 +574,7 @@ def add_td_constraints(
 def add_springer_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date]
 ):
@@ -462,12 +590,27 @@ def add_springer_constraints(
     if not springers:
         return
     
+    shift_codes = ["F", "S", "N"]
+    
     # At least 1 springer available per day
     for d in dates:
         springer_working = []
         for emp in springers:
-            if (emp.id, d) in employee_active:
-                springer_working.append(employee_active[(emp.id, d)])
+            if d.weekday() < 5:  # Weekday
+                if (emp.id, d) in employee_active:
+                    springer_working.append(employee_active[(emp.id, d)])
+            else:  # Weekend
+                # Springer works if assigned to any shift
+                shift_vars = []
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_weekend_shift:
+                        shift_vars.append(employee_weekend_shift[(emp.id, d, shift_code)])
+                
+                if shift_vars:
+                    # Since max 1 shift per day, sum ∈ {0,1} works as boolean
+                    working_any_shift = model.NewBoolVar(f"springer{emp.id}_working_{d}")
+                    model.Add(working_any_shift == sum(shift_vars))
+                    springer_working.append(working_any_shift)
         
         if springer_working:
             # At least one springer must be free
@@ -477,6 +620,7 @@ def add_springer_constraints(
 def add_fairness_objectives(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
@@ -498,21 +642,30 @@ def add_fairness_objectives(
     """
     objective_terms = []
     
-    # 1. Fair distribution of total shifts per employee
+    # 1. Fair distribution of total shifts per employee (including weekends)
     shift_counts = []
     for emp in employees:
         if emp.is_springer or not emp.team_id:
             continue  # Don't include springers in fairness
         
-        # Count active days
-        active_days = []
+        # Count weekday active days
+        weekday_active = []
         for d in dates:
-            if (emp.id, d) in employee_active:
-                active_days.append(employee_active[(emp.id, d)])
+            if d.weekday() < 5 and (emp.id, d) in employee_active:
+                weekday_active.append(employee_active[(emp.id, d)])
         
-        if active_days:
+        # Count weekend shifts
+        weekend_active = []
+        for d in dates:
+            if d.weekday() >= 5:
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_weekend_shift:
+                        weekend_active.append(employee_weekend_shift[(emp.id, d, shift_code)])
+        
+        all_active = weekday_active + weekend_active
+        if all_active:
             total = model.NewIntVar(0, len(dates), f"total_shifts_{emp.id}")
-            model.Add(total == sum(active_days))
+            model.Add(total == sum(all_active))
             shift_counts.append(total)
     
     # Minimize pairwise differences
@@ -525,17 +678,50 @@ def add_fairness_objectives(
                 model.AddAbsEquality(abs_diff, diff)
                 objective_terms.append(abs_diff)
     
-    # 2. Fair distribution of night shifts (count by team)
+    # Count total weeks and weekend days for proper variable bounds
+    num_weeks = len(weeks)
+    num_weekend_days = len([d for d in dates if d.weekday() >= 5])
+    
+    # 2. Fair distribution of weekend work per employee
+    weekend_counts = []
+    for emp in employees:
+        if emp.is_springer or not emp.team_id:
+            continue
+        
+        weekend_shifts = []
+        for d in dates:
+            if d.weekday() >= 5:
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_weekend_shift:
+                        weekend_shifts.append(employee_weekend_shift[(emp.id, d, shift_code)])
+        
+        if weekend_shifts:
+            total_weekends = model.NewIntVar(0, num_weekend_days, f"weekends_{emp.id}")
+            model.Add(total_weekends == sum(weekend_shifts))
+            weekend_counts.append(total_weekends)
+    
+    # Minimize variance in weekend distribution
+    if len(weekend_counts) > 1:
+        for i in range(len(weekend_counts)):
+            for j in range(i + 1, len(weekend_counts)):
+                diff = model.NewIntVar(-num_weekend_days, num_weekend_days, 
+                                      f"weekend_diff_{i}_{j}")
+                model.Add(diff == weekend_counts[i] - weekend_counts[j])
+                abs_diff = model.NewIntVar(0, num_weekend_days, f"weekend_abs_diff_{i}_{j}")
+                model.AddAbsEquality(abs_diff, diff)
+                objective_terms.append(abs_diff * 3)  # Weight weekend fairness higher
+    
+    # 3. Fair distribution of night shifts (count by team)
     if "N" in shift_codes:
         night_counts = []
         for team in teams:
             night_weeks = []
-            for week_idx in range(len(weeks)):
+            for week_idx in range(num_weeks):
                 if (team.id, week_idx, "N") in team_shift:
                     night_weeks.append(team_shift[(team.id, week_idx, "N")])
             
             if night_weeks:
-                total_nights = model.NewIntVar(0, len(weeks), f"nights_{team.id}")
+                total_nights = model.NewIntVar(0, num_weeks, f"nights_{team.id}")
                 model.Add(total_nights == sum(night_weeks))
                 night_counts.append(total_nights)
         
@@ -543,13 +729,13 @@ def add_fairness_objectives(
         if len(night_counts) > 1:
             for i in range(len(night_counts)):
                 for j in range(i + 1, len(night_counts)):
-                    diff = model.NewIntVar(-len(weeks), len(weeks), f"night_diff_{i}_{j}")
+                    diff = model.NewIntVar(-num_weeks, num_weeks, f"night_diff_{i}_{j}")
                     model.Add(diff == night_counts[i] - night_counts[j])
-                    abs_diff = model.NewIntVar(0, len(weeks), f"night_abs_diff_{i}_{j}")
+                    abs_diff = model.NewIntVar(0, num_weeks, f"night_abs_diff_{i}_{j}")
                     model.AddAbsEquality(abs_diff, diff)
                     objective_terms.append(abs_diff * 2)  # Weight night fairness higher
     
-    # 3. Fair distribution of TD assignments
+    # 4. Fair distribution of TD assignments
     if td_vars:
         td_counts = []
         for emp in employees:
@@ -557,12 +743,12 @@ def add_fairness_objectives(
                 continue
             
             emp_td_weeks = []
-            for week_idx in range(len(weeks)):
+            for week_idx in range(num_weeks):
                 if (emp.id, week_idx) in td_vars:
                     emp_td_weeks.append(td_vars[(emp.id, week_idx)])
             
             if emp_td_weeks:
-                total_td = model.NewIntVar(0, len(weeks), f"td_total_{emp.id}")
+                total_td = model.NewIntVar(0, num_weeks, f"td_total_{emp.id}")
                 model.Add(total_td == sum(emp_td_weeks))
                 td_counts.append(total_td)
         
@@ -570,9 +756,9 @@ def add_fairness_objectives(
         if len(td_counts) > 1:
             for i in range(len(td_counts)):
                 for j in range(i + 1, len(td_counts)):
-                    diff = model.NewIntVar(-len(weeks), len(weeks), f"td_diff_{i}_{j}")
+                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{i}_{j}")
                     model.Add(diff == td_counts[i] - td_counts[j])
-                    abs_diff = model.NewIntVar(0, len(weeks), f"td_abs_diff_{i}_{j}")
+                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{i}_{j}")
                     model.AddAbsEquality(abs_diff, diff)
                     objective_terms.append(abs_diff)
     

@@ -52,7 +52,7 @@ class ShiftPlanningSolver:
         Add all constraints to the TEAM-BASED model.
         """
         model = self.planning_model.get_model()
-        team_shift, employee_active, td_vars = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -75,27 +75,27 @@ class ShiftPlanningSolver:
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift)")
-        add_staffing_constraints(model, employee_active, team_shift, employees, teams, dates, weeks, shift_codes)
+        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, teams, dates, weeks, shift_codes)
         
         print("  - Rest time constraints (11 hours minimum)")
-        add_rest_time_constraints(model, employee_active, team_shift, employees, dates, weeks, shift_codes)
+        add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, dates, weeks, shift_codes)
         
         print("  - Consecutive shifts constraints (max 6 days)")
-        add_consecutive_shifts_constraints(model, employee_active, td_vars, employees, dates, shift_codes)
+        add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, td_vars, employees, dates, shift_codes)
         
         print("  - Working hours constraints (48h/week, 192h/month)")
-        add_working_hours_constraints(model, employee_active, team_shift, td_vars, employees, dates, weeks, shift_codes, shift_types)
+        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, dates, weeks, shift_codes, shift_types)
         
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")
         add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)
         
         print("  - Springer constraints (at least 1 available)")
-        add_springer_constraints(model, employee_active, employees, dates)
+        add_springer_constraints(model, employee_active, employee_weekend_shift, employees, dates)
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
         print("  - Fairness objectives")
-        objective_terms = add_fairness_objectives(model, employee_active, team_shift, td_vars, employees, teams, dates, weeks, shift_codes)
+        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, teams, dates, weeks, shift_codes)
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
@@ -170,7 +170,7 @@ class ShiftPlanningSolver:
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}
         
-        team_shift, employee_active, td_vars = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -184,30 +184,52 @@ class ShiftPlanningSolver:
         for emp in employees:
             # Handle springers separately - they don't follow team shifts
             if emp.is_springer:
-                # Springer can work any shift on any day based on employee_active
+                # Springer can work any shift on any day
+                # For weekdays, use employee_active; for weekends, use employee_weekend_shift
                 for d in dates:
-                    if (emp.id, d) not in employee_active:
-                        continue
-                    
-                    if self.solution.Value(employee_active[(emp.id, d)]) == 0:
-                        continue  # Not working this day
-                    
-                    # For springer, we need to determine which shift they worked
-                    # This is based on staffing needs - springer fills gaps
-                    # For now, assign to the shift that needs coverage
-                    # (In practice, this would be determined during staffing constraints)
-                    # Default to F shift if active
-                    shift_type_id = 1  # F shift by default
-                    
-                    assignment = ShiftAssignment(
-                        id=assignment_id,
-                        employee_id=emp.id,
-                        shift_type_id=shift_type_id,
-                        date=d,
-                        is_springer_assignment=True
-                    )
-                    assignments.append(assignment)
-                    assignment_id += 1
+                    if d.weekday() < 5:  # Weekday
+                        if (emp.id, d) not in employee_active:
+                            continue
+                        
+                        if self.solution.Value(employee_active[(emp.id, d)]) == 0:
+                            continue  # Not working this day
+                        
+                        # For springer, assign to shift that needs coverage (default to F)
+                        shift_type_id = 1  # F shift by default
+                        
+                        assignment = ShiftAssignment(
+                            id=assignment_id,
+                            employee_id=emp.id,
+                            shift_type_id=shift_type_id,
+                            date=d,
+                            is_springer_assignment=True
+                        )
+                        assignments.append(assignment)
+                        assignment_id += 1
+                    else:  # Weekend
+                        # Check which shift springer is assigned to
+                        for shift_code in shift_codes:
+                            if (emp.id, d, shift_code) not in employee_weekend_shift:
+                                continue
+                            
+                            if self.solution.Value(employee_weekend_shift[(emp.id, d, shift_code)]) == 1:
+                                shift_type_id = None
+                                for st in STANDARD_SHIFT_TYPES:
+                                    if st.code == shift_code:
+                                        shift_type_id = st.id
+                                        break
+                                
+                                if shift_type_id:
+                                    assignment = ShiftAssignment(
+                                        id=assignment_id,
+                                        employee_id=emp.id,
+                                        shift_type_id=shift_type_id,
+                                        date=d,
+                                        is_springer_assignment=True
+                                    )
+                                    assignments.append(assignment)
+                                    assignment_id += 1
+                                    break
                 continue
             
             # Regular team members
@@ -226,43 +248,72 @@ class ShiftPlanningSolver:
             
             # For each date, check if employee is active
             for d in dates:
-                if (emp.id, d) not in employee_active:
-                    continue
+                weekday = d.weekday()
                 
-                if self.solution.Value(employee_active[(emp.id, d)]) == 0:
-                    continue  # Not working this day
-                
-                # Find which week this date belongs to
-                week_idx = self.planning_model.get_week_index(d)
-                
-                # Find which shift the team has this week
-                team_shift_code = None
-                for shift_code in shift_codes:
-                    if (team.id, week_idx, shift_code) in team_shift:
-                        if self.solution.Value(team_shift[(team.id, week_idx, shift_code)]) == 1:
-                            team_shift_code = shift_code
+                if weekday < 5:  # WEEKDAY (Mon-Fri): Use team shift
+                    if (emp.id, d) not in employee_active:
+                        continue
+                    
+                    if self.solution.Value(employee_active[(emp.id, d)]) == 0:
+                        continue  # Not working this day
+                    
+                    # Find which week this date belongs to
+                    week_idx = self.planning_model.get_week_index(d)
+                    
+                    # Find which shift the team has this week
+                    team_shift_code = None
+                    for shift_code in shift_codes:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            if self.solution.Value(team_shift[(team.id, week_idx, shift_code)]) == 1:
+                                team_shift_code = shift_code
+                                break
+                    
+                    if not team_shift_code:
+                        continue  # No shift found
+                    
+                    # Find shift type ID
+                    shift_type_id = None
+                    for st in STANDARD_SHIFT_TYPES:
+                        if st.code == team_shift_code:
+                            shift_type_id = st.id
                             break
+                    
+                    if shift_type_id:
+                        assignment = ShiftAssignment(
+                            id=assignment_id,
+                            employee_id=emp.id,
+                            shift_type_id=shift_type_id,
+                            date=d,
+                            is_springer_assignment=False
+                        )
+                        assignments.append(assignment)
+                        assignment_id += 1
                 
-                if not team_shift_code:
-                    continue  # No shift found
-                
-                # Find shift type ID
-                shift_type_id = None
-                for st in STANDARD_SHIFT_TYPES:
-                    if st.code == team_shift_code:
-                        shift_type_id = st.id
-                        break
-                
-                if shift_type_id:
-                    assignment = ShiftAssignment(
-                        id=assignment_id,
-                        employee_id=emp.id,
-                        shift_type_id=shift_type_id,
-                        date=d,
-                        is_springer_assignment=False
-                    )
-                    assignments.append(assignment)
-                    assignment_id += 1
+                else:  # WEEKEND (Sat-Sun): Use individual weekend shift
+                    # Find which shift the employee has this weekend day
+                    for shift_code in shift_codes:
+                        if (emp.id, d, shift_code) not in employee_weekend_shift:
+                            continue
+                        
+                        if self.solution.Value(employee_weekend_shift[(emp.id, d, shift_code)]) == 1:
+                            # Find shift type ID
+                            shift_type_id = None
+                            for st in STANDARD_SHIFT_TYPES:
+                                if st.code == shift_code:
+                                    shift_type_id = st.id
+                                    break
+                            
+                            if shift_type_id:
+                                assignment = ShiftAssignment(
+                                    id=assignment_id,
+                                    employee_id=emp.id,
+                                    shift_type_id=shift_type_id,
+                                    date=d,
+                                    is_springer_assignment=False
+                                )
+                                assignments.append(assignment)
+                                assignment_id += 1
+                            break  # Only one shift per weekend day
         
         # Extract TD assignments
         special_functions = {}

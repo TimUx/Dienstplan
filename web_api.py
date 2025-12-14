@@ -882,7 +882,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not result:
                 return jsonify({'error': 'No solution found'}), 500
             
-            assignments, special_functions = result
+            assignments, special_functions, complete_schedule = result
             
             # Save to database
             conn = db.get_connection()
@@ -924,6 +924,171 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/shifts/assignments/<int:id>', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def update_shift_assignment(id):
+        """Update a shift assignment (manual edit)"""
+        try:
+            data = request.get_json()
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if assignment exists
+            cursor.execute("SELECT Id FROM ShiftAssignments WHERE Id = ?", (id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+            
+            # Update assignment
+            cursor.execute("""
+                UPDATE ShiftAssignments 
+                SET EmployeeId = ?, ShiftTypeId = ?, Date = ?, 
+                    IsManual = 1, IsFixed = ?, Notes = ?,
+                    ModifiedAt = ?, ModifiedBy = ?
+                WHERE Id = ?
+            """, (
+                data.get('employeeId'),
+                data.get('shiftTypeId'),
+                data.get('date'),
+                1 if data.get('isFixed') else 0,
+                data.get('notes'),
+                datetime.utcnow().isoformat(),
+                session.get('user_email'),
+                id
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update shift assignment error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/shifts/assignments', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def create_shift_assignment():
+        """Create a shift assignment manually"""
+        try:
+            data = request.get_json()
+            
+            if not data.get('employeeId') or not data.get('shiftTypeId') or not data.get('date'):
+                return jsonify({'error': 'EmployeeId, ShiftTypeId und Date sind erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check for existing assignment
+            cursor.execute("""
+                SELECT Id FROM ShiftAssignments 
+                WHERE EmployeeId = ? AND Date = ?
+            """, (data.get('employeeId'), data.get('date')))
+            
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Mitarbeiter hat bereits eine Schicht an diesem Tag'}), 400
+            
+            # Create assignment
+            cursor.execute("""
+                INSERT INTO ShiftAssignments 
+                (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, Notes, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+            """, (
+                data.get('employeeId'),
+                data.get('shiftTypeId'),
+                data.get('date'),
+                1 if data.get('isFixed') else 0,
+                data.get('notes'),
+                datetime.utcnow().isoformat(),
+                session.get('user_email')
+            ))
+            
+            assignment_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': assignment_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create shift assignment error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/shifts/assignments/<int:id>', methods=['DELETE'])
+    @require_role('Admin', 'Disponent')
+    def delete_shift_assignment(id):
+        """Delete a shift assignment"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if assignment exists
+            cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                conn.close()
+                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+            
+            # Warn if trying to delete a fixed assignment
+            if row['IsFixed']:
+                conn.close()
+                return jsonify({'error': 'Fixierte Schichtzuweisungen können nicht gelöscht werden. Bitte erst entsperren.'}), 400
+            
+            # Delete assignment
+            cursor.execute("DELETE FROM ShiftAssignments WHERE Id = ?", (id,))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete shift assignment error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
+    @app.route('/api/shifts/assignments/<int:id>/toggle-fixed', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def toggle_fixed_assignment(id):
+        """Toggle the IsFixed flag on an assignment (lock/unlock)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if assignment exists
+            cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                conn.close()
+                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+            
+            # Toggle fixed status
+            new_fixed_status = 0 if row['IsFixed'] else 1
+            
+            cursor.execute("""
+                UPDATE ShiftAssignments 
+                SET IsFixed = ?, ModifiedAt = ?, ModifiedBy = ?
+                WHERE Id = ?
+            """, (
+                new_fixed_status,
+                datetime.utcnow().isoformat(),
+                session.get('user_email'),
+                id
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'isFixed': bool(new_fixed_status)
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Toggle fixed assignment error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Sperren/Entsperren: {str(e)}'}), 500
     
     @app.route('/api/shifts/export/csv', methods=['GET'])
     def export_schedule_csv():

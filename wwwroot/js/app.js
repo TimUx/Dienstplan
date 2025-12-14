@@ -447,7 +447,10 @@ function displayWeekView(data, employees) {
                     const shiftId = parseInt(s.id); // Ensure it's a number
                     const shiftCode = escapeHtml(s.shiftCode);
                     const shiftName = escapeHtml(s.shiftName);
-                    const badge = `<span class="shift-badge shift-${shiftCode}" title="${shiftName}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${shiftCode}</span>`;
+                    const isFixed = s.isFixed || false;
+                    const lockIcon = isFixed ? '🔒' : '';
+                    const badgeClass = isFixed ? 'shift-badge-fixed' : '';
+                    const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;
                     return badge;
                 }).join(' ');
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
@@ -2496,6 +2499,37 @@ async function deleteShiftAssignment() {
         }
     } catch (error) {
         console.error('Error deleting shift:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function toggleShiftFixed(shiftId) {
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten zu sperren/entsperren.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}/toggle-fixed`, {
+            method: 'PUT',
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const status = data.isFixed ? 'gesperrt' : 'entsperrt';
+            alert(`Schicht erfolgreich ${status}!`);
+            loadSchedule();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            const error = await response.json();
+            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error toggling fixed status:', error);
         alert(`Fehler: ${error.message}`);
     }
 }

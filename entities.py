@@ -68,13 +68,19 @@ class Employee:
     funktion: Optional[str] = None  # Function/Role
     is_springer: bool = False  # Backup worker
     is_ferienjobber: bool = False  # Temporary worker
-    is_brandmeldetechniker: bool = False  # BMT qualified
-    is_brandschutzbeauftragter: bool = False  # BSB qualified
+    is_brandmeldetechniker: bool = False  # BMT qualified (for legacy compatibility)
+    is_brandschutzbeauftragter: bool = False  # BSB qualified (for legacy compatibility)
+    is_td_qualified: bool = False  # TD (Tagdienst) qualified - combines BMT and BSB
     team_id: Optional[int] = None
     
     @property
     def full_name(self) -> str:
         return f"{self.vorname} {self.name}"
+    
+    @property
+    def can_do_td(self) -> bool:
+        """Check if employee can perform TD (Tagdienst) function"""
+        return self.is_td_qualified or self.is_brandmeldetechniker or self.is_brandschutzbeauftragter
 
 
 @dataclass

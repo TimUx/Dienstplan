@@ -1,12 +1,17 @@
 """
 OR-Tools CP-SAT model builder for shift planning.
 Creates decision variables and orchestrates constraint addition.
+
+Important: This model implements team-based shift planning where:
+- Teams are the primary planning unit, not individual employees
+- All members of a team work the same shift during a week
+- Teams rotate weekly in fixed pattern: F → N → S
 """
 
 from ortools.sat.python import cp_model
 from datetime import date, timedelta
-from typing import Dict, List, Tuple
-from entities import Employee, Absence, ShiftType, STANDARD_SHIFT_TYPES
+from typing import Dict, List, Tuple, Set
+from entities import Employee, Absence, ShiftType, STANDARD_SHIFT_TYPES, Team
 
 
 class ShiftPlanningModel:
@@ -17,6 +22,7 @@ class ShiftPlanningModel:
     def __init__(
         self,
         employees: List[Employee],
+        teams: List[Team],
         start_date: date,
         end_date: date,
         absences: List[Absence],
@@ -27,6 +33,7 @@ class ShiftPlanningModel:
         
         Args:
             employees: List of all employees
+            teams: List of teams
             start_date: Start date of planning period
             end_date: End date of planning period
             absences: List of employee absences
@@ -34,6 +41,7 @@ class ShiftPlanningModel:
         """
         self.model = cp_model.CpModel()
         self.employees = employees
+        self.teams = teams
         self.start_date = start_date
         self.end_date = end_date
         self.absences = absences
@@ -49,64 +57,103 @@ class ShiftPlanningModel:
         # Get main shift codes (F, S, N)
         self.shift_codes = [st.code for st in self.shift_types if st.code in ["F", "S", "N"]]
         
+        # Generate weeks (Monday to Sunday)
+        self.weeks = self._generate_weeks()
+        
         # Decision variables
-        self.x = {}  # x[employee_id, date, shift_code] = 0 or 1
-        self.bmt_vars = {}  # BMT assignments
-        self.bsb_vars = {}  # BSB assignments
+        self.team_shift = {}  # team_shift[team_id, week_idx, shift_code] = 0 or 1
+        self.employee_active = {}  # employee_active[employee_id, date] = 0 or 1 (derived from team shift)
+        self.td_vars = {}  # td[employee_id, week_idx] = 0 or 1 (Tagdienst assignment)
         
         # Build the model
         self._create_decision_variables()
+    
+    
+    def _generate_weeks(self) -> List[List[date]]:
+        """
+        Generate list of weeks (Monday to Sunday) from dates.
+        
+        Returns:
+            List of weeks, where each week is a list of dates
+        """
+        weeks = []
+        current_week = []
+        
+        for d in self.dates:
+            if d.weekday() == 0 and current_week:  # Monday and week has content
+                weeks.append(current_week)
+                current_week = []
+            current_week.append(d)
+        
+        if current_week:
+            weeks.append(current_week)
+        
+        return weeks
     
     def _create_decision_variables(self):
         """
         Create all decision variables for the model.
         
-        Variables:
-        - x[(emp_id, date, shift)]: Boolean - employee is assigned to shift on date
-        - bmt_vars[(emp_id, date)]: Boolean - employee is assigned BMT on date
-        - bsb_vars[(emp_id, date)]: Boolean - employee is assigned BSB on date
+        Team-based model structure:
+        - team_shift[team_id, week_idx, shift]: Team has this shift in this week
+        - employee_active[emp_id, date]: Employee works on this date (derived from team shift)
+        - td_vars[emp_id, week_idx]: Employee has TD (Tagdienst) duty in this week
+        
+        Important: Employees do not have individual shift variables.
+        Their shifts are always determined by their team's shift.
         """
         
-        # Main shift assignment variables x[p][d][s]
-        # For each employee, date, and shift type
+        # CORE VARIABLE: Team shift assignment per week
+        # team_shift[team_id, week_idx, shift_code] ∈ {0, 1}
+        for team in self.teams:
+            for week_idx in range(len(self.weeks)):
+                for shift_code in self.shift_codes:
+                    var_name = f"team_{team.id}_week{week_idx}_shift{shift_code}"
+                    self.team_shift[(team.id, week_idx, shift_code)] = self.model.NewBoolVar(var_name)
+        
+        # Employee active variables (derived from team shifts + springer assignments)
+        # employee_active[emp_id, date] ∈ {0, 1}
         for emp in self.employees:
             for d in self.dates:
-                for shift_code in self.shift_codes:
-                    var_name = f"x_emp{emp.id}_date{d}_shift{shift_code}"
-                    self.x[(emp.id, d, shift_code)] = self.model.NewBoolVar(var_name)
+                var_name = f"emp{emp.id}_active_date{d}"
+                self.employee_active[(emp.id, d)] = self.model.NewBoolVar(var_name)
         
-        # BMT (Brandmeldetechniker) variables - only for qualified employees on weekdays
-        bmt_qualified = [emp for emp in self.employees if emp.is_brandmeldetechniker]
-        for emp in bmt_qualified:
-            for d in self.dates:
-                if d.weekday() < 5:  # Monday to Friday
-                    var_name = f"bmt_emp{emp.id}_date{d}"
-                    self.bmt_vars[(emp.id, d)] = self.model.NewBoolVar(var_name)
-        
-        # BSB (Brandschutzbeauftragter) variables - only for qualified employees on weekdays
-        bsb_qualified = [emp for emp in self.employees if emp.is_brandschutzbeauftragter]
-        for emp in bsb_qualified:
-            for d in self.dates:
-                if d.weekday() < 5:  # Monday to Friday
-                    var_name = f"bsb_emp{emp.id}_date{d}"
-                    self.bsb_vars[(emp.id, d)] = self.model.NewBoolVar(var_name)
+        # TD (Tagdienst) variables - weekly assignment on Monday-Friday
+        # td_vars[emp_id, week_idx] ∈ {0, 1}
+        td_qualified = [emp for emp in self.employees if emp.can_do_td]
+        for emp in td_qualified:
+            for week_idx in range(len(self.weeks)):
+                # Only create TD variable if week has weekdays
+                week_dates = self.weeks[week_idx]
+                has_weekdays = any(d.weekday() < 5 for d in week_dates)
+                if has_weekdays:
+                    var_name = f"td_emp{emp.id}_week{week_idx}"
+                    self.td_vars[(emp.id, week_idx)] = self.model.NewBoolVar(var_name)
+    
     
     def get_model(self) -> cp_model.CpModel:
         """Get the CP-SAT model"""
         return self.model
     
     def get_variables(self) -> Tuple[
-        Dict[Tuple[int, date, str], cp_model.IntVar],
+        Dict[Tuple[int, int, str], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
-        Dict[Tuple[int, date], cp_model.IntVar]
+        Dict[Tuple[int, int], cp_model.IntVar]
     ]:
         """
         Get all decision variables.
         
         Returns:
-            Tuple of (x, bmt_vars, bsb_vars)
+            Tuple of (team_shift, employee_active, td_vars)
         """
-        return self.x, self.bmt_vars, self.bsb_vars
+        return self.team_shift, self.employee_active, self.td_vars
+    
+    def get_team_by_id(self, team_id: int) -> Team:
+        """Get team by ID"""
+        for team in self.teams:
+            if team.id == team_id:
+                return team
+        raise ValueError(f"Team {team_id} not found")
     
     def get_employee_by_id(self, emp_id: int) -> Employee:
         """Get employee by ID"""
@@ -122,32 +169,44 @@ class ShiftPlanningModel:
                 return st
         raise ValueError(f"Shift type {code} not found")
     
+    def get_week_index(self, d: date) -> int:
+        """Get the week index for a given date"""
+        for week_idx, week_dates in enumerate(self.weeks):
+            if d in week_dates:
+                return week_idx
+        raise ValueError(f"Date {d} not in any week")
+    
     def print_model_statistics(self):
         """Print statistics about the model"""
         print("=" * 60)
-        print("MODEL STATISTICS")
+        print("MODEL STATISTICS (TEAM-BASED)")
         print("=" * 60)
         print(f"Planning period: {self.start_date} to {self.end_date}")
         print(f"Number of days: {len(self.dates)}")
+        print(f"Number of weeks: {len(self.weeks)}")
+        print(f"Number of teams: {len(self.teams)}")
+        for team in self.teams:
+            team_members = [e for e in self.employees if e.team_id == team.id]
+            print(f"  - {team.name}: {len(team_members)} members")
         print(f"Number of employees: {len(self.employees)}")
-        print(f"  - Regular employees: {len([e for e in self.employees if not e.is_springer])}")
+        print(f"  - In teams: {len([e for e in self.employees if e.team_id])}")
         print(f"  - Springers: {len([e for e in self.employees if e.is_springer])}")
-        print(f"  - BMT qualified: {len([e for e in self.employees if e.is_brandmeldetechniker])}")
-        print(f"  - BSB qualified: {len([e for e in self.employees if e.is_brandschutzbeauftragter])}")
+        print(f"  - TD qualified: {len([e for e in self.employees if e.can_do_td])}")
         print(f"Number of shift types: {len(self.shift_codes)}")
         print(f"Shift types: {', '.join(self.shift_codes)}")
         print(f"Number of absences: {len(self.absences)}")
         print()
         print(f"Decision variables:")
-        print(f"  - Main shift variables (x): {len(self.x)}")
-        print(f"  - BMT variables: {len(self.bmt_vars)}")
-        print(f"  - BSB variables: {len(self.bsb_vars)}")
-        print(f"  - Total variables: {len(self.x) + len(self.bmt_vars) + len(self.bsb_vars)}")
+        print(f"  - Team shift variables: {len(self.team_shift)}")
+        print(f"  - Employee active variables: {len(self.employee_active)}")
+        print(f"  - TD variables: {len(self.td_vars)}")
+        print(f"  - Total variables: {len(self.team_shift) + len(self.employee_active) + len(self.td_vars)}")
         print("=" * 60)
 
 
 def create_shift_planning_model(
     employees: List[Employee],
+    teams: List[Team],
     start_date: date,
     end_date: date,
     absences: List[Absence],
@@ -158,6 +217,7 @@ def create_shift_planning_model(
     
     Args:
         employees: List of all employees
+        teams: List of teams
         start_date: Start date of planning period
         end_date: End date of planning period
         absences: List of employee absences
@@ -166,7 +226,7 @@ def create_shift_planning_model(
     Returns:
         ShiftPlanningModel instance
     """
-    return ShiftPlanningModel(employees, start_date, end_date, absences, shift_types)
+    return ShiftPlanningModel(employees, teams, start_date, end_date, absences, shift_types)
 
 
 if __name__ == "__main__":
@@ -178,7 +238,7 @@ if __name__ == "__main__":
     start = date.today()
     end = start + timedelta(days=30)
     
-    planning_model = create_shift_planning_model(employees, start, end, absences)
+    planning_model = create_shift_planning_model(employees, teams, start, end, absences)
     planning_model.print_model_statistics()
     
     print("\nModel created successfully!")

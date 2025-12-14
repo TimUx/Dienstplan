@@ -431,9 +431,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
                 return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker, Springer'}), 400
             
-            # Auto-set BMT/BSB flags based on Funktion
-            is_bmt = 1 if funktion == 'Brandmeldetechniker' else 0
-            is_bsb = 1 if funktion == 'Brandschutzbeauftragter' else 0
+            # Use checkbox values directly from frontend for BMT/BSB flags
+            is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
+            is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -489,9 +489,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
                 return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker, Springer'}), 400
             
-            # Auto-set BMT/BSB flags based on Funktion
-            is_bmt = 1 if funktion == 'Brandmeldetechniker' else 0
-            is_bsb = 1 if funktion == 'Brandschutzbeauftragter' else 0
+            # Use checkbox values directly from frontend for BMT/BSB flags
+            is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
+            is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()

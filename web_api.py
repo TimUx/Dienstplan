@@ -1056,7 +1056,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Return PDF
             buffer.seek(0)
-            from flask import send_file
             return send_file(
                 buffer,
                 mimetype='application/pdf',
@@ -1144,7 +1143,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     try:
                         if len(str(cell.value)) > max_length:
                             max_length = len(cell.value)
-                    except:
+                    except Exception:
                         pass
                 adjusted_width = (max_length + 2)
                 ws.column_dimensions[column[0].column_letter].width = adjusted_width
@@ -1156,7 +1155,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             output.seek(0)
             
             # Return Excel file
-            from flask import send_file
             return send_file(
                 output,
                 mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

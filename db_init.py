@@ -44,6 +44,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             IsFerienjobber INTEGER NOT NULL DEFAULT 0,
             IsBrandmeldetechniker INTEGER NOT NULL DEFAULT 0,
             IsBrandschutzbeauftragter INTEGER NOT NULL DEFAULT 0,
+            IsTdQualified INTEGER NOT NULL DEFAULT 0,
             TeamId INTEGER,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (TeamId) REFERENCES Teams(Id)
@@ -282,9 +283,10 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
         (4, "Z", "Zwischendienst", "08:00", "16:00", 8.0, "#9C27B0"),
         (5, "BMT", "Brandmeldetechniker", "06:00", "14:00", 8.0, "#F44336"),
         (6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", 9.5, "#E91E63"),
-        (7, "K", "Krank", "00:00", "00:00", 0.0, "#9E9E9E"),
-        (8, "U", "Urlaub", "00:00", "00:00", 0.0, "#00BCD4"),
-        (9, "L", "Lehrgang", "00:00", "00:00", 0.0, "#795548"),
+        (7, "TD", "Tagdienst", "06:00", "16:30", 10.5, "#673AB7"),
+        (8, "K", "Krank", "00:00", "00:00", 0.0, "#9E9E9E"),
+        (9, "U", "Urlaub", "00:00", "00:00", 0.0, "#00BCD4"),
+        (10, "L", "Lehrgang", "00:00", "00:00", 0.0, "#795548"),
     ]
     
     for shift_type in shift_types:

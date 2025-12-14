@@ -528,9 +528,17 @@ function displayMonthView(data, employees) {
                     const isSunday = date.getDay() === 0;
                     const isHoliday = isHessianHoliday(date);
                     const shifts = employee.shifts[dateStr] || [];
-                    const shiftBadges = shifts.map(s => 
-                        `<span class="shift-badge shift-${s.shiftCode}" title="${s.shiftName}">${s.shiftCode}</span>`
-                    ).join(' ');
+                    const shiftBadges = shifts.map(s => {
+                        const canEdit = canPlanShifts();
+                        const shiftId = parseInt(s.id); // Ensure it's a number
+                        const shiftCode = escapeHtml(s.shiftCode);
+                        const shiftName = escapeHtml(s.shiftName);
+                        const isFixed = s.isFixed;
+                        const lockIcon = isFixed ? '🔒' : '';
+                        const badgeClass = isFixed ? 'shift-badge-fixed' : '';
+                        const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;
+                        return badge;
+                    }).join(' ');
                     const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
                     html += `<td class="${cellClass}">${shiftBadges}</td>`;
                 });
@@ -1259,6 +1267,7 @@ async function editEmployee(id) {
         document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
+        document.getElementById('isTdQualified').checked = employee.isTdQualified || false;
         
         document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
         document.getElementById('employeeModal').style.display = 'block';
@@ -1332,7 +1341,8 @@ async function saveEmployee(event) {
         isSpringer: document.getElementById('isSpringer').checked,
         isFerienjobber: document.getElementById('isFerienjobber').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
-        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
+        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked,
+        isTdQualified: document.getElementById('isTdQualified').checked
     };
     
     try {
@@ -2414,6 +2424,60 @@ async function editShiftAssignment(shiftId) {
     document.getElementById('editShiftModal').style.display = 'block';
 }
 
+async function showNewShiftModal() {
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten zu erstellen.');
+        return;
+    }
+
+    // Load employees and shift types if not already loaded
+    await loadEmployees();
+    if (allShiftTypes.length === 0) {
+        await loadShiftTypes();
+    }
+
+    // Clear modal for new shift
+    document.getElementById('editShiftForm').reset();
+    document.getElementById('editShiftId').value = '';
+    
+    // Set default date to current view date
+    let defaultDate;
+    if (currentView === 'week') {
+        defaultDate = document.getElementById('startDate').value;
+    } else if (currentView === 'month') {
+        const month = document.getElementById('monthSelect').value;
+        const year = document.getElementById('monthYearSelect').value;
+        defaultDate = `${year}-${month.padStart(2, '0')}-01`;
+    } else {
+        defaultDate = new Date().toISOString().split('T')[0];
+    }
+    document.getElementById('editShiftDate').value = defaultDate;
+    
+    // Populate employee dropdown
+    const employeeSelect = document.getElementById('editShiftEmployeeId');
+    employeeSelect.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+    cachedEmployees.forEach(emp => {
+        const option = document.createElement('option');
+        option.value = emp.id;
+        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        employeeSelect.appendChild(option);
+    });
+
+    // Populate shift type dropdown
+    const shiftTypeSelect = document.getElementById('editShiftTypeId');
+    shiftTypeSelect.innerHTML = '<option value="">Schichttyp wählen...</option>';
+    allShiftTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type.id;
+        option.textContent = `${type.name} (${type.code})`;
+        shiftTypeSelect.appendChild(option);
+    });
+
+    document.getElementById('editShiftWarning').style.display = 'none';
+    document.getElementById('editShiftModalTitle').textContent = 'Neue Schicht erstellen';
+    document.getElementById('editShiftModal').style.display = 'block';
+}
+
 function closeEditShiftModal() {
     document.getElementById('editShiftModal').style.display = 'none';
     document.getElementById('editShiftForm').reset();
@@ -2424,8 +2488,9 @@ async function saveShiftAssignment(event) {
     event.preventDefault();
 
     const shiftId = document.getElementById('editShiftId').value;
+    const isNewShift = !shiftId;
+    
     const shiftData = {
-        id: parseInt(shiftId),
         employeeId: parseInt(document.getElementById('editShiftEmployeeId').value),
         date: document.getElementById('editShiftDate').value,
         shiftTypeId: parseInt(document.getElementById('editShiftTypeId').value),
@@ -2433,16 +2498,26 @@ async function saveShiftAssignment(event) {
         notes: document.getElementById('editShiftNotes').value
     };
 
+    // Only include id for updates
+    if (!isNewShift) {
+        shiftData.id = parseInt(shiftId);
+    }
+
     try {
-        const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}`, {
-            method: 'PUT',
+        const url = isNewShift 
+            ? `${API_BASE}/shifts/assignments`
+            : `${API_BASE}/shifts/assignments/${shiftId}`;
+        const method = isNewShift ? 'POST' : 'PUT';
+        
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(shiftData)
         });
 
         if (response.ok) {
-            alert('Schicht erfolgreich aktualisiert!');
+            alert(isNewShift ? 'Schicht erfolgreich erstellt!' : 'Schicht erfolgreich aktualisiert!');
             closeEditShiftModal();
             loadSchedule();
         } else if (response.status === 400) {
@@ -2465,10 +2540,10 @@ async function saveShiftAssignment(event) {
         } else if (response.status === 403) {
             alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
-            alert('Fehler beim Aktualisieren der Schicht.');
+            alert(isNewShift ? 'Fehler beim Erstellen der Schicht.' : 'Fehler beim Aktualisieren der Schicht.');
         }
     } catch (error) {
-        console.error('Error updating shift:', error);
+        console.error('Error saving shift:', error);
         alert(`Fehler: ${error.message}`);
     }
 }

@@ -237,6 +237,12 @@ select {
     margin: 2px;
 }
 
+.shift-badge-fixed {
+    border: 2px solid #ff6b00;
+    box-shadow: 0 0 4px rgba(255, 107, 0, 0.5);
+    font-weight: 700;
+}
+
 .shift-F { background: var(--frueh-color); color: #000; }
 .shift-S { background: var(--spaet-color); color: #fff; }
 .shift-N { background: var(--nacht-color); color: #fff; }

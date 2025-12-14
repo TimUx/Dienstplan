@@ -49,7 +49,7 @@ def test_locked_team_shift():
         print("❌ FAIL: No solution found for compatible lock")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Verify Team Alpha has 'F' in week 0
     team_alpha_members = [e for e in employees if e.team_id == 1 and not e.is_springer]
@@ -102,7 +102,7 @@ def test_locked_employee_weekend():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Check if employee works on Saturday
     works_saturday = any(
@@ -154,7 +154,7 @@ def test_locked_td():
         print("❌ FAIL: No solution found")
         return False
     
-    assignments, special_functions = result
+    assignments, special_functions, complete_schedule = result
     
     # Check if employee has TD in week 0
     has_td = any(

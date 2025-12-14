@@ -20,17 +20,22 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     - 3 teams with 5 members each (15 employees)
     - 2 springers (not in teams)
     - TD-qualified employees (combining BMT/BSB roles)
+    - Virtual team "Fire Alarm System" for TD-qualified employees without regular teams
     
     Returns:
         Tuple of (employees, teams, absences)
     """
     
-    # Create 3 teams
+    # Create 3 regular teams
     team_alpha = Team(id=1, name="Team Alpha", description="First team")
     team_beta = Team(id=2, name="Team Beta", description="Second team")
     team_gamma = Team(id=3, name="Team Gamma", description="Third team")
     
-    teams = [team_alpha, team_beta, team_gamma]
+    # Create virtual team for Fire Alarm System (TD-qualified without regular team)
+    team_fire_alarm = Team(id=99, name="Fire Alarm System", 
+                          description="Virtual team for TD-qualified employees without regular team assignment")
+    
+    teams = [team_alpha, team_beta, team_gamma, team_fire_alarm]
     
     # Create employees (15 in teams + 2 springers = 17 total)
     employees = []
@@ -62,9 +67,11 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(15, "Christian", "Neumann", "3005", team_id=3),
     ])
     
-    # Springers (2 backup workers, one is TD-qualified)
+    # Springers (2 backup workers)
+    # One springer is TD-qualified and assigned to virtual "Fire Alarm System" team
+    # The other is a regular springer without TD qualification
     employees.extend([
-        Employee(16, "Robert", "Franke", "S001", is_springer=True, team_id=None, is_td_qualified=True),
+        Employee(16, "Robert", "Franke", "S001", is_springer=True, team_id=99, is_td_qualified=True),
         Employee(17, "Thomas", "Zimmermann", "S002", is_springer=True, team_id=None),
     ])
     
@@ -76,6 +83,8 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
             team_beta.employees.append(emp)
         elif emp.team_id == 3:
             team_gamma.employees.append(emp)
+        elif emp.team_id == 99:
+            team_fire_alarm.employees.append(emp)
     
     # Create sample absences
     absences = []

@@ -146,11 +146,17 @@ class ShiftPlanningModel:
         Important: 
         - Weekday shifts (Mon-Fri) are determined by team's shift
         - Weekend shifts (Sat-Sun): PRESENCE is individually assigned, but shift TYPE matches team's weekly shift
+        - Virtual team "Fire Alarm System" (ID 99) does NOT participate in regular shift rotation
         """
         
         # CORE VARIABLE: Team shift assignment per week (WEEKDAYS ONLY)
         # team_shift[team_id, week_idx, shift_code] ∈ {0, 1}
+        # EXCLUDE virtual team "Fire Alarm System" (ID 99) from shift rotation
         for team in self.teams:
+            # Skip virtual team for TD-qualified employees
+            if team.id == 99:  # Fire Alarm System virtual team
+                continue
+                
             for week_idx in range(len(self.weeks)):
                 for shift_code in self.shift_codes:
                     var_name = f"team_{team.id}_week{week_idx}_shift{shift_code}"

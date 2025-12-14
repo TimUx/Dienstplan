@@ -57,7 +57,12 @@ def validate_shift_plan(
     absences: List[Absence],
     start_date: date,
     end_date: date,
-    teams: List = None
+    teams: List = None,
+    special_functions: Dict[Tuple[int, date], str] = None,
+    complete_schedule: Dict[Tuple[int, date], str] = None,
+    locked_team_shift: Dict[Tuple[int, int], str] = None,
+    locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
+    locked_td: Dict[Tuple[int, int], bool] = None
 ) -> ValidationResult:
     """
     Validate the complete shift plan against all rules.
@@ -69,6 +74,11 @@ def validate_shift_plan(
         start_date: Start date of planning period
         end_date: End date of planning period
         teams: List of teams (optional, for enhanced weekend validation)
+        special_functions: Dict of special functions like TD (optional)
+        complete_schedule: Complete schedule dict (optional, for checking all employees)
+        locked_team_shift: Locked team shift assignments (optional, for checking manual overrides)
+        locked_employee_weekend: Locked employee weekend assignments (optional)
+        locked_td: Locked TD assignments (optional)
         
     Returns:
         ValidationResult with any violations or warnings
@@ -103,7 +113,21 @@ def validate_shift_plan(
     validate_special_functions(result, assignments, emp_dict)
     validate_springer_availability(result, assignments, employees)
     
-    # NEW: Validate weekend team consistency
+    # NEW: Validate all employees present in complete schedule
+    if complete_schedule:
+        validate_all_employees_present(result, complete_schedule, employees, start_date, end_date)
+    
+    # NEW: Validate TD assignments
+    if special_functions:
+        validate_td_assignments(result, special_functions, employees, start_date, end_date)
+    
+    # NEW: Validate locked assignments are respected
+    if locked_team_shift or locked_employee_weekend or locked_td:
+        validate_locked_assignments(result, assignments, special_functions, 
+                                    locked_team_shift, locked_employee_weekend, locked_td,
+                                    employees, teams, start_date, end_date)
+    
+    # Validate weekend team consistency
     if teams:
         validate_weekend_team_consistency(result, assignments, employees, teams, start_date, end_date)
     
@@ -516,6 +540,228 @@ def validate_weekend_team_consistency(
                 )
 
 
+def validate_all_employees_present(
+    result: ValidationResult,
+    complete_schedule: Dict[Tuple[int, date], str],
+    employees: List[Employee],
+    start_date: date,
+    end_date: date
+):
+    """
+    CRITICAL: Validate that ALL employees appear in the complete schedule.
+    
+    Every employee must have an entry for every day in the planning period,
+    regardless of whether they:
+    - Have a shift assignment
+    - Have weekend work
+    - Have TD assignment
+    - Are absent
+    - Have no assignment (OFF)
+    
+    This is a fundamental requirement to ensure visibility of all employees.
+    """
+    # Generate all dates
+    dates = []
+    current = start_date
+    while current <= end_date:
+        dates.append(current)
+        current += timedelta(days=1)
+    
+    # Check each employee for each date
+    for emp in employees:
+        for d in dates:
+            if (emp.id, d) not in complete_schedule:
+                result.add_violation(
+                    f"MISSING EMPLOYEE: {emp.full_name} (ID {emp.id}) is missing from schedule on {d}"
+                )
+
+
+def validate_td_assignments(
+    result: ValidationResult,
+    special_functions: Dict[Tuple[int, date], str],
+    employees: List[Employee],
+    start_date: date,
+    end_date: date
+):
+    """
+    Validate TD (Tagdienst / Day Duty) assignments.
+    
+    Rules:
+    - Exactly ONE TD per week (Monday-Friday)
+    - TD must be assigned to a qualified employee
+    - TD is visible and marked in special_functions
+    """
+    # Generate weeks
+    dates = []
+    current = start_date
+    while current <= end_date:
+        dates.append(current)
+        current += timedelta(days=1)
+    
+    weeks = []
+    current_week = []
+    for d in dates:
+        if d.weekday() == 0 and current_week:
+            weeks.append(current_week)
+            current_week = []
+        current_week.append(d)
+    if current_week:
+        weeks.append(current_week)
+    
+    # Check each week
+    for week_idx, week_dates in enumerate(weeks):
+        weekday_dates = [d for d in week_dates if d.weekday() < 5]
+        
+        if not weekday_dates:
+            continue
+        
+        # Count TD assignments in this week
+        td_count = 0
+        td_employees = set()
+        
+        for emp in employees:
+            # Check if this employee has TD any day this week
+            has_td_this_week = False
+            for d in weekday_dates:
+                if (emp.id, d) in special_functions and special_functions[(emp.id, d)] == "TD":
+                    has_td_this_week = True
+                    td_employees.add(emp.id)
+            
+            if has_td_this_week:
+                td_count += 1
+                
+                # Validate employee is qualified
+                if not emp.can_do_td:
+                    result.add_violation(
+                        f"TD QUALIFICATION VIOLATION: {emp.full_name} assigned TD in week {week_idx} but not qualified"
+                    )
+        
+        # Validate exactly 1 TD per week
+        if td_count == 0:
+            result.add_violation(
+                f"MISSING TD: Week {week_idx} ({weekday_dates[0]} to {weekday_dates[-1]}) has no TD assignment (required: exactly 1)"
+            )
+        elif td_count > 1:
+            result.add_violation(
+                f"MULTIPLE TD: Week {week_idx} has {td_count} TD assignments (should be exactly 1)"
+            )
+
+
+def validate_locked_assignments(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    special_functions: Dict[Tuple[int, date], str],
+    locked_team_shift: Dict[Tuple[int, int], str],
+    locked_employee_weekend: Dict[Tuple[int, date], bool],
+    locked_td: Dict[Tuple[int, int], bool],
+    employees: List[Employee],
+    teams: List,
+    start_date: date,
+    end_date: date
+):
+    """
+    Validate that locked (manual override) assignments are respected.
+    
+    When administrators or dispatchers lock assignments:
+    - locked_team_shift: Team must have the specified shift in that week
+    - locked_employee_weekend: Employee must work/not work on that weekend day
+    - locked_td: Employee must have/not have TD in that week
+    """
+    # Generate weeks
+    dates = []
+    current = start_date
+    while current <= end_date:
+        dates.append(current)
+        current += timedelta(days=1)
+    
+    weeks = []
+    current_week = []
+    for d in dates:
+        if d.weekday() == 0 and current_week:
+            weeks.append(current_week)
+            current_week = []
+        current_week.append(d)
+    if current_week:
+        weeks.append(current_week)
+    
+    # Validate locked team shifts
+    if locked_team_shift and teams:
+        for (team_id, week_idx), expected_shift in locked_team_shift.items():
+            if week_idx >= len(weeks):
+                continue
+            
+            week_dates = weeks[week_idx]
+            weekday_dates = [d for d in week_dates if d.weekday() < 5]
+            
+            # Find team
+            team = next((t for t in teams if t.id == team_id), None)
+            if not team:
+                continue
+            
+            # Check team members' shifts this week
+            team_members = [e for e in employees if e.team_id == team_id and not e.is_springer]
+            actual_shifts = set()
+            
+            for emp in team_members:
+                for assignment in assignments:
+                    if assignment.employee_id == emp.id and assignment.date in weekday_dates:
+                        shift_type = get_shift_type_by_id(assignment.shift_type_id)
+                        if shift_type:
+                            actual_shifts.add(shift_type.code)
+            
+            if actual_shifts and expected_shift not in actual_shifts:
+                result.add_violation(
+                    f"LOCKED TEAM SHIFT VIOLATED: {team.name} week {week_idx} should be '{expected_shift}' but has {actual_shifts}"
+                )
+    
+    # Validate locked employee weekend
+    if locked_employee_weekend:
+        for (emp_id, d), expected_working in locked_employee_weekend.items():
+            emp = next((e for e in employees if e.id == emp_id), None)
+            if not emp:
+                continue
+            
+            # Check if employee has assignment on this date
+            is_working = any(a.employee_id == emp_id and a.date == d for a in assignments)
+            
+            if expected_working and not is_working:
+                result.add_violation(
+                    f"LOCKED WEEKEND VIOLATED: {emp.full_name} should work on {d} but doesn't"
+                )
+            elif not expected_working and is_working:
+                result.add_violation(
+                    f"LOCKED WEEKEND VIOLATED: {emp.full_name} should NOT work on {d} but does"
+                )
+    
+    # Validate locked TD
+    if locked_td and special_functions:
+        for (emp_id, week_idx), expected_td in locked_td.items():
+            if week_idx >= len(weeks):
+                continue
+            
+            emp = next((e for e in employees if e.id == emp_id), None)
+            if not emp:
+                continue
+            
+            week_dates = weeks[week_idx]
+            weekday_dates = [d for d in week_dates if d.weekday() < 5]
+            
+            # Check if employee has TD this week
+            has_td = any(
+                (emp_id, d) in special_functions and special_functions[(emp_id, d)] == "TD"
+                for d in weekday_dates
+            )
+            
+            if expected_td and not has_td:
+                result.add_violation(
+                    f"LOCKED TD VIOLATED: {emp.full_name} should have TD in week {week_idx} but doesn't"
+                )
+            elif not expected_td and has_td:
+                result.add_violation(
+                    f"LOCKED TD VIOLATED: {emp.full_name} should NOT have TD in week {week_idx} but does"
+                )
+
+
 if __name__ == "__main__":
     # Test validation
     from data_loader import generate_sample_data
@@ -530,14 +776,17 @@ if __name__ == "__main__":
     end = start + timedelta(days=13)  # 2 weeks
     
     print("Creating and solving model...")
-    planning_model = create_shift_planning_model(employees, start, end, absences)
+    planning_model = create_shift_planning_model(employees, teams, start, end, absences)
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if result:
-        assignments, special_functions = result
+        assignments, special_functions, complete_schedule = result
         print(f"\nValidating {len(assignments)} assignments...")
         
-        validation_result = validate_shift_plan(assignments, employees, absences, start, end)
+        validation_result = validate_shift_plan(
+            assignments, employees, absences, start, end, teams,
+            special_functions, complete_schedule
+        )
         validation_result.print_report()
     else:
         print("\nNo solution to validate!")

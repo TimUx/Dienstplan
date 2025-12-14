@@ -958,7 +958,7 @@ async function executePlanShifts(event) {
         
         if (response.ok) {
             const data = await response.json();
-            alert(`Erfolgreich! ${data.length} Schichten wurden geplant.`);
+            alert(`Erfolgreich! ${data.assignmentsCount || 0} Schichten wurden geplant.`);
             closePlanShiftsModal();
             loadSchedule();
         } else if (response.status === 401) {
@@ -967,7 +967,7 @@ async function executePlanShifts(event) {
             alert('Sie haben keine Berechtigung, Schichten zu planen.');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Planen der Schichten: ${error.message || 'Unbekannter Fehler'}`);
+            alert(`Fehler beim Planen der Schichten: ${error.error || 'Unbekannter Fehler'}`);
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);

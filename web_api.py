@@ -13,6 +13,13 @@ import hashlib
 import secrets
 from functools import wraps
 
+# PDF export dependencies
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+
 from data_loader import load_from_database, get_existing_assignments
 from model import create_shift_planning_model
 from solver import solve_shift_planning
@@ -866,7 +873,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Create model
             planning_model = create_shift_planning_model(
-                employees, start_date, end_date, absences
+                employees, teams, start_date, end_date, absences
             )
             
             # Solve
@@ -973,17 +980,186 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     
     @app.route('/api/shifts/export/pdf', methods=['GET'])
     def export_schedule_pdf():
-        """PDF export - not yet implemented"""
-        return jsonify({
-            'error': 'PDF-Export ist noch nicht implementiert. Bitte verwenden Sie CSV-Export oder drucken Sie die Ansicht.'
-        }), 501
+        """Export schedule to PDF format"""
+        start_date_str = request.args.get('startDate')
+        end_date_str = request.args.get('endDate')
+        
+        if not start_date_str or not end_date_str:
+            return jsonify({'error': 'startDate and endDate are required'}), 400
+        
+        try:
+            start_date = date.fromisoformat(start_date_str)
+            end_date = date.fromisoformat(end_date_str)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get assignments
+            cursor.execute("""
+                SELECT sa.Date, e.Vorname, e.Name, e.Personalnummer, 
+                       t.Name as TeamName, st.Code, st.Name as ShiftName
+                FROM ShiftAssignments sa
+                JOIN Employees e ON sa.EmployeeId = e.Id
+                LEFT JOIN Teams t ON e.TeamId = t.Id
+                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                ORDER BY sa.Date, t.Name, e.Name, e.Vorname
+            """, (start_date.isoformat(), end_date.isoformat()))
+            
+            # Create PDF
+            import io
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
+            elements = []
+            
+            # Title
+            styles = getSampleStyleSheet()
+            title = Paragraph(f"Dienstplan {start_date_str} bis {end_date_str}", styles['Title'])
+            elements.append(title)
+            elements.append(Spacer(1, 0.5*cm))
+            
+            # Table data
+            data = [['Datum', 'Team', 'Mitarbeiter', 'Personalnummer', 'Schichttyp', 'Schichtname']]
+            for row in cursor.fetchall():
+                team_name = row['TeamName'] or 'Ohne Team'
+                data.append([
+                    row['Date'],
+                    team_name,
+                    f"{row['Vorname']} {row['Name']}",
+                    row['Personalnummer'],
+                    row['Code'],
+                    row['ShiftName']
+                ])
+            
+            conn.close()
+            
+            # Create table
+            table = Table(data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            elements.append(table)
+            doc.build(elements)
+            
+            # Return PDF
+            buffer.seek(0)
+            return send_file(
+                buffer,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'Dienstplan_{start_date_str}_bis_{end_date_str}.pdf'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"PDF export error: {str(e)}")
+            return jsonify({'error': f'PDF-Export-Fehler: {str(e)}'}), 500
     
     @app.route('/api/shifts/export/excel', methods=['GET'])
     def export_schedule_excel():
-        """Excel export - not yet implemented"""
-        return jsonify({
-            'error': 'Excel-Export ist noch nicht implementiert. Bitte verwenden Sie CSV-Export oder drucken Sie die Ansicht.'
-        }), 501
+        """Export schedule to Excel format"""
+        start_date_str = request.args.get('startDate')
+        end_date_str = request.args.get('endDate')
+        
+        if not start_date_str or not end_date_str:
+            return jsonify({'error': 'startDate and endDate are required'}), 400
+        
+        try:
+            # Import Excel library
+            try:
+                import openpyxl
+                from openpyxl.styles import Font, PatternFill, Alignment
+            except ImportError:
+                return jsonify({
+                    'error': 'Excel-Export erfordert openpyxl. Bitte installieren Sie es mit: pip install openpyxl'
+                }), 501
+            
+            start_date = date.fromisoformat(start_date_str)
+            end_date = date.fromisoformat(end_date_str)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get assignments
+            cursor.execute("""
+                SELECT sa.Date, e.Vorname, e.Name, e.Personalnummer, 
+                       t.Name as TeamName, st.Code, st.Name as ShiftName
+                FROM ShiftAssignments sa
+                JOIN Employees e ON sa.EmployeeId = e.Id
+                LEFT JOIN Teams t ON e.TeamId = t.Id
+                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                ORDER BY sa.Date, t.Name, e.Name, e.Vorname
+            """, (start_date.isoformat(), end_date.isoformat()))
+            
+            # Create workbook
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Dienstplan"
+            
+            # Header
+            headers = ['Datum', 'Team', 'Mitarbeiter', 'Personalnummer', 'Schichttyp', 'Schichtname']
+            ws.append(headers)
+            
+            # Style header
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            for cell in ws[1]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+            
+            # Add data
+            for row in cursor.fetchall():
+                team_name = row['TeamName'] or 'Ohne Team'
+                ws.append([
+                    row['Date'],
+                    team_name,
+                    f"{row['Vorname']} {row['Name']}",
+                    row['Personalnummer'],
+                    row['Code'],
+                    row['ShiftName']
+                ])
+            
+            conn.close()
+            
+            # Adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column = [cell for cell in column]
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(cell.value)
+                    except Exception:
+                        pass
+                adjusted_width = (max_length + 2)
+                ws.column_dimensions[column[0].column_letter].width = adjusted_width
+            
+            # Save to BytesIO
+            import io
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            
+            # Return Excel file
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'Dienstplan_{start_date_str}_bis_{end_date_str}.xlsx'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Excel export error: {str(e)}")
+            return jsonify({'error': f'Excel-Export-Fehler: {str(e)}'}), 500
     
     # ============================================================================
     # ABSENCE ENDPOINTS
@@ -1019,6 +1195,341 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         return jsonify(absences)
     
     # ============================================================================
+    # VACATION REQUEST ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/vacationrequests', methods=['GET'])
+    def get_vacation_requests():
+        """Get all vacation requests or pending ones"""
+        status_filter = request.args.get('status')
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        if status_filter == 'pending':
+            cursor.execute("""
+                SELECT vr.*, e.Vorname, e.Name, e.TeamId
+                FROM VacationRequests vr
+                JOIN Employees e ON vr.EmployeeId = e.Id
+                WHERE vr.Status = 'InBearbeitung'
+                ORDER BY vr.CreatedAt DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT vr.*, e.Vorname, e.Name, e.TeamId
+                FROM VacationRequests vr
+                JOIN Employees e ON vr.EmployeeId = e.Id
+                ORDER BY vr.CreatedAt DESC
+            """)
+        
+        requests = []
+        for row in cursor.fetchall():
+            requests.append({
+                'id': row['Id'],
+                'employeeId': row['EmployeeId'],
+                'employeeName': f"{row['Vorname']} {row['Name']}",
+                'teamId': row['TeamId'],
+                'startDate': row['StartDate'],
+                'endDate': row['EndDate'],
+                'status': row['Status'],
+                'notes': row['Notes'],
+                'disponentResponse': row['DisponentResponse'],
+                'createdAt': row['CreatedAt'],
+                'processedAt': row['ProcessedAt']
+            })
+        
+        conn.close()
+        return jsonify(requests)
+    
+    @app.route('/api/vacationrequests', methods=['POST'])
+    @require_auth
+    def create_vacation_request():
+        """Create new vacation request"""
+        try:
+            data = request.get_json()
+            
+            if not data.get('employeeId') or not data.get('startDate') or not data.get('endDate'):
+                return jsonify({'error': 'EmployeeId, StartDate und EndDate sind erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO VacationRequests 
+                (EmployeeId, StartDate, EndDate, Status, Notes, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, 'InBearbeitung', ?, ?, ?)
+            """, (
+                data.get('employeeId'),
+                data.get('startDate'),
+                data.get('endDate'),
+                data.get('notes'),
+                datetime.utcnow().isoformat(),
+                session.get('user_email')
+            ))
+            
+            request_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': request_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create vacation request error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/vacationrequests/<int:id>/status', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def update_vacation_request_status(id):
+        """Update vacation request status (Disponent only)"""
+        try:
+            data = request.get_json()
+            status = data.get('status')
+            response = data.get('response')
+            
+            if status not in ['Genehmigt', 'Abgelehnt', 'InBearbeitung']:
+                return jsonify({'error': 'Ungültiger Status'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE VacationRequests 
+                SET Status = ?, DisponentResponse = ?, ProcessedAt = ?, ProcessedBy = ?
+                WHERE Id = ?
+            """, (
+                status,
+                response,
+                datetime.utcnow().isoformat(),
+                session.get('user_email'),
+                id
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update vacation request error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    # ============================================================================
+    # SHIFT EXCHANGE ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/shiftexchanges/available', methods=['GET'])
+    def get_available_shift_exchanges():
+        """Get available shift exchanges"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT se.*, 
+                   sa.Date, sa.ShiftTypeId,
+                   st.Code as ShiftCode, st.Name as ShiftName,
+                   e.Vorname, e.Name, e.TeamId
+            FROM ShiftExchanges se
+            JOIN ShiftAssignments sa ON se.ShiftAssignmentId = sa.Id
+            JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            JOIN Employees e ON se.OfferingEmployeeId = e.Id
+            WHERE se.Status = 'Angeboten'
+            ORDER BY sa.Date
+        """)
+        
+        exchanges = []
+        for row in cursor.fetchall():
+            exchanges.append({
+                'id': row['Id'],
+                'shiftAssignmentId': row['ShiftAssignmentId'],
+                'offeringEmployeeId': row['OfferingEmployeeId'],
+                'offeringEmployeeName': f"{row['Vorname']} {row['Name']}",
+                'teamId': row['TeamId'],
+                'date': row['Date'],
+                'shiftCode': row['ShiftCode'],
+                'shiftName': row['ShiftName'],
+                'status': row['Status'],
+                'offeringReason': row['OfferingReason'],
+                'createdAt': row['CreatedAt']
+            })
+        
+        conn.close()
+        return jsonify(exchanges)
+    
+    @app.route('/api/shiftexchanges/pending', methods=['GET'])
+    @require_role('Admin', 'Disponent')
+    def get_pending_shift_exchanges():
+        """Get pending shift exchanges (Disponent only)"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT se.*, 
+                   sa.Date, sa.ShiftTypeId,
+                   st.Code as ShiftCode, st.Name as ShiftName,
+                   e1.Vorname as OfferingVorname, e1.Name as OfferingName,
+                   e2.Vorname as RequestingVorname, e2.Name as RequestingName
+            FROM ShiftExchanges se
+            JOIN ShiftAssignments sa ON se.ShiftAssignmentId = sa.Id
+            JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            JOIN Employees e1 ON se.OfferingEmployeeId = e1.Id
+            LEFT JOIN Employees e2 ON se.RequestingEmployeeId = e2.Id
+            WHERE se.Status = 'Angefragt'
+            ORDER BY sa.Date
+        """)
+        
+        exchanges = []
+        for row in cursor.fetchall():
+            exchanges.append({
+                'id': row['Id'],
+                'shiftAssignmentId': row['ShiftAssignmentId'],
+                'offeringEmployeeId': row['OfferingEmployeeId'],
+                'offeringEmployeeName': f"{row['OfferingVorname']} {row['OfferingName']}",
+                'requestingEmployeeId': row['RequestingEmployeeId'],
+                'requestingEmployeeName': f"{row['RequestingVorname']} {row['RequestingName']}" if row['RequestingEmployeeId'] else None,
+                'date': row['Date'],
+                'shiftCode': row['ShiftCode'],
+                'shiftName': row['ShiftName'],
+                'status': row['Status'],
+                'offeringReason': row['OfferingReason'],
+                'createdAt': row['CreatedAt']
+            })
+        
+        conn.close()
+        return jsonify(exchanges)
+    
+    @app.route('/api/shiftexchanges', methods=['POST'])
+    @require_auth
+    def create_shift_exchange():
+        """Create new shift exchange offer"""
+        try:
+            data = request.get_json()
+            
+            if not data.get('shiftAssignmentId') or not data.get('offeringEmployeeId'):
+                return jsonify({'error': 'ShiftAssignmentId und OfferingEmployeeId sind erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO ShiftExchanges 
+                (ShiftAssignmentId, OfferingEmployeeId, Status, OfferingReason, CreatedAt)
+                VALUES (?, ?, 'Angeboten', ?, ?)
+            """, (
+                data.get('shiftAssignmentId'),
+                data.get('offeringEmployeeId'),
+                data.get('offeringReason'),
+                datetime.utcnow().isoformat()
+            ))
+            
+            exchange_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': exchange_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create shift exchange error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/shiftexchanges/<int:id>/request', methods=['POST'])
+    @require_auth
+    def request_shift_exchange(id):
+        """Request a shift exchange"""
+        try:
+            data = request.get_json()
+            requesting_employee_id = data.get('requestingEmployeeId')
+            
+            if not requesting_employee_id:
+                return jsonify({'error': 'RequestingEmployeeId ist erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE ShiftExchanges 
+                SET RequestingEmployeeId = ?, Status = 'Angefragt'
+                WHERE Id = ? AND Status = 'Angeboten'
+            """, (requesting_employee_id, id))
+            
+            if cursor.rowcount == 0:
+                conn.close()
+                return jsonify({'error': 'Tauschangebot nicht verfügbar'}), 404
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Request shift exchange error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Anfragen: {str(e)}'}), 500
+    
+    @app.route('/api/shiftexchanges/<int:id>/process', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def process_shift_exchange(id):
+        """Process shift exchange (approve/reject)"""
+        try:
+            data = request.get_json()
+            status = data.get('status')
+            notes = data.get('notes')
+            
+            if status not in ['Genehmigt', 'Abgelehnt']:
+                return jsonify({'error': 'Status muss Genehmigt oder Abgelehnt sein'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get exchange details
+            cursor.execute("""
+                SELECT ShiftAssignmentId, OfferingEmployeeId, RequestingEmployeeId
+                FROM ShiftExchanges
+                WHERE Id = ? AND Status = 'Angefragt'
+            """, (id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return jsonify({'error': 'Tauschangebot nicht gefunden oder bereits bearbeitet'}), 404
+            
+            shift_assignment_id = row['ShiftAssignmentId']
+            requesting_employee_id = row['RequestingEmployeeId']
+            
+            # Update exchange status
+            cursor.execute("""
+                UPDATE ShiftExchanges 
+                SET Status = ?, DisponentNotes = ?, ProcessedAt = ?, ProcessedBy = ?
+                WHERE Id = ?
+            """, (
+                status,
+                notes,
+                datetime.utcnow().isoformat(),
+                session.get('user_email'),
+                id
+            ))
+            
+            # If approved, update the shift assignment
+            if status == 'Genehmigt' and requesting_employee_id:
+                cursor.execute("""
+                    UPDATE ShiftAssignments
+                    SET EmployeeId = ?, ModifiedAt = ?, ModifiedBy = ?
+                    WHERE Id = ?
+                """, (
+                    requesting_employee_id,
+                    datetime.utcnow().isoformat(),
+                    session.get('user_email'),
+                    shift_assignment_id
+                ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Process shift exchange error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Bearbeiten: {str(e)}'}), 500
+    
+    # ============================================================================
     # STATISTICS ENDPOINTS
     # ============================================================================
     
@@ -1043,25 +1554,104 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Employee hours
+        # Employee work hours
         cursor.execute("""
             SELECT e.Id, e.Vorname, e.Name, e.TeamId,
-                   COUNT(sa.Id) as ShiftCount
+                   COUNT(sa.Id) as ShiftCount,
+                   COUNT(sa.Id) * 8.0 as TotalHours
             FROM Employees e
             LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
                 AND sa.Date >= ? AND sa.Date <= ?
             GROUP BY e.Id, e.Vorname, e.Name, e.TeamId
-            ORDER BY e.Name, e.Vorname
+            HAVING ShiftCount > 0
+            ORDER BY TotalHours DESC
         """, (start_date.isoformat(), end_date.isoformat()))
         
-        employee_hours = []
+        employee_work_hours = []
         for row in cursor.fetchall():
-            employee_hours.append({
+            employee_work_hours.append({
                 'employeeId': row['Id'],
                 'employeeName': f"{row['Vorname']} {row['Name']}",
                 'teamId': row['TeamId'],
                 'shiftCount': row['ShiftCount'],
-                'hours': row['ShiftCount'] * 8  # Approximate
+                'totalHours': row['TotalHours']
+            })
+        
+        # Team shift distribution
+        cursor.execute("""
+            SELECT t.Id, t.Name,
+                   st.Code,
+                   COUNT(sa.Id) as ShiftCount
+            FROM Teams t
+            LEFT JOIN Employees e ON t.Id = e.TeamId
+            LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
+                AND sa.Date >= ? AND sa.Date <= ?
+            LEFT JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            WHERE st.Code IS NOT NULL
+            GROUP BY t.Id, t.Name, st.Code
+            ORDER BY t.Name, st.Code
+        """, (start_date.isoformat(), end_date.isoformat()))
+        
+        team_shift_data = {}
+        for row in cursor.fetchall():
+            team_id = row['Id']
+            if team_id not in team_shift_data:
+                team_shift_data[team_id] = {
+                    'teamId': team_id,
+                    'teamName': row['Name'],
+                    'shiftCounts': {}
+                }
+            team_shift_data[team_id]['shiftCounts'][row['Code']] = row['ShiftCount']
+        
+        team_shift_distribution = list(team_shift_data.values())
+        
+        # Employee absence days
+        cursor.execute("""
+            SELECT e.Id, e.Vorname, e.Name,
+                   SUM(julianday(a.EndDate) - julianday(a.StartDate) + 1) as TotalDays
+            FROM Employees e
+            JOIN Absences a ON e.Id = a.EmployeeId
+            WHERE (a.StartDate <= ? AND a.EndDate >= ?)
+               OR (a.StartDate >= ? AND a.StartDate <= ?)
+            GROUP BY e.Id, e.Vorname, e.Name
+            HAVING TotalDays > 0
+            ORDER BY TotalDays DESC
+        """, (end_date.isoformat(), start_date.isoformat(),
+              start_date.isoformat(), end_date.isoformat()))
+        
+        employee_absence_days = []
+        for row in cursor.fetchall():
+            employee_absence_days.append({
+                'employeeId': row['Id'],
+                'employeeName': f"{row['Vorname']} {row['Name']}",
+                'totalDays': int(row['TotalDays'])
+            })
+        
+        # Team workload
+        cursor.execute("""
+            SELECT t.Id, t.Name,
+                   COUNT(DISTINCT e.Id) as EmployeeCount,
+                   COUNT(sa.Id) as TotalShifts,
+                   CASE WHEN COUNT(DISTINCT e.Id) > 0 
+                        THEN CAST(COUNT(sa.Id) AS REAL) / COUNT(DISTINCT e.Id)
+                        ELSE 0 END as AvgShiftsPerEmployee
+            FROM Teams t
+            LEFT JOIN Employees e ON t.Id = e.TeamId
+            LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
+                AND sa.Date >= ? AND sa.Date <= ?
+            GROUP BY t.Id, t.Name
+            HAVING EmployeeCount > 0
+            ORDER BY t.Name
+        """, (start_date.isoformat(), end_date.isoformat()))
+        
+        team_workload = []
+        for row in cursor.fetchall():
+            team_workload.append({
+                'teamId': row['Id'],
+                'teamName': row['Name'],
+                'employeeCount': row['EmployeeCount'],
+                'totalShifts': row['TotalShifts'],
+                'averageShiftsPerEmployee': row['AvgShiftsPerEmployee']
             })
         
         conn.close()
@@ -1069,7 +1659,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         return jsonify({
             'startDate': start_date.isoformat(),
             'endDate': end_date.isoformat(),
-            'employeeHours': employee_hours
+            'employeeWorkHours': employee_work_hours,
+            'teamShiftDistribution': team_shift_distribution,
+            'employeeAbsenceDays': employee_absence_days,
+            'teamWorkload': team_workload
         })
     
     # ============================================================================

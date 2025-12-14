@@ -932,37 +932,49 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         try:
             data = request.get_json()
             
-            conn = db.get_connection()
-            cursor = conn.cursor()
+            # Validate data types
+            try:
+                employee_id = int(data.get('employeeId'))
+                shift_type_id = int(data.get('shiftTypeId'))
+                assignment_date = date.fromisoformat(data.get('date'))
+            except (ValueError, TypeError) as e:
+                return jsonify({'error': f'Ungültige Daten: {str(e)}'}), 400
             
-            # Check if assignment exists
-            cursor.execute("SELECT Id FROM ShiftAssignments WHERE Id = ?", (id,))
-            if not cursor.fetchone():
-                conn.close()
-                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
-            
-            # Update assignment
-            cursor.execute("""
-                UPDATE ShiftAssignments 
-                SET EmployeeId = ?, ShiftTypeId = ?, Date = ?, 
-                    IsManual = 1, IsFixed = ?, Notes = ?,
-                    ModifiedAt = ?, ModifiedBy = ?
-                WHERE Id = ?
-            """, (
-                data.get('employeeId'),
-                data.get('shiftTypeId'),
-                data.get('date'),
-                1 if data.get('isFixed') else 0,
-                data.get('notes'),
-                datetime.utcnow().isoformat(),
-                session.get('user_email'),
-                id
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            return jsonify({'success': True})
+            conn = None
+            try:
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                # Check if assignment exists
+                cursor.execute("SELECT Id FROM ShiftAssignments WHERE Id = ?", (id,))
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+                
+                # Update assignment
+                cursor.execute("""
+                    UPDATE ShiftAssignments 
+                    SET EmployeeId = ?, ShiftTypeId = ?, Date = ?, 
+                        IsManual = 1, IsFixed = ?, Notes = ?,
+                        ModifiedAt = ?, ModifiedBy = ?
+                    WHERE Id = ?
+                """, (
+                    employee_id,
+                    shift_type_id,
+                    assignment_date.isoformat(),
+                    1 if data.get('isFixed') else 0,
+                    data.get('notes'),
+                    datetime.utcnow().isoformat(),
+                    session.get('user_email'),
+                    id
+                ))
+                
+                conn.commit()
+                
+                return jsonify({'success': True})
+                
+            finally:
+                if conn:
+                    conn.close()
             
         except Exception as e:
             app.logger.error(f"Update shift assignment error: {str(e)}")
@@ -975,42 +987,55 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         try:
             data = request.get_json()
             
+            # Validate required fields
             if not data.get('employeeId') or not data.get('shiftTypeId') or not data.get('date'):
                 return jsonify({'error': 'EmployeeId, ShiftTypeId und Date sind erforderlich'}), 400
             
-            conn = db.get_connection()
-            cursor = conn.cursor()
+            # Validate data types
+            try:
+                employee_id = int(data.get('employeeId'))
+                shift_type_id = int(data.get('shiftTypeId'))
+                assignment_date = date.fromisoformat(data.get('date'))
+            except (ValueError, TypeError) as e:
+                return jsonify({'error': f'Ungültige Daten: {str(e)}'}), 400
             
-            # Check for existing assignment
-            cursor.execute("""
-                SELECT Id FROM ShiftAssignments 
-                WHERE EmployeeId = ? AND Date = ?
-            """, (data.get('employeeId'), data.get('date')))
-            
-            if cursor.fetchone():
-                conn.close()
-                return jsonify({'error': 'Mitarbeiter hat bereits eine Schicht an diesem Tag'}), 400
-            
-            # Create assignment
-            cursor.execute("""
-                INSERT INTO ShiftAssignments 
-                (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, Notes, CreatedAt, CreatedBy)
-                VALUES (?, ?, ?, 1, ?, ?, ?, ?)
-            """, (
-                data.get('employeeId'),
-                data.get('shiftTypeId'),
-                data.get('date'),
-                1 if data.get('isFixed') else 0,
-                data.get('notes'),
-                datetime.utcnow().isoformat(),
-                session.get('user_email')
-            ))
-            
-            assignment_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            
-            return jsonify({'success': True, 'id': assignment_id}), 201
+            conn = None
+            try:
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                # Check for existing assignment (same employee, date, shift type)
+                cursor.execute("""
+                    SELECT Id FROM ShiftAssignments 
+                    WHERE EmployeeId = ? AND Date = ? AND ShiftTypeId = ?
+                """, (employee_id, assignment_date.isoformat(), shift_type_id))
+                
+                if cursor.fetchone():
+                    return jsonify({'error': 'Diese Schichtzuweisung existiert bereits'}), 400
+                
+                # Create assignment
+                cursor.execute("""
+                    INSERT INTO ShiftAssignments 
+                    (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, Notes, CreatedAt, CreatedBy)
+                    VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+                """, (
+                    employee_id,
+                    shift_type_id,
+                    assignment_date.isoformat(),
+                    1 if data.get('isFixed') else 0,
+                    data.get('notes'),
+                    datetime.utcnow().isoformat(),
+                    session.get('user_email')
+                ))
+                
+                assignment_id = cursor.lastrowid
+                conn.commit()
+                
+                return jsonify({'success': True, 'id': assignment_id}), 201
+                
+            finally:
+                if conn:
+                    conn.close()
             
         except Exception as e:
             app.logger.error(f"Create shift assignment error: {str(e)}")
@@ -1021,28 +1046,31 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     def delete_shift_assignment(id):
         """Delete a shift assignment"""
         try:
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            
-            # Check if assignment exists
-            cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
-            row = cursor.fetchone()
-            
-            if not row:
-                conn.close()
-                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
-            
-            # Warn if trying to delete a fixed assignment
-            if row['IsFixed']:
-                conn.close()
-                return jsonify({'error': 'Fixierte Schichtzuweisungen können nicht gelöscht werden. Bitte erst entsperren.'}), 400
-            
-            # Delete assignment
-            cursor.execute("DELETE FROM ShiftAssignments WHERE Id = ?", (id,))
-            conn.commit()
-            conn.close()
-            
-            return jsonify({'success': True})
+            conn = None
+            try:
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                # Check if assignment exists
+                cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
+                row = cursor.fetchone()
+                
+                if not row:
+                    return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+                
+                # Warn if trying to delete a fixed assignment
+                if row['IsFixed']:
+                    return jsonify({'error': 'Fixierte Schichtzuweisungen können nicht gelöscht werden. Bitte erst entsperren.'}), 400
+                
+                # Delete assignment
+                cursor.execute("DELETE FROM ShiftAssignments WHERE Id = ?", (id,))
+                conn.commit()
+                
+                return jsonify({'success': True})
+                
+            finally:
+                if conn:
+                    conn.close()
             
         except Exception as e:
             app.logger.error(f"Delete shift assignment error: {str(e)}")
@@ -1053,38 +1081,42 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     def toggle_fixed_assignment(id):
         """Toggle the IsFixed flag on an assignment (lock/unlock)"""
         try:
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            
-            # Check if assignment exists
-            cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
-            row = cursor.fetchone()
-            
-            if not row:
-                conn.close()
-                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
-            
-            # Toggle fixed status
-            new_fixed_status = 0 if row['IsFixed'] else 1
-            
-            cursor.execute("""
-                UPDATE ShiftAssignments 
-                SET IsFixed = ?, ModifiedAt = ?, ModifiedBy = ?
-                WHERE Id = ?
-            """, (
-                new_fixed_status,
-                datetime.utcnow().isoformat(),
-                session.get('user_email'),
-                id
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            return jsonify({
-                'success': True,
-                'isFixed': bool(new_fixed_status)
-            })
+            conn = None
+            try:
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                # Check if assignment exists
+                cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
+                row = cursor.fetchone()
+                
+                if not row:
+                    return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+                
+                # Toggle fixed status
+                new_fixed_status = 0 if row['IsFixed'] else 1
+                
+                cursor.execute("""
+                    UPDATE ShiftAssignments 
+                    SET IsFixed = ?, ModifiedAt = ?, ModifiedBy = ?
+                    WHERE Id = ?
+                """, (
+                    new_fixed_status,
+                    datetime.utcnow().isoformat(),
+                    session.get('user_email'),
+                    id
+                ))
+                
+                conn.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'isFixed': bool(new_fixed_status)
+                })
+                
+            finally:
+                if conn:
+                    conn.close()
             
         except Exception as e:
             app.logger.error(f"Toggle fixed assignment error: {str(e)}")

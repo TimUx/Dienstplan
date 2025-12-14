@@ -447,7 +447,7 @@ function displayWeekView(data, employees) {
                     const shiftId = parseInt(s.id); // Ensure it's a number
                     const shiftCode = escapeHtml(s.shiftCode);
                     const shiftName = escapeHtml(s.shiftName);
-                    const isFixed = s.isFixed || false;
+                    const isFixed = s.isFixed;
                     const lockIcon = isFixed ? '🔒' : '';
                     const badgeClass = isFixed ? 'shift-badge-fixed' : '';
                     const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;

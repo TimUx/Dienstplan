@@ -155,9 +155,8 @@ def test_weekend_team_consistency():
                     violations.append(
                         f"{emp.full_name} week {week_idx}: weekday={weekday_shifts}, weekend={weekend_shifts}"
                     )
-                elif weekend_shifts != weekday_shifts:
-                    # This is OK - employee might work different days but same shift type
-                    pass
+                # Note: If weekend_shifts != weekday_shifts but is still a subset,
+                # that's OK - employee might work different days but same shift type
     
     if violations:
         print("❌ FAIL: Weekend shifts do NOT match team weekly shift type!")

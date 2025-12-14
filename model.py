@@ -95,6 +95,8 @@ class ShiftPlanningModel:
         for (team_id, week_idx), shift_code in self.locked_team_shift.items():
             if (team_id, week_idx, shift_code) in self.team_shift:
                 # Force this team to have this shift in this week
+                # Note: Other shifts for this team/week are implicitly set to 0
+                # by the "exactly one shift per team per week" constraint
                 self.model.Add(self.team_shift[(team_id, week_idx, shift_code)] == 1)
         
         # Apply locked employee weekend work

@@ -189,6 +189,11 @@ class ShiftPlanningSolver:
             if emp.is_springer:
                 # Springer can work any shift on any day
                 # For weekdays and weekends, use employee_active/employee_weekend_shift
+                # 
+                # NOTE: Springers don't have weekend_shift variables (they have no team).
+                # Weekend springer coverage is a known limitation - springers primarily
+                # cover weekdays. If weekend springer coverage is needed, extend the
+                # model to create weekend variables for springers with flexible shift types.
                 for d in dates:
                     if d.weekday() < 5:  # Weekday
                         if (emp.id, d) not in employee_active:
@@ -209,10 +214,7 @@ class ShiftPlanningSolver:
                         )
                         assignments.append(assignment)
                         assignment_id += 1
-                    else:  # Weekend
-                        # Springers don't have weekend_shift variables (they have no team)
-                        # Skip for now - springers primarily cover weekdays
-                        pass
+                    # Weekend: Springers not assigned (no team for weekend shift type)
                 continue
             
             # Regular team members

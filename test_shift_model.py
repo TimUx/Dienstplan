@@ -102,7 +102,6 @@ def test_weekend_team_consistency():
     assignments, special_functions = result
     
     # Group assignments by employee and week
-    from collections import defaultdict
     emp_week_shifts = defaultdict(lambda: defaultdict(lambda: {'weekday': set(), 'weekend': set()}))
     
     # Determine weeks

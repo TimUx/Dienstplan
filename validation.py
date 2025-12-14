@@ -5,6 +5,7 @@ Validates all rules and constraints after solving.
 
 from datetime import date, timedelta
 from typing import List, Dict, Tuple
+from collections import defaultdict
 from entities import Employee, ShiftAssignment, Absence, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 
 
@@ -439,8 +440,6 @@ def validate_weekend_team_consistency(
     - Team Alpha: Week 1 = 'F' (Early)
     - Employee Max: Fri='F', Sat='F', Sun='F' <- All 'F' within the week
     """
-    from collections import defaultdict
-    
     # Generate weeks from dates
     dates = []
     current = start_date

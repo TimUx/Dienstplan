@@ -442,17 +442,7 @@ function displayWeekView(data, employees) {
                 const isSunday = date.getDay() === 0;
                 const isHoliday = isHessianHoliday(date);
                 const shifts = employee.shifts[dateStr] || [];
-                const shiftBadges = shifts.map(s => {
-                    const canEdit = canPlanShifts();
-                    const shiftId = parseInt(s.id); // Ensure it's a number
-                    const shiftCode = escapeHtml(s.shiftCode);
-                    const shiftName = escapeHtml(s.shiftName);
-                    const isFixed = s.isFixed;
-                    const lockIcon = isFixed ? '🔒' : '';
-                    const badgeClass = isFixed ? 'shift-badge-fixed' : '';
-                    const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;
-                    return badge;
-                }).join(' ');
+                const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
                 html += `<td class="${cellClass}">${shiftBadges}</td>`;
             });
@@ -528,17 +518,7 @@ function displayMonthView(data, employees) {
                     const isSunday = date.getDay() === 0;
                     const isHoliday = isHessianHoliday(date);
                     const shifts = employee.shifts[dateStr] || [];
-                    const shiftBadges = shifts.map(s => {
-                        const canEdit = canPlanShifts();
-                        const shiftId = parseInt(s.id); // Ensure it's a number
-                        const shiftCode = escapeHtml(s.shiftCode);
-                        const shiftName = escapeHtml(s.shiftName);
-                        const isFixed = s.isFixed;
-                        const lockIcon = isFixed ? '🔒' : '';
-                        const badgeClass = isFixed ? 'shift-badge-fixed' : '';
-                        const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;
-                        return badge;
-                    }).join(' ');
+                    const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
                     const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
                     html += `<td class="${cellClass}">${shiftBadges}</td>`;
                 });
@@ -617,17 +597,7 @@ function displayYearView(data, employees) {
                         }
                     });
                     
-                    const shiftBadges = shifts.map(s => {
-                        const canEdit = canPlanShifts();
-                        const shiftId = parseInt(s.id); // Ensure it's a number
-                        const shiftCode = escapeHtml(s.shiftCode);
-                        const shiftName = escapeHtml(s.shiftName);
-                        const isFixed = s.isFixed;
-                        const lockIcon = isFixed ? '🔒' : '';
-                        const badgeClass = isFixed ? 'shift-badge-fixed' : '';
-                        const badge = `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${canEdit ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` : ''}>${lockIcon}${shiftCode}</span>`;
-                        return badge;
-                    }).join(' ');
+                    const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
                     html += `<td class="shift-cell">${shiftBadges}</td>`;
                 });
                 
@@ -646,6 +616,32 @@ function displayYearView(data, employees) {
 
 // Constant for employees without team assignment
 const UNASSIGNED_TEAM_ID = 0;
+
+/**
+ * Create a shift badge HTML element with appropriate styling and onclick handlers
+ * @param {object} shift - Shift object with id, shiftCode, shiftName, isFixed
+ * @returns {string} HTML for shift badge
+ */
+function createShiftBadge(shift) {
+    if (!shift || !shift.shiftCode) {
+        return '';
+    }
+    
+    const canEdit = canPlanShifts();
+    const shiftId = shift.id ? parseInt(shift.id) : null;
+    const shiftCode = escapeHtml(shift.shiftCode);
+    const shiftName = escapeHtml(shift.shiftName || shiftCode);
+    const isFixed = shift.isFixed;
+    const lockIcon = isFixed ? '🔒' : '';
+    const badgeClass = isFixed ? 'shift-badge-fixed' : '';
+    
+    // Only add onclick if we have a valid ID and user can edit
+    const onclickAttr = (canEdit && shiftId) 
+        ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` 
+        : '';
+    
+    return `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
+}
 
 function groupByTeamAndEmployee(assignments, allEmployees) {
     const teams = {};

@@ -331,6 +331,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             employees = []
             for row in cursor.fetchall():
+                # Handle IsTdQualified field which may not exist in older databases
+                try:
+                    is_td_qualified = bool(row['IsTdQualified'])
+                except (KeyError, IndexError):
+                    is_td_qualified = False
+                
                 employees.append({
                     'id': row['Id'],
                     'vorname': row['Vorname'],
@@ -343,7 +349,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'isFerienjobber': bool(row['IsFerienjobber']),
                     'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                     'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
-                    'isTdQualified': bool(row.get('IsTdQualified', 0)),
+                    'isTdQualified': is_td_qualified,
                     'teamId': row['TeamId'],
                     'teamName': row['TeamName'],
                     'fullName': f"{row['Vorname']} {row['Name']}"
@@ -375,6 +381,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         if not row:
             return jsonify({'error': 'Employee not found'}), 404
         
+        # Handle IsTdQualified field which may not exist in older databases
+        try:
+            is_td_qualified = bool(row['IsTdQualified'])
+        except (KeyError, IndexError):
+            is_td_qualified = False
+        
         return jsonify({
             'id': row['Id'],
             'vorname': row['Vorname'],
@@ -387,7 +399,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'isFerienjobber': bool(row['IsFerienjobber']),
             'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
             'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
-            'isTdQualified': bool(row.get('IsTdQualified', 0)),
+            'isTdQualified': is_td_qualified,
             'teamId': row['TeamId'],
             'teamName': row['TeamName'],
             'fullName': f"{row['Vorname']} {row['Name']}"

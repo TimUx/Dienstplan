@@ -6,7 +6,7 @@ Configures and runs the solver, returns solution.
 from ortools.sat.python import cp_model
 from datetime import date
 from typing import List, Dict, Tuple, Optional
-from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES
+from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
 from constraints import (
     add_team_shift_assignment_constraints,

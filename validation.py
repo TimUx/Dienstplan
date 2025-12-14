@@ -638,7 +638,9 @@ def validate_td_assignments(
         
         # Validate exactly 1 TD per week
         if td_count == 0:
-            result.add_warning(f"NO TD ASSIGNED: Week {week_idx} ({weekday_dates[0]} to {weekday_dates[-1]}) has no TD assignment")
+            result.add_violation(
+                f"MISSING TD: Week {week_idx} ({weekday_dates[0]} to {weekday_dates[-1]}) has no TD assignment (required: exactly 1)"
+            )
         elif td_count > 1:
             result.add_violation(
                 f"MULTIPLE TD: Week {week_idx} has {td_count} TD assignments (should be exactly 1)"

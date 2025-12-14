@@ -331,6 +331,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             employees = []
             for row in cursor.fetchall():
+                # Handle IsTdQualified field which may not exist in older databases
+                try:
+                    is_td_qualified = bool(row['IsTdQualified'])
+                except (KeyError, IndexError):
+                    is_td_qualified = False
+                
                 employees.append({
                     'id': row['Id'],
                     'vorname': row['Vorname'],
@@ -343,6 +349,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'isFerienjobber': bool(row['IsFerienjobber']),
                     'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                     'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
+                    'isTdQualified': is_td_qualified,
                     'teamId': row['TeamId'],
                     'teamName': row['TeamName'],
                     'fullName': f"{row['Vorname']} {row['Name']}"
@@ -374,6 +381,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         if not row:
             return jsonify({'error': 'Employee not found'}), 404
         
+        # Handle IsTdQualified field which may not exist in older databases
+        try:
+            is_td_qualified = bool(row['IsTdQualified'])
+        except (KeyError, IndexError):
+            is_td_qualified = False
+        
         return jsonify({
             'id': row['Id'],
             'vorname': row['Vorname'],
@@ -386,6 +399,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'isFerienjobber': bool(row['IsFerienjobber']),
             'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
             'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
+            'isTdQualified': is_td_qualified,
             'teamId': row['TeamId'],
             'teamName': row['TeamName'],
             'fullName': f"{row['Vorname']} {row['Name']}"
@@ -441,6 +455,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Use checkbox values directly from frontend for BMT/BSB flags
             is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
+            is_td = 1 if data.get('isTdQualified') else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -454,8 +469,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor.execute("""
                 INSERT INTO Employees 
                 (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
-                 IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, TeamId)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, TeamId)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('vorname'),
                 data.get('name'),
@@ -467,6 +482,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('isFerienjobber') else 0,
                 is_bmt,
                 is_bsb,
+                is_td,
                 data.get('teamId')
             ))
             
@@ -499,6 +515,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Use checkbox values directly from frontend for BMT/BSB flags
             is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
+            is_td = 1 if data.get('isTdQualified') else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -520,7 +537,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 UPDATE Employees 
                 SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, Geburtsdatum = ?, 
                     Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
-                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, TeamId = ?
+                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, TeamId = ?
                 WHERE Id = ?
             """, (
                 data.get('vorname'),
@@ -533,6 +550,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('isFerienjobber') else 0,
                 is_bmt,
                 is_bsb,
+                is_td,
                 data.get('teamId'),
                 id
             ))
@@ -911,6 +929,29 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     datetime.utcnow().isoformat(),
                     "Python-OR-Tools"
                 ))
+            
+            # Insert special functions (TD assignments)
+            # Get TD shift type ID
+            cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = 'TD'")
+            td_row = cursor.fetchone()
+            if td_row:
+                td_shift_type_id = td_row[0]
+                for (emp_id, date_obj), function_code in special_functions.items():
+                    if function_code == "TD":
+                        cursor.execute("""
+                            INSERT INTO ShiftAssignments 
+                            (EmployeeId, ShiftTypeId, Date, IsManual, IsSpringerAssignment, IsFixed, CreatedAt, CreatedBy)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            emp_id,
+                            td_shift_type_id,
+                            date_obj.isoformat(),
+                            0,
+                            0,
+                            0,
+                            datetime.utcnow().isoformat(),
+                            "Python-OR-Tools"
+                        ))
             
             conn.commit()
             conn.close()

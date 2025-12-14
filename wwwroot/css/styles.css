@@ -247,6 +247,9 @@ select {
 .shift-S { background: var(--spaet-color); color: #fff; }
 .shift-N { background: var(--nacht-color); color: #fff; }
 .shift-ZD { background: var(--zwischendienst-color); color: #fff; }
+.shift-TD { background: #673AB7; color: #fff; }
+.shift-BMT { background: #F44336; color: #fff; }
+.shift-BSB { background: #E91E63; color: #fff; }
 
 .springer-badge {
     background: var(--warning-color);

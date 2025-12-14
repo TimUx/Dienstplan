@@ -21,3 +21,11 @@ numpy>=1.26.0
 
 # Build tools for creating standalone executable
 pyinstaller>=6.0.0
+
+# Optional: PDF export (reportlab)
+# Install with: pip install reportlab
+# reportlab>=4.0.0
+
+# Optional: Excel export (openpyxl)
+# Install with: pip install openpyxl
+# openpyxl>=3.1.0

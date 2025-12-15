@@ -58,15 +58,15 @@ function updateUIForAuthenticatedUser(user) {
     if (isAdmin) {
         document.body.classList.add('admin');
         document.getElementById('nav-admin').style.display = 'inline-block';
-        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     } else if (isDisponent) {
         document.body.classList.add('disponent');
-        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     } else {
         // Mitarbeiter can also access vacation and shift exchange
-        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     }
 }
@@ -78,7 +78,7 @@ function updateUIForAnonymousUser() {
     userRoles = [];
     document.body.classList.remove('admin', 'disponent');
     document.getElementById('nav-admin').style.display = 'none';
-    document.getElementById('nav-vacations').style.display = 'none';
+    document.getElementById('nav-absences').style.display = 'none';
     document.getElementById('nav-shiftexchange').style.display = 'none';
 }
 
@@ -242,8 +242,13 @@ function showView(viewName) {
         loadEmployees();
     } else if (viewName === 'teams') {
         loadTeams();
+    } else if (viewName === 'absences') {
+        // Load vacation tab by default
+        switchAbsenceTab('vacation');
     } else if (viewName === 'vacations') {
-        loadVacationRequests('all');
+        // Redirect old 'vacations' view to new 'absences' view
+        showView('absences');
+        return;
     } else if (viewName === 'shiftexchange') {
         loadShiftExchanges('available');
     } else if (viewName === 'statistics') {
@@ -448,10 +453,8 @@ function displayWeekView(data, employees) {
                 
                 let content = '';
                 if (absence) {
-                    // Show absence badge (K for Krank, U for Urlaub, L for Lehrgang)
-                    const absenceCode = absence.type === 'Krank' ? 'K' : 
-                                       absence.type === 'Urlaub' ? 'U' : 
-                                       absence.type === 'Lehrgang' ? 'L' : 'A';
+                    // Show absence badge (AU for sick, U for vacation, L for training)
+                    const absenceCode = getAbsenceCode(absence.type);
                     content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
                 } else {
                     // Show regular shifts
@@ -471,8 +474,8 @@ function displayWeekView(data, employees) {
 }
 
 function displayMonthView(data, employees) {
-    // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
+    // Group assignments by team and employee, including absences
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
     // Get all dates and organize by calendar weeks
     const dates = getUniqueDates(data.assignments);
@@ -533,9 +536,22 @@ function displayMonthView(data, employees) {
                     const isSunday = date.getDay() === 0;
                     const isHoliday = isHessianHoliday(date);
                     const shifts = employee.shifts[dateStr] || [];
-                    const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
+                    
+                    // Check if employee has absence on this date
+                    const absence = getAbsenceForDate(employee.absences || [], dateStr);
+                    
+                    let content = '';
+                    if (absence) {
+                        // Show absence badge (AU for sick, U for vacation, L for training)
+                        const absenceCode = getAbsenceCode(absence.type);
+                        content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
+                    } else {
+                        // Show regular shifts
+                        content = shifts.map(s => createShiftBadge(s)).join(' ');
+                    }
+                    
                     const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
-                    html += `<td class="${cellClass}">${shiftBadges}</td>`;
+                    html += `<td class="${cellClass}">${content}</td>`;
                 });
             });
             
@@ -548,8 +564,8 @@ function displayMonthView(data, employees) {
 }
 
 function displayYearView(data, employees) {
-    // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
+    // Group assignments by team and employee, including absences
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
     // Get all dates and organize by months and weeks
     const dates = getUniqueDates(data.assignments);
@@ -606,14 +622,28 @@ function displayYearView(data, employees) {
                 month.weeks.forEach(weekNum => {
                     const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
                     const shifts = [];
+                    let hasAbsence = false;
+                    let absenceCode = '';
+                    
                     weekDates.forEach(dateStr => {
-                        if (employee.shifts[dateStr]) {
+                        // Check for absence first
+                        const absence = getAbsenceForDate(employee.absences || [], dateStr);
+                        if (absence) {
+                            hasAbsence = true;
+                            absenceCode = getAbsenceCode(absence.type);
+                        } else if (employee.shifts[dateStr]) {
                             shifts.push(...employee.shifts[dateStr]);
                         }
                     });
                     
-                    const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
-                    html += `<td class="shift-cell">${shiftBadges}</td>`;
+                    let content = '';
+                    if (hasAbsence) {
+                        content = `<span class="shift-badge shift-${absenceCode}">${absenceCode}</span>`;
+                    } else {
+                        content = shifts.map(s => createShiftBadge(s)).join(' ');
+                    }
+                    
+                    html += `<td class="shift-cell">${content}</td>`;
                 });
                 
                 html += '</tr>';
@@ -628,6 +658,32 @@ function displayYearView(data, employees) {
 }
 
 // Helper functions
+
+// Constant for employees without team assignment
+const UNASSIGNED_TEAM_ID = 0;
+
+// Absence type constants (must match database enum)
+const ABSENCE_TYPES = {
+    AU: 1,  // Arbeitsunfähigkeit / Sick Leave (Krank)
+    U: 2,   // Urlaub / Vacation
+    L: 3    // Lehrgang / Training
+};
+
+/**
+ * Get absence code from absence type string
+ * @param {string} typeString - Type string from API (e.g., "Krank / AU", "Urlaub", "Lehrgang")
+ * @returns {string} Absence code (AU, U, or L)
+ */
+function getAbsenceCode(typeString) {
+    if (typeString === 'Krank / AU' || typeString === 'Krank') {
+        return 'AU';
+    } else if (typeString === 'Urlaub') {
+        return 'U';
+    } else if (typeString === 'Lehrgang') {
+        return 'L';
+    }
+    return 'A'; // Default for unknown types
+}
 
 // Constant for employees without team assignment
 const UNASSIGNED_TEAM_ID = 0;
@@ -1785,7 +1841,9 @@ async function showAddVacationRequestModal() {
             const select = document.getElementById('vacationEmployeeId');
             select.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
             employees.forEach(emp => {
-                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name}</option>`;
+                const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+                const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}</option>`;
             });
         }
     } catch (error) {
@@ -1856,6 +1914,224 @@ async function processVacationRequest(id, status) {
             alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
             alert('Fehler beim Verarbeiten des Antrags.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Absence Management Tab Switching
+function switchAbsenceTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    const selectedTab = document.getElementById(`${tabName}-tab`);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+    
+    // Activate corresponding button
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach((btn, index) => {
+        if ((tabName === 'vacation' && index === 0) ||
+            (tabName === 'sick' && index === 1) ||
+            (tabName === 'training' && index === 2)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Load content for the selected tab
+    if (tabName === 'vacation') {
+        loadVacationRequests('all');
+    } else if (tabName === 'sick') {
+        loadAbsences('AU');
+    } else if (tabName === 'training') {
+        loadAbsences('L');
+    }
+}
+
+// Load Absences (AU or L)
+async function loadAbsences(type) {
+    const contentId = type === 'AU' ? 'sick-absences-content' : 'training-absences-content';
+    const content = document.getElementById(contentId);
+    content.innerHTML = '<p class="loading">Lade Abwesenheiten...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/absences`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const absences = await response.json();
+            // Filter by type
+            const filteredAbsences = absences.filter(a => {
+                if (type === 'AU') {
+                    return a.type === 'Krank / AU' || a.type === 'Krank';
+                } else if (type === 'L') {
+                    return a.type === 'Lehrgang';
+                }
+                return false;
+            });
+            displayAbsences(filteredAbsences, type);
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading absences:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
+    }
+}
+
+// Display Absences Table
+function displayAbsences(absences, type) {
+    const contentId = type === 'AU' ? 'sick-absences-content' : 'training-absences-content';
+    const content = document.getElementById(contentId);
+    
+    if (absences.length === 0) {
+        const typeName = type === 'AU' ? 'Arbeitsunfähigkeiten' : 'Lehrgänge';
+        content.innerHTML = `<p>Keine ${typeName} vorhanden.</p>`;
+        return;
+    }
+    
+    const canDelete = hasRole('Admin') || hasRole('Disponent');
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Mitarbeiter</th>';
+    html += '<th>Von</th>';
+    html += '<th>Bis</th>';
+    html += '<th>Notizen</th>';
+    html += '<th>Erstellt</th>';
+    if (canDelete) {
+        html += '<th>Aktionen</th>';
+    }
+    html += '</tr></thead><tbody>';
+    
+    absences.forEach(absence => {
+        html += '<tr>';
+        html += `<td>${absence.employeeName || 'Unbekannt'}</td>`;
+        html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
+        html += `<td>${new Date(absence.endDate).toLocaleDateString('de-DE')}</td>`;
+        html += `<td>${absence.notes || '-'}</td>`;
+        // Only show creation date if available in the API response, otherwise hide column
+        html += `<td>${absence.createdAt ? new Date(absence.createdAt).toLocaleDateString('de-DE') : '-'}</td>`;
+        
+        if (canDelete) {
+            html += `<td><button onclick="deleteAbsence(${absence.id}, '${type}')" class="btn-small btn-danger">Löschen</button></td>`;
+        }
+        
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+// Show Add Absence Modal
+async function showAddAbsenceModal(type) {
+    // Load employees for dropdown
+    try {
+        const response = await fetch(`${API_BASE}/employees`);
+        if (response.ok) {
+            const employees = await response.json();
+            const select = document.getElementById('absenceEmployeeId');
+            select.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+            employees.forEach(emp => {
+                const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+                const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading employees:', error);
+    }
+    
+    // Set modal title and type
+    const modalTitle = document.getElementById('absenceModalTitle');
+    if (type === 'AU') {
+        modalTitle.textContent = 'Arbeitsunfähigkeit (AU) erfassen';
+    } else if (type === 'L') {
+        modalTitle.textContent = 'Lehrgang erfassen';
+    }
+    
+    document.getElementById('absenceType').value = type;
+    document.getElementById('absenceForm').reset();
+    document.getElementById('absenceType').value = type; // Reset clears it, so set again
+    document.getElementById('absenceModal').style.display = 'block';
+}
+
+// Close Absence Modal
+function closeAbsenceModal() {
+    document.getElementById('absenceModal').style.display = 'none';
+    document.getElementById('absenceForm').reset();
+}
+
+// Save Absence
+async function saveAbsence(event) {
+    event.preventDefault();
+    
+    const type = document.getElementById('absenceType').value;
+    const typeValue = type === 'AU' ? ABSENCE_TYPES.AU : ABSENCE_TYPES.L;
+    
+    const absence = {
+        employeeId: parseInt(document.getElementById('absenceEmployeeId').value),
+        type: typeValue,
+        startDate: document.getElementById('absenceStartDate').value,
+        endDate: document.getElementById('absenceEndDate').value,
+        notes: document.getElementById('absenceNotes').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/absences`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(absence)
+        });
+        
+        if (response.ok) {
+            alert('Abwesenheit erfolgreich erfasst!');
+            closeAbsenceModal();
+            loadAbsences(type);
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Speichern der Abwesenheit.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Delete Absence
+async function deleteAbsence(id, type) {
+    if (!confirm('Möchten Sie diese Abwesenheit wirklich löschen?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/absences/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            alert('Abwesenheit erfolgreich gelöscht!');
+            loadAbsences(type);
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Löschen der Abwesenheit.');
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);
@@ -2492,7 +2768,9 @@ async function editShiftAssignment(shiftId) {
     cachedEmployees.forEach(emp => {
         const option = document.createElement('option');
         option.value = emp.id;
-        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+        const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+        option.textContent = `${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}`;
         employeeSelect.appendChild(option);
     });
     employeeSelect.value = shift.employeeId;
@@ -2548,7 +2826,9 @@ async function showNewShiftModal() {
     cachedEmployees.forEach(emp => {
         const option = document.createElement('option');
         option.value = emp.id;
-        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+        const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+        option.textContent = `${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}`;
         employeeSelect.appendChild(option);
     });
 

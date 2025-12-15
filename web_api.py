@@ -125,27 +125,34 @@ def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Opti
         changes: Optional JSON string with details of changes
         user_id: Optional user ID (will try to get from session if not provided)
         user_name: Optional user name (will try to get from session if not provided)
+    
+    Note: Audit logging failures are logged but do not prevent the main operation from succeeding.
     """
-    cursor = conn.cursor()
-    
-    # Get user info from session if not provided
-    if user_id is None:
-        user_id = session.get('user_id')
-    if user_name is None:
-        user_name = session.get('user_email')
-    
-    cursor.execute("""
-        INSERT INTO AuditLogs (Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        datetime.utcnow().isoformat(),
-        user_id,
-        user_name,
-        entity_name,
-        str(entity_id),
-        action,
-        changes
-    ))
+    try:
+        cursor = conn.cursor()
+        
+        # Get user info from session if not provided
+        if user_id is None:
+            user_id = session.get('user_id')
+        if user_name is None:
+            user_name = session.get('user_email')
+        
+        cursor.execute("""
+            INSERT INTO AuditLogs (Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.utcnow().isoformat(),
+            user_id,
+            user_name,
+            entity_name,
+            str(entity_id),
+            action,
+            changes
+        ))
+    except Exception as e:
+        # Log the audit failure but don't raise - we don't want audit logging to break business operations
+        import sys
+        print(f"Warning: Failed to log audit entry: {e}", file=sys.stderr)
 
 
 def create_app(db_path: str = "dienstplan.db") -> Flask:
@@ -1719,17 +1726,20 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             """, (id,))
             absence_row = cursor.fetchone()
             
-            if absence_row:
-                cursor.execute("DELETE FROM Absences WHERE Id = ?", (id,))
-                
-                # Log audit entry
-                changes = json.dumps({
-                    'employeeId': absence_row['EmployeeId'],
-                    'type': absence_row['Type'],
-                    'startDate': absence_row['StartDate'],
-                    'endDate': absence_row['EndDate']
-                }, ensure_ascii=False)
-                log_audit(conn, 'Absence', id, 'Delete', changes)
+            if not absence_row:
+                conn.close()
+                return jsonify({'error': 'Abwesenheit nicht gefunden'}), 404
+            
+            cursor.execute("DELETE FROM Absences WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'employeeId': absence_row['EmployeeId'],
+                'type': absence_row['Type'],
+                'startDate': absence_row['StartDate'],
+                'endDate': absence_row['EndDate']
+            }, ensure_ascii=False)
+            log_audit(conn, 'Absence', id, 'Delete', changes)
             
             conn.commit()
             conn.close()

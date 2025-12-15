@@ -685,9 +685,6 @@ function getAbsenceCode(typeString) {
     return 'A'; // Default for unknown types
 }
 
-// Constant for employees without team assignment
-const UNASSIGNED_TEAM_ID = 0;
-
 /**
  * Create a shift badge HTML element with appropriate styling and onclick handlers
  * @param {object} shift - Shift object with id, shiftCode, shiftName, isFixed

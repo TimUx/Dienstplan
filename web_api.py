@@ -11,6 +11,7 @@ import sqlite3
 import json
 import hashlib
 import secrets
+import sys
 from functools import wraps
 
 # PDF export dependencies
@@ -110,6 +111,48 @@ def require_role(*required_roles):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+
+def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Optional[str] = None, 
+              user_id: Optional[str] = None, user_name: Optional[str] = None):
+    """
+    Log an audit entry to the AuditLogs table.
+    
+    Args:
+        conn: Database connection (must be already opened)
+        entity_name: Name of the entity (e.g., 'Employee', 'Team', 'ShiftAssignment', 'Absence')
+        entity_id: ID of the entity being modified
+        action: Action performed (e.g., 'Create', 'Update', 'Delete')
+        changes: Optional JSON string with details of changes
+        user_id: Optional user ID (will try to get from session if not provided)
+        user_name: Optional user name (will try to get from session if not provided)
+    
+    Note: Audit logging failures are logged but do not prevent the main operation from succeeding.
+    """
+    try:
+        cursor = conn.cursor()
+        
+        # Get user info from session if not provided
+        if user_id is None:
+            user_id = session.get('user_id')
+        if user_name is None:
+            user_name = session.get('user_email')
+        
+        cursor.execute("""
+            INSERT INTO AuditLogs (Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.utcnow().isoformat(),
+            user_id,
+            user_name,
+            entity_name,
+            str(entity_id),
+            action,
+            changes
+        ))
+    except Exception as e:
+        # Log the audit failure but don't raise - we don't want audit logging to break business operations
+        print(f"Warning: Failed to log audit entry: {e}", file=sys.stderr)
 
 
 def create_app(db_path: str = "dienstplan.db") -> Flask:
@@ -488,6 +531,18 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             ))
             
             employee_id = cursor.lastrowid
+            
+            # Log audit entry
+            changes = json.dumps({
+                'vorname': data.get('vorname'),
+                'name': data.get('name'),
+                'personalnummer': data.get('personalnummer'),
+                'email': data.get('email'),
+                'funktion': funktion,
+                'teamId': data.get('teamId')
+            }, ensure_ascii=False)
+            log_audit(conn, 'Employee', employee_id, 'Create', changes)
+            
             conn.commit()
             conn.close()
             
@@ -522,9 +577,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if employee exists
-            cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (id,))
-            if not cursor.fetchone():
+            # Check if employee exists and get old values for audit
+            cursor.execute("""
+                SELECT Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
+                       IsSpringer, IsFerienjobber, IsBrandmeldetechniker, 
+                       IsBrandschutzbeauftragter, IsTdQualified, TeamId 
+                FROM Employees WHERE Id = ?
+            """, (id,))
+            old_row = cursor.fetchone()
+            if not old_row:
                 conn.close()
                 return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
             
@@ -557,6 +618,25 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 id
             ))
             
+            # Log audit entry with changes
+            changes_dict = {}
+            if old_row['Vorname'] != data.get('vorname'):
+                changes_dict['vorname'] = {'old': old_row['Vorname'], 'new': data.get('vorname')}
+            if old_row['Name'] != data.get('name'):
+                changes_dict['name'] = {'old': old_row['Name'], 'new': data.get('name')}
+            if old_row['Personalnummer'] != data.get('personalnummer'):
+                changes_dict['personalnummer'] = {'old': old_row['Personalnummer'], 'new': data.get('personalnummer')}
+            if old_row['Email'] != data.get('email'):
+                changes_dict['email'] = {'old': old_row['Email'], 'new': data.get('email')}
+            if old_row['Funktion'] != funktion:
+                changes_dict['funktion'] = {'old': old_row['Funktion'], 'new': funktion}
+            if old_row['TeamId'] != data.get('teamId'):
+                changes_dict['teamId'] = {'old': old_row['TeamId'], 'new': data.get('teamId')}
+            
+            if changes_dict:
+                changes = json.dumps(changes_dict, ensure_ascii=False)
+                log_audit(conn, 'Employee', id, 'Update', changes)
+            
             conn.commit()
             conn.close()
             
@@ -574,9 +654,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if employee exists
-            cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (id,))
-            if not cursor.fetchone():
+            # Check if employee exists and get info for audit
+            cursor.execute("SELECT Vorname, Name, Personalnummer FROM Employees WHERE Id = ?", (id,))
+            emp_row = cursor.fetchone()
+            if not emp_row:
                 conn.close()
                 return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
             
@@ -590,6 +671,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Delete employee
             cursor.execute("DELETE FROM Employees WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'vorname': emp_row['Vorname'],
+                'name': emp_row['Name'],
+                'personalnummer': emp_row['Personalnummer']
+            }, ensure_ascii=False)
+            log_audit(conn, 'Employee', id, 'Delete', changes)
+            
             conn.commit()
             conn.close()
             
@@ -687,6 +777,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             ))
             
             team_id = cursor.lastrowid
+            
+            # Log audit entry
+            changes = json.dumps({
+                'name': data.get('name'),
+                'description': data.get('description'),
+                'email': data.get('email'),
+                'isVirtual': data.get('isVirtual')
+            }, ensure_ascii=False)
+            log_audit(conn, 'Team', team_id, 'Create', changes)
+            
             conn.commit()
             conn.close()
             
@@ -710,9 +810,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if team exists
-            cursor.execute("SELECT Id FROM Teams WHERE Id = ?", (id,))
-            if not cursor.fetchone():
+            # Check if team exists and get old values for audit
+            cursor.execute("SELECT Name, Description, Email, IsVirtual FROM Teams WHERE Id = ?", (id,))
+            old_row = cursor.fetchone()
+            if not old_row:
                 conn.close()
                 return jsonify({'error': 'Team nicht gefunden'}), 404
             
@@ -727,6 +828,22 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('isVirtual') else 0,
                 id
             ))
+            
+            # Log audit entry with changes
+            changes_dict = {}
+            if old_row['Name'] != data.get('name'):
+                changes_dict['name'] = {'old': old_row['Name'], 'new': data.get('name')}
+            if old_row['Description'] != data.get('description'):
+                changes_dict['description'] = {'old': old_row['Description'], 'new': data.get('description')}
+            if old_row['Email'] != data.get('email'):
+                changes_dict['email'] = {'old': old_row['Email'], 'new': data.get('email')}
+            new_is_virtual = 1 if data.get('isVirtual') else 0
+            if old_row['IsVirtual'] != new_is_virtual:
+                changes_dict['isVirtual'] = {'old': bool(old_row['IsVirtual']), 'new': bool(new_is_virtual)}
+            
+            if changes_dict:
+                changes = json.dumps(changes_dict, ensure_ascii=False)
+                log_audit(conn, 'Team', id, 'Update', changes)
             
             conn.commit()
             conn.close()
@@ -745,9 +862,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if team exists
-            cursor.execute("SELECT Id FROM Teams WHERE Id = ?", (id,))
-            if not cursor.fetchone():
+            # Check if team exists and get info for audit
+            cursor.execute("SELECT Name FROM Teams WHERE Id = ?", (id,))
+            team_row = cursor.fetchone()
+            if not team_row:
                 conn.close()
                 return jsonify({'error': 'Team nicht gefunden'}), 404
             
@@ -761,6 +879,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Delete team
             cursor.execute("DELETE FROM Teams WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({'name': team_row['Name']}, ensure_ascii=False)
+            log_audit(conn, 'Team', id, 'Delete', changes)
+            
             conn.commit()
             conn.close()
             
@@ -1046,9 +1169,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn = db.get_connection()
                 cursor = conn.cursor()
                 
-                # Check if assignment exists
-                cursor.execute("SELECT Id FROM ShiftAssignments WHERE Id = ?", (id,))
-                if not cursor.fetchone():
+                # Check if assignment exists and get old values for audit
+                cursor.execute("""
+                    SELECT EmployeeId, ShiftTypeId, Date, IsFixed, Notes 
+                    FROM ShiftAssignments WHERE Id = ?
+                """, (id,))
+                old_row = cursor.fetchone()
+                if not old_row:
                     return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
                 
                 # Update assignment
@@ -1068,6 +1195,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     session.get('user_email'),
                     id
                 ))
+                
+                # Log audit entry with changes
+                changes_dict = {}
+                if old_row['EmployeeId'] != employee_id:
+                    changes_dict['employeeId'] = {'old': old_row['EmployeeId'], 'new': employee_id}
+                if old_row['ShiftTypeId'] != shift_type_id:
+                    changes_dict['shiftTypeId'] = {'old': old_row['ShiftTypeId'], 'new': shift_type_id}
+                if old_row['Date'] != assignment_date.isoformat():
+                    changes_dict['date'] = {'old': old_row['Date'], 'new': assignment_date.isoformat()}
+                new_is_fixed = 1 if data.get('isFixed') else 0
+                if old_row['IsFixed'] != new_is_fixed:
+                    changes_dict['isFixed'] = {'old': bool(old_row['IsFixed']), 'new': bool(new_is_fixed)}
+                if old_row['Notes'] != data.get('notes'):
+                    changes_dict['notes'] = {'old': old_row['Notes'], 'new': data.get('notes')}
+                
+                if changes_dict:
+                    changes = json.dumps(changes_dict, ensure_ascii=False)
+                    log_audit(conn, 'ShiftAssignment', id, 'Update', changes)
                 
                 conn.commit()
                 
@@ -1130,6 +1275,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 ))
                 
                 assignment_id = cursor.lastrowid
+                
+                # Log audit entry
+                changes = json.dumps({
+                    'employeeId': employee_id,
+                    'shiftTypeId': shift_type_id,
+                    'date': assignment_date.isoformat(),
+                    'isFixed': data.get('isFixed'),
+                    'notes': data.get('notes')
+                }, ensure_ascii=False)
+                log_audit(conn, 'ShiftAssignment', assignment_id, 'Create', changes)
+                
                 conn.commit()
                 
                 return jsonify({'success': True, 'id': assignment_id}), 201
@@ -1152,8 +1308,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn = db.get_connection()
                 cursor = conn.cursor()
                 
-                # Check if assignment exists
-                cursor.execute("SELECT Id, IsFixed FROM ShiftAssignments WHERE Id = ?", (id,))
+                # Check if assignment exists and get info for audit
+                cursor.execute("""
+                    SELECT EmployeeId, ShiftTypeId, Date, IsFixed 
+                    FROM ShiftAssignments WHERE Id = ?
+                """, (id,))
                 row = cursor.fetchone()
                 
                 if not row:
@@ -1165,6 +1324,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 
                 # Delete assignment
                 cursor.execute("DELETE FROM ShiftAssignments WHERE Id = ?", (id,))
+                
+                # Log audit entry
+                changes = json.dumps({
+                    'employeeId': row['EmployeeId'],
+                    'shiftTypeId': row['ShiftTypeId'],
+                    'date': row['Date']
+                }, ensure_ascii=False)
+                log_audit(conn, 'ShiftAssignment', id, 'Delete', changes)
+                
                 conn.commit()
                 
                 return jsonify({'success': True})
@@ -1523,6 +1691,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             ))
             
             absence_id = cursor.lastrowid
+            
+            # Log audit entry
+            changes = json.dumps({
+                'employeeId': data.get('employeeId'),
+                'type': data.get('type'),
+                'startDate': data.get('startDate'),
+                'endDate': data.get('endDate'),
+                'notes': data.get('notes')
+            }, ensure_ascii=False)
+            log_audit(conn, 'Absence', absence_id, 'Create', changes)
+            
             conn.commit()
             conn.close()
             
@@ -1540,7 +1719,28 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
+            # Get absence info for audit before deleting
+            cursor.execute("""
+                SELECT EmployeeId, Type, StartDate, EndDate 
+                FROM Absences WHERE Id = ?
+            """, (id,))
+            absence_row = cursor.fetchone()
+            
+            if not absence_row:
+                conn.close()
+                return jsonify({'error': 'Abwesenheit nicht gefunden'}), 404
+            
             cursor.execute("DELETE FROM Absences WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'employeeId': absence_row['EmployeeId'],
+                'type': absence_row['Type'],
+                'startDate': absence_row['StartDate'],
+                'endDate': absence_row['EndDate']
+            }, ensure_ascii=False)
+            log_audit(conn, 'Absence', id, 'Delete', changes)
+            
             conn.commit()
             conn.close()
             

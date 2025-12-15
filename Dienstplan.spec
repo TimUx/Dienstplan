@@ -6,7 +6,6 @@ for the Dienstplan shift planning system.
 """
 
 import os
-import sys
 from pathlib import Path
 
 # Get the application directory

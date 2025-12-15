@@ -1488,7 +1488,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'type': type_names[row['Type']] if row['Type'] < len(type_names) else 'Unbekannt',
                 'startDate': row['StartDate'],
                 'endDate': row['EndDate'],
-                'notes': row['Notes']
+                'notes': row['Notes'],
+                'createdAt': row['CreatedAt']
             })
         
         conn.close()

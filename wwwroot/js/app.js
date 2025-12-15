@@ -454,10 +454,7 @@ function displayWeekView(data, employees) {
                 let content = '';
                 if (absence) {
                     // Show absence badge (AU for sick, U for vacation, L for training)
-                    const absenceCode = absence.type === 'Krank / AU' ? 'AU' : 
-                                       absence.type === 'Krank' ? 'AU' : 
-                                       absence.type === 'Urlaub' ? 'U' : 
-                                       absence.type === 'Lehrgang' ? 'L' : 'A';
+                    const absenceCode = getAbsenceCode(absence.type);
                     content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
                 } else {
                     // Show regular shifts
@@ -546,10 +543,7 @@ function displayMonthView(data, employees) {
                     let content = '';
                     if (absence) {
                         // Show absence badge (AU for sick, U for vacation, L for training)
-                        const absenceCode = absence.type === 'Krank / AU' ? 'AU' : 
-                                           absence.type === 'Krank' ? 'AU' : 
-                                           absence.type === 'Urlaub' ? 'U' : 
-                                           absence.type === 'Lehrgang' ? 'L' : 'A';
+                        const absenceCode = getAbsenceCode(absence.type);
                         content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
                     } else {
                         // Show regular shifts
@@ -636,10 +630,7 @@ function displayYearView(data, employees) {
                         const absence = getAbsenceForDate(employee.absences || [], dateStr);
                         if (absence) {
                             hasAbsence = true;
-                            absenceCode = absence.type === 'Krank / AU' ? 'AU' : 
-                                         absence.type === 'Krank' ? 'AU' : 
-                                         absence.type === 'Urlaub' ? 'U' : 
-                                         absence.type === 'Lehrgang' ? 'L' : 'A';
+                            absenceCode = getAbsenceCode(absence.type);
                         } else if (employee.shifts[dateStr]) {
                             shifts.push(...employee.shifts[dateStr]);
                         }
@@ -667,6 +658,32 @@ function displayYearView(data, employees) {
 }
 
 // Helper functions
+
+// Constant for employees without team assignment
+const UNASSIGNED_TEAM_ID = 0;
+
+// Absence type constants (must match database enum)
+const ABSENCE_TYPES = {
+    AU: 1,  // Arbeitsunfähigkeit / Sick Leave (Krank)
+    U: 2,   // Urlaub / Vacation
+    L: 3    // Lehrgang / Training
+};
+
+/**
+ * Get absence code from absence type string
+ * @param {string} typeString - Type string from API (e.g., "Krank / AU", "Urlaub", "Lehrgang")
+ * @returns {string} Absence code (AU, U, or L)
+ */
+function getAbsenceCode(typeString) {
+    if (typeString === 'Krank / AU' || typeString === 'Krank') {
+        return 'AU';
+    } else if (typeString === 'Urlaub') {
+        return 'U';
+    } else if (typeString === 'Lehrgang') {
+        return 'L';
+    }
+    return 'A'; // Default for unknown types
+}
 
 // Constant for employees without team assignment
 const UNASSIGNED_TEAM_ID = 0;
@@ -2003,7 +2020,8 @@ function displayAbsences(absences, type) {
         html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
         html += `<td>${new Date(absence.endDate).toLocaleDateString('de-DE')}</td>`;
         html += `<td>${absence.notes || '-'}</td>`;
-        html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
+        // Only show creation date if available in the API response, otherwise hide column
+        html += `<td>${absence.createdAt ? new Date(absence.createdAt).toLocaleDateString('de-DE') : '-'}</td>`;
         
         if (canDelete) {
             html += `<td><button onclick="deleteAbsence(${absence.id}, '${type}')" class="btn-small btn-danger">Löschen</button></td>`;
@@ -2059,7 +2077,7 @@ async function saveAbsence(event) {
     event.preventDefault();
     
     const type = document.getElementById('absenceType').value;
-    const typeValue = type === 'AU' ? 1 : 3; // 1=Krank, 3=Lehrgang (based on database enum)
+    const typeValue = type === 'AU' ? ABSENCE_TYPES.AU : ABSENCE_TYPES.L;
     
     const absence = {
         employeeId: parseInt(document.getElementById('absenceEmployeeId').value),

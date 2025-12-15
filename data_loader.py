@@ -33,7 +33,8 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     
     # Create virtual team for Fire Alarm System (TD-qualified without regular team)
     team_fire_alarm = Team(id=99, name="Fire Alarm System", 
-                          description="Virtual team for TD-qualified employees without regular team assignment")
+                          description="Virtual team for TD-qualified employees without regular team assignment",
+                          is_virtual=True)  # Mark as virtual team
     
     teams = [team_alpha, team_beta, team_gamma, team_fire_alarm]
     
@@ -86,15 +87,15 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         elif emp.team_id == 99:
             team_fire_alarm.employees.append(emp)
     
-    # Create sample absences
+    # Create sample absences using official codes: U, AU, L
     absences = []
     today = date.today()
     
-    # Some vacation days
+    # Use official absence codes: U (Urlaub), AU (Krank), L (Lehrgang)
     absences.extend([
-        Absence(1, 2, AbsenceType.URLAUB, today + timedelta(days=10), today + timedelta(days=14), "Jahresurlaub"),
-        Absence(2, 7, AbsenceType.URLAUB, today + timedelta(days=20), today + timedelta(days=27), "Sommerurlaub"),
-        Absence(3, 12, AbsenceType.LEHRGANG, today + timedelta(days=5), today + timedelta(days=7), "Fortbildung"),
+        Absence(1, 2, AbsenceType.U, today + timedelta(days=10), today + timedelta(days=14), "Jahresurlaub"),
+        Absence(2, 7, AbsenceType.U, today + timedelta(days=20), today + timedelta(days=27), "Sommerurlaub"),
+        Absence(3, 12, AbsenceType.L, today + timedelta(days=5), today + timedelta(days=7), "Fortbildung"),
     ])
     
     return employees, teams, absences
@@ -119,10 +120,11 @@ def load_from_database(db_path: str = "dienstplan.db"):
     cursor = conn.cursor()
     
     # Load teams
-    cursor.execute("SELECT Id, Name, Description, Email FROM Teams")
+    cursor.execute("SELECT Id, Name, Description, Email, IsVirtual FROM Teams")
     teams = []
     for row in cursor.fetchall():
-        team = Team(id=row[0], name=row[1], description=row[2], email=row[3])
+        is_virtual = bool(row[4]) if len(row) > 4 else False
+        team = Team(id=row[0], name=row[1], description=row[2], email=row[3], is_virtual=is_virtual)
         teams.append(team)
     
     # Load employees
@@ -176,18 +178,26 @@ def load_from_database(db_path: str = "dienstplan.db"):
                     team.employees.append(emp)
                     break
     
-    # Load absences
+    # Load absences with official code mapping
+    # Map database Type values to official AbsenceType codes
+    # Old: 1=KRANK, 2=URLAUB, 3=LEHRGANG
+    # New: AU=Sick, U=Vacation, L=Training
     cursor.execute("""
         SELECT Id, EmployeeId, Type, StartDate, EndDate, Notes
         FROM Absences
     """)
     absences = []
     for row in cursor.fetchall():
-        absence_type_map = {1: AbsenceType.KRANK, 2: AbsenceType.URLAUB, 3: AbsenceType.LEHRGANG}
+        # Map old integer types to new official codes
+        absence_type_map = {
+            1: AbsenceType.AU,  # Krank -> AU
+            2: AbsenceType.U,   # Urlaub -> U
+            3: AbsenceType.L    # Lehrgang -> L
+        }
         absence = Absence(
             id=row[0],
             employee_id=row[1],
-            absence_type=absence_type_map.get(row[2], AbsenceType.URLAUB),
+            absence_type=absence_type_map.get(row[2], AbsenceType.U),
             start_date=date.fromisoformat(row[3]),
             end_date=date.fromisoformat(row[4]),
             notes=row[5]
@@ -206,7 +216,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
         absence = Absence(
             id=vacation_id_offset + row[0],
             employee_id=row[1],
-            absence_type=AbsenceType.URLAUB,
+            absence_type=AbsenceType.U,  # Approved vacation -> U
             start_date=date.fromisoformat(row[2]),
             end_date=date.fromisoformat(row[3]),
             notes=row[4] or "Genehmigter Urlaub"

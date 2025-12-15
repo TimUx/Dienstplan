@@ -298,7 +298,12 @@ def create_default_admin(db_path: str = "dienstplan.db"):
 
 
 def initialize_shift_types(db_path: str = "dienstplan.db"):
-    """Initialize standard shift types"""
+    """
+    Initialize standard shift types.
+    
+    Official absence codes (U, AU, L) are stored in Absences table,
+    NOT as shift types. Shift types are only for actual work shifts.
+    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
@@ -310,9 +315,8 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
         (5, "BMT", "Brandmeldetechniker", "06:00", "14:00", 8.0, "#F44336"),
         (6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", 9.5, "#E91E63"),
         (7, "TD", "Tagdienst", "06:00", "16:30", 10.5, "#673AB7"),
-        (8, "K", "Krank", "00:00", "00:00", 0.0, "#9E9E9E"),
-        (9, "U", "Urlaub", "00:00", "00:00", 0.0, "#00BCD4"),
-        (10, "L", "Lehrgang", "00:00", "00:00", 0.0, "#795548"),
+        # REMOVED: "K" (Krank) and old "U" (Urlaub) shift types
+        # Absences are now handled exclusively through Absences table with codes: U, AU, L
     ]
     
     for shift_type in shift_types:
@@ -323,11 +327,17 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Standard shift types initialized")
+    print("✅ Standard shift types initialized (absences use separate codes: U, AU, L)")
 
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
-    """Initialize sample teams"""
+    """
+    Initialize sample teams.
+    
+    CRITICAL: 
+    - No virtual "Springer Team" - springers are employees with is_springer attribute
+    - Virtual team "Fire Alarm System" (ID 99) for display grouping of TD-qualified employees
+    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
@@ -335,7 +345,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
         ("Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
         ("Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
         ("Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
-        ("Springer", "Virtuelles Team für Springer", "springer@fritzwinter.de", 1),
+        ("Fire Alarm System", "Virtual team for BSB/BMT qualified employees", "feuermeldeanl@fritzwinter.de", 1),
     ]
     
     for name, description, email, is_virtual in teams:
@@ -346,7 +356,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Sample teams initialized")
+    print("✅ Sample teams initialized (no springer team - springers are employee attributes)")
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):

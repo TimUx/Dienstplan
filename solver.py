@@ -341,14 +341,28 @@ class ShiftPlanningSolver:
         
         # Build complete schedule: every employee for every day
         # This ensures ALL employees appear in the output, even without shifts
+        # CRITICAL: Absences (U, AU, L) ALWAYS take priority over shifts and TD
         for emp in employees:
             for d in dates:
-                # Check if employee has TD on this day
+                # PRIORITY 1: Check if employee is absent (HIGHEST PRIORITY)
+                # Absences ALWAYS override shifts and TD
+                absence = None
+                for abs in absences:
+                    if abs.employee_id == emp.id and abs.overlaps_date(d):
+                        absence = abs
+                        break
+                
+                if absence:
+                    # Show absence code (U, AU, or L)
+                    complete_schedule[(emp.id, d)] = absence.get_code()
+                    continue
+                
+                # PRIORITY 2: Check if employee has TD on this day
                 if (emp.id, d) in special_functions:
                     complete_schedule[(emp.id, d)] = "TD"
                     continue
                 
-                # Check if employee has a shift assignment
+                # PRIORITY 3: Check if employee has a shift assignment
                 has_assignment = False
                 for assignment in assignments:
                     if assignment.employee_id == emp.id and assignment.date == d:
@@ -359,16 +373,9 @@ class ShiftPlanningSolver:
                             has_assignment = True
                             break
                 
-                # Check if employee is absent
+                # PRIORITY 4: No assignment - mark as OFF
                 if not has_assignment:
-                    is_absent = any(
-                        abs.employee_id == emp.id and abs.overlaps_date(d)
-                        for abs in absences
-                    )
-                    if is_absent:
-                        complete_schedule[(emp.id, d)] = "ABSENT"
-                    else:
-                        complete_schedule[(emp.id, d)] = "OFF"
+                    complete_schedule[(emp.id, d)] = "OFF"
         
         return assignments, special_functions, complete_schedule
     

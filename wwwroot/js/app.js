@@ -808,7 +808,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         
         // If this is a BSB or MBT shift, also add to virtual "Brandmeldeanlage" team
         if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT') {
-            const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999;
             if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]) {
                 teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
                     teamId: VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,
@@ -873,7 +872,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         // If employee has BSB/MBT qualification, also add to virtual "Brandmeldeanlage" team
         const employee = allEmployees.find(e => e.id === absence.employeeId);
         if (employee && (employee.isBrandmeldetechniker || employee.isBrandschutzbeauftragter)) {
-            const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999;
             if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]) {
                 teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
                     teamId: VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,
@@ -906,7 +904,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         employees: Object.values(team.employees).sort((a, b) => a.name.localeCompare(b.name))
     })).sort((a, b) => {
         // Put "Brandmeldeanlage" near the top (after regular teams, before "Ohne Team")
-        const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999;
         if (a.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && b.teamId !== UNASSIGNED_TEAM_ID) return 1;
         if (b.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && a.teamId !== UNASSIGNED_TEAM_ID) return -1;
         // Put "Ohne Team" at the end

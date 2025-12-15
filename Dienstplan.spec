@@ -6,6 +6,7 @@ for the Dienstplan shift planning system.
 """
 
 import os
+import sys
 from pathlib import Path
 
 # Get the application directory
@@ -31,6 +32,27 @@ if data_dir.exists():
             rel_path = file_path.relative_to(app_dir)
             data_files.append((str(file_path), str(rel_path.parent)))
 
+# Collect OR-Tools binary files
+# This is critical for Windows builds where PyInstaller doesn't automatically
+# detect the native binary dependencies (.pyd and .dll files)
+ortools_binaries = []
+try:
+    import ortools
+    ortools_dir = Path(ortools.__file__).parent
+    
+    # Collect all .pyd files (Python extension modules on Windows)
+    # and .so files (on Linux, for cross-platform compatibility)
+    for root, dirs, files in os.walk(ortools_dir):
+        for file in files:
+            if file.endswith(('.pyd', '.so', '.dll')):
+                file_path = Path(root) / file
+                rel_path = file_path.relative_to(ortools_dir.parent)
+                ortools_binaries.append((str(file_path), str(rel_path.parent)))
+    
+    print(f"Found {len(ortools_binaries)} OR-Tools binary files")
+except ImportError:
+    print("Warning: OR-Tools not found. Binary collection skipped.")
+
 # Combine all data files
 all_data_files = wwwroot_files + data_files
 
@@ -39,15 +61,22 @@ block_cipher = None
 a = Analysis(
     ['launcher.py'],
     pathex=[],
-    binaries=[],
+    binaries=ortools_binaries,  # Include OR-Tools binary dependencies
     datas=all_data_files,
     hiddenimports=[
         'flask',
         'flask_cors',
         'ortools',
+        'ortools.sat',
+        'ortools.sat.python',
         'ortools.sat.python.cp_model',
+        'ortools.init',
+        'ortools.init.python',
+        'ortools.init.python.init',
         'sqlite3',
         'dateutil',
+        'google',
+        'google.protobuf',
     ],
     hookspath=[],
     hooksconfig={},

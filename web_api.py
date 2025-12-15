@@ -11,6 +11,7 @@ import sqlite3
 import json
 import hashlib
 import secrets
+import sys
 from functools import wraps
 
 # PDF export dependencies
@@ -151,7 +152,6 @@ def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Opti
         ))
     except Exception as e:
         # Log the audit failure but don't raise - we don't want audit logging to break business operations
-        import sys
         print(f"Warning: Failed to log audit entry: {e}", file=sys.stderr)
 
 

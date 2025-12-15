@@ -714,12 +714,20 @@ function createShiftBadge(shift) {
 // Constants for team IDs
 const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999; // Virtual team ID for fire alarm system
 
-// Helper function to format employee display name with personnel number
+/**
+ * Formats employee display name with personnel number in parentheses
+ * @param {string} employeeName - The employee's name
+ * @param {string} personalnummer - The employee's personnel number
+ * @returns {string} Formatted name like "Max Müller (PN001)" or just the name if no personnel number
+ */
 function formatEmployeeDisplayName(employeeName, personalnummer) {
     return personalnummer ? `${employeeName} (${personalnummer})` : employeeName;
 }
 
-// Helper function to ensure virtual Brandmeldeanlage team exists
+/**
+ * Ensures the virtual Brandmeldeanlage team exists in the teams object
+ * @param {Object} teams - The teams object to check and update
+ */
 function ensureVirtualTeam(teams) {
     if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]) {
         teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {

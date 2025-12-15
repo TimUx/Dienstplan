@@ -738,12 +738,8 @@
                             <input type="checkbox" id="isBrandschutzbeauftragter" style="margin-right: 8px;">
                             Brandschutzbeauftragter (BSB)
                         </label>
-                        <label style="display: block;">
-                            <input type="checkbox" id="isTdQualified" style="margin-right: 8px;">
-                            TD-Qualifiziert (Tagdienst)
-                        </label>
                     </div>
-                    <small class="field-note">Mitarbeiter können mehrere Sonderfunktionen haben</small>
+                    <small class="field-note">Mitarbeiter mit BMT oder BSB sind automatisch TD-Qualifiziert</small>
                 </div>
                 <div class="form-group">
                     <label>
@@ -811,6 +807,12 @@
                 <div class="form-group">
                     <label>E-Mail</label>
                     <input type="email" id="teamEmail" placeholder="team@fritzwinter.de">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="teamIsVirtual">
+                        Virtuelles Team (Mitarbeiter erscheinen nicht in der regulären Schichtplanung)
+                    </label>
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeTeamModal()" class="btn-secondary">Abbrechen</button>

@@ -386,8 +386,8 @@ function displaySchedule(data, employees) {
 }
 
 function displayWeekView(data, employees) {
-    // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
+    // Group assignments by team and employee, including absences
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
     // Get all dates in the range (from backend, already aligned to Monday-Sunday)
     const dates = getUniqueDates(data.assignments);
@@ -442,9 +442,24 @@ function displayWeekView(data, employees) {
                 const isSunday = date.getDay() === 0;
                 const isHoliday = isHessianHoliday(date);
                 const shifts = employee.shifts[dateStr] || [];
-                const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
+                
+                // Check if employee has absence on this date
+                const absence = getAbsenceForDate(employee.absences || [], dateStr);
+                
+                let content = '';
+                if (absence) {
+                    // Show absence badge (K for Krank, U for Urlaub, L for Lehrgang)
+                    const absenceCode = absence.type === 'Krank' ? 'K' : 
+                                       absence.type === 'Urlaub' ? 'U' : 
+                                       absence.type === 'Lehrgang' ? 'L' : 'A';
+                    content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
+                } else {
+                    // Show regular shifts
+                    content = shifts.map(s => createShiftBadge(s)).join(' ');
+                }
+                
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
-                html += `<td class="${cellClass}">${shiftBadges}</td>`;
+                html += `<td class="${cellClass}">${content}</td>`;
             });
             
             html += '</tr>';
@@ -643,7 +658,7 @@ function createShiftBadge(shift) {
     return `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
 }
 
-function groupByTeamAndEmployee(assignments, allEmployees) {
+function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     const teams = {};
     
     // First, create team structure with all employees
@@ -668,7 +683,8 @@ function groupByTeamAndEmployee(assignments, allEmployees) {
             teams[teamId].employees[emp.id] = {
                 id: emp.id,
                 name: emp.fullName || `${emp.vorname} ${emp.name}`,
-                shifts: {}
+                shifts: {},
+                absences: [] // Store absences for this employee
             };
         }
     });
@@ -697,7 +713,8 @@ function groupByTeamAndEmployee(assignments, allEmployees) {
             teams[teamId].employees[a.employeeId] = {
                 id: a.employeeId,
                 name: a.employeeName,
-                shifts: {}
+                shifts: {},
+                absences: []
             };
         }
         
@@ -706,6 +723,33 @@ function groupByTeamAndEmployee(assignments, allEmployees) {
             teams[teamId].employees[a.employeeId].shifts[dateKey] = [];
         }
         teams[teamId].employees[a.employeeId].shifts[dateKey].push(a);
+    });
+    
+    // Add absences to the employees
+    absences.forEach(absence => {
+        const teamId = absence.teamId || UNASSIGNED_TEAM_ID;
+        
+        // Ensure team exists for absence
+        if (!teams[teamId]) {
+            teams[teamId] = {
+                teamId: teamId,
+                teamName: 'Ohne Team',
+                employees: {}
+            };
+        }
+        
+        // Ensure employee exists for absence
+        if (!teams[teamId].employees[absence.employeeId]) {
+            // Create employee entry if not exists
+            teams[teamId].employees[absence.employeeId] = {
+                id: absence.employeeId,
+                name: absence.employeeName,
+                shifts: {},
+                absences: []
+            };
+        }
+        
+        teams[teamId].employees[absence.employeeId].absences.push(absence);
     });
     
     // Convert to array and sort
@@ -745,6 +789,34 @@ function generateDateRange(start, end) {
         dates.push(d.toISOString().split('T')[0]);
     }
     return dates;
+}
+
+/**
+ * Check if employee has an absence on a specific date
+ * @param {Array} absences - Array of absence objects
+ * @param {string} dateStr - Date string in ISO format (YYYY-MM-DD)
+ * @returns {Object|null} Absence object if found, null otherwise
+ */
+function getAbsenceForDate(absences, dateStr) {
+    if (!absences || absences.length === 0) {
+        return null;
+    }
+    
+    const checkDate = new Date(dateStr);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    for (const absence of absences) {
+        const startDate = new Date(absence.startDate);
+        const endDate = new Date(absence.endDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(0, 0, 0, 0);
+        
+        if (checkDate >= startDate && checkDate <= endDate) {
+            return absence;
+        }
+    }
+    
+    return null;
 }
 
 /**
@@ -1274,7 +1346,7 @@ async function editEmployee(id) {
         document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
-        document.getElementById('isTdQualified').checked = employee.isTdQualified || false;
+        // TD qualification is now automatic based on BMT or BSB
         
         document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
         document.getElementById('employeeModal').style.display = 'block';
@@ -1348,8 +1420,8 @@ async function saveEmployee(event) {
         isSpringer: document.getElementById('isSpringer').checked,
         isFerienjobber: document.getElementById('isFerienjobber').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
-        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked,
-        isTdQualified: document.getElementById('isTdQualified').checked
+        isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
+        // isTdQualified is calculated automatically on the server based on BMT or BSB
     };
     
     try {
@@ -1486,16 +1558,21 @@ function displayTeams(teams) {
     
     let html = '<div class="grid">';
     teams.forEach(team => {
+        const virtualBadge = team.isVirtual ? '<span style="background: #999; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 8px;">Virtuell</span>' : '';
+        const teamName = escapeHtml(team.name);
+        const teamDesc = escapeHtml(team.description || 'Keine Beschreibung');
+        const teamEmail = escapeHtml(team.email || 'Nicht angegeben');
+        
         html += `
             <div class="card">
-                <h3>${team.name}</h3>
-                <p>${team.description || 'Keine Beschreibung'}</p>
-                <p><strong>E-Mail:</strong> ${team.email || 'Nicht angegeben'}</p>
+                <h3>${teamName}${virtualBadge}</h3>
+                <p>${teamDesc}</p>
+                <p><strong>E-Mail:</strong> ${teamEmail}</p>
                 <p><strong>Mitarbeiter:</strong> ${team.employeeCount || 0}</p>
                 ${canEdit ? `
                     <div class="card-actions">
                         <button onclick="editTeam(${team.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
-                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${team.name}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, ${JSON.stringify(team.name)})" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
                     </div>
                 ` : ''}
             </div>
@@ -1524,7 +1601,9 @@ async function editTeam(id) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/teams/${id}`);
+        const response = await fetch(`${API_BASE}/teams/${id}`, {
+            credentials: 'include'
+        });
         if (!response.ok) {
             alert('Fehler beim Laden der Teamdaten');
             return;
@@ -1536,6 +1615,7 @@ async function editTeam(id) {
         document.getElementById('teamName').value = team.name;
         document.getElementById('teamDescription').value = team.description || '';
         document.getElementById('teamEmail').value = team.email || '';
+        document.getElementById('teamIsVirtual').checked = team.isVirtual || false;
         
         document.getElementById('teamModalTitle').textContent = 'Team bearbeiten';
         document.getElementById('teamModal').style.display = 'block';
@@ -1587,7 +1667,8 @@ async function saveTeam(event) {
     const team = {
         name: document.getElementById('teamName').value,
         description: document.getElementById('teamDescription').value || null,
-        email: document.getElementById('teamEmail').value || null
+        email: document.getElementById('teamEmail').value || null,
+        isVirtual: document.getElementById('teamIsVirtual').checked
     };
     
     try {

@@ -26,6 +26,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             Name TEXT NOT NULL,
             Description TEXT,
             Email TEXT,
+            IsVirtual INTEGER NOT NULL DEFAULT 0,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -172,6 +173,21 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # AuditLogs table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AuditLogs (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UserId TEXT,
+            UserName TEXT,
+            EntityName TEXT NOT NULL,
+            EntityId TEXT NOT NULL,
+            Action TEXT NOT NULL,
+            Changes TEXT,
+            FOREIGN KEY (UserId) REFERENCES AspNetUsers(Id)
+        )
+    """)
+    
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 
@@ -191,6 +207,16 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_absences_employee_date 
         ON Absences(EmployeeId, StartDate, EndDate)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_auditlogs_timestamp 
+        ON AuditLogs(Timestamp DESC)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_auditlogs_entity 
+        ON AuditLogs(EntityName, EntityId)
     """)
     
     conn.commit()
@@ -306,16 +332,17 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     cursor = conn.cursor()
     
     teams = [
-        ("Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de"),
-        ("Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de"),
-        ("Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de"),
+        ("Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
+        ("Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
+        ("Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
+        ("Springer", "Virtuelles Team für Springer", "springer@fritzwinter.de", 1),
     ]
     
-    for name, description, email in teams:
+    for name, description, email, is_virtual in teams:
         cursor.execute("""
-            INSERT OR IGNORE INTO Teams (Name, Description, Email)
-            VALUES (?, ?, ?)
-        """, (name, description, email))
+            INSERT OR IGNORE INTO Teams (Name, Description, Email, IsVirtual)
+            VALUES (?, ?, ?, ?)
+        """, (name, description, email, is_virtual))
     
     conn.commit()
     conn.close()

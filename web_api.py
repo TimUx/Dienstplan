@@ -455,7 +455,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Use checkbox values directly from frontend for BMT/BSB flags
             is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
-            is_td = 1 if data.get('isTdQualified') else 0
+            # TD qualification is automatically set if BMT or BSB is true
+            is_td = 1 if (is_bmt or is_bsb) else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -515,7 +516,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Use checkbox values directly from frontend for BMT/BSB flags
             is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
-            is_td = 1 if data.get('isTdQualified') else 0
+            # TD qualification is automatically set if BMT or BSB is true
+            is_td = 1 if (is_bmt or is_bsb) else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -608,11 +610,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT t.Id, t.Name, t.Description, t.Email,
+            SELECT t.Id, t.Name, t.Description, t.Email, t.IsVirtual,
                    COUNT(e.Id) as EmployeeCount
             FROM Teams t
             LEFT JOIN Employees e ON t.Id = e.TeamId
-            GROUP BY t.Id, t.Name, t.Description, t.Email
+            GROUP BY t.Id, t.Name, t.Description, t.Email, t.IsVirtual
             ORDER BY t.Name
         """)
         
@@ -623,11 +625,42 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'name': row['Name'],
                 'description': row['Description'],
                 'email': row['Email'],
+                'isVirtual': bool(row['IsVirtual']),
                 'employeeCount': row['EmployeeCount']
             })
         
         conn.close()
         return jsonify(teams)
+    
+    @app.route('/api/teams/<int:id>', methods=['GET'])
+    def get_team(id):
+        """Get single team by ID"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT t.Id, t.Name, t.Description, t.Email, t.IsVirtual,
+                   COUNT(e.Id) as EmployeeCount
+            FROM Teams t
+            LEFT JOIN Employees e ON t.Id = e.TeamId
+            WHERE t.Id = ?
+            GROUP BY t.Id, t.Name, t.Description, t.Email, t.IsVirtual
+        """, (id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify({'error': 'Team nicht gefunden'}), 404
+        
+        return jsonify({
+            'id': row['Id'],
+            'name': row['Name'],
+            'description': row['Description'],
+            'email': row['Email'],
+            'isVirtual': bool(row['IsVirtual']),
+            'employeeCount': row['EmployeeCount']
+        })
     
     @app.route('/api/teams', methods=['POST'])
     @require_role('Admin', 'Disponent')
@@ -644,12 +677,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor = conn.cursor()
             
             cursor.execute("""
-                INSERT INTO Teams (Name, Description, Email)
-                VALUES (?, ?, ?)
+                INSERT INTO Teams (Name, Description, Email, IsVirtual)
+                VALUES (?, ?, ?, ?)
             """, (
                 data.get('name'),
                 data.get('description'),
-                data.get('email')
+                data.get('email'),
+                1 if data.get('isVirtual') else 0
             ))
             
             team_id = cursor.lastrowid
@@ -684,12 +718,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             cursor.execute("""
                 UPDATE Teams 
-                SET Name = ?, Description = ?, Email = ?
+                SET Name = ?, Description = ?, Email = ?, IsVirtual = ?
                 WHERE Id = ?
             """, (
                 data.get('name'),
                 data.get('description'),
                 data.get('email'),
+                1 if data.get('isVirtual') else 0,
                 id
             ))
             
@@ -836,7 +871,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'notes': row['Notes']
                 })
             
-            # Get absences
+            # Get absences from Absences table
             cursor.execute("""
                 SELECT a.*, e.Vorname, e.Name, e.TeamId
                 FROM Absences a
@@ -857,6 +892,31 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'startDate': row['StartDate'],
                     'endDate': row['EndDate'],
                     'notes': row['Notes']
+                })
+            
+            # Also get approved vacation requests and add them as absences
+            cursor.execute("""
+                SELECT vr.Id, vr.EmployeeId, vr.StartDate, vr.EndDate, vr.Notes,
+                       e.Vorname, e.Name, e.TeamId
+                FROM VacationRequests vr
+                JOIN Employees e ON vr.EmployeeId = e.Id
+                WHERE vr.Status = 'Genehmigt'
+                  AND ((vr.StartDate <= ? AND vr.EndDate >= ?)
+                   OR (vr.StartDate >= ? AND vr.StartDate <= ?))
+            """, (end_date.isoformat(), start_date.isoformat(),
+                  start_date.isoformat(), end_date.isoformat()))
+            
+            vacation_id_offset = 10000  # Offset to avoid ID conflicts
+            for row in cursor.fetchall():
+                absences.append({
+                    'id': vacation_id_offset + row['Id'],
+                    'employeeId': row['EmployeeId'],
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'teamId': row['TeamId'],
+                    'type': 'Urlaub',
+                    'startDate': row['StartDate'],
+                    'endDate': row['EndDate'],
+                    'notes': row['Notes'] or 'Genehmigter Urlaub'
                 })
             
             return jsonify({
@@ -1902,6 +1962,144 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'employeeAbsenceDays': employee_absence_days,
             'teamWorkload': team_workload
         })
+    
+    # ============================================================================
+    # AUDIT LOG ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/auditlogs', methods=['GET'])
+    @require_role('Admin', 'Disponent')
+    def get_audit_logs():
+        """Get audit logs with pagination and filters"""
+        try:
+            # Get and validate pagination parameters
+            try:
+                page = int(request.args.get('page', 1))
+                page_size = int(request.args.get('pageSize', 50))
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid pagination parameters'}), 400
+            
+            # Validate pagination ranges
+            if page < 1:
+                page = 1
+            if page_size < 1 or page_size > 100:
+                page_size = min(max(page_size, 1), 100)
+            
+            # Get filter parameters
+            entity_name = request.args.get('entityName')
+            action = request.args.get('action')
+            start_date = request.args.get('startDate')
+            end_date = request.args.get('endDate')
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Build WHERE clause with parameterized queries for safety
+            where_clauses = []
+            params = []
+            
+            # Whitelist valid filters to prevent any potential SQL injection
+            if entity_name:
+                where_clauses.append("EntityName = ?")
+                params.append(entity_name)
+            
+            if action:
+                where_clauses.append("Action = ?")
+                params.append(action)
+            
+            if start_date:
+                where_clauses.append("DATE(Timestamp) >= ?")
+                params.append(start_date)
+            
+            if end_date:
+                where_clauses.append("DATE(Timestamp) <= ?")
+                params.append(end_date)
+            
+            # Safe: only joining static WHERE clauses, all values are parameterized
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            # Get total count
+            count_query = f"SELECT COUNT(*) as total FROM AuditLogs WHERE {where_sql}"
+            cursor.execute(count_query, params)
+            total_count = cursor.fetchone()['total']
+            
+            # Calculate pagination
+            total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+            offset = (page - 1) * page_size
+            
+            # Get paginated results - safe: WHERE clause uses only parameterized queries
+            select_query = f"""
+                SELECT Id, Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes
+                FROM AuditLogs
+                WHERE {where_sql}
+                ORDER BY Timestamp DESC
+                LIMIT ? OFFSET ?
+            """
+            cursor.execute(select_query, params + [page_size, offset])
+            
+            items = []
+            for row in cursor.fetchall():
+                items.append({
+                    'id': row['Id'],
+                    'timestamp': row['Timestamp'],
+                    'userId': row['UserId'],
+                    'userName': row['UserName'],
+                    'entityName': row['EntityName'],
+                    'entityId': row['EntityId'],
+                    'action': row['Action'],
+                    'changes': row['Changes']
+                })
+            
+            conn.close()
+            
+            return jsonify({
+                'items': items,
+                'page': page,
+                'pageSize': page_size,
+                'totalCount': total_count,
+                'totalPages': total_pages,
+                'hasPreviousPage': page > 1,
+                'hasNextPage': page < total_pages
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Get audit logs error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}), 500
+    
+    @app.route('/api/auditlogs/recent/<int:count>', methods=['GET'])
+    @require_role('Admin', 'Disponent')
+    def get_recent_audit_logs(count):
+        """Get recent audit logs (simplified endpoint for backwards compatibility)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Id, Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes
+                FROM AuditLogs
+                ORDER BY Timestamp DESC
+                LIMIT ?
+            """, (count,))
+            
+            logs = []
+            for row in cursor.fetchall():
+                logs.append({
+                    'id': row['Id'],
+                    'timestamp': row['Timestamp'],
+                    'userId': row['UserId'],
+                    'userName': row['UserName'],
+                    'entityName': row['EntityName'],
+                    'entityId': row['EntityId'],
+                    'action': row['Action'],
+                    'changes': row['Changes']
+                })
+            
+            conn.close()
+            return jsonify(logs)
+            
+        except Exception as e:
+            app.logger.error(f"Get recent audit logs error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}), 500
     
     # ============================================================================
     # STATIC FILES (Web UI)

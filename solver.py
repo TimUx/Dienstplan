@@ -341,7 +341,16 @@ class ShiftPlanningSolver:
         
         # Build complete schedule: every employee for every day
         # This ensures ALL employees appear in the output, even without shifts
+        # 
         # CRITICAL: Absences (U, AU, L) ALWAYS take priority over shifts and TD
+        # This is mandated by requirement #1 in the problem statement:
+        # "Absence codes (U, AU, L) ALWAYS override regular shifts and TD"
+        # 
+        # Priority order (highest to lowest):
+        # 1. Absence (U, AU, L)
+        # 2. TD (Day Duty)
+        # 3. Regular shifts (F, S, N)
+        # 4. OFF (no assignment)
         for emp in employees:
             for d in dates:
                 # PRIORITY 1: Check if employee is absent (HIGHEST PRIORITY)

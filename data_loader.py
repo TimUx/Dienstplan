@@ -123,6 +123,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     cursor.execute("SELECT Id, Name, Description, Email, IsVirtual FROM Teams")
     teams = []
     for row in cursor.fetchall():
+        # IsVirtual column added in migration - default to False if not present
         is_virtual = bool(row[4]) if len(row) > 4 else False
         team = Team(id=row[0], name=row[1], description=row[2], email=row[3], is_virtual=is_virtual)
         teams.append(team)

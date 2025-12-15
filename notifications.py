@@ -48,11 +48,14 @@ class AbsenceAfterSchedulingNotification(NotificationTrigger):
     replacement_attempted: bool
     
     def __post_init__(self):
-        self.trigger_type = "absence_after_scheduling"
-        self.description = (
-            f"{self.employee.full_name} marked as {self.absence.get_code()} "
-            f"from {self.absence.start_date} to {self.absence.end_date} "
-            f"after schedule was already generated for {self.schedule_month}"
+        super().__init__(
+            trigger_type="absence_after_scheduling",
+            timestamp=date.today(),
+            description=(
+                f"{self.employee.full_name} marked as {self.absence.get_code()} "
+                f"from {self.absence.start_date} to {self.absence.end_date} "
+                f"after schedule was already generated for {self.schedule_month}"
+            )
         )
     
     def get_recipients(self) -> List[str]:
@@ -100,11 +103,14 @@ class SpringerAssignedNotification(NotificationTrigger):
     absence_reason: str  # U, AU, or L
     
     def __post_init__(self):
-        self.trigger_type = "springer_assigned"
-        self.description = (
-            f"Springer {self.springer.full_name} automatically assigned to "
-            f"{self.shift_code} shift on {self.shift_date} "
-            f"replacing {self.original_employee.full_name} ({self.absence_reason})"
+        super().__init__(
+            trigger_type="springer_assigned",
+            timestamp=date.today(),
+            description=(
+                f"Springer {self.springer.full_name} automatically assigned to "
+                f"{self.shift_code} shift on {self.shift_date} "
+                f"replacing {self.original_employee.full_name} ({self.absence_reason})"
+            )
         )
     
     def get_recipients(self) -> List[str]:
@@ -151,11 +157,14 @@ class NoReplacementAvailableNotification(NotificationTrigger):
     understaffing_impact: str  # e.g., "Night shift: 2/3 required"
     
     def __post_init__(self):
-        self.trigger_type = "no_replacement_available"
-        self.description = (
-            f"NO REPLACEMENT AVAILABLE for {self.employee.full_name} "
-            f"({self.shift_code} shift on {self.shift_date}). "
-            f"Reason: {self.reason_no_replacement}"
+        super().__init__(
+            trigger_type="no_replacement_available",
+            timestamp=date.today(),
+            description=(
+                f"NO REPLACEMENT AVAILABLE for {self.employee.full_name} "
+                f"({self.shift_code} shift on {self.shift_date}). "
+                f"Reason: {self.reason_no_replacement}"
+            )
         )
     
     def get_recipients(self) -> List[str]:
@@ -200,10 +209,13 @@ class LockedAssignmentConflictNotification(NotificationTrigger):
     conflict_description: str
     
     def __post_init__(self):
-        self.trigger_type = "locked_assignment_conflict"
-        self.description = (
-            f"Locked assignment for {self.entity_name} on {self.locked_date_or_week} "
-            f"causes conflict: {self.conflict_description}"
+        super().__init__(
+            trigger_type="locked_assignment_conflict",
+            timestamp=date.today(),
+            description=(
+                f"Locked assignment for {self.entity_name} on {self.locked_date_or_week} "
+                f"causes conflict: {self.conflict_description}"
+            )
         )
     
     def get_recipients(self) -> List[str]:
@@ -245,9 +257,6 @@ class NotificationService:
     ):
         """Queue notification for absence entered after scheduling"""
         notification = AbsenceAfterSchedulingNotification(
-            trigger_type="",
-            timestamp=date.today(),
-            description="",
             employee=employee,
             absence=absence,
             affected_dates=affected_dates,
@@ -267,9 +276,6 @@ class NotificationService:
     ):
         """Queue notification for automatic springer assignment"""
         notification = SpringerAssignedNotification(
-            trigger_type="",
-            timestamp=date.today(),
-            description="",
             springer=springer,
             original_employee=original_employee,
             shift_date=shift_date,
@@ -291,9 +297,6 @@ class NotificationService:
     ):
         """Queue notification for failed replacement attempt"""
         notification = NoReplacementAvailableNotification(
-            trigger_type="",
-            timestamp=date.today(),
-            description="",
             employee=employee,
             shift_date=shift_date,
             shift_code=shift_code,
@@ -316,9 +319,6 @@ class NotificationService:
     ):
         """Queue notification for locked assignment conflicts"""
         notification = LockedAssignmentConflictNotification(
-            trigger_type="",
-            timestamp=date.today(),
-            description="",
             locked_type=locked_type,
             entity_id=entity_id,
             entity_name=entity_name,

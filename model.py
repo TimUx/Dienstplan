@@ -46,6 +46,11 @@ class ShiftPlanningModel:
             locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
             locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
             locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
+        
+        Note on key structures:
+        - locked_td uses week_idx because TD is a weekly assignment (Mon-Fri)
+        - locked_absence uses date because absences are daily (can span partial weeks)
+        - This difference reflects the granularity of the underlying business logic
         """
         self.model = cp_model.CpModel()
         self.employees = employees

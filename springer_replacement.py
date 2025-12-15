@@ -16,7 +16,7 @@ Requirements:
 
 from datetime import date, timedelta
 from typing import List, Tuple, Optional, Dict
-from entities import Employee, Absence, ShiftAssignment, Team
+from entities import Employee, Absence, ShiftAssignment, Team, get_shift_type_by_id, get_shift_type_by_code
 from notifications import notification_service
 
 
@@ -58,7 +58,6 @@ def can_springer_work_shift(
     for assignment in existing_assignments:
         if assignment.employee_id == springer.id and assignment.date == previous_day:
             # Get shift type from assignment
-            from entities import get_shift_type_by_id
             prev_shift = get_shift_type_by_id(assignment.shift_type_id)
             if prev_shift:
                 # Check forbidden transitions
@@ -209,7 +208,6 @@ def attempt_springer_replacement(
     springer, _ = result
     
     # Create springer assignment
-    from entities import get_shift_type_by_code
     shift_type = get_shift_type_by_code(shift_code)
     
     if not shift_type:
@@ -335,7 +333,6 @@ def get_affected_shifts_for_absence(
         if assignment.employee_id == employee.id:
             if absence.overlaps_date(assignment.date):
                 # Get shift code
-                from entities import get_shift_type_by_id
                 shift_type = get_shift_type_by_id(assignment.shift_type_id)
                 if shift_type:
                     affected_shifts[assignment.date] = shift_type.code

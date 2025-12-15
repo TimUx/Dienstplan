@@ -20,7 +20,7 @@
                         <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
                         <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
                         <button onclick="showView('teams')" class="nav-btn">Teams</button>
-                        <button onclick="showView('vacations')" class="nav-btn" id="nav-vacations" style="display:none;">Urlaub</button>
+                        <button onclick="showView('absences')" class="nav-btn" id="nav-absences" style="display:none;">Abwesenheiten</button>
                         <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">Diensttausch</button>
                         <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
@@ -132,16 +132,55 @@
             </div>
 
             <!-- Vacations View -->
-            <div id="vacations-view" class="view">
-                <h2>Urlaubsverwaltung</h2>
-                <div class="controls">
-                    <button onclick="showAddVacationRequestModal()" class="btn-primary">+ Urlaubsantrag stellen</button>
-                    <button onclick="loadVacationRequests('pending')" class="btn-secondary admin-only">Offene Anträge</button>
-                    <button onclick="loadVacationRequests('all')" class="btn-secondary admin-only">Alle Anträge</button>
-                    <button onclick="loadVacationRequests('my')" class="btn-secondary">Meine Anträge</button>
+            <div id="absences-view" class="view">
+                <h2>Abwesenheitsverwaltung</h2>
+                
+                <!-- Tab Navigation -->
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchAbsenceTab('vacation')">Urlaub</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('sick')">Arbeitsunfähigkeit (AU)</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('training')">Lehrgang / Schulung</button>
                 </div>
-                <div id="vacation-requests-content">
-                    <p class="loading">Lade Urlaubsanträge...</p>
+                
+                <!-- Vacation Tab -->
+                <div id="vacation-tab" class="tab-content active">
+                    <h3>Urlaubsverwaltung</h3>
+                    <p class="info">Urlaubsanträge müssen vom Disponent genehmigt werden.</p>
+                    <div class="controls">
+                        <button onclick="showAddVacationRequestModal()" class="btn-primary">+ Urlaubsantrag stellen</button>
+                        <button onclick="loadVacationRequests('pending')" class="btn-secondary admin-only">Offene Anträge</button>
+                        <button onclick="loadVacationRequests('all')" class="btn-secondary admin-only">Alle Anträge</button>
+                        <button onclick="loadVacationRequests('my')" class="btn-secondary">Meine Anträge</button>
+                    </div>
+                    <div id="vacation-requests-content">
+                        <p class="loading">Lade Urlaubsanträge...</p>
+                    </div>
+                </div>
+                
+                <!-- Sick Leave Tab -->
+                <div id="sick-tab" class="tab-content">
+                    <h3>Arbeitsunfähigkeit (AU)</h3>
+                    <p class="info">AU-Meldungen werden ohne Genehmigungsprozess direkt erfasst.</p>
+                    <div class="controls">
+                        <button onclick="showAddAbsenceModal('AU')" class="btn-primary admin-only">+ AU erfassen</button>
+                        <button onclick="loadAbsences('AU')" class="btn-secondary">Alle AU anzeigen</button>
+                    </div>
+                    <div id="sick-absences-content">
+                        <p class="loading">Lade Arbeitsunfähigkeiten...</p>
+                    </div>
+                </div>
+                
+                <!-- Training Tab -->
+                <div id="training-tab" class="tab-content">
+                    <h3>Lehrgang / Schulung / Training</h3>
+                    <p class="info">Lehrgänge und Schulungen werden ohne Genehmigungsprozess direkt erfasst.</p>
+                    <div class="controls">
+                        <button onclick="showAddAbsenceModal('L')" class="btn-primary admin-only">+ Lehrgang erfassen</button>
+                        <button onclick="loadAbsences('L')" class="btn-secondary">Alle Lehrgänge anzeigen</button>
+                    </div>
+                    <div id="training-absences-content">
+                        <p class="loading">Lade Lehrgänge...</p>
+                    </div>
                 </div>
             </div>
 
@@ -849,6 +888,39 @@
                 <div class="form-actions">
                     <button type="button" onclick="closeVacationRequestModal()" class="btn-secondary">Abbrechen</button>
                     <button type="submit" class="btn-primary">Antrag einreichen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Absence (AU/L) Modal -->
+    <div id="absenceModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeAbsenceModal()">&times;</span>
+            <h2 id="absenceModalTitle">Abwesenheit erfassen</h2>
+            <form id="absenceForm" onsubmit="saveAbsence(event)">
+                <input type="hidden" id="absenceType">
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="absenceEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Von (Startdatum)*</label>
+                    <input type="date" id="absenceStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Bis (Enddatum)*</label>
+                    <input type="date" id="absenceEndDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Notizen</label>
+                    <textarea id="absenceNotes" rows="3" placeholder="Optional: Zusätzliche Informationen"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeAbsenceModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
                 </div>
             </form>
         </div>

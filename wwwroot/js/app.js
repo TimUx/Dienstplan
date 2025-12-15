@@ -58,15 +58,15 @@ function updateUIForAuthenticatedUser(user) {
     if (isAdmin) {
         document.body.classList.add('admin');
         document.getElementById('nav-admin').style.display = 'inline-block';
-        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     } else if (isDisponent) {
         document.body.classList.add('disponent');
-        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     } else {
         // Mitarbeiter can also access vacation and shift exchange
-        document.getElementById('nav-vacations').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     }
 }
@@ -78,7 +78,7 @@ function updateUIForAnonymousUser() {
     userRoles = [];
     document.body.classList.remove('admin', 'disponent');
     document.getElementById('nav-admin').style.display = 'none';
-    document.getElementById('nav-vacations').style.display = 'none';
+    document.getElementById('nav-absences').style.display = 'none';
     document.getElementById('nav-shiftexchange').style.display = 'none';
 }
 
@@ -242,8 +242,13 @@ function showView(viewName) {
         loadEmployees();
     } else if (viewName === 'teams') {
         loadTeams();
+    } else if (viewName === 'absences') {
+        // Load vacation tab by default
+        switchAbsenceTab('vacation');
     } else if (viewName === 'vacations') {
-        loadVacationRequests('all');
+        // Redirect old 'vacations' view to new 'absences' view
+        showView('absences');
+        return;
     } else if (viewName === 'shiftexchange') {
         loadShiftExchanges('available');
     } else if (viewName === 'statistics') {
@@ -1819,7 +1824,9 @@ async function showAddVacationRequestModal() {
             const select = document.getElementById('vacationEmployeeId');
             select.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
             employees.forEach(emp => {
-                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name}</option>`;
+                const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+                const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}</option>`;
             });
         }
     } catch (error) {
@@ -1890,6 +1897,223 @@ async function processVacationRequest(id, status) {
             alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
             alert('Fehler beim Verarbeiten des Antrags.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Absence Management Tab Switching
+function switchAbsenceTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    const selectedTab = document.getElementById(`${tabName}-tab`);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+    
+    // Activate corresponding button
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach((btn, index) => {
+        if ((tabName === 'vacation' && index === 0) ||
+            (tabName === 'sick' && index === 1) ||
+            (tabName === 'training' && index === 2)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Load content for the selected tab
+    if (tabName === 'vacation') {
+        loadVacationRequests('all');
+    } else if (tabName === 'sick') {
+        loadAbsences('AU');
+    } else if (tabName === 'training') {
+        loadAbsences('L');
+    }
+}
+
+// Load Absences (AU or L)
+async function loadAbsences(type) {
+    const contentId = type === 'AU' ? 'sick-absences-content' : 'training-absences-content';
+    const content = document.getElementById(contentId);
+    content.innerHTML = '<p class="loading">Lade Abwesenheiten...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/absences`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const absences = await response.json();
+            // Filter by type
+            const filteredAbsences = absences.filter(a => {
+                if (type === 'AU') {
+                    return a.type === 'Krank / AU' || a.type === 'Krank';
+                } else if (type === 'L') {
+                    return a.type === 'Lehrgang';
+                }
+                return false;
+            });
+            displayAbsences(filteredAbsences, type);
+        } else {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading absences:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
+    }
+}
+
+// Display Absences Table
+function displayAbsences(absences, type) {
+    const contentId = type === 'AU' ? 'sick-absences-content' : 'training-absences-content';
+    const content = document.getElementById(contentId);
+    
+    if (absences.length === 0) {
+        const typeName = type === 'AU' ? 'Arbeitsunfähigkeiten' : 'Lehrgänge';
+        content.innerHTML = `<p>Keine ${typeName} vorhanden.</p>`;
+        return;
+    }
+    
+    const canDelete = hasRole('Admin') || hasRole('Disponent');
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Mitarbeiter</th>';
+    html += '<th>Von</th>';
+    html += '<th>Bis</th>';
+    html += '<th>Notizen</th>';
+    html += '<th>Erstellt</th>';
+    if (canDelete) {
+        html += '<th>Aktionen</th>';
+    }
+    html += '</tr></thead><tbody>';
+    
+    absences.forEach(absence => {
+        html += '<tr>';
+        html += `<td>${absence.employeeName || 'Unbekannt'}</td>`;
+        html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
+        html += `<td>${new Date(absence.endDate).toLocaleDateString('de-DE')}</td>`;
+        html += `<td>${absence.notes || '-'}</td>`;
+        html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
+        
+        if (canDelete) {
+            html += `<td><button onclick="deleteAbsence(${absence.id}, '${type}')" class="btn-small btn-danger">Löschen</button></td>`;
+        }
+        
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+// Show Add Absence Modal
+async function showAddAbsenceModal(type) {
+    // Load employees for dropdown
+    try {
+        const response = await fetch(`${API_BASE}/employees`);
+        if (response.ok) {
+            const employees = await response.json();
+            const select = document.getElementById('absenceEmployeeId');
+            select.innerHTML = '<option value="">Mitarbeiter wählen...</option>';
+            employees.forEach(emp => {
+                const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+                const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+                select.innerHTML += `<option value="${emp.id}">${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading employees:', error);
+    }
+    
+    // Set modal title and type
+    const modalTitle = document.getElementById('absenceModalTitle');
+    if (type === 'AU') {
+        modalTitle.textContent = 'Arbeitsunfähigkeit (AU) erfassen';
+    } else if (type === 'L') {
+        modalTitle.textContent = 'Lehrgang erfassen';
+    }
+    
+    document.getElementById('absenceType').value = type;
+    document.getElementById('absenceForm').reset();
+    document.getElementById('absenceType').value = type; // Reset clears it, so set again
+    document.getElementById('absenceModal').style.display = 'block';
+}
+
+// Close Absence Modal
+function closeAbsenceModal() {
+    document.getElementById('absenceModal').style.display = 'none';
+    document.getElementById('absenceForm').reset();
+}
+
+// Save Absence
+async function saveAbsence(event) {
+    event.preventDefault();
+    
+    const type = document.getElementById('absenceType').value;
+    const typeValue = type === 'AU' ? 1 : 3; // 1=Krank, 3=Lehrgang (based on database enum)
+    
+    const absence = {
+        employeeId: parseInt(document.getElementById('absenceEmployeeId').value),
+        type: typeValue,
+        startDate: document.getElementById('absenceStartDate').value,
+        endDate: document.getElementById('absenceEndDate').value,
+        notes: document.getElementById('absenceNotes').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/absences`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(absence)
+        });
+        
+        if (response.ok) {
+            alert('Abwesenheit erfolgreich erfasst!');
+            closeAbsenceModal();
+            loadAbsences(type);
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Speichern der Abwesenheit.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Delete Absence
+async function deleteAbsence(id, type) {
+    if (!confirm('Möchten Sie diese Abwesenheit wirklich löschen?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/absences/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            alert('Abwesenheit erfolgreich gelöscht!');
+            loadAbsences(type);
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Löschen der Abwesenheit.');
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);
@@ -2526,7 +2750,9 @@ async function editShiftAssignment(shiftId) {
     cachedEmployees.forEach(emp => {
         const option = document.createElement('option');
         option.value = emp.id;
-        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+        const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+        option.textContent = `${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}`;
         employeeSelect.appendChild(option);
     });
     employeeSelect.value = shift.employeeId;
@@ -2582,7 +2808,9 @@ async function showNewShiftModal() {
     cachedEmployees.forEach(emp => {
         const option = document.createElement('option');
         option.value = emp.id;
-        option.textContent = `${emp.vorname} ${emp.name} (${emp.personalnummer})`;
+        const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+        const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+        option.textContent = `${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}`;
         employeeSelect.appendChild(option);
     });
 

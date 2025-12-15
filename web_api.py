@@ -1478,12 +1478,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         
         absences = []
         for row in cursor.fetchall():
+            # Map type: 1=AU (Krank), 2=U (Urlaub), 3=L (Lehrgang)
+            type_names = ['', 'Krank / AU', 'Urlaub', 'Lehrgang']
             absences.append({
                 'id': row['Id'],
                 'employeeId': row['EmployeeId'],
                 'employeeName': f"{row['Vorname']} {row['Name']}",
                 'teamId': row['TeamId'],
-                'type': ['', 'Krank', 'Urlaub', 'Lehrgang'][row['Type']],
+                'type': type_names[row['Type']] if row['Type'] < len(type_names) else 'Unbekannt',
                 'startDate': row['StartDate'],
                 'endDate': row['EndDate'],
                 'notes': row['Notes']
@@ -1491,6 +1493,61 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         
         conn.close()
         return jsonify(absences)
+    
+    @app.route('/api/absences', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def create_absence():
+        """Create new absence (AU or Lehrgang)"""
+        try:
+            data = request.get_json()
+            
+            if not data.get('employeeId') or not data.get('type') or not data.get('startDate') or not data.get('endDate'):
+                return jsonify({'error': 'EmployeeId, Type, StartDate und EndDate sind erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO Absences 
+                (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('employeeId'),
+                data.get('type'),
+                data.get('startDate'),
+                data.get('endDate'),
+                data.get('notes'),
+                datetime.utcnow().isoformat(),
+                session.get('user_email')
+            ))
+            
+            absence_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': absence_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create absence error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/absences/<int:id>', methods=['DELETE'])
+    @require_role('Admin', 'Disponent')
+    def delete_absence(id):
+        """Delete an absence"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM Absences WHERE Id = ?", (id,))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete absence error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
     # ============================================================================
     # VACATION REQUEST ENDPOINTS

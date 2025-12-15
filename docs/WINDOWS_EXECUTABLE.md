@@ -57,6 +57,20 @@ Die Anwendung speichert alle Daten in einer SQLite-Datenbank:
 
 ## 🔧 Fehlerbehebung
 
+### Problem: "DLL load failed while importing cp_model_helper"
+
+**Symptom:** Die Anwendung startet, zeigt aber folgenden Fehler:
+```
+❌ Missing dependency: DLL load failed while importing cp_model_helper: Das angegebene Modul wurde nicht gefunden.
+```
+
+**Ursache:** OR-Tools native Bibliotheken fehlen in der Executable
+
+**Lösung:**
+- Dies wurde in neueren Versionen behoben (ab v2.0.x)
+- Laden Sie die neueste Version von GitHub herunter
+- Falls das Problem weiterhin besteht, melden Sie es auf GitHub Issues
+
 ### Problem: "Windows hat den PC geschützt"
 **Ursache:** Windows SmartScreen warnt vor unbekannten Anwendungen.
 

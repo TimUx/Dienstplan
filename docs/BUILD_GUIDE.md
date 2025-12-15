@@ -121,17 +121,28 @@ Key configuration options:
 # Entry point
 ['launcher.py']
 
+# OR-Tools binary dependencies (critical for Windows builds!)
+# Automatically collects all .pyd, .so, and .dll files from OR-Tools
+binaries=ortools_binaries
+
 # Data files to include
-datas=wwwroot_files  # All files from wwwroot/
+datas=wwwroot_files + data_files  # All files from wwwroot/ and data/
 
 # Hidden imports (modules not auto-detected)
 hiddenimports=[
     'flask',
     'flask_cors',
     'ortools',
+    'ortools.sat',
+    'ortools.sat.python',
     'ortools.sat.python.cp_model',
+    'ortools.init',
+    'ortools.init.python',
+    'ortools.init.python.init',
     'sqlite3',
     'dateutil',
+    'google',
+    'google.protobuf',
 ]
 
 # Executable options
@@ -139,6 +150,8 @@ name='Dienstplan'       # Output name
 console=True            # Show console window
 upx=True               # Compress with UPX
 ```
+
+**Important Note on OR-Tools:** The spec file includes special code to collect OR-Tools native binary files. This is essential for Windows builds where the `cp_model_helper` DLL and other native dependencies must be explicitly included.
 
 ### Customization Options
 
@@ -169,6 +182,22 @@ port = 8080  # Change from 5000
 ```
 
 ## Troubleshooting Build Issues
+
+### Issue: "DLL load failed while importing cp_model_helper"
+
+**Symptom:** Windows executable starts but fails with error:
+```
+❌ Missing dependency: DLL load failed while importing cp_model_helper: Das angegebene Modul wurde nicht gefunden.
+```
+
+**Cause:** OR-Tools native binary dependencies (.pyd/.dll files) are not included in the executable
+
+**Solution:** This has been fixed in the current version of `Dienstplan.spec`. If you're using an older version:
+1. Update `Dienstplan.spec` from the repository
+2. Ensure the spec file includes the `ortools_binaries` collection code
+3. Rebuild the executable: `python -m PyInstaller Dienstplan.spec`
+
+The spec file automatically collects all OR-Tools binary files during the build process.
 
 ### Issue: "ModuleNotFoundError" during build
 

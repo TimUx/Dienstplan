@@ -448,8 +448,9 @@ function displayWeekView(data, employees) {
                 
                 let content = '';
                 if (absence) {
-                    // Show absence badge (K for Krank, U for Urlaub, L for Lehrgang)
-                    const absenceCode = absence.type === 'Krank' ? 'K' : 
+                    // Show absence badge (AU for sick, U for vacation, L for training)
+                    const absenceCode = absence.type === 'Krank / AU' ? 'AU' : 
+                                       absence.type === 'Krank' ? 'AU' : 
                                        absence.type === 'Urlaub' ? 'U' : 
                                        absence.type === 'Lehrgang' ? 'L' : 'A';
                     content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
@@ -471,8 +472,8 @@ function displayWeekView(data, employees) {
 }
 
 function displayMonthView(data, employees) {
-    // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
+    // Group assignments by team and employee, including absences
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
     // Get all dates and organize by calendar weeks
     const dates = getUniqueDates(data.assignments);
@@ -533,9 +534,25 @@ function displayMonthView(data, employees) {
                     const isSunday = date.getDay() === 0;
                     const isHoliday = isHessianHoliday(date);
                     const shifts = employee.shifts[dateStr] || [];
-                    const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
+                    
+                    // Check if employee has absence on this date
+                    const absence = getAbsenceForDate(employee.absences || [], dateStr);
+                    
+                    let content = '';
+                    if (absence) {
+                        // Show absence badge (AU for sick, U for vacation, L for training)
+                        const absenceCode = absence.type === 'Krank / AU' ? 'AU' : 
+                                           absence.type === 'Krank' ? 'AU' : 
+                                           absence.type === 'Urlaub' ? 'U' : 
+                                           absence.type === 'Lehrgang' ? 'L' : 'A';
+                        content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
+                    } else {
+                        // Show regular shifts
+                        content = shifts.map(s => createShiftBadge(s)).join(' ');
+                    }
+                    
                     const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
-                    html += `<td class="${cellClass}">${shiftBadges}</td>`;
+                    html += `<td class="${cellClass}">${content}</td>`;
                 });
             });
             
@@ -548,8 +565,8 @@ function displayMonthView(data, employees) {
 }
 
 function displayYearView(data, employees) {
-    // Group assignments by team and employee
-    const teamGroups = groupByTeamAndEmployee(data.assignments, employees);
+    // Group assignments by team and employee, including absences
+    const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
     // Get all dates and organize by months and weeks
     const dates = getUniqueDates(data.assignments);
@@ -606,14 +623,31 @@ function displayYearView(data, employees) {
                 month.weeks.forEach(weekNum => {
                     const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
                     const shifts = [];
+                    let hasAbsence = false;
+                    let absenceCode = '';
+                    
                     weekDates.forEach(dateStr => {
-                        if (employee.shifts[dateStr]) {
+                        // Check for absence first
+                        const absence = getAbsenceForDate(employee.absences || [], dateStr);
+                        if (absence) {
+                            hasAbsence = true;
+                            absenceCode = absence.type === 'Krank / AU' ? 'AU' : 
+                                         absence.type === 'Krank' ? 'AU' : 
+                                         absence.type === 'Urlaub' ? 'U' : 
+                                         absence.type === 'Lehrgang' ? 'L' : 'A';
+                        } else if (employee.shifts[dateStr]) {
                             shifts.push(...employee.shifts[dateStr]);
                         }
                     });
                     
-                    const shiftBadges = shifts.map(s => createShiftBadge(s)).join(' ');
-                    html += `<td class="shift-cell">${shiftBadges}</td>`;
+                    let content = '';
+                    if (hasAbsence) {
+                        content = `<span class="shift-badge shift-${absenceCode}">${absenceCode}</span>`;
+                    } else {
+                        content = shifts.map(s => createShiftBadge(s)).join(' ');
+                    }
+                    
+                    html += `<td class="shift-cell">${content}</td>`;
                 });
                 
                 html += '</tr>';

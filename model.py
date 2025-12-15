@@ -29,7 +29,8 @@ class ShiftPlanningModel:
         shift_types: List[ShiftType] = None,
         locked_team_shift: Dict[Tuple[int, int], str] = None,
         locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
-        locked_td: Dict[Tuple[int, int], bool] = None
+        locked_td: Dict[Tuple[int, int], bool] = None,
+        locked_absence: Dict[Tuple[int, date], str] = None
     ):
         """
         Initialize the shift planning model.
@@ -39,11 +40,17 @@ class ShiftPlanningModel:
             teams: List of teams
             start_date: Start date of planning period
             end_date: End date of planning period
-            absences: List of employee absences
+            absences: List of employee absences (AUTHORITATIVE - always locked)
             shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
             locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
             locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
             locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
+            locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
+        
+        Note on key structures:
+        - locked_td uses week_idx because TD is a weekly assignment (Mon-Fri)
+        - locked_absence uses date because absences are daily (can span partial weeks)
+        - This difference reflects the granularity of the underlying business logic
         """
         self.model = cp_model.CpModel()
         self.employees = employees
@@ -57,6 +64,7 @@ class ShiftPlanningModel:
         self.locked_team_shift = locked_team_shift or {}
         self.locked_employee_weekend = locked_employee_weekend or {}
         self.locked_td = locked_td or {}
+        self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
         
         # Generate list of dates
         self.dates = []
@@ -294,7 +302,8 @@ def create_shift_planning_model(
     shift_types: List[ShiftType] = None,
     locked_team_shift: Dict[Tuple[int, int], str] = None,
     locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
-    locked_td: Dict[Tuple[int, int], bool] = None
+    locked_td: Dict[Tuple[int, int], bool] = None,
+    locked_absence: Dict[Tuple[int, date], str] = None
 ) -> ShiftPlanningModel:
     """
     Factory function to create a shift planning model.
@@ -304,18 +313,19 @@ def create_shift_planning_model(
         teams: List of teams
         start_date: Start date of planning period
         end_date: End date of planning period
-        absences: List of employee absences
+        absences: List of employee absences (AUTHORITATIVE - always preserved)
         shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
         locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
         locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
         locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
+        locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
         
     Returns:
         ShiftPlanningModel instance
     """
     return ShiftPlanningModel(
         employees, teams, start_date, end_date, absences, shift_types,
-        locked_team_shift, locked_employee_weekend, locked_td
+        locked_team_shift, locked_employee_weekend, locked_td, locked_absence
     )
 
 

@@ -10,10 +10,30 @@ from enum import Enum
 
 
 class AbsenceType(Enum):
-    """Types of absence"""
-    KRANK = "Krank"  # Sick leave
-    URLAUB = "Urlaub"  # Vacation
-    LEHRGANG = "Lehrgang"  # Training
+    """
+    Types of absence - OFFICIAL STANDARD CODES
+    
+    MANDATORY CODES:
+    - U (Urlaub) = Vacation
+    - AU (Arbeitsunfähigkeit / Krank) = Sick leave / Medical certificate
+    - L (Lehrgang) = Training / Course
+    
+    FORBIDDEN: "V" and "K" must NOT be used
+    """
+    AU = "AU"  # Sick leave / Medical certificate (Arbeitsunfähigkeit)
+    U = "U"   # Vacation (Urlaub)
+    L = "L"   # Training / Course (Lehrgang)
+    
+    # Helper properties for display names
+    @property
+    def display_name(self) -> str:
+        """Get display name for the absence type"""
+        display_names = {
+            "AU": "Krank / AU",
+            "U": "Urlaub",
+            "L": "Lehrgang"
+        }
+        return display_names.get(self.value, self.value)
 
 
 class ShiftTypeCode(Enum):
@@ -90,22 +110,40 @@ class Team:
     name: str
     description: Optional[str] = None
     email: Optional[str] = None
+    is_virtual: bool = False  # Virtual teams (e.g., "Fire Alarm System") for display only
     employees: List[Employee] = field(default_factory=list)
 
 
 @dataclass
 class Absence:
-    """Represents an employee absence"""
+    """
+    Represents an employee absence.
+    
+    CRITICAL: Absences are AUTHORITATIVE and must ALWAYS override:
+    - Regular shifts (F, S, N)
+    - TD (Day Duty)
+    - Any other assignments
+    
+    Absences MUST:
+    - Be visible in all views
+    - Persist through re-solving
+    - Only be changed by Admin/Dispatcher
+    """
     id: int
     employee_id: int
     absence_type: AbsenceType
     start_date: date
     end_date: date
     notes: Optional[str] = None
+    is_locked: bool = True  # Absences are locked by default to prevent loss
     
     def overlaps_date(self, check_date: date) -> bool:
         """Check if absence overlaps with given date"""
         return self.start_date <= check_date <= self.end_date
+    
+    def get_code(self) -> str:
+        """Get the absence code (U, AU, or L)"""
+        return self.absence_type.value
 
 
 @dataclass

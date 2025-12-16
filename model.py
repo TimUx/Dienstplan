@@ -13,6 +13,9 @@ from datetime import date, timedelta
 from typing import Dict, List, Tuple, Set
 from entities import Employee, Absence, ShiftType, STANDARD_SHIFT_TYPES, Team
 
+# Virtual team ID (for TD-qualified employees without regular team assignment)
+VIRTUAL_TEAM_ID = 99  # "Fire Alarm System" virtual team
+
 
 class ShiftPlanningModel:
     """
@@ -163,7 +166,7 @@ class ShiftPlanningModel:
         # EXCLUDE virtual team "Fire Alarm System" (ID 99) from shift rotation
         for team in self.teams:
             # Skip virtual team for TD-qualified employees
-            if team.id == 99:  # Fire Alarm System virtual team
+            if team.id == VIRTUAL_TEAM_ID:  # Fire Alarm System virtual team
                 continue
                 
             for week_idx in range(len(self.weeks)):
@@ -224,7 +227,7 @@ class ShiftPlanningModel:
         for springer in springers:
             for team in self.teams:
                 # Skip virtual team and springer's own team
-                if team.id == 99 or team.id == springer.team_id:
+                if team.id == VIRTUAL_TEAM_ID or team.id == springer.team_id:
                     continue
                 
                 for week_idx in range(len(self.weeks)):

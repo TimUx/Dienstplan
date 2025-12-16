@@ -15,6 +15,9 @@ from datetime import date, timedelta
 from typing import Dict, List, Set, Tuple
 from entities import Employee, Absence, ShiftType, Team, get_shift_type_by_id
 
+# Virtual team ID (for TD-qualified employees without regular team assignment)
+VIRTUAL_TEAM_ID = 99  # "Fire Alarm System" virtual team
+
 # Shift planning rules
 MINIMUM_REST_HOURS = 11
 MAXIMUM_CONSECUTIVE_SHIFTS = 6
@@ -62,7 +65,7 @@ def add_team_shift_assignment_constraints(
     """
     for team in teams:
         # Skip virtual team for TD-qualified employees
-        if team.id == 99:  # Fire Alarm System virtual team
+        if team.id == VIRTUAL_TEAM_ID:  # Fire Alarm System virtual team
             continue
             
         for week_idx in range(len(weeks)):
@@ -155,7 +158,7 @@ def add_employee_team_linkage_constraints(
             # Collect all cross-team variables for this springer in this week
             cross_team_vars = []
             for team in teams:
-                if team.id == springer.team_id or team.id == 99:
+                if team.id == springer.team_id or team.id == VIRTUAL_TEAM_ID:
                     continue
                 if (springer.id, team.id, week_idx) in springer_cross_team:
                     cross_team_vars.append(springer_cross_team[(springer.id, team.id, week_idx)])
@@ -204,7 +207,7 @@ def add_employee_team_linkage_constraints(
                 
                 # Foreign teams (cross-team assignment)
                 for team in teams:
-                    if team.id == emp.team_id or team.id == 99:
+                    if team.id == emp.team_id or team.id == VIRTUAL_TEAM_ID:
                         continue
                     if (emp.id, team.id, week_idx) in springer_cross_team:
                         possible_teams.append(springer_cross_team[(emp.id, team.id, week_idx)])
@@ -223,7 +226,7 @@ def add_employee_team_linkage_constraints(
         
         # Employees in virtual team "Fire Alarm System" (ID 99) do NOT work regular shifts
         # They are only assigned TD
-        if emp.team_id == 99:
+        if emp.team_id == VIRTUAL_TEAM_ID:
             # Force all regular shift variables to 0
             for d in dates:
                 if (emp.id, d) in employee_active:

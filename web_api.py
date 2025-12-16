@@ -26,6 +26,10 @@ from model import create_shift_planning_model
 from solver import solve_shift_planning
 from entities import Employee, Team, Absence, AbsenceType, ShiftAssignment
 
+# Virtual team IDs (must match database and frontend)
+VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Fire Alarm System virtual team
+VIRTUAL_TEAM_FERIENJOBBER_ID = 98      # Ferienjobber virtual team
+
 
 class Database:
     """Database connection helper"""
@@ -714,8 +718,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # For virtual teams, count employees with special qualifications instead of TeamId
             if bool(row['IsVirtual']):
-                # Virtual team for fire alarm system (ID 99) - count employees with BMT or BSB qualification
-                if row['Id'] == 99:
+                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
+                if row['Id'] == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID:
                     cursor.execute("""
                         SELECT COUNT(*) as Count
                         FROM Employees
@@ -723,8 +727,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     """)
                     virtual_count = cursor.fetchone()['Count']
                     employee_count = virtual_count
-                # Virtual team for Ferienjobber (ID 98) - count employees with IsFerienjobber flag
-                elif row['Id'] == 98:
+                # Virtual team for Ferienjobber - count employees with IsFerienjobber flag
+                elif row['Id'] == VIRTUAL_TEAM_FERIENJOBBER_ID:
                     cursor.execute("""
                         SELECT COUNT(*) as Count
                         FROM Employees
@@ -771,8 +775,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # For virtual teams, count employees with special qualifications instead of TeamId
             if bool(row['IsVirtual']):
-                # Virtual team for fire alarm system (ID 99) - count employees with BMT or BSB qualification
-                if row['Id'] == 99:
+                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
+                if row['Id'] == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID:
                     cursor.execute("""
                         SELECT COUNT(*) as Count
                         FROM Employees
@@ -780,8 +784,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     """)
                     virtual_count = cursor.fetchone()['Count']
                     employee_count = virtual_count
-                # Virtual team for Ferienjobber (ID 98) - count employees with IsFerienjobber flag
-                elif row['Id'] == 98:
+                # Virtual team for Ferienjobber - count employees with IsFerienjobber flag
+                elif row['Id'] == VIRTUAL_TEAM_FERIENJOBBER_ID:
                     cursor.execute("""
                         SELECT COUNT(*) as Count
                         FROM Employees

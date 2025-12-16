@@ -159,6 +159,38 @@ def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Opti
         print(f"Warning: Failed to log audit entry: {e}", file=sys.stderr)
 
 
+def get_virtual_team_employee_count(cursor, team_id: int) -> int:
+    """
+    Get the actual employee count for a virtual team based on employee qualifications.
+    
+    Args:
+        cursor: Database cursor
+        team_id: Team ID
+        
+    Returns:
+        Number of employees with the qualifications for this virtual team
+    """
+    if team_id == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID:
+        # Count employees with BMT or BSB qualification
+        cursor.execute("""
+            SELECT COUNT(*) as Count
+            FROM Employees
+            WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
+        """)
+        return cursor.fetchone()['Count']
+    elif team_id == VIRTUAL_TEAM_FERIENJOBBER_ID:
+        # Count employees with IsFerienjobber flag
+        cursor.execute("""
+            SELECT COUNT(*) as Count
+            FROM Employees
+            WHERE IsFerienjobber = 1
+        """)
+        return cursor.fetchone()['Count']
+    else:
+        # For other virtual teams, return 0 (no special counting logic)
+        return 0
+
+
 def create_app(db_path: str = "dienstplan.db") -> Flask:
     """
     Create and configure Flask application.
@@ -718,24 +750,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # For virtual teams, count employees with special qualifications instead of TeamId
             if bool(row['IsVirtual']):
-                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
-                if row['Id'] == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID:
-                    cursor.execute("""
-                        SELECT COUNT(*) as Count
-                        FROM Employees
-                        WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
-                    """)
-                    virtual_count = cursor.fetchone()['Count']
-                    employee_count = virtual_count
-                # Virtual team for Ferienjobber - count employees with IsFerienjobber flag
-                elif row['Id'] == VIRTUAL_TEAM_FERIENJOBBER_ID:
-                    cursor.execute("""
-                        SELECT COUNT(*) as Count
-                        FROM Employees
-                        WHERE IsFerienjobber = 1
-                    """)
-                    virtual_count = cursor.fetchone()['Count']
-                    employee_count = virtual_count
+                employee_count = get_virtual_team_employee_count(cursor, row['Id'])
             
             teams.append({
                 'id': row['Id'],
@@ -775,24 +790,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # For virtual teams, count employees with special qualifications instead of TeamId
             if bool(row['IsVirtual']):
-                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
-                if row['Id'] == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID:
-                    cursor.execute("""
-                        SELECT COUNT(*) as Count
-                        FROM Employees
-                        WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
-                    """)
-                    virtual_count = cursor.fetchone()['Count']
-                    employee_count = virtual_count
-                # Virtual team for Ferienjobber - count employees with IsFerienjobber flag
-                elif row['Id'] == VIRTUAL_TEAM_FERIENJOBBER_ID:
-                    cursor.execute("""
-                        SELECT COUNT(*) as Count
-                        FROM Employees
-                        WHERE IsFerienjobber = 1
-                    """)
-                    virtual_count = cursor.fetchone()['Count']
-                    employee_count = virtual_count
+                employee_count = get_virtual_team_employee_count(cursor, row['Id'])
             
             return jsonify({
                 'id': row['Id'],

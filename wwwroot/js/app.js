@@ -816,13 +816,9 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         // Find employee to check for special functions
         const employee = employeeMap.get(a.employeeId);
         
-        // Check if employee has special functions but no team
-        const hasSpecialFunction = employee && (employee.isBrandmeldetechniker || employee.isBrandschutzbeauftragter);
-        const hasNoTeam = !a.teamId;
-        
         // If employee has special functions but no team, skip adding to regular team
         // They will be added to virtual team below
-        if (!(hasSpecialFunction && hasNoTeam)) {
+        if (!employee || !shouldExcludeFromUnassigned(employee)) {
             const teamId = a.teamId || UNASSIGNED_TEAM_ID;
             
             // Ensure team exists (in case assignment has a team not in allEmployees)
@@ -863,7 +859,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         
         // If this is a BSB or MBT shift, OR if employee has special functions but no team,
         // also add to virtual "Brandmeldeanlage" team
-        if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT' || (hasSpecialFunction && hasNoTeam)) {
+        if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT' || (employee && shouldExcludeFromUnassigned(employee))) {
             ensureVirtualTeam(teams);
             
             if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId]) {
@@ -894,13 +890,9 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         // Find employee to check for special functions
         const employee = employeeMap.get(absence.employeeId);
         
-        // Check if employee has special functions but no team
-        const hasSpecialFunction = employee && (employee.isBrandmeldetechniker || employee.isBrandschutzbeauftragter);
-        const hasNoTeam = !absence.teamId;
-        
         // If employee has special functions but no team, skip adding to regular team
         // They will be added to virtual team below
-        if (!(hasSpecialFunction && hasNoTeam)) {
+        if (!employee || !shouldExcludeFromUnassigned(employee)) {
             const teamId = absence.teamId || UNASSIGNED_TEAM_ID;
             
             // Ensure team exists for absence

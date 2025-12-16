@@ -449,7 +449,174 @@ GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31
 Authorization: Required (Admin oder Disponent)
 ```
 
-Weitere API-Dokumentation: Siehe [MIGRATION.md](MIGRATION.md) für vollständige API-Referenz.
+### Export-Endpoints
+
+#### CSV-Export
+```http
+GET /api/shifts/export/csv?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### PDF-Export
+```http
+GET /api/shifts/export/pdf?startDate=2025-01-01&endDate=2025-01-31&view=month
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### Excel-Export
+```http
+GET /api/shifts/export/excel?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Optional (öffentlich lesbar)
+```
+
+### Abwesenheits-Endpoints
+
+#### Abwesenheiten abrufen
+```http
+GET /api/absences?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### Abwesenheit erstellen
+```http
+POST /api/absences
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "employeeId": 1,
+  "type": 1,
+  "startDate": "2025-01-15",
+  "endDate": "2025-01-20",
+  "notes": "Jahresurlaub"
+}
+```
+Typen: 1=Urlaub, 2=Krank, 3=Lehrgang
+
+#### Abwesenheit löschen
+```http
+DELETE /api/absences/{id}
+Authorization: Required (Admin oder Disponent)
+```
+
+### Urlaubsantrags-Endpoints
+
+#### Urlaubsanträge abrufen
+```http
+GET /api/vacationrequests
+Authorization: Required (eigene Anträge oder Admin/Disponent für alle)
+```
+
+#### Urlaubsantrag erstellen
+```http
+POST /api/vacationrequests
+Content-Type: application/json
+Authorization: Required (alle authentifizierten Benutzer)
+
+{
+  "startDate": "2025-06-01",
+  "endDate": "2025-06-14",
+  "reason": "Sommerurlaub"
+}
+```
+
+#### Urlaubsantrag genehmigen/ablehnen
+```http
+PUT /api/vacationrequests/{id}/status
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "status": 2,
+  "comment": "Genehmigt"
+}
+```
+Status: 1=In Bearbeitung, 2=Genehmigt, 3=Abgelehnt
+
+### Diensttausch-Endpoints
+
+#### Verfügbare Tauschangebote
+```http
+GET /api/shiftexchanges/available
+Authorization: Required (alle authentifizierten Benutzer)
+```
+
+#### Offene Tausch-Anfragen (Admin/Disponent)
+```http
+GET /api/shiftexchanges/pending
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Dienst zum Tausch anbieten
+```http
+POST /api/shiftexchanges
+Content-Type: application/json
+Authorization: Required (alle authentifizierten Benutzer)
+
+{
+  "shiftAssignmentId": 123,
+  "reason": "Private Verpflichtung"
+}
+```
+
+#### Diensttausch anfragen
+```http
+POST /api/shiftexchanges/{id}/request
+Authorization: Required (alle authentifizierten Benutzer)
+```
+
+#### Diensttausch genehmigen/ablehnen
+```http
+PUT /api/shiftexchanges/{id}/process
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "approve": true,
+  "comment": "Tausch genehmigt"
+}
+```
+
+### Team-Endpoints
+
+#### Alle Teams abrufen
+```http
+GET /api/teams
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### Team erstellen
+```http
+POST /api/teams
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "name": "Team Delta",
+  "description": "Neue Schichtgruppe"
+}
+```
+
+#### Team bearbeiten
+```http
+PUT /api/teams/{id}
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Team löschen
+```http
+DELETE /api/teams/{id}
+Authorization: Required (nur Admin)
+```
+
+### Weitere Endpoints
+
+Eine vollständige API-Referenz finden Sie in [MIGRATION.md](MIGRATION.md) oder im Benutzerhandbuch.
+
+**API-Basis-URL:** `http://localhost:5000/api/`
+
+**Authentifizierung:** Cookie-basierte Sessions nach Login
 
 ## 🔧 Konfiguration
 

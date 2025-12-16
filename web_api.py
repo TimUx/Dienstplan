@@ -714,14 +714,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # For virtual teams, count employees with special qualifications instead of TeamId
             if bool(row['IsVirtual']):
-                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
-                cursor.execute("""
-                    SELECT COUNT(*) as Count
-                    FROM Employees
-                    WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
-                """)
-                virtual_count = cursor.fetchone()['Count']
-                employee_count = virtual_count
+                # Virtual team for fire alarm system (ID 99) - count employees with BMT or BSB qualification
+                if row['Id'] == 99:
+                    cursor.execute("""
+                        SELECT COUNT(*) as Count
+                        FROM Employees
+                        WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
+                    """)
+                    virtual_count = cursor.fetchone()['Count']
+                    employee_count = virtual_count
+                # Virtual team for Ferienjobber (ID 98) - count employees with IsFerienjobber flag
+                elif row['Id'] == 98:
+                    cursor.execute("""
+                        SELECT COUNT(*) as Count
+                        FROM Employees
+                        WHERE IsFerienjobber = 1
+                    """)
+                    virtual_count = cursor.fetchone()['Count']
+                    employee_count = virtual_count
             
             teams.append({
                 'id': row['Id'],
@@ -761,14 +771,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # For virtual teams, count employees with special qualifications instead of TeamId
             if bool(row['IsVirtual']):
-                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
-                cursor.execute("""
-                    SELECT COUNT(*) as Count
-                    FROM Employees
-                    WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
-                """)
-                virtual_count = cursor.fetchone()['Count']
-                employee_count = virtual_count
+                # Virtual team for fire alarm system (ID 99) - count employees with BMT or BSB qualification
+                if row['Id'] == 99:
+                    cursor.execute("""
+                        SELECT COUNT(*) as Count
+                        FROM Employees
+                        WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
+                    """)
+                    virtual_count = cursor.fetchone()['Count']
+                    employee_count = virtual_count
+                # Virtual team for Ferienjobber (ID 98) - count employees with IsFerienjobber flag
+                elif row['Id'] == 98:
+                    cursor.execute("""
+                        SELECT COUNT(*) as Count
+                        FROM Employees
+                        WHERE IsFerienjobber = 1
+                    """)
+                    virtual_count = cursor.fetchone()['Count']
+                    employee_count = virtual_count
             
             return jsonify({
                 'id': row['Id'],

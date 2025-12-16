@@ -1692,7 +1692,43 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             import io
             from reportlab.lib.colors import HexColor
             buffer = io.BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
+            
+            # Determine appropriate page size based on view type and number of columns
+            # For month/year views with many columns, we need to adjust the page size or scale
+            num_columns = len(dates) + 1  # +1 for employee name column
+            
+            # Calculate required table width
+            employee_col_width = 5*cm
+            if view_type == 'year':
+                date_col_width = 0.8*cm  # Smaller for year view (365 days)
+            elif view_type == 'month' and len(dates) > 28:
+                date_col_width = 1.2*cm  # Compressed for month view
+            else:
+                date_col_width = 1.8*cm  # Normal for week view
+            
+            required_width = employee_col_width + (len(dates) * date_col_width)
+            
+            # Standard landscape A4 dimensions
+            from reportlab.lib.pagesizes import A4, A3
+            landscape_a4_width = landscape(A4)[0]
+            landscape_a4_height = landscape(A4)[1]
+            
+            # Determine page size - use A3 for large tables
+            if required_width > landscape_a4_width - 2*cm:
+                # Use landscape A3 for larger tables
+                pagesize = landscape(A3)
+            else:
+                pagesize = landscape(A4)
+            
+            # Set margins to maximize usable space
+            doc = SimpleDocTemplate(
+                buffer, 
+                pagesize=pagesize,
+                leftMargin=0.5*cm,
+                rightMargin=0.5*cm,
+                topMargin=1*cm,
+                bottomMargin=1*cm
+            )
             elements = []
             
             # Title
@@ -1764,13 +1800,23 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn.close()
             
             # Create table with styling
-            # Adjust column widths based on number of columns
-            col_width = 1.5*cm if len(dates) > 20 else 2.0*cm
-            col_widths = [5*cm] + [col_width] * len(dates)
+            # Use the dynamically calculated column widths
+            col_widths = [employee_col_width] + [date_col_width] * len(dates)
             
             table = Table(table_data, colWidths=col_widths)
             
             # Apply styling
+            # Adjust font sizes based on view type
+            if view_type == 'year':
+                header_font_size = 6
+                data_font_size = 5
+            elif view_type == 'month':
+                header_font_size = 7
+                data_font_size = 6
+            else:  # week
+                header_font_size = 9
+                data_font_size = 8
+            
             style_commands = [
                 # Header row styling
                 ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4CAF50')),
@@ -1778,18 +1824,18 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8 if view_type == 'year' else 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('FONTSIZE', (0, 0), (-1, 0), header_font_size),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('TOPPADDING', (0, 0), (-1, 0), 6),
                 # Grid
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
                 # First column (employee names) - left aligned
                 ('ALIGN', (0, 1), (0, -1), 'LEFT'),
-                ('FONTSIZE', (0, 1), (-1, -1), 7 if view_type == 'year' else 8),
-                ('LEFTPADDING', (0, 1), (0, -1), 5),
-                ('RIGHTPADDING', (0, 1), (0, -1), 5),
-                ('TOPPADDING', (0, 1), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ('FONTSIZE', (0, 1), (-1, -1), data_font_size),
+                ('LEFTPADDING', (0, 1), (0, -1), 3),
+                ('RIGHTPADDING', (0, 1), (0, -1), 3),
+                ('TOPPADDING', (0, 1), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
             ]
             
             # Add team header row styling

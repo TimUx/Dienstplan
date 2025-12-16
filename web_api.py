@@ -1538,11 +1538,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             assignments_by_emp_date[key].append(assignment)
         
         # Group by team
-        VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999
+        VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Must match database ID
         UNASSIGNED_TEAM_ID = -1
         
         teams = {}
         for emp in employees:
+            # Format employee name once for reuse
+            emp_name = f"{emp['Vorname']} {emp['Name']}"
+            if emp['Personalnummer']:
+                emp_name = f"{emp_name} ({emp['Personalnummer']})"
+            
             # Check if employee has special functions but no team
             # These employees should ONLY appear in virtual team, not "Ohne Team"
             has_special_function = emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']
@@ -1560,10 +1565,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         'teamName': team_name,
                         'employees': {}
                     }
-                
-                emp_name = f"{emp['Vorname']} {emp['Name']}"
-                if emp['Personalnummer']:
-                    emp_name = f"{emp_name} ({emp['Personalnummer']})"
                 
                 teams[team_id]['employees'][emp['Id']] = {
                     'id': emp['Id'],

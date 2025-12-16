@@ -712,7 +712,7 @@ function createShiftBadge(shift) {
 }
 
 // Constants for team IDs
-const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999; // Virtual team ID for fire alarm system
+const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99; // Virtual team ID for fire alarm system (must match database ID)
 
 /**
  * Formats employee display name with personnel number in parentheses

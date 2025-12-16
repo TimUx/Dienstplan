@@ -337,26 +337,32 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     CRITICAL: 
     - No virtual "Springer Team" - springers are employees with is_springer attribute
     - Virtual team "Fire Alarm System" (ID 99) for display grouping of TD-qualified employees
+    - Virtual team "Ferienjobber" (ID 98) for display grouping of temporary holiday workers
+    
+    Note: Team IDs are explicitly set to ensure virtual teams have correct IDs.
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # Sample teams with explicit IDs
+    # Format: (Id, Name, Description, Email, IsVirtual)
     teams = [
-        ("Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
-        ("Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
-        ("Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
-        ("Fire Alarm System", "Virtual team for BSB/BMT qualified employees", "feuermeldeanl@fritzwinter.de", 1),
+        (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
+        (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
+        (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
+        (98, "Ferienjobber", "Virtual team for temporary holiday workers", "ferienjobber@fritzwinter.de", 1),
+        (99, "Fire Alarm System", "Virtual team for BSB/BMT qualified employees", "feuermeldeanl@fritzwinter.de", 1),
     ]
     
-    for name, description, email, is_virtual in teams:
+    for team_id, name, description, email, is_virtual in teams:
         cursor.execute("""
-            INSERT OR IGNORE INTO Teams (Name, Description, Email, IsVirtual)
-            VALUES (?, ?, ?, ?)
-        """, (name, description, email, is_virtual))
+            INSERT OR IGNORE INTO Teams (Id, Name, Description, Email, IsVirtual)
+            VALUES (?, ?, ?, ?, ?)
+        """, (team_id, name, description, email, is_virtual))
     
     conn.commit()
     conn.close()
-    print("✅ Sample teams initialized (no springer team - springers are employee attributes)")
+    print("✅ Sample teams initialized (includes Ferienjobber virtual team)")
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):

@@ -155,6 +155,11 @@ def load_from_database(db_path: str = "dienstplan.db"):
         # TD qualification: employee is qualified if they have either BMT or BSB qualification
         is_td = bool(row[COL_IS_BMT]) or bool(row[COL_IS_BSB])
         
+        # Auto-assign Ferienjobbers to virtual Ferienjobber team (ID 98)
+        team_id = row[COL_TEAM_ID]
+        if bool(row[COL_IS_FERIENJOBBER]) and not team_id:
+            team_id = 98  # Ferienjobber virtual team
+        
         emp = Employee(
             id=row[COL_ID],
             vorname=row[COL_VORNAME],
@@ -168,7 +173,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
             is_brandmeldetechniker=bool(row[COL_IS_BMT]),
             is_brandschutzbeauftragter=bool(row[COL_IS_BSB]),
             is_td_qualified=is_td,
-            team_id=row[COL_TEAM_ID]
+            team_id=team_id
         )
         employees.append(emp)
         

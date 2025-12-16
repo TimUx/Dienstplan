@@ -52,7 +52,7 @@ class ShiftPlanningSolver:
         Add all constraints to the TEAM-BASED model.
         """
         model = self.planning_model.get_model()
-        team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars, springer_cross_team, ferienjobber_cross_team = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -74,11 +74,11 @@ class ShiftPlanningSolver:
         add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
-        add_employee_team_linkage_constraints(model, team_shift, employee_active, employees, teams, dates, weeks, shift_codes, absences)
+        add_employee_team_linkage_constraints(model, team_shift, employee_active, springer_cross_team, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes, absences)
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift)")
-        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, teams, dates, weeks, shift_codes)
+        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, springer_cross_team, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
         
         print("  - Rest time constraints (11 hours minimum)")
         add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, dates, weeks, shift_codes)
@@ -98,7 +98,7 @@ class ShiftPlanningSolver:
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
         print("  - Fairness objectives")
-        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, teams, dates, weeks, shift_codes)
+        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, td_vars, springer_cross_team, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
@@ -177,7 +177,7 @@ class ShiftPlanningSolver:
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}, {}
         
-        team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars, springer_cross_team, ferienjobber_cross_team = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates

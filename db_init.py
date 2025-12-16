@@ -336,7 +336,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     
     CRITICAL: 
     - No virtual "Springer Team" - springers are employees with is_springer attribute
-    - Virtual team "Fire Alarm System" (ID 99) for display grouping of TD-qualified employees
+    - Virtual team "Brandmeldeanlage" (ID 99) for display grouping of TD-qualified employees
     - Virtual team "Ferienjobber" (ID 98) for display grouping of temporary holiday workers
     
     Note: Team IDs are explicitly set to ensure virtual teams have correct IDs.
@@ -350,8 +350,8 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
         (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
         (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
         (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
-        (98, "Ferienjobber", "Virtual team for temporary holiday workers", "ferienjobber@fritzwinter.de", 1),
-        (99, "Fire Alarm System", "Virtual team for BSB/BMT qualified employees", "feuermeldeanl@fritzwinter.de", 1),
+        (98, "Ferienjobber", "Virtuelles Team für Ferienjobber", "ferienjobber@fritzwinter.de", 1),
+        (99, "Brandmeldeanlage", "Virtuelles Team für Mitarbeiter mit Sonderfunktion (BMT/BSB)", "feuermeldeanl@fritzwinter.de", 1),
     ]
     
     for team_id, name, description, email, is_virtual in teams:

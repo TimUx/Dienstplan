@@ -660,7 +660,7 @@ function displayYearView(data, employees) {
 // Helper functions
 
 // Constant for employees without team assignment
-const UNASSIGNED_TEAM_ID = 0;
+const UNASSIGNED_TEAM_ID = -1; // Must match Python backend value
 
 // Absence type constants (must match database enum)
 const ABSENCE_TYPES = {
@@ -712,7 +712,7 @@ function createShiftBadge(shift) {
 }
 
 // Constants for team IDs
-const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999; // Virtual team ID for fire alarm system
+const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99; // Virtual team ID for fire alarm system (must match database ID)
 
 /**
  * Formats employee display name with personnel number in parentheses
@@ -738,6 +738,16 @@ function ensureVirtualTeam(teams) {
     }
 }
 
+/**
+ * Check if employee should be excluded from "Ohne Team" because they belong to virtual team
+ * @param {Object} emp - Employee object
+ * @returns {boolean} True if employee should be excluded from "Ohne Team"
+ */
+function shouldExcludeFromUnassigned(emp) {
+    // Employees with special functions (BMT/BSB) should only appear in virtual team, not "Ohne Team"
+    return !emp.teamId && (emp.isBrandmeldetechniker || emp.isBrandschutzbeauftragter);
+}
+
 function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     const teams = {};
     
@@ -747,6 +757,12 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     // First, create team structure with all employees
     allEmployees.forEach(emp => {
         // No longer skip Springers - they should be displayed in their teams
+        
+        // Skip employees with special functions but no team - they belong only to virtual team
+        if (shouldExcludeFromUnassigned(emp)) {
+            // Skip - will be added to virtual team below
+            return;
+        }
         
         // Determine which team(s) this employee belongs to
         const teamId = emp.teamId || UNASSIGNED_TEAM_ID;

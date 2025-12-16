@@ -32,8 +32,8 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     team_gamma = Team(id=3, name="Team Gamma", description="Third team")
     
     # Create virtual team for Fire Alarm System (TD-qualified without regular team)
-    team_fire_alarm = Team(id=99, name="Fire Alarm System", 
-                          description="Virtual team for TD-qualified employees without regular team assignment",
+    team_fire_alarm = Team(id=99, name="Brandmeldeanlage", 
+                          description="Virtuelles Team für Mitarbeiter mit Sonderfunktion (BMT/BSB) ohne reguläre Teamzuweisung",
                           is_virtual=True)  # Mark as virtual team
     
     teams = [team_alpha, team_beta, team_gamma, team_fire_alarm]

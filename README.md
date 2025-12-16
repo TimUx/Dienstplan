@@ -8,6 +8,29 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 
 ![Dienstplan Hauptansicht](docs/screenshots/00-main-view.png)
 
+---
+
+## 📑 Inhaltsverzeichnis
+
+- [🎯 Funktionsumfang](#-funktionsumfang)
+- [📸 Screenshots](#-screenshots)
+- [🏗️ Architektur](#%EF%B8%8F-architektur)
+- [🚀 Installation & Ausführung](#-installation--ausführung)
+- [📖 API-Dokumentation](#-api-dokumentation)
+- [🔧 Konfiguration](#-konfiguration)
+- [🧪 Tests](#-tests)
+- [🔐 Sicherheit & Authentifizierung](#-sicherheit--authentifizierung)
+- [🐳 Deployment](#-deployment)
+- [🛠️ Entwicklung](#%EF%B8%8F-entwicklung)
+- [🤝 Beitragen](#-beitragen)
+- [📊 Migration von .NET zu Python](#-migration-von-net-zu-python)
+- [🗺️ Roadmap](#%EF%B8%8F-roadmap)
+- [📚 Dokumentation](#-dokumentation)
+- [📄 Lizenz](#-lizenz)
+- [🙋 Support & Kontakt](#-support--kontakt)
+
+---
+
 ## 🎯 Funktionsumfang
 
 ### Mitarbeiterverwaltung
@@ -34,13 +57,14 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - **Nachverfolgung**: Vollständige Historie aller Tauschangebote
 
 ### Schichtarten
-- **Früh**: 05:45–13:45 Uhr
-- **Spät**: 13:45–21:45 Uhr
-- **Nacht**: 21:45–05:45 Uhr
-- **Zwischendienst**: 08:00–16:00 Uhr
-- **Brandmeldetechniker**: 06:00-14:00 Uhr (Mo-Fr)
-- **Brandschutzbeauftragter**: 07:00-16:30 Uhr (Mo-Fr, 9,5 Stunden)
-- **Zusatzkürzel**: Flexibel erweiterbar für Sonderaufgaben
+- **Früh (F)**: 05:45–13:45 Uhr
+- **Spät (S)**: 13:45–21:45 Uhr
+- **Nacht (N)**: 21:45–05:45 Uhr
+- **Zwischendienst (Z)**: 08:00–16:00 Uhr
+- **Brandmeldetechniker (BMT)**: 06:00-14:00 Uhr (Mo-Fr)
+- **Brandschutzbeauftragter (BSB)**: 07:00-16:30 Uhr (Mo-Fr, 9,5 Stunden)
+- **Tagdienst (TD)**: Speziell für qualifizierte Mitarbeiter (automatisch für BMT/BSB)
+- **Abwesenheiten**: AU (Arbeitsunfähigkeit/Krank), U (Urlaub), L (Lehrgang)
 
 ### Schichtbesetzung
 **Montag–Freitag:**
@@ -425,7 +449,174 @@ GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31
 Authorization: Required (Admin oder Disponent)
 ```
 
-Weitere API-Dokumentation: Siehe [MIGRATION.md](MIGRATION.md) für vollständige API-Referenz.
+### Export-Endpoints
+
+#### CSV-Export
+```http
+GET /api/shifts/export/csv?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### PDF-Export
+```http
+GET /api/shifts/export/pdf?startDate=2025-01-01&endDate=2025-01-31&view=month
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### Excel-Export
+```http
+GET /api/shifts/export/excel?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Optional (öffentlich lesbar)
+```
+
+### Abwesenheits-Endpoints
+
+#### Abwesenheiten abrufen
+```http
+GET /api/absences?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### Abwesenheit erstellen
+```http
+POST /api/absences
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "employeeId": 1,
+  "type": 1,
+  "startDate": "2025-01-15",
+  "endDate": "2025-01-20",
+  "notes": "Jahresurlaub"
+}
+```
+Typen: 1=Urlaub, 2=Krank, 3=Lehrgang
+
+#### Abwesenheit löschen
+```http
+DELETE /api/absences/{id}
+Authorization: Required (Admin oder Disponent)
+```
+
+### Urlaubsantrags-Endpoints
+
+#### Urlaubsanträge abrufen
+```http
+GET /api/vacationrequests
+Authorization: Required (eigene Anträge oder Admin/Disponent für alle)
+```
+
+#### Urlaubsantrag erstellen
+```http
+POST /api/vacationrequests
+Content-Type: application/json
+Authorization: Required (alle authentifizierten Benutzer)
+
+{
+  "startDate": "2025-06-01",
+  "endDate": "2025-06-14",
+  "reason": "Sommerurlaub"
+}
+```
+
+#### Urlaubsantrag genehmigen/ablehnen
+```http
+PUT /api/vacationrequests/{id}/status
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "status": 2,
+  "comment": "Genehmigt"
+}
+```
+Status: 1=In Bearbeitung, 2=Genehmigt, 3=Abgelehnt
+
+### Diensttausch-Endpoints
+
+#### Verfügbare Tauschangebote
+```http
+GET /api/shiftexchanges/available
+Authorization: Required (alle authentifizierten Benutzer)
+```
+
+#### Offene Tausch-Anfragen (Admin/Disponent)
+```http
+GET /api/shiftexchanges/pending
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Dienst zum Tausch anbieten
+```http
+POST /api/shiftexchanges
+Content-Type: application/json
+Authorization: Required (alle authentifizierten Benutzer)
+
+{
+  "shiftAssignmentId": 123,
+  "reason": "Private Verpflichtung"
+}
+```
+
+#### Diensttausch anfragen
+```http
+POST /api/shiftexchanges/{id}/request
+Authorization: Required (alle authentifizierten Benutzer)
+```
+
+#### Diensttausch genehmigen/ablehnen
+```http
+PUT /api/shiftexchanges/{id}/process
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "approve": true,
+  "comment": "Tausch genehmigt"
+}
+```
+
+### Team-Endpoints
+
+#### Alle Teams abrufen
+```http
+GET /api/teams
+Authorization: Optional (öffentlich lesbar)
+```
+
+#### Team erstellen
+```http
+POST /api/teams
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+
+{
+  "name": "Team Delta",
+  "description": "Neue Schichtgruppe"
+}
+```
+
+#### Team bearbeiten
+```http
+PUT /api/teams/{id}
+Content-Type: application/json
+Authorization: Required (Admin oder Disponent)
+```
+
+#### Team löschen
+```http
+DELETE /api/teams/{id}
+Authorization: Required (nur Admin)
+```
+
+### Weitere Endpoints
+
+Eine vollständige API-Referenz finden Sie in [MIGRATION.md](MIGRATION.md) oder im Benutzerhandbuch.
+
+**API-Basis-URL:** `http://localhost:5000/api/`
+
+**Authentifizierung:** Cookie-basierte Sessions nach Login
 
 ## 🔧 Konfiguration
 
@@ -618,6 +809,29 @@ Diese Version 2.0 ist eine vollständige Neuimplementierung des Schichtplanungss
 
 Details zur Migration: [MIGRATION.md](MIGRATION.md)
 
+## 📚 Dokumentation
+
+Das Dienstplan-System verfügt über eine umfassende Dokumentation:
+
+### 📘 Für Benutzer
+- **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** - Vollständige Anleitung für alle Funktionen mit Screenshots
+- **[Schnellstart](docs/QUICKSTART.md)** - In 5 Minuten produktiv
+- **[Windows Standalone Guide](docs/WINDOWS_EXECUTABLE.md)** - Anleitung für die Exe-Version
+
+### 🔧 Für Administratoren
+- **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** - CLI-Befehle und API-Nutzung
+- **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** - Details zum OR-Tools Solver
+- **[Beispieldaten](docs/SAMPLE_DATA.md)** - Testdaten und API-Beispiele
+
+### 💻 Für Entwickler
+- **[Architektur](ARCHITECTURE.md)** - System-Design und Komponenten
+- **[Build-Anleitung](docs/BUILD_GUIDE.md)** - Executable erstellen
+- **[Migration](MIGRATION.md)** - .NET zu Python Migration
+- **[Changelog](CHANGELOG.md)** - Versionshistorie
+
+### 📍 Zentrale Übersicht
+- **[Dokumentationsindex](DOKUMENTATION.md)** - Zentraler Einstiegspunkt mit allen Links und Strukturen
+
 ## 📄 Lizenz
 
 Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) für Details.
@@ -630,21 +844,59 @@ Bei Fragen oder Problemen:
 
 ## 🗺️ Roadmap
 
-### Version 2.x
+### ✅ Version 2.0 - Abgeschlossen
 - [x] **Migration zu Python** ✅ **v2.0**
 - [x] **Google OR-Tools Integration** ✅ **v2.0**
 - [x] **Optimale Schichtplanung** ✅ **v2.0**
-- [ ] E-Mail-Benachrichtigungen (SMTP-Integration)
-- [ ] PDF/Excel-Export
-- [ ] Mobile App (React Native)
-- [ ] Erweiterte Berichte und Analytics
+- [x] **Mitarbeiterverwaltung** mit Springer-System ✅ **v2.0**
+- [x] **Teamverwaltung** mit virtuellen Teams ✅ **v2.0**
+- [x] **Urlaubsantrags-System** mit Workflow ✅ **v2.0**
+- [x] **Diensttausch-Plattform** ✅ **v2.0**
+- [x] **Statistiken & Dashboard** ✅ **v2.0**
+- [x] **PDF/Excel/CSV-Export** ✅ **v2.0**
+- [x] **Windows Standalone Executable** ✅ **v2.0**
+- [x] **Ferienjobber-Support** ✅ **v2.0**
+- [x] **BMT/BSB/TD Sonderfunktionen** ✅ **v2.0**
+- [x] **Responsive Web-UI** ✅ **v2.0**
+- [x] **Audit-Logging** ✅ **v2.0**
 
-### Version 3.x
-- [ ] Wunschschichten
-- [ ] Urlaubssperren
-- [ ] Zeiterfassung Integration
-- [ ] Multi-Mandanten-Fähigkeit
-- [ ] Real-Time Benachrichtigungen (WebSockets)
+### 🔄 Version 2.1 - In Planung
+- [ ] **E-Mail-Benachrichtigungen** (SMTP-Integration)
+  - Urlaubsgenehmigungen
+  - Diensttausch-Bestätigungen
+  - Erinnerungen an bevorstehende Schichten
+- [ ] **Erweiterte Berichte und Analytics**
+  - Monatsberichte als PDF
+  - Jahresübersichten
+  - Export-Templates
+- [ ] **Verbesserungen am Planungsalgorithmus**
+  - Bevorzugte Rhythmen pro Mitarbeiter
+  - Team-basierte Präferenzen
+
+### 🚀 Version 3.0 - Zukünftig
+- [ ] **Wunschschichten**
+  - Mitarbeiter können bevorzugte Schichten angeben
+  - Berücksichtigung bei automatischer Planung
+  - Wunsch-Erfüllungsrate in Statistiken
+- [ ] **Urlaubssperren**
+  - Zeiträume definieren, in denen kein Urlaub möglich ist
+  - Saisonale Einschränkungen
+- [ ] **Zeiterfassung Integration**
+  - Tatsächliche Arbeitszeiten erfassen
+  - Überstunden-Tracking
+  - Soll/Ist-Vergleich
+- [ ] **Multi-Mandanten-Fähigkeit**
+  - Mehrere Firmen/Standorte in einer Installation
+  - Getrennte Datenbanken pro Mandant
+  - Zentrale Verwaltung
+- [ ] **Mobile App** (React Native)
+  - Native Apps für iOS und Android
+  - Push-Benachrichtigungen
+  - Offline-Modus
+- [ ] **Real-Time Benachrichtigungen** (WebSockets)
+  - Live-Updates bei Änderungen
+  - Chat-Funktion für Diensttausch
+  - Benachrichtigungs-Center
 
 ---
 

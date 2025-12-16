@@ -492,6 +492,235 @@ Empfohlene Tools:
 - ✅ Flexible Erweiterbarkeit
 - ✅ Plattformunabhängigkeit
 
+## 15. Feature-Übersicht
+
+### Implementierte Features in Version 2.0
+
+#### Kern-Features
+- ✅ **Automatische Schichtplanung** mit Google OR-Tools CP-SAT Solver
+- ✅ **Mitarbeiterverwaltung** mit Springer-System und Qualifikationen
+- ✅ **Teamverwaltung** mit virtuellen Teams (BMT, BSB, Ferienjobber)
+- ✅ **Abwesenheitsverwaltung** (Urlaub, Krank, Lehrgang)
+
+#### Workflow-Features
+- ✅ **Urlaubsantrags-System** mit Genehmigungsworkflow
+  - Mitarbeiter können Urlaubsanträge stellen
+  - Disponenten/Admins können genehmigen/ablehnen
+  - Automatische Umwandlung zu Abwesenheiten bei Genehmigung
+  - Status-Tracking (In Bearbeitung, Genehmigt, Abgelehnt)
+
+- ✅ **Diensttausch-Plattform**
+  - Mitarbeiter können Dienste zum Tausch anbieten
+  - Andere Mitarbeiter können Tausch anfragen
+  - Disponenten/Admins genehmigen Tausche
+  - Automatische Umschichtung nach Genehmigung
+
+#### Export & Reporting
+- ✅ **CSV-Export** für Excel/Google Sheets
+- ✅ **PDF-Export** mit ReportLab für Ausdrucke
+- ✅ **Excel-Export** mit OpenPyXL für Weiterverarbeitung
+- ✅ **Statistiken & Dashboard** mit umfangreichen Auswertungen
+- ✅ **Wochenend-Statistiken** (nur für Disponenten/Admins)
+
+#### Sicherheit & Administration
+- ✅ **Rollenbasierte Zugriffskontrolle** (Admin, Disponent, Mitarbeiter)
+- ✅ **Cookie-basierte Authentifizierung**
+- ✅ **Audit-Logging** für alle Änderungen
+- ✅ **Passwort-Hashing** mit SHA-256
+
+#### Spezialfunktionen
+- ✅ **BMT (Brandmeldetechniker)** - Sonderfunktion mit eigenem virtuellem Team
+- ✅ **BSB (Brandschutzbeauftragter)** - Sonderfunktion mit eigenem virtuellem Team
+- ✅ **TD (Tagdienst)** - Automatisch für BMT/BSB-qualifizierte Mitarbeiter
+- ✅ **Ferienjobber-Support** - Eigenes virtuelles Team für temporäre Mitarbeiter
+- ✅ **Springer-System** - Teamübergreifende Vertretungsregelung
+
+#### Benutzeroberfläche
+- ✅ **Responsive Web-UI** für Desktop und Mobile
+- ✅ **Wochenansicht, Monatsansicht, Jahresansicht**
+- ✅ **Manuelle Schichtbearbeitung** mit Fixierung
+- ✅ **Integriertes Hilfesystem**
+
+#### Deployment
+- ✅ **Windows Standalone Executable** mit PyInstaller
+- ✅ **Python CLI** für alle Betriebssysteme
+- ✅ **Docker-Ready** für Container-Deployment
+- ✅ **Systemd-Ready** für Linux-Server
+
+### Datenbank-Schema
+
+Die wichtigsten Tabellen:
+
+```sql
+-- Mitarbeiter
+CREATE TABLE Employees (
+    Id INTEGER PRIMARY KEY,
+    Vorname TEXT NOT NULL,
+    Name TEXT NOT NULL,
+    Personalnummer TEXT UNIQUE NOT NULL,
+    Email TEXT,
+    Geburtsdatum TEXT,
+    Funktion TEXT,
+    IsSpringer INTEGER DEFAULT 0,
+    IsFerienjobber INTEGER DEFAULT 0,
+    IsBrandmeldetechniker INTEGER DEFAULT 0,
+    IsBrandschutzbeauftragter INTEGER DEFAULT 0,
+    IsTdQualified INTEGER DEFAULT 0,
+    TeamId INTEGER,
+    FOREIGN KEY (TeamId) REFERENCES Teams(Id)
+);
+
+-- Teams
+CREATE TABLE Teams (
+    Id INTEGER PRIMARY KEY,
+    Name TEXT NOT NULL,
+    Description TEXT
+);
+
+-- Schichttypen
+CREATE TABLE ShiftTypes (
+    Id INTEGER PRIMARY KEY,
+    Code TEXT UNIQUE NOT NULL,
+    Name TEXT NOT NULL,
+    StartTime TEXT NOT NULL,
+    EndTime TEXT NOT NULL,
+    DurationHours REAL NOT NULL
+);
+
+-- Schichtzuweisungen
+CREATE TABLE ShiftAssignments (
+    Id INTEGER PRIMARY KEY,
+    EmployeeId INTEGER NOT NULL,
+    ShiftTypeId INTEGER NOT NULL,
+    Date TEXT NOT NULL,
+    IsManual INTEGER DEFAULT 0,
+    IsSpringer INTEGER DEFAULT 0,
+    IsFixed INTEGER DEFAULT 0,
+    CreatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    CreatedBy TEXT,
+    FOREIGN KEY (EmployeeId) REFERENCES Employees(Id),
+    FOREIGN KEY (ShiftTypeId) REFERENCES ShiftTypes(Id)
+);
+
+-- Abwesenheiten
+CREATE TABLE Absences (
+    Id INTEGER PRIMARY KEY,
+    EmployeeId INTEGER NOT NULL,
+    Type INTEGER NOT NULL,
+    StartDate TEXT NOT NULL,
+    EndDate TEXT NOT NULL,
+    Notes TEXT,
+    CreatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
+);
+
+-- Urlaubsanträge
+CREATE TABLE VacationRequests (
+    Id INTEGER PRIMARY KEY,
+    EmployeeId INTEGER NOT NULL,
+    StartDate TEXT NOT NULL,
+    EndDate TEXT NOT NULL,
+    Reason TEXT,
+    Status INTEGER DEFAULT 1,
+    ProcessedBy TEXT,
+    ProcessedAt TEXT,
+    Comment TEXT,
+    CreatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
+);
+
+-- Diensttausch
+CREATE TABLE ShiftExchanges (
+    Id INTEGER PRIMARY KEY,
+    OfferedByEmployeeId INTEGER NOT NULL,
+    ShiftAssignmentId INTEGER NOT NULL,
+    RequestedByEmployeeId INTEGER,
+    Status INTEGER DEFAULT 1,
+    Reason TEXT,
+    ProcessedBy TEXT,
+    ProcessedAt TEXT,
+    Comment TEXT,
+    CreatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (OfferedByEmployeeId) REFERENCES Employees(Id),
+    FOREIGN KEY (RequestedByEmployeeId) REFERENCES Employees(Id),
+    FOREIGN KEY (ShiftAssignmentId) REFERENCES ShiftAssignments(Id)
+);
+
+-- Audit-Logs
+CREATE TABLE AuditLogs (
+    Id INTEGER PRIMARY KEY,
+    EntityName TEXT NOT NULL,
+    EntityId TEXT NOT NULL,
+    Action TEXT NOT NULL,
+    Changes TEXT,
+    UserId TEXT,
+    Timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### API-Endpoints-Übersicht
+
+**Authentifizierung:**
+- `POST /api/auth/login` - Anmelden
+- `POST /api/auth/logout` - Abmelden
+- `GET /api/auth/current-user` - Aktueller Benutzer
+- `GET /api/auth/users` - Alle Benutzer (Admin)
+- `POST /api/auth/register` - Neuen Benutzer registrieren (Admin)
+
+**Mitarbeiter:**
+- `GET /api/employees` - Alle Mitarbeiter
+- `GET /api/employees/{id}` - Einzelner Mitarbeiter
+- `POST /api/employees` - Mitarbeiter erstellen
+- `PUT /api/employees/{id}` - Mitarbeiter bearbeiten
+- `DELETE /api/employees/{id}` - Mitarbeiter löschen
+- `GET /api/employees/springers` - Alle Springer
+
+**Teams:**
+- `GET /api/teams` - Alle Teams
+- `GET /api/teams/{id}` - Einzelnes Team
+- `POST /api/teams` - Team erstellen
+- `PUT /api/teams/{id}` - Team bearbeiten
+- `DELETE /api/teams/{id}` - Team löschen
+
+**Schichten:**
+- `GET /api/shifttypes` - Alle Schichttypen
+- `GET /api/shifts/schedule` - Dienstplan anzeigen
+- `POST /api/shifts/plan` - Automatisch planen
+- `POST /api/shifts/assignments` - Schicht erstellen
+- `PUT /api/shifts/assignments/{id}` - Schicht bearbeiten
+- `DELETE /api/shifts/assignments/{id}` - Schicht löschen
+- `PUT /api/shifts/assignments/{id}/toggle-fixed` - Fixierung umschalten
+
+**Export:**
+- `GET /api/shifts/export/csv` - CSV-Export
+- `GET /api/shifts/export/pdf` - PDF-Export
+- `GET /api/shifts/export/excel` - Excel-Export
+
+**Abwesenheiten:**
+- `GET /api/absences` - Alle Abwesenheiten
+- `POST /api/absences` - Abwesenheit erstellen
+- `DELETE /api/absences/{id}` - Abwesenheit löschen
+
+**Urlaubsanträge:**
+- `GET /api/vacationrequests` - Alle Urlaubsanträge
+- `POST /api/vacationrequests` - Urlaubsantrag erstellen
+- `PUT /api/vacationrequests/{id}/status` - Status ändern
+
+**Diensttausch:**
+- `GET /api/shiftexchanges/available` - Verfügbare Angebote
+- `GET /api/shiftexchanges/pending` - Offene Anfragen
+- `POST /api/shiftexchanges` - Dienst anbieten
+- `POST /api/shiftexchanges/{id}/request` - Tausch anfragen
+- `PUT /api/shiftexchanges/{id}/process` - Tausch bearbeiten
+
+**Statistiken:**
+- `GET /api/statistics/dashboard` - Dashboard-Statistiken
+- `GET /api/statistics/weekend-shifts` - Wochenend-Statistiken
+
+**Audit:**
+- `GET /api/audit/logs` - Audit-Logs
+- `GET /api/audit/recent/{count}` - Letzte N Einträge
+
 ---
 
 **Version 2.0 - Python Edition**

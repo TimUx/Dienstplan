@@ -84,6 +84,7 @@ class ShiftPlanningModel:
         self.employee_active = {}  # employee_active[employee_id, date] = 0 or 1 (derived from team shift)
         self.employee_weekend_shift = {}  # employee_weekend_shift[emp_id, date] = 0 or 1 (WEEKEND ONLY - shift type from team)
         self.td_vars = {}  # td[employee_id, week_idx] = 0 or 1 (Tagdienst assignment)
+        self.springer_cross_team = {}  # springer_cross_team[springer_id, foreign_team_id, week_idx] = 0 or 1 (cross-team assignment)
         
         # Build the model
         self._create_decision_variables()
@@ -215,6 +216,20 @@ class ShiftPlanningModel:
                 if has_weekdays:
                     var_name = f"td_emp{emp.id}_week{week_idx}"
                     self.td_vars[(emp.id, week_idx)] = self.model.NewBoolVar(var_name)
+        
+        # CROSS-TEAM SPRINGER VARIABLES (NEW for worst-case absence scenarios)
+        # springer_cross_team[springer_id, foreign_team_id, week_idx] ∈ {0, 1}
+        # Allows springers to help other teams when multiple absences occur
+        springers = [emp for emp in self.employees if emp.is_springer and emp.team_id]
+        for springer in springers:
+            for team in self.teams:
+                # Skip virtual team and springer's own team
+                if team.id == 99 or team.id == springer.team_id:
+                    continue
+                
+                for week_idx in range(len(self.weeks)):
+                    var_name = f"springer{springer.id}_helps_team{team.id}_week{week_idx}"
+                    self.springer_cross_team[(springer.id, team.id, week_idx)] = self.model.NewBoolVar(var_name)
     
     
     def get_model(self) -> cp_model.CpModel:
@@ -225,16 +240,19 @@ class ShiftPlanningModel:
         Dict[Tuple[int, int, str], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
-        Dict[Tuple[int, int], cp_model.IntVar]
+        Dict[Tuple[int, int], cp_model.IntVar],
+        Dict[Tuple[int, int, int], cp_model.IntVar]
     ]:
         """
         Get all decision variables.
         
         Returns:
-            Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars)
-            where employee_weekend_shift is now keyed by (emp_id, date) only
+            Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars, springer_cross_team)
+            where:
+            - employee_weekend_shift is keyed by (emp_id, date) only
+            - springer_cross_team is keyed by (springer_id, foreign_team_id, week_idx)
         """
-        return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars
+        return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars, self.springer_cross_team
     
     def get_team_by_id(self, team_id: int) -> Team:
         """Get team by ID"""

@@ -813,51 +813,56 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     
     // Then, add shift assignments to the employees
     assignments.forEach(a => {
-        const teamId = a.teamId || UNASSIGNED_TEAM_ID;
+        // Find employee to check for special functions
+        const employee = employeeMap.get(a.employeeId);
         
-        // Ensure team exists (in case assignment has a team not in allEmployees)
-        if (!teams[teamId]) {
-            const teamName = 'Ohne Team'; // Will be updated if we find the employee
-            teams[teamId] = {
-                teamId: teamId,
-                teamName: teamName,
-                employees: {}
-            };
-        }
-        
-        // Ensure employee exists in the team
-        if (!teams[teamId].employees[a.employeeId]) {
-            // Find employee to get team name and personnel number using map
-            const employee = employeeMap.get(a.employeeId);
-            const correctTeamName = employee?.teamName || 'Ohne Team';
-            teams[teamId].teamName = correctTeamName;
+        // If employee has special functions but no team, skip adding to regular team
+        // They will be added to virtual team below
+        if (!employee || !shouldExcludeFromUnassigned(employee)) {
+            const teamId = a.teamId || UNASSIGNED_TEAM_ID;
             
-            const displayName = formatEmployeeDisplayName(
-                a.employeeName,
-                employee?.personalnummer || ''
-            );
+            // Ensure team exists (in case assignment has a team not in allEmployees)
+            if (!teams[teamId]) {
+                const teamName = 'Ohne Team'; // Will be updated if we find the employee
+                teams[teamId] = {
+                    teamId: teamId,
+                    teamName: teamName,
+                    employees: {}
+                };
+            }
             
-            teams[teamId].employees[a.employeeId] = {
-                id: a.employeeId,
-                name: displayName,
-                personalnummer: employee?.personalnummer || '',
-                shifts: {},
-                absences: []
-            };
+            // Ensure employee exists in the team
+            if (!teams[teamId].employees[a.employeeId]) {
+                const correctTeamName = employee?.teamName || 'Ohne Team';
+                teams[teamId].teamName = correctTeamName;
+                
+                const displayName = formatEmployeeDisplayName(
+                    a.employeeName,
+                    employee?.personalnummer || ''
+                );
+                
+                teams[teamId].employees[a.employeeId] = {
+                    id: a.employeeId,
+                    name: displayName,
+                    personalnummer: employee?.personalnummer || '',
+                    shifts: {},
+                    absences: []
+                };
+            }
+            
+            const dateKey = a.date.split('T')[0];
+            if (!teams[teamId].employees[a.employeeId].shifts[dateKey]) {
+                teams[teamId].employees[a.employeeId].shifts[dateKey] = [];
+            }
+            teams[teamId].employees[a.employeeId].shifts[dateKey].push(a);
         }
         
-        const dateKey = a.date.split('T')[0];
-        if (!teams[teamId].employees[a.employeeId].shifts[dateKey]) {
-            teams[teamId].employees[a.employeeId].shifts[dateKey] = [];
-        }
-        teams[teamId].employees[a.employeeId].shifts[dateKey].push(a);
-        
-        // If this is a BSB or MBT shift, also add to virtual "Brandmeldeanlage" team
-        if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT') {
+        // If this is a BSB or MBT shift, OR if employee has special functions but no team,
+        // also add to virtual "Brandmeldeanlage" team
+        if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT' || (employee && shouldExcludeFromUnassigned(employee))) {
             ensureVirtualTeam(teams);
             
             if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId]) {
-                const employee = employeeMap.get(a.employeeId);
                 const displayName = formatEmployeeDisplayName(
                     a.employeeName,
                     employee?.personalnummer || ''
@@ -872,6 +877,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                 };
             }
             
+            const dateKey = a.date.split('T')[0];
             if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey]) {
                 teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey] = [];
             }
@@ -881,40 +887,44 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     
     // Add absences to the employees
     absences.forEach(absence => {
-        const teamId = absence.teamId || UNASSIGNED_TEAM_ID;
+        // Find employee to check for special functions
+        const employee = employeeMap.get(absence.employeeId);
         
-        // Ensure team exists for absence
-        if (!teams[teamId]) {
-            teams[teamId] = {
-                teamId: teamId,
-                teamName: 'Ohne Team',
-                employees: {}
-            };
-        }
-        
-        // Ensure employee exists for absence
-        if (!teams[teamId].employees[absence.employeeId]) {
-            // Find employee to get personnel number using map
-            const employee = employeeMap.get(absence.employeeId);
-            const displayName = formatEmployeeDisplayName(
-                absence.employeeName,
-                employee?.personalnummer || ''
-            );
+        // If employee has special functions but no team, skip adding to regular team
+        // They will be added to virtual team below
+        if (!employee || !shouldExcludeFromUnassigned(employee)) {
+            const teamId = absence.teamId || UNASSIGNED_TEAM_ID;
             
-            // Create employee entry if not exists
-            teams[teamId].employees[absence.employeeId] = {
-                id: absence.employeeId,
-                name: displayName,
-                personalnummer: employee?.personalnummer || '',
-                shifts: {},
-                absences: []
-            };
+            // Ensure team exists for absence
+            if (!teams[teamId]) {
+                teams[teamId] = {
+                    teamId: teamId,
+                    teamName: 'Ohne Team',
+                    employees: {}
+                };
+            }
+            
+            // Ensure employee exists for absence
+            if (!teams[teamId].employees[absence.employeeId]) {
+                const displayName = formatEmployeeDisplayName(
+                    absence.employeeName,
+                    employee?.personalnummer || ''
+                );
+                
+                // Create employee entry if not exists
+                teams[teamId].employees[absence.employeeId] = {
+                    id: absence.employeeId,
+                    name: displayName,
+                    personalnummer: employee?.personalnummer || '',
+                    shifts: {},
+                    absences: []
+                };
+            }
+            
+            teams[teamId].employees[absence.employeeId].absences.push(absence);
         }
-        
-        teams[teamId].employees[absence.employeeId].absences.push(absence);
         
         // If employee has BSB/MBT qualification, also add to virtual "Brandmeldeanlage" team
-        const employee = employeeMap.get(absence.employeeId);
         if (employee && (employee.isBrandmeldetechniker || employee.isBrandschutzbeauftragter)) {
             ensureVirtualTeam(teams);
             

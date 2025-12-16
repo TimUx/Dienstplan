@@ -738,47 +738,49 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/teams/<int:id>', methods=['GET'])
     def get_team(id):
         """Get single team by ID"""
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT t.Id, t.Name, t.Description, t.Email, t.IsVirtual,
-                   COUNT(e.Id) as EmployeeCount
-            FROM Teams t
-            LEFT JOIN Employees e ON t.Id = e.TeamId
-            WHERE t.Id = ?
-            GROUP BY t.Id, t.Name, t.Description, t.Email, t.IsVirtual
-        """, (id,))
-        
-        row = cursor.fetchone()
-        
-        if not row:
-            conn.close()
-            return jsonify({'error': 'Team nicht gefunden'}), 404
-        
-        employee_count = row['EmployeeCount']
-        
-        # For virtual teams, count employees with special qualifications instead of TeamId
-        if bool(row['IsVirtual']):
-            # Virtual team for fire alarm system - count employees with BMT or BSB qualification
+        conn = None
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
             cursor.execute("""
-                SELECT COUNT(*) as Count
-                FROM Employees
-                WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
-            """)
-            virtual_count = cursor.fetchone()['Count']
-            employee_count = virtual_count
-        
-        conn.close()
-        
-        return jsonify({
-            'id': row['Id'],
-            'name': row['Name'],
-            'description': row['Description'],
-            'email': row['Email'],
-            'isVirtual': bool(row['IsVirtual']),
-            'employeeCount': employee_count
-        })
+                SELECT t.Id, t.Name, t.Description, t.Email, t.IsVirtual,
+                       COUNT(e.Id) as EmployeeCount
+                FROM Teams t
+                LEFT JOIN Employees e ON t.Id = e.TeamId
+                WHERE t.Id = ?
+                GROUP BY t.Id, t.Name, t.Description, t.Email, t.IsVirtual
+            """, (id,))
+            
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({'error': 'Team nicht gefunden'}), 404
+            
+            employee_count = row['EmployeeCount']
+            
+            # For virtual teams, count employees with special qualifications instead of TeamId
+            if bool(row['IsVirtual']):
+                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
+                cursor.execute("""
+                    SELECT COUNT(*) as Count
+                    FROM Employees
+                    WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
+                """)
+                virtual_count = cursor.fetchone()['Count']
+                employee_count = virtual_count
+            
+            return jsonify({
+                'id': row['Id'],
+                'name': row['Name'],
+                'description': row['Description'],
+                'email': row['Email'],
+                'isVirtual': bool(row['IsVirtual']),
+                'employeeCount': employee_count
+            })
+        finally:
+            if conn:
+                conn.close()
     
     @app.route('/api/teams', methods=['POST'])
     @require_role('Admin', 'Disponent')
@@ -1563,13 +1565,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if emp['Personalnummer']:
                 emp_name = f"{emp_name} ({emp['Personalnummer']})"
             
-            # Check if employee has special functions but no team
-            # These employees should ONLY appear in virtual team, not "Ohne Team"
+            # Check if employee has special functions
             has_special_function = emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']
-            has_no_team = not emp['TeamId']
             
-            # Add to regular team only if they have a team OR don't have special function
-            if not (has_no_team and has_special_function):
+            # Add to regular team if they have a team OR don't have special functions
+            # (employees with special functions but no team should only appear in virtual team)
+            if emp['TeamId'] or not has_special_function:
                 # Add to regular team
                 team_id = emp['TeamId'] if emp['TeamId'] else UNASSIGNED_TEAM_ID
                 team_name = emp['TeamName'] if emp['TeamName'] else 'Ohne Team'
@@ -1588,7 +1589,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 }
             
             # Add to virtual Brandmeldeanlage team if qualified
-            if emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']:
+            if has_special_function:
                 if VIRTUAL_TEAM_BRANDMELDEANLAGE_ID not in teams:
                     teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
                         'teamId': VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,

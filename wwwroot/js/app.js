@@ -760,34 +760,35 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         
         // Skip employees with special functions but no team - they belong only to virtual team
         if (shouldExcludeFromUnassigned(emp)) {
-            // Don't add to "Ohne Team" - will be added to virtual team below
-        } else {
-            // Determine which team(s) this employee belongs to
-            const teamId = emp.teamId || UNASSIGNED_TEAM_ID;
-            const teamName = emp.teamName || 'Ohne Team';
-            
-            if (!teams[teamId]) {
-                teams[teamId] = {
-                    teamId: teamId,
-                    teamName: teamName,
-                    employees: {}
-                };
-            }
-            
-            if (!teams[teamId].employees[emp.id]) {
-                // Include personnel number in parentheses after the name
-                const displayName = formatEmployeeDisplayName(
-                    emp.fullName || `${emp.vorname} ${emp.name}`,
-                    emp.personalnummer
-                );
-                teams[teamId].employees[emp.id] = {
-                    id: emp.id,
-                    name: displayName,
-                    personalnummer: emp.personalnummer,
-                    shifts: {},
-                    absences: [] // Store absences for this employee
-                };
-            }
+            // Skip - will be added to virtual team below
+            return;
+        }
+        
+        // Determine which team(s) this employee belongs to
+        const teamId = emp.teamId || UNASSIGNED_TEAM_ID;
+        const teamName = emp.teamName || 'Ohne Team';
+        
+        if (!teams[teamId]) {
+            teams[teamId] = {
+                teamId: teamId,
+                teamName: teamName,
+                employees: {}
+            };
+        }
+        
+        if (!teams[teamId].employees[emp.id]) {
+            // Include personnel number in parentheses after the name
+            const displayName = formatEmployeeDisplayName(
+                emp.fullName || `${emp.vorname} ${emp.name}`,
+                emp.personalnummer
+            );
+            teams[teamId].employees[emp.id] = {
+                id: emp.id,
+                name: displayName,
+                personalnummer: emp.personalnummer,
+                shifts: {},
+                absences: [] // Store absences for this employee
+            };
         }
         
         // Also add BSB/MBT employees to virtual "Brandmeldeanlage" team

@@ -360,38 +360,47 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):
-    """Initialize sample employees"""
+    """
+    Initialize sample employees.
+    
+    Rules:
+    - Team members NEVER have special functions (BSB/MBT)
+    - Each team has exactly 1 Springer (backup worker)
+    - Non-team members have special functions but are NEVER Springer
+    - Total: 17 employees (3 teams × 5 employees + 2 non-team with special functions)
+    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     # Sample employees data
+    # Format: (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
+    #          IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, TeamId)
     employees = [
-        # Team Alpha (TeamId=1)
-        ("Max", "Müller", "1001", "max.mueller@fritzwinter.de", "1985-03-15", "Techniker", 0, 0, 0, 0, 1),
-        ("Anna", "Schmidt", "1002", "anna.schmidt@fritzwinter.de", "1990-07-22", "Techniker", 0, 0, 1, 0, 1),
-        ("Peter", "Weber", "1003", "peter.weber@fritzwinter.de", "1988-11-03", "Techniker", 0, 0, 0, 0, 1),
-        ("Lisa", "Meyer", "1004", "lisa.meyer@fritzwinter.de", "1992-05-18", "Techniker", 0, 0, 0, 1, 1),
-        ("Tom", "Wagner", "1005", "tom.wagner@fritzwinter.de", "1987-09-27", "Techniker", 0, 0, 0, 0, 1),
+        # Team Alpha (TeamId=1) - 5 employees, 1 Springer
+        ("Max", "Müller", "PN001", "max.mueller@fritzwinter.de", "1985-03-15", "Techniker", 0, 0, 0, 0, 1),
+        ("Anna", "Schmidt", "PN002", "anna.schmidt@fritzwinter.de", "1990-07-22", "Techniker", 0, 0, 0, 0, 1),
+        ("Peter", "Weber", "PN003", "peter.weber@fritzwinter.de", "1988-11-03", "Techniker", 0, 0, 0, 0, 1),
+        ("Lisa", "Meyer", "PN004", "lisa.meyer@fritzwinter.de", "1992-05-18", "Techniker", 0, 0, 0, 0, 1),
+        ("Robert", "Franke", "S001", "robert.franke@fritzwinter.de", "1985-05-08", "Springer", 1, 0, 0, 0, 1),
         
-        # Team Beta (TeamId=2)
-        ("Julia", "Becker", "2001", "julia.becker@fritzwinter.de", "1991-01-10", "Techniker", 0, 0, 1, 0, 2),
-        ("Michael", "Schulz", "2002", "michael.schulz@fritzwinter.de", "1986-06-14", "Techniker", 0, 0, 0, 0, 2),
-        ("Sarah", "Hoffmann", "2003", "sarah.hoffmann@fritzwinter.de", "1989-12-08", "Techniker", 0, 0, 0, 0, 2),
-        ("Daniel", "Koch", "2004", "daniel.koch@fritzwinter.de", "1993-04-25", "Techniker", 0, 0, 0, 1, 2),
-        ("Laura", "Bauer", "2005", "laura.bauer@fritzwinter.de", "1990-08-17", "Techniker", 0, 0, 0, 0, 2),
+        # Team Beta (TeamId=2) - 5 employees, 1 Springer
+        ("Julia", "Becker", "PN006", "julia.becker@fritzwinter.de", "1991-01-10", "Techniker", 0, 0, 0, 0, 2),
+        ("Michael", "Schulz", "PN007", "michael.schulz@fritzwinter.de", "1986-06-14", "Techniker", 0, 0, 0, 0, 2),
+        ("Sarah", "Hoffmann", "PN008", "sarah.hoffmann@fritzwinter.de", "1989-12-08", "Techniker", 0, 0, 0, 0, 2),
+        ("Daniel", "Koch", "PN009", "daniel.koch@fritzwinter.de", "1993-04-25", "Techniker", 0, 0, 0, 0, 2),
+        ("Thomas", "Zimmermann", "S002", "thomas.zimmermann@fritzwinter.de", "1986-12-11", "Springer", 1, 0, 0, 0, 2),
         
-        # Team Gamma (TeamId=3)
-        ("Markus", "Richter", "3001", "markus.richter@fritzwinter.de", "1984-02-20", "Techniker", 0, 0, 0, 0, 3),
-        ("Stefanie", "Klein", "3002", "stefanie.klein@fritzwinter.de", "1992-10-05", "Techniker", 0, 0, 1, 0, 3),
-        ("Andreas", "Wolf", "3003", "andreas.wolf@fritzwinter.de", "1988-07-12", "Techniker", 0, 0, 0, 0, 3),
-        ("Nicole", "Schröder", "3004", "nicole.schroeder@fritzwinter.de", "1991-03-29", "Techniker", 0, 0, 0, 0, 3),
-        ("Christian", "Neumann", "3005", "christian.neumann@fritzwinter.de", "1987-11-16", "Techniker", 0, 0, 0, 1, 3),
+        # Team Gamma (TeamId=3) - 5 employees, 1 Springer
+        ("Markus", "Richter", "PN011", "markus.richter@fritzwinter.de", "1984-02-20", "Techniker", 0, 0, 0, 0, 3),
+        ("Stefanie", "Klein", "PN012", "stefanie.klein@fritzwinter.de", "1992-10-05", "Techniker", 0, 0, 0, 0, 3),
+        ("Andreas", "Wolf", "PN013", "andreas.wolf@fritzwinter.de", "1988-07-12", "Techniker", 0, 0, 0, 0, 3),
+        ("Nicole", "Schröder", "PN014", "nicole.schroeder@fritzwinter.de", "1991-03-29", "Techniker", 0, 0, 0, 0, 3),
+        ("Maria", "Lange", "S003", "maria.lange@fritzwinter.de", "1990-09-24", "Springer", 1, 0, 0, 0, 3),
         
-        # Springers (no team)
-        ("Robert", "Franke", "S001", "robert.franke@fritzwinter.de", "1985-05-08", "Springer", 1, 0, 0, 0, None),
-        ("Maria", "Lange", "S002", "maria.lange@fritzwinter.de", "1990-09-24", "Springer", 1, 0, 1, 0, None),
-        ("Thomas", "Zimmermann", "S003", "thomas.zimmermann@fritzwinter.de", "1986-12-11", "Springer", 1, 0, 0, 0, None),
-        ("Katharina", "Krüger", "S004", "katharina.krueger@fritzwinter.de", "1989-06-30", "Springer", 1, 0, 0, 1, None),
+        # Non-team employees with special functions (2 employees)
+        # These have special functions (BSB/MBT) but are NEVER Springers
+        ("Laura", "Bauer", "SF001", "laura.bauer@fritzwinter.de", "1990-08-17", "Brandschutzbeauftragter", 0, 0, 0, 1, None),
+        ("Christian", "Neumann", "SF002", "christian.neumann@fritzwinter.de", "1987-11-16", "Brandmeldetechniker", 0, 0, 1, 0, None),
     ]
     
     for vorname, name, personalnummer, email, geburtsdatum, funktion, is_springer, is_ferienjobber, is_bmt, is_bsb, team_id in employees:
@@ -405,7 +414,7 @@ def initialize_sample_employees(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Sample employees initialized")
+    print("✅ Sample employees initialized: 17 total (3 teams × 5 + 2 with special functions)")
 
 
 def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool = True):

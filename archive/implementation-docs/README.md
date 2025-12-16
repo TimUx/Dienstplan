@@ -56,4 +56,4 @@ Diese Dokumente sind nur für Entwickler relevant, die die Historie des Projekts
 
 ---
 
-**Archiviert:** Dezember 2025
+**Archiviert:** Dezember 2024

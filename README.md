@@ -64,7 +64,7 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - **Brandmeldetechniker (BMT)**: 06:00-14:00 Uhr (Mo-Fr)
 - **Brandschutzbeauftragter (BSB)**: 07:00-16:30 Uhr (Mo-Fr, 9,5 Stunden)
 - **Tagdienst (TD)**: Speziell für qualifizierte Mitarbeiter (automatisch für BMT/BSB)
-- **Abwesenheiten**: K (Krank), U (Urlaub), L (Lehrgang)
+- **Abwesenheiten**: AU (Arbeitsunfähigkeit/Krank), U (Urlaub), L (Lehrgang)
 
 ### Schichtbesetzung
 **Montag–Freitag:**

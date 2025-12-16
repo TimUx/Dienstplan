@@ -203,7 +203,7 @@ Der Dienstplan kann in drei verschiedenen Ansichten dargestellt werden:
 - **BMT** = Brandmeldetechniker (06:00-14:00, Mo-Fr)
 - **BSB** = Brandschutzbeauftragter (07:00-16:30, Mo-Fr)
 - **TD** = Tagdienst (speziell für qualifizierte Mitarbeiter)
-- **K** = Krank
+- **AU** = Arbeitsunfähigkeit / Krank
 - **U** = Urlaub
 - **L** = Lehrgang
 
@@ -552,7 +552,7 @@ Um Fixierung aufzuheben:
 
 **Abwesenheitsarten:**
 - **U - Urlaub** (grün) - Geplante Urlaubstage
-- **K - Krank** (rot) - Krankheitstage
+- **AU - Arbeitsunfähigkeit / Krank** (rot) - Krankheitstage, Krankschreibung
 - **L - Lehrgang** (blau) - Schulungen, Fortbildungen
 
 ### Abwesenheit bearbeiten
@@ -570,7 +570,7 @@ Um Fixierung aufzuheben:
 
 Abwesenheiten werden im Dienstplan farblich markiert:
 - **U** (Urlaub) = Grüner Hintergrund
-- **K** (Krank) = Roter Hintergrund
+- **AU** (Arbeitsunfähigkeit / Krank) = Roter Hintergrund
 - **L** (Lehrgang) = Blauer Hintergrund
 
 **Wichtig:** An Abwesenheitstagen können keine regulären Schichten vergeben werden.
@@ -1355,4 +1355,4 @@ Powered by **Google OR-Tools**
 
 ---
 
-*Letzte Aktualisierung: Dezember 2025*
+*Letzte Aktualisierung: Dezember 2024*

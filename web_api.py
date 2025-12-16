@@ -16,7 +16,7 @@ from functools import wraps
 
 # PDF export dependencies
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, A3, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -1708,10 +1708,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             required_width = employee_col_width + (len(dates) * date_col_width)
             
-            # Standard landscape A4 dimensions
-            from reportlab.lib.pagesizes import A4, A3
+            # Standard landscape A4 width for comparison
             landscape_a4_width = landscape(A4)[0]
-            landscape_a4_height = landscape(A4)[1]
             
             # Determine page size - use A3 for large tables
             if required_width > landscape_a4_width - 2*cm:

@@ -15,8 +15,9 @@ from datetime import date, timedelta
 from typing import Dict, List, Set, Tuple
 from entities import Employee, Absence, ShiftType, Team, get_shift_type_by_id
 
-# Virtual team ID (for TD-qualified employees without regular team assignment)
-VIRTUAL_TEAM_ID = 99  # "Fire Alarm System" virtual team
+# Virtual team IDs
+VIRTUAL_TEAM_ID = 99  # "Fire Alarm System" virtual team (for TD-qualified employees)
+FERIENJOBBER_TEAM_ID = 98  # "Ferienjobber" virtual team (for temporary holiday workers)
 
 # Shift planning rules
 MINIMUM_REST_HOURS = 11
@@ -133,6 +134,7 @@ def add_employee_team_linkage_constraints(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     springer_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
+    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -146,7 +148,8 @@ def add_employee_team_linkage_constraints(
     - Team members CAN work when their team works (but not required to work every day)
     - Employees CANNOT work if their team doesn't have a shift
     - Employees cannot work when absent
-    - Springers can work with their own team OR be assigned to help ONE other team (not both)
+    - Springers can work with own team OR one foreign team (not both)
+    - Ferienjobbers can help any team (similar to springers but without own team)
     - Employees in virtual team "Fire Alarm System" (ID 99) do NOT work regular shifts
     """
     
@@ -158,7 +161,7 @@ def add_employee_team_linkage_constraints(
             # Collect all cross-team variables for this springer in this week
             cross_team_vars = []
             for team in teams:
-                if team.id == springer.team_id or team.id == VIRTUAL_TEAM_ID:
+                if team.id == springer.team_id or team.id == VIRTUAL_TEAM_ID or team.id == FERIENJOBBER_TEAM_ID:
                     continue
                 if (springer.id, team.id, week_idx) in springer_cross_team:
                     cross_team_vars.append(springer_cross_team[(springer.id, team.id, week_idx)])
@@ -166,6 +169,23 @@ def add_employee_team_linkage_constraints(
             # At most 1 cross-team assignment per week
             if cross_team_vars:
                 model.Add(sum(cross_team_vars) <= 1)
+    
+    # CONSTRAINT: Ferienjobber can help at most ONE team per week
+    # Ferienjobbers don't have an own team, so they can only help other teams
+    ferienjobbers = [emp for emp in employees if emp.is_ferienjobber]
+    for ferienjobber in ferienjobbers:
+        for week_idx in range(len(weeks)):
+            # Collect all team assignments for this ferienjobber in this week
+            team_vars = []
+            for team in teams:
+                if team.id == VIRTUAL_TEAM_ID or team.id == FERIENJOBBER_TEAM_ID:
+                    continue
+                if (ferienjobber.id, team.id, week_idx) in ferienjobber_cross_team:
+                    team_vars.append(ferienjobber_cross_team[(ferienjobber.id, team.id, week_idx)])
+            
+            # At most 1 team assignment per week
+            if team_vars:
+                model.Add(sum(team_vars) <= 1)
     
     # For each employee
     for emp in employees:
@@ -198,25 +218,37 @@ def add_employee_team_linkage_constraints(
                 # 1. Working with own team (team has a shift AND springer assigned to own team)
                 # 2. Working with foreign team (springer assigned to help that team)
                 
-                possible_teams = []
+                # Constraint handled by staffing requirements
+            
+            continue
+        
+        # Ferienjobbers handled specially - can help any team
+        if emp.is_ferienjobber:
+            for d in dates:
+                if d.weekday() >= 5:  # Weekend - skip (no cross-team on weekends for now)
+                    continue
+                    
+                if (emp.id, d) not in employee_active:
+                    continue
                 
-                # Own team
-                for shift_code in shift_codes:
-                    if (emp.team_id, week_idx, shift_code) in team_shift:
-                        possible_teams.append(team_shift[(emp.team_id, week_idx, shift_code)])
+                # Check if absent
+                is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
+                if is_absent:
+                    model.Add(employee_active[(emp.id, d)] == 0)
+                    continue
                 
-                # Foreign teams (cross-team assignment)
-                for team in teams:
-                    if team.id == emp.team_id or team.id == VIRTUAL_TEAM_ID:
-                        continue
-                    if (emp.id, team.id, week_idx) in springer_cross_team:
-                        possible_teams.append(springer_cross_team[(emp.id, team.id, week_idx)])
+                # Find which week this day is in
+                week_idx = None
+                for w_idx, week_dates in enumerate(weeks):
+                    if d in week_dates:
+                        week_idx = w_idx
+                        break
                 
-                # Springer can be active if working with any team
-                if possible_teams:
-                    # employee_active implies at least one team assignment
-                    # This is automatically satisfied by staffing constraints
-                    pass
+                if week_idx is None:
+                    continue
+                
+                # Ferienjobber is active if assigned to help any team
+                # Constraint handled by staffing requirements
             
             continue
             
@@ -289,6 +321,7 @@ def add_staffing_constraints(
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     springer_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
+    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -410,6 +443,30 @@ def add_staffing_constraints(
                             [employee_active[(emp.id, d)], 
                              team_shift[(team.id, week_idx, shift)],
                              springer_cross_team[(emp.id, team.id, week_idx)]]
+                        )
+                        assigned.append(is_on_shift)
+                    
+                    # FERIENJOBBERS: Count Ferienjobbers helping this team
+                    for emp in employees:
+                        if not emp.is_ferienjobber:
+                            continue  # Only count Ferienjobbers
+                        
+                        if (emp.id, d) not in employee_active:
+                            continue
+                        
+                        if (emp.id, team.id, week_idx) not in ferienjobber_cross_team:
+                            continue
+                        
+                        # This Ferienjobber helps this team if:
+                        # 1. Team has this shift this week
+                        # 2. Ferienjobber is assigned to help this team
+                        # 3. Ferienjobber is active on this day
+                        is_on_shift = model.NewBoolVar(f"ferienjobber{emp.id}_helps_team{team.id}_shift{shift}_date{d}")
+                        model.AddMultiplicationEquality(
+                            is_on_shift,
+                            [employee_active[(emp.id, d)], 
+                             team_shift[(team.id, week_idx, shift)],
+                             ferienjobber_cross_team[(emp.id, team.id, week_idx)]]
                         )
                         assigned.append(is_on_shift)
                 
@@ -693,6 +750,7 @@ def add_fairness_objectives(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     springer_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
+    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -836,5 +894,14 @@ def add_fairness_objectives(
         # Add penalty for each week a springer helps a foreign team
         # This encourages the solver to use cross-team only when necessary
         objective_terms.append(10 * springer_cross_team[(springer_id, foreign_team_id, week_idx)])
+    
+    # MINIMIZE FERIENJOBBER USAGE (NEW)
+    # Prefer to use regular team members and own springers before using Ferienjobbers
+    # Ferienjobbers are temporary workers - use them to fill gaps when needed
+    # Weight: 8 (high but less than cross-team springers, as they're meant for gap-filling)
+    for ferienjobber_id, team_id, week_idx in ferienjobber_cross_team:
+        # Add penalty for each week a Ferienjobber helps a team
+        # This encourages the solver to use Ferienjobbers only when necessary
+        objective_terms.append(8 * ferienjobber_cross_team[(ferienjobber_id, team_id, week_idx)])
     
     return objective_terms

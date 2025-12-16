@@ -711,16 +711,44 @@ function createShiftBadge(shift) {
     return `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
 }
 
+// Constants for team IDs
+const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999; // Virtual team ID for fire alarm system
+
+/**
+ * Formats employee display name with personnel number in parentheses
+ * @param {string} employeeName - The employee's name
+ * @param {string} personalnummer - The employee's personnel number
+ * @returns {string} Formatted name like "Max Müller (PN001)" or just the name if no personnel number
+ */
+function formatEmployeeDisplayName(employeeName, personalnummer) {
+    return personalnummer ? `${employeeName} (${personalnummer})` : employeeName;
+}
+
+/**
+ * Ensures the virtual Brandmeldeanlage team exists in the teams object
+ * @param {Object} teams - The teams object to check and update
+ */
+function ensureVirtualTeam(teams) {
+    if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]) {
+        teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
+            teamId: VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,
+            teamName: 'Brandmeldeanlage',
+            employees: {}
+        };
+    }
+}
+
 function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     const teams = {};
     
+    // Create employee lookup map for better performance
+    const employeeMap = new Map(allEmployees.map(emp => [emp.id, emp]));
+    
     // First, create team structure with all employees
     allEmployees.forEach(emp => {
-        // Skip Springers from display in regular schedule
-        if (emp.isSpringer) {
-            return;
-        }
+        // No longer skip Springers - they should be displayed in their teams
         
+        // Determine which team(s) this employee belongs to
         const teamId = emp.teamId || UNASSIGNED_TEAM_ID;
         const teamName = emp.teamName || 'Ohne Team';
         
@@ -733,12 +761,37 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         }
         
         if (!teams[teamId].employees[emp.id]) {
+            // Include personnel number in parentheses after the name
+            const displayName = formatEmployeeDisplayName(
+                emp.fullName || `${emp.vorname} ${emp.name}`,
+                emp.personalnummer
+            );
             teams[teamId].employees[emp.id] = {
                 id: emp.id,
-                name: emp.fullName || `${emp.vorname} ${emp.name}`,
+                name: displayName,
+                personalnummer: emp.personalnummer,
                 shifts: {},
                 absences: [] // Store absences for this employee
             };
+        }
+        
+        // Also add BSB/MBT employees to virtual "Brandmeldeanlage" team
+        if (emp.isBrandmeldetechniker || emp.isBrandschutzbeauftragter) {
+            ensureVirtualTeam(teams);
+            
+            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[emp.id]) {
+                const displayName = formatEmployeeDisplayName(
+                    emp.fullName || `${emp.vorname} ${emp.name}`,
+                    emp.personalnummer
+                );
+                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[emp.id] = {
+                    id: emp.id,
+                    name: displayName,
+                    personalnummer: emp.personalnummer,
+                    shifts: {},
+                    absences: []
+                };
+            }
         }
     });
     
@@ -758,14 +811,20 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         
         // Ensure employee exists in the team
         if (!teams[teamId].employees[a.employeeId]) {
-            // Find employee to get team name
-            const employee = allEmployees.find(e => e.id === a.employeeId);
+            // Find employee to get team name and personnel number using map
+            const employee = employeeMap.get(a.employeeId);
             const correctTeamName = employee?.teamName || 'Ohne Team';
             teams[teamId].teamName = correctTeamName;
             
+            const displayName = formatEmployeeDisplayName(
+                a.employeeName,
+                employee?.personalnummer || ''
+            );
+            
             teams[teamId].employees[a.employeeId] = {
                 id: a.employeeId,
-                name: a.employeeName,
+                name: displayName,
+                personalnummer: employee?.personalnummer || '',
                 shifts: {},
                 absences: []
             };
@@ -776,6 +835,32 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
             teams[teamId].employees[a.employeeId].shifts[dateKey] = [];
         }
         teams[teamId].employees[a.employeeId].shifts[dateKey].push(a);
+        
+        // If this is a BSB or MBT shift, also add to virtual "Brandmeldeanlage" team
+        if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT') {
+            ensureVirtualTeam(teams);
+            
+            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId]) {
+                const employee = employeeMap.get(a.employeeId);
+                const displayName = formatEmployeeDisplayName(
+                    a.employeeName,
+                    employee?.personalnummer || ''
+                );
+                
+                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId] = {
+                    id: a.employeeId,
+                    name: displayName,
+                    personalnummer: employee?.personalnummer || '',
+                    shifts: {},
+                    absences: []
+                };
+            }
+            
+            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey]) {
+                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey] = [];
+            }
+            teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey].push(a);
+        }
     });
     
     // Add absences to the employees
@@ -793,16 +878,47 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         
         // Ensure employee exists for absence
         if (!teams[teamId].employees[absence.employeeId]) {
+            // Find employee to get personnel number using map
+            const employee = employeeMap.get(absence.employeeId);
+            const displayName = formatEmployeeDisplayName(
+                absence.employeeName,
+                employee?.personalnummer || ''
+            );
+            
             // Create employee entry if not exists
             teams[teamId].employees[absence.employeeId] = {
                 id: absence.employeeId,
-                name: absence.employeeName,
+                name: displayName,
+                personalnummer: employee?.personalnummer || '',
                 shifts: {},
                 absences: []
             };
         }
         
         teams[teamId].employees[absence.employeeId].absences.push(absence);
+        
+        // If employee has BSB/MBT qualification, also add to virtual "Brandmeldeanlage" team
+        const employee = employeeMap.get(absence.employeeId);
+        if (employee && (employee.isBrandmeldetechniker || employee.isBrandschutzbeauftragter)) {
+            ensureVirtualTeam(teams);
+            
+            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[absence.employeeId]) {
+                const displayName = formatEmployeeDisplayName(
+                    absence.employeeName,
+                    employee.personalnummer || ''
+                );
+                
+                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[absence.employeeId] = {
+                    id: absence.employeeId,
+                    name: displayName,
+                    personalnummer: employee.personalnummer || '',
+                    shifts: {},
+                    absences: []
+                };
+            }
+            
+            teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[absence.employeeId].absences.push(absence);
+        }
     });
     
     // Convert to array and sort
@@ -811,6 +927,9 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         teamName: team.teamName,
         employees: Object.values(team.employees).sort((a, b) => a.name.localeCompare(b.name))
     })).sort((a, b) => {
+        // Put "Brandmeldeanlage" near the top (after regular teams, before "Ohne Team")
+        if (a.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && b.teamId !== UNASSIGNED_TEAM_ID) return 1;
+        if (b.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && a.teamId !== UNASSIGNED_TEAM_ID) return -1;
         // Put "Ohne Team" at the end
         if (a.teamId === UNASSIGNED_TEAM_ID) return 1;
         if (b.teamId === UNASSIGNED_TEAM_ID) return -1;
@@ -1150,8 +1269,8 @@ async function exportScheduleToPdf() {
     }
     
     try {
-        // Use fetch to download PDF with authentication
-        const response = await fetch(`${API_BASE}/shifts/export/pdf?startDate=${startDate}&endDate=${endDate}`, {
+        // Use fetch to download PDF with authentication, passing the current view type
+        const response = await fetch(`${API_BASE}/shifts/export/pdf?startDate=${startDate}&endDate=${endDate}&view=${currentView}`, {
             credentials: 'include'
         });
         
@@ -1209,8 +1328,8 @@ async function exportScheduleToExcel() {
     }
     
     try {
-        // Use fetch to download Excel with authentication
-        const response = await fetch(`${API_BASE}/shifts/export/excel?startDate=${startDate}&endDate=${endDate}`, {
+        // Use fetch to download Excel with authentication, passing the current view type
+        const response = await fetch(`${API_BASE}/shifts/export/excel?startDate=${startDate}&endDate=${endDate}&view=${currentView}`, {
             credentials: 'include'
         });
         

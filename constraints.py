@@ -257,6 +257,10 @@ def add_staffing_constraints(
             if is_weekend:
                 # WEEKEND: Count team members working this weekend with their team's shift
                 # For each team with this shift, count active members
+                # 
+                # NOTE: Springers excluded from weekends by design - they don't have 
+                # weekend variables (see model.py line 198). Weekend staffing is lower
+                # (2-3 vs 4-5) so regular team members can usually meet requirements.
                 assigned = []
                 
                 for team in teams:
@@ -266,7 +270,7 @@ def add_staffing_constraints(
                     # Count members of this team working on this weekend day
                     for emp in employees:
                         if emp.team_id != team.id or emp.is_springer or emp.is_ferienjobber:
-                            continue  # Only count regular team members
+                            continue  # Only count regular team members (springers have no weekend variables)
                         
                         if (emp.id, d) not in employee_weekend_shift:
                             continue

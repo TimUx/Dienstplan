@@ -1444,11 +1444,178 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             app.logger.error(f"CSV export error: {str(e)}")
             return jsonify({'error': f'Export-Fehler: {str(e)}'}), 500
     
+    def get_shift_color(shift_code: str) -> tuple:
+        """
+        Get background color and text color for a shift type.
+        Returns (bg_color_hex, text_color_hex)
+        Matches the colors from the UI (wwwroot/css/styles.css and database)
+        """
+        colors_map = {
+            'F': ('#4CAF50', '#000000'),   # Früh - green with black text
+            'S': ('#FF9800', '#FFFFFF'),   # Spät - orange with white text
+            'N': ('#2196F3', '#FFFFFF'),   # Nacht - blue with white text
+            'Z': ('#9C27B0', '#FFFFFF'),   # Zwischendienst - purple with white text
+            'TD': ('#673AB7', '#FFFFFF'),  # Tagdienst - deep purple with white text
+            'BMT': ('#F44336', '#FFFFFF'), # Brandmeldetechniker - red with white text
+            'BSB': ('#E91E63', '#FFFFFF'), # Brandschutzbeauftragter - pink with white text
+            'U': ('#64748b', '#FFFFFF'),   # Urlaub - gray with white text
+            'AU': ('#dc2626', '#FFFFFF'),  # Krank - dark red with white text
+            'L': ('#3b82f6', '#FFFFFF'),   # Lehrgang - blue with white text
+        }
+        return colors_map.get(shift_code, ('#E0E0E0', '#000000'))  # Default gray
+    
+    def group_data_by_team_and_employee(conn, start_date: date, end_date: date, view_type: str = 'week'):
+        """
+        Group shift assignments by team and employee, mirroring the UI's groupByTeamAndEmployee logic.
+        Returns: (team_groups, dates, absences_by_employee)
+        """
+        cursor = conn.cursor()
+        
+        # Get all employees with their team info and special functions
+        cursor.execute("""
+            SELECT e.Id, e.Vorname, e.Name, e.Personalnummer, e.TeamId, 
+                   t.Name as TeamName, e.IsSpringer,
+                   e.IsBrandmeldetechniker, e.IsBrandschutzbeauftragter
+            FROM Employees e
+            LEFT JOIN Teams t ON e.TeamId = t.Id
+            ORDER BY t.Name NULLS LAST, e.IsSpringer DESC, e.Name, e.Vorname
+        """)
+        employees = cursor.fetchall()
+        
+        # Get all shift assignments in the date range
+        cursor.execute("""
+            SELECT sa.Date, sa.EmployeeId, st.Code, st.Name as ShiftName, st.ColorCode
+            FROM ShiftAssignments sa
+            JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            WHERE sa.Date >= ? AND sa.Date <= ?
+        """, (start_date.isoformat(), end_date.isoformat()))
+        assignments = cursor.fetchall()
+        
+        # Get all absences in the date range
+        cursor.execute("""
+            SELECT a.EmployeeId, a.StartDate, a.EndDate, a.Type, a.Notes
+            FROM Absences a
+            WHERE (a.StartDate <= ? AND a.EndDate >= ?)
+               OR (a.StartDate >= ? AND a.StartDate <= ?)
+        """, (end_date.isoformat(), start_date.isoformat(), 
+              start_date.isoformat(), end_date.isoformat()))
+        absences = cursor.fetchall()
+        
+        # Generate date range
+        dates = []
+        current = start_date
+        while current <= end_date:
+            dates.append(current.isoformat())
+            current += timedelta(days=1)
+        
+        # Build absences lookup
+        absences_by_employee = {}
+        for absence in absences:
+            emp_id = absence['EmployeeId']
+            if emp_id not in absences_by_employee:
+                absences_by_employee[emp_id] = []
+            absences_by_employee[emp_id].append(absence)
+        
+        # Build assignments lookup
+        assignments_by_emp_date = {}
+        for assignment in assignments:
+            key = (assignment['EmployeeId'], assignment['Date'])
+            if key not in assignments_by_emp_date:
+                assignments_by_emp_date[key] = []
+            assignments_by_emp_date[key].append(assignment)
+        
+        # Group by team
+        VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 9999
+        UNASSIGNED_TEAM_ID = -1
+        
+        teams = {}
+        for emp in employees:
+            # Add to regular team
+            team_id = emp['TeamId'] if emp['TeamId'] else UNASSIGNED_TEAM_ID
+            team_name = emp['TeamName'] if emp['TeamName'] else 'Ohne Team'
+            
+            if team_id not in teams:
+                teams[team_id] = {
+                    'teamId': team_id,
+                    'teamName': team_name,
+                    'employees': {}
+                }
+            
+            emp_name = f"{emp['Vorname']} {emp['Name']}"
+            if emp['Personalnummer']:
+                emp_name = f"{emp_name} ({emp['Personalnummer']})"
+            
+            teams[team_id]['employees'][emp['Id']] = {
+                'id': emp['Id'],
+                'name': emp_name,
+                'shifts': {}
+            }
+            
+            # Add to virtual Brandmeldeanlage team if qualified
+            if emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']:
+                if VIRTUAL_TEAM_BRANDMELDEANLAGE_ID not in teams:
+                    teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
+                        'teamId': VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,
+                        'teamName': 'Brandmeldeanlage',
+                        'employees': {}
+                    }
+                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]['employees'][emp['Id']] = {
+                    'id': emp['Id'],
+                    'name': emp_name,
+                    'shifts': {}
+                }
+        
+        # Populate shifts for each employee
+        for team in teams.values():
+            for emp_id, emp_data in team['employees'].items():
+                for date_str in dates:
+                    key = (emp_id, date_str)
+                    shifts = assignments_by_emp_date.get(key, [])
+                    emp_data['shifts'][date_str] = shifts
+        
+        # Sort teams (regular -> Brandmeldeanlage -> Ohne Team)
+        sorted_teams = []
+        for team_id in sorted(teams.keys()):
+            if team_id == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID or team_id == UNASSIGNED_TEAM_ID:
+                continue
+            sorted_teams.append(teams[team_id])
+        
+        if VIRTUAL_TEAM_BRANDMELDEANLAGE_ID in teams:
+            sorted_teams.append(teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID])
+        if UNASSIGNED_TEAM_ID in teams:
+            sorted_teams.append(teams[UNASSIGNED_TEAM_ID])
+        
+        # Sort employees within each team by name
+        for team in sorted_teams:
+            team['employees'] = dict(sorted(
+                team['employees'].items(),
+                key=lambda x: x[1]['name']
+            ))
+        
+        return sorted_teams, dates, absences_by_employee
+    
+    def get_absence_for_date(absences: list, date_str: str) -> Optional[dict]:
+        """Check if an employee has an absence on a specific date"""
+        target_date = date.fromisoformat(date_str)
+        for absence in absences:
+            start = date.fromisoformat(absence['StartDate'])
+            end = date.fromisoformat(absence['EndDate'])
+            if start <= target_date <= end:
+                return absence
+        return None
+    
+    def get_absence_code(absence_type: int) -> str:
+        """Convert absence type to code (U, AU, L)"""
+        # From entities.py: U=1 (Urlaub), AU=2 (Krank), L=3 (Lehrgang/Fortbildung)
+        codes = {1: 'U', 2: 'AU', 3: 'L'}
+        return codes.get(absence_type, 'U')
+
     @app.route('/api/shifts/export/pdf', methods=['GET'])
     def export_schedule_pdf():
-        """Export schedule to PDF format"""
+        """Export schedule to PDF format matching the UI view structure"""
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
+        view_type = request.args.get('view', 'week')  # week, month, or year
         
         if not start_date_str or not end_date_str:
             return jsonify({'error': 'startDate and endDate are required'}), 400
@@ -1458,60 +1625,133 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             end_date = date.fromisoformat(end_date_str)
             
             conn = db.get_connection()
-            cursor = conn.cursor()
             
-            # Get assignments
-            cursor.execute("""
-                SELECT sa.Date, e.Vorname, e.Name, e.Personalnummer, 
-                       t.Name as TeamName, st.Code, st.Name as ShiftName
-                FROM ShiftAssignments sa
-                JOIN Employees e ON sa.EmployeeId = e.Id
-                LEFT JOIN Teams t ON e.TeamId = t.Id
-                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-                WHERE sa.Date >= ? AND sa.Date <= ?
-                ORDER BY sa.Date, t.Name, e.Name, e.Vorname
-            """, (start_date.isoformat(), end_date.isoformat()))
+            # Get grouped data matching UI structure
+            team_groups, dates, absences_by_employee = group_data_by_team_and_employee(conn, start_date, end_date, view_type)
             
             # Create PDF
             import io
+            from reportlab.lib.colors import HexColor
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=landscape(A4))
             elements = []
             
             # Title
             styles = getSampleStyleSheet()
-            title = Paragraph(f"Dienstplan {start_date_str} bis {end_date_str}", styles['Title'])
-            elements.append(title)
-            elements.append(Spacer(1, 0.5*cm))
+            if view_type == 'week':
+                # Get week number
+                first_date_obj = datetime.fromisoformat(dates[0])
+                week_num = first_date_obj.isocalendar()[1]
+                year = first_date_obj.year
+                title_text = f"Dienstplan - Woche: KW {week_num} {year}"
+            elif view_type == 'month':
+                first_date_obj = datetime.fromisoformat(dates[0])
+                month_name = first_date_obj.strftime('%B %Y')
+                title_text = f"Dienstplan - Monat: {month_name}"
+            else:  # year
+                year = datetime.fromisoformat(dates[0]).year
+                title_text = f"Dienstplan - Jahr: {year}"
             
-            # Table data
-            data = [['Datum', 'Team', 'Mitarbeiter', 'Personalnummer', 'Schichttyp', 'Schichtname']]
-            for row in cursor.fetchall():
-                team_name = row['TeamName'] or 'Ohne Team'
-                data.append([
-                    row['Date'],
-                    team_name,
-                    f"{row['Vorname']} {row['Name']}",
-                    row['Personalnummer'],
-                    row['Code'],
-                    row['ShiftName']
-                ])
+            title = Paragraph(title_text, styles['Title'])
+            elements.append(title)
+            elements.append(Spacer(1, 0.3*cm))
+            
+            # Build table data matching UI structure
+            table_data = []
+            
+            # Header row
+            header_row = ['Team / Mitarbeiter']
+            for date_str in dates:
+                date_obj = datetime.fromisoformat(date_str)
+                if view_type == 'year':
+                    # For year view, show only date number
+                    header_row.append(date_obj.strftime('%d.%m'))
+                else:
+                    # For week/month view, show day name and date
+                    day_name = date_obj.strftime('%a')
+                    day_num = date_obj.strftime('%d.%m')
+                    header_row.append(f"{day_name}\n{day_num}")
+            table_data.append(header_row)
+            
+            # Data rows - grouped by team
+            for team in team_groups:
+                # Team header row
+                team_row = [team['teamName']] + [''] * len(dates)
+                table_data.append(team_row)
+                
+                # Employee rows
+                for emp_id, emp_data in team['employees'].items():
+                    emp_row = [f"  - {emp_data['name']}"]
+                    
+                    for date_str in dates:
+                        # Check for absence first
+                        absences = absences_by_employee.get(emp_id, [])
+                        absence = get_absence_for_date(absences, date_str)
+                        
+                        if absence:
+                            absence_code = get_absence_code(absence['Type'])
+                            emp_row.append(absence_code)
+                        else:
+                            # Get shifts for this date
+                            shifts = emp_data['shifts'].get(date_str, [])
+                            if shifts:
+                                shift_codes = ' '.join([s['Code'] for s in shifts])
+                                emp_row.append(shift_codes)
+                            else:
+                                emp_row.append('-')
+                    
+                    table_data.append(emp_row)
             
             conn.close()
             
-            # Create table
-            table = Table(data)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
+            # Create table with styling
+            # Adjust column widths based on number of columns
+            col_width = 1.5*cm if len(dates) > 20 else 2.0*cm
+            col_widths = [5*cm] + [col_width] * len(dates)
             
+            table = Table(table_data, colWidths=col_widths)
+            
+            # Apply styling
+            style_commands = [
+                # Header row styling
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#4CAF50')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8 if view_type == 'year' else 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                # Grid
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                # First column (employee names) - left aligned
+                ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+                ('FONTSIZE', (0, 1), (-1, -1), 7 if view_type == 'year' else 8),
+                ('LEFTPADDING', (0, 1), (0, -1), 5),
+                ('RIGHTPADDING', (0, 1), (0, -1), 5),
+                ('TOPPADDING', (0, 1), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ]
+            
+            # Add team header row styling
+            row_idx = 1
+            for team in team_groups:
+                # Team header background with gradient-like color
+                style_commands.append(
+                    ('BACKGROUND', (0, row_idx), (-1, row_idx), HexColor('#2563eb'))
+                )
+                style_commands.append(
+                    ('TEXTCOLOR', (0, row_idx), (-1, row_idx), colors.white)
+                )
+                style_commands.append(
+                    ('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold')
+                )
+                style_commands.append(
+                    ('ALIGN', (0, row_idx), (0, row_idx), 'LEFT')
+                )
+                row_idx += 1 + len(team['employees'])
+            
+            table.setStyle(TableStyle(style_commands))
             elements.append(table)
             doc.build(elements)
             
@@ -1526,13 +1766,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
         except Exception as e:
             app.logger.error(f"PDF export error: {str(e)}")
+            import traceback
+            app.logger.error(traceback.format_exc())
             return jsonify({'error': f'PDF-Export-Fehler: {str(e)}'}), 500
     
     @app.route('/api/shifts/export/excel', methods=['GET'])
     def export_schedule_excel():
-        """Export schedule to Excel format"""
+        """Export schedule to Excel format matching the UI view structure"""
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
+        view_type = request.args.get('view', 'week')  # week, month, or year
         
         if not start_date_str or not end_date_str:
             return jsonify({'error': 'startDate and endDate are required'}), 400
@@ -1541,7 +1784,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Import Excel library
             try:
                 import openpyxl
-                from openpyxl.styles import Font, PatternFill, Alignment
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
             except ImportError:
                 return jsonify({
                     'error': 'Excel-Export erfordert openpyxl. Bitte installieren Sie es mit: pip install openpyxl'
@@ -1551,63 +1794,145 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             end_date = date.fromisoformat(end_date_str)
             
             conn = db.get_connection()
-            cursor = conn.cursor()
             
-            # Get assignments
-            cursor.execute("""
-                SELECT sa.Date, e.Vorname, e.Name, e.Personalnummer, 
-                       t.Name as TeamName, st.Code, st.Name as ShiftName
-                FROM ShiftAssignments sa
-                JOIN Employees e ON sa.EmployeeId = e.Id
-                LEFT JOIN Teams t ON e.TeamId = t.Id
-                JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-                WHERE sa.Date >= ? AND sa.Date <= ?
-                ORDER BY sa.Date, t.Name, e.Name, e.Vorname
-            """, (start_date.isoformat(), end_date.isoformat()))
+            # Get grouped data matching UI structure
+            team_groups, dates, absences_by_employee = group_data_by_team_and_employee(conn, start_date, end_date, view_type)
             
             # Create workbook
             wb = openpyxl.Workbook()
             ws = wb.active
-            ws.title = "Dienstplan"
             
-            # Header
-            headers = ['Datum', 'Team', 'Mitarbeiter', 'Personalnummer', 'Schichttyp', 'Schichtname']
-            ws.append(headers)
+            # Set title based on view type
+            if view_type == 'week':
+                first_date_obj = datetime.fromisoformat(dates[0])
+                week_num = first_date_obj.isocalendar()[1]
+                year = first_date_obj.year
+                ws.title = f"KW{week_num} {year}"
+            elif view_type == 'month':
+                first_date_obj = datetime.fromisoformat(dates[0])
+                ws.title = first_date_obj.strftime('%B %Y')
+            else:  # year
+                year = datetime.fromisoformat(dates[0]).year
+                ws.title = f"Jahr {year}"
             
-            # Style header
-            header_font = Font(bold=True, color="FFFFFF")
-            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            # Header row
+            header_row = ['Team / Mitarbeiter']
+            for date_str in dates:
+                date_obj = datetime.fromisoformat(date_str)
+                if view_type == 'year':
+                    header_row.append(date_obj.strftime('%d.%m'))
+                else:
+                    day_name = date_obj.strftime('%a')
+                    day_num = date_obj.strftime('%d.%m')
+                    header_row.append(f"{day_name}\n{day_num}")
+            ws.append(header_row)
+            
+            # Style header row
+            header_font = Font(bold=True, color="FFFFFF", size=10)
+            header_fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
+            header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
             for cell in ws[1]:
                 cell.font = header_font
                 cell.fill = header_fill
-                cell.alignment = Alignment(horizontal="center")
+                cell.alignment = header_alignment
+                cell.border = border
             
-            # Add data
-            for row in cursor.fetchall():
-                team_name = row['TeamName'] or 'Ohne Team'
-                ws.append([
-                    row['Date'],
-                    team_name,
-                    f"{row['Vorname']} {row['Name']}",
-                    row['Personalnummer'],
-                    row['Code'],
-                    row['ShiftName']
-                ])
+            # Set row height for header
+            ws.row_dimensions[1].height = 30
+            
+            # Data rows - grouped by team
+            current_row = 2
+            for team in team_groups:
+                # Team header row
+                team_row = [team['teamName']] + [''] * len(dates)
+                ws.append(team_row)
+                
+                # Style team header
+                team_font = Font(bold=True, color="FFFFFF", size=10)
+                team_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+                team_alignment = Alignment(horizontal="left", vertical="center")
+                
+                for col_idx in range(1, len(dates) + 2):
+                    cell = ws.cell(row=current_row, column=col_idx)
+                    cell.font = team_font
+                    cell.fill = team_fill
+                    cell.alignment = team_alignment
+                    cell.border = border
+                
+                current_row += 1
+                
+                # Employee rows
+                for emp_id, emp_data in team['employees'].items():
+                    emp_row = [f"  - {emp_data['name']}"]
+                    
+                    for date_str in dates:
+                        # Check for absence first
+                        absences = absences_by_employee.get(emp_id, [])
+                        absence = get_absence_for_date(absences, date_str)
+                        
+                        if absence:
+                            absence_code = get_absence_code(absence['Type'])
+                            emp_row.append(absence_code)
+                        else:
+                            # Get shifts for this date
+                            shifts = emp_data['shifts'].get(date_str, [])
+                            if shifts:
+                                shift_codes = ' '.join([s['Code'] for s in shifts])
+                                emp_row.append(shift_codes)
+                            else:
+                                emp_row.append('-')
+                    
+                    ws.append(emp_row)
+                    
+                    # Style employee row
+                    emp_font = Font(size=9)
+                    emp_alignment_left = Alignment(horizontal="left", vertical="center")
+                    emp_alignment_center = Alignment(horizontal="center", vertical="center")
+                    
+                    # First cell (employee name) - left aligned
+                    cell = ws.cell(row=current_row, column=1)
+                    cell.font = emp_font
+                    cell.alignment = emp_alignment_left
+                    cell.border = border
+                    
+                    # Shift cells - with color coding
+                    for col_idx in range(2, len(dates) + 2):
+                        cell = ws.cell(row=current_row, column=col_idx)
+                        cell.font = Font(size=8, bold=True)
+                        cell.alignment = emp_alignment_center
+                        cell.border = border
+                        
+                        # Get the shift code to apply color
+                        cell_value = str(cell.value) if cell.value else ''
+                        if cell_value and cell_value != '-':
+                            # Split multiple shifts and use first one for color
+                            first_shift = cell_value.split()[0]
+                            bg_color, text_color = get_shift_color(first_shift)
+                            # Remove # from hex colors for openpyxl
+                            bg_hex = bg_color.replace('#', '')
+                            text_hex = text_color.replace('#', '')
+                            cell.fill = PatternFill(start_color=bg_hex, end_color=bg_hex, fill_type="solid")
+                            cell.font = Font(size=8, bold=True, color=text_hex)
+                    
+                    current_row += 1
             
             conn.close()
             
             # Adjust column widths
-            for column in ws.columns:
-                max_length = 0
-                column = [cell for cell in column]
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(cell.value)
-                    except Exception:
-                        pass
-                adjusted_width = (max_length + 2)
-                ws.column_dimensions[column[0].column_letter].width = adjusted_width
+            ws.column_dimensions['A'].width = 30  # Employee names column
+            for col_idx in range(2, len(dates) + 2):
+                col_letter = openpyxl.utils.get_column_letter(col_idx)
+                if view_type == 'year':
+                    ws.column_dimensions[col_letter].width = 6
+                else:
+                    ws.column_dimensions[col_letter].width = 8
             
             # Save to BytesIO
             import io
@@ -1625,6 +1950,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
         except Exception as e:
             app.logger.error(f"Excel export error: {str(e)}")
+            import traceback
+            app.logger.error(traceback.format_exc())
             return jsonify({'error': f'Excel-Export-Fehler: {str(e)}'}), 500
     
     # ============================================================================

@@ -1269,8 +1269,8 @@ async function exportScheduleToPdf() {
     }
     
     try {
-        // Use fetch to download PDF with authentication
-        const response = await fetch(`${API_BASE}/shifts/export/pdf?startDate=${startDate}&endDate=${endDate}`, {
+        // Use fetch to download PDF with authentication, passing the current view type
+        const response = await fetch(`${API_BASE}/shifts/export/pdf?startDate=${startDate}&endDate=${endDate}&view=${currentView}`, {
             credentials: 'include'
         });
         
@@ -1328,8 +1328,8 @@ async function exportScheduleToExcel() {
     }
     
     try {
-        // Use fetch to download Excel with authentication
-        const response = await fetch(`${API_BASE}/shifts/export/excel?startDate=${startDate}&endDate=${endDate}`, {
+        // Use fetch to download Excel with authentication, passing the current view type
+        const response = await fetch(`${API_BASE}/shifts/export/excel?startDate=${startDate}&endDate=${endDate}&view=${currentView}`, {
             credentials: 'include'
         });
         

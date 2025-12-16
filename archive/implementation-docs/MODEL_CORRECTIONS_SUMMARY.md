@@ -4,7 +4,7 @@
 
 This document summarizes the corrections and extensions applied to the Python + Google OR-Tools (CP-SAT) scheduling model as specified in the requirements.
 
-## Date: December 2025
+## Date: December 2024
 
 ---
 
@@ -509,7 +509,7 @@ All critical requirements from problem statement have been addressed and verifie
 
 ---
 
-**Implementation Date:** December 14, 2025
+**Implementation Date:** December 14, 2024
 **Implemented By:** GitHub Copilot Agent
 **Reviewed By:** Automated test suite
 **Version:** 2.1 - Weekend Consistency + Manual Overrides

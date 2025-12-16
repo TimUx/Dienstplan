@@ -232,14 +232,14 @@ Time: 1.05s
 
 **Before**:
 ```
-Period: Dec 31, 2025 - Jan 30, 2026 (31 days)
+Period: Dec 31, 2024 - Jan 30, 2026 (31 days)
 2 absences (AU, U)
 Result: INFEASIBLE ❌
 ```
 
 **After**:
 ```
-Period: Dec 31, 2025 - Jan 30, 2026 (31 days)
+Period: Dec 31, 2024 - Jan 30, 2026 (31 days)
 2 absences (AU, U)
 Result: OPTIMAL ✅
 Time: 10.38s
@@ -352,7 +352,7 @@ The shift planning system can now handle realistic absence scenarios including w
 
 ---
 
-**Implementation Date**: December 2025  
+**Implementation Date**: December 2024  
 **Status**: ✅ COMPLETE AND DEPLOYED  
 **Test Coverage**: 11/11 tests passing  
 **Performance**: All scenarios < 11 seconds  

@@ -290,16 +290,18 @@ def add_staffing_constraints(
                 # A member works this shift if:
                 # 1. Their team has this shift this week
                 # 2. They are active on this day
+                # 
+                # IMPORTANT: Include springers in count - they can fill in for absent team members
                 assigned = []
                 
                 for team in teams:
                     if (team.id, week_idx, shift) not in team_shift:
                         continue
                     
-                    # Count active members of this team on this day
+                    # Count active members of this team on this day (including springers)
                     for emp in employees:
-                        if emp.team_id != team.id or emp.is_springer:
-                            continue  # Only count regular team members
+                        if emp.team_id != team.id:
+                            continue  # Only count team members (springers ARE team members)
                         
                         if (emp.id, d) not in employee_active:
                             continue

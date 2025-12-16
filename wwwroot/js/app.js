@@ -660,7 +660,7 @@ function displayYearView(data, employees) {
 // Helper functions
 
 // Constant for employees without team assignment
-const UNASSIGNED_TEAM_ID = 0;
+const UNASSIGNED_TEAM_ID = -1; // Must match Python backend value
 
 // Absence type constants (must match database enum)
 const ABSENCE_TYPES = {

@@ -751,10 +751,25 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         """, (id,))
         
         row = cursor.fetchone()
-        conn.close()
         
         if not row:
+            conn.close()
             return jsonify({'error': 'Team nicht gefunden'}), 404
+        
+        employee_count = row['EmployeeCount']
+        
+        # For virtual teams, count employees with special qualifications instead of TeamId
+        if bool(row['IsVirtual']):
+            # Virtual team for fire alarm system - count employees with BMT or BSB qualification
+            cursor.execute("""
+                SELECT COUNT(*) as Count
+                FROM Employees
+                WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
+            """)
+            virtual_count = cursor.fetchone()['Count']
+            employee_count = virtual_count
+        
+        conn.close()
         
         return jsonify({
             'id': row['Id'],
@@ -762,7 +777,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'description': row['Description'],
             'email': row['Email'],
             'isVirtual': bool(row['IsVirtual']),
-            'employeeCount': row['EmployeeCount']
+            'employeeCount': employee_count
         })
     
     @app.route('/api/teams', methods=['POST'])

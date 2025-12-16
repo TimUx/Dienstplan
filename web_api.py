@@ -710,13 +710,26 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         
         teams = []
         for row in cursor.fetchall():
+            employee_count = row['EmployeeCount']
+            
+            # For virtual teams, count employees with special qualifications instead of TeamId
+            if bool(row['IsVirtual']):
+                # Virtual team for fire alarm system - count employees with BMT or BSB qualification
+                cursor.execute("""
+                    SELECT COUNT(*) as Count
+                    FROM Employees
+                    WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
+                """)
+                virtual_count = cursor.fetchone()['Count']
+                employee_count = virtual_count
+            
             teams.append({
                 'id': row['Id'],
                 'name': row['Name'],
                 'description': row['Description'],
                 'email': row['Email'],
                 'isVirtual': bool(row['IsVirtual']),
-                'employeeCount': row['EmployeeCount']
+                'employeeCount': employee_count
             })
         
         conn.close()
@@ -1530,26 +1543,33 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         
         teams = {}
         for emp in employees:
-            # Add to regular team
-            team_id = emp['TeamId'] if emp['TeamId'] else UNASSIGNED_TEAM_ID
-            team_name = emp['TeamName'] if emp['TeamName'] else 'Ohne Team'
+            # Check if employee has special functions but no team
+            # These employees should ONLY appear in virtual team, not "Ohne Team"
+            has_special_function = emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']
+            has_no_team = not emp['TeamId']
             
-            if team_id not in teams:
-                teams[team_id] = {
-                    'teamId': team_id,
-                    'teamName': team_name,
-                    'employees': {}
+            # Add to regular team only if they have a team OR don't have special function
+            if not (has_no_team and has_special_function):
+                # Add to regular team
+                team_id = emp['TeamId'] if emp['TeamId'] else UNASSIGNED_TEAM_ID
+                team_name = emp['TeamName'] if emp['TeamName'] else 'Ohne Team'
+                
+                if team_id not in teams:
+                    teams[team_id] = {
+                        'teamId': team_id,
+                        'teamName': team_name,
+                        'employees': {}
+                    }
+                
+                emp_name = f"{emp['Vorname']} {emp['Name']}"
+                if emp['Personalnummer']:
+                    emp_name = f"{emp_name} ({emp['Personalnummer']})"
+                
+                teams[team_id]['employees'][emp['Id']] = {
+                    'id': emp['Id'],
+                    'name': emp_name,
+                    'shifts': {}
                 }
-            
-            emp_name = f"{emp['Vorname']} {emp['Name']}"
-            if emp['Personalnummer']:
-                emp_name = f"{emp_name} ({emp['Personalnummer']})"
-            
-            teams[team_id]['employees'][emp['Id']] = {
-                'id': emp['Id'],
-                'name': emp_name,
-                'shifts': {}
-            }
             
             # Add to virtual Brandmeldeanlage team if qualified
             if emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']:

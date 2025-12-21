@@ -210,6 +210,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     app.config['SESSION_COOKIE_NAME'] = 'dienstplan_session'
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_SECURE'] = False  # Allow HTTP connections (set to True if using HTTPS in production)
+    app.config['SESSION_COOKIE_DOMAIN'] = None  # Allow cookies to work across all domains/IPs
     
     CORS(app, supports_credentials=True)  # Enable CORS with credentials
     

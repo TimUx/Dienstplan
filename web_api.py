@@ -2815,7 +2815,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/vacationrequests/<int:id>/status', methods=['PUT'])
     @require_role('Admin')
     def update_vacation_request_status(id):
-        """Update vacation request status (Disponent only)"""
+        """Update vacation request status (Admin only)"""
         try:
             data = request.get_json()
             status = data.get('status')
@@ -2893,7 +2893,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/shiftexchanges/pending', methods=['GET'])
     @require_role('Admin')
     def get_pending_shift_exchanges():
-        """Get pending shift exchanges (Disponent only)"""
+        """Get pending shift exchanges (Admin only)"""
         conn = db.get_connection()
         cursor = conn.cursor()
         

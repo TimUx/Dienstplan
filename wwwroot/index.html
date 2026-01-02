@@ -205,6 +205,7 @@
                 <!-- Admin Navigation Tabs -->
                 <div class="admin-tabs">
                     <button class="admin-tab active" onclick="showAdminTab('users', this)">👥 Benutzerverwaltung</button>
+                    <button class="admin-tab" onclick="showAdminTab('vacation-periods', this)">📅 Ferienzeiten</button>
                     <button class="admin-tab" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" onclick="showAdminTab('email', this)">📧 E-Mail-Einstellungen</button>
                     <button class="admin-tab" onclick="showAdminTab('settings', this)">🔧 Globale Einstellungen</button>
@@ -223,6 +224,20 @@
                             </div>
                             <div id="users-content">
                                 <p class="loading">Lade Benutzer...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vacation Periods Tab -->
+                    <div id="admin-tab-vacation-periods" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📅 Ferienzeiten verwalten</h3>
+                            <p>Definieren Sie Ferienzeiträume (Sommer, Herbst, Weihnachten, Ostern usw.). Diese werden in den Kalenderansichten als oberste Zeile angezeigt.</p>
+                            <div class="controls">
+                                <button onclick="showVacationPeriodModal()" class="btn-primary">+ Ferienzeit hinzufügen</button>
+                            </div>
+                            <div id="vacation-periods-content">
+                                <p class="loading">Lade Ferienzeiten...</p>
                             </div>
                         </div>
                     </div>
@@ -855,6 +870,38 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeTeamModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Vacation Period Modal -->
+    <div id="vacationPeriodModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeVacationPeriodModal()">&times;</span>
+            <h2 id="vacationPeriodModalTitle">Ferienzeit hinzufügen</h2>
+            <form id="vacationPeriodForm" onsubmit="saveVacationPeriod(event)">
+                <input type="hidden" id="vacationPeriodId">
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="vacationPeriodName" required placeholder="z.B. Sommerferien, Weihnachtsferien, Osterferien">
+                </div>
+                <div class="form-group">
+                    <label>Von (Startdatum)*</label>
+                    <input type="date" id="vacationPeriodStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Bis (Enddatum)*</label>
+                    <input type="date" id="vacationPeriodEndDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Farbe</label>
+                    <input type="color" id="vacationPeriodColor" value="#E8F5E9">
+                    <small>Farbe für die Darstellung in den Kalenderansichten</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeVacationPeriodModal()" class="btn-secondary">Abbrechen</button>
                     <button type="submit" class="btn-primary">Speichern</button>
                 </div>
             </form>

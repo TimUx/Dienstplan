@@ -431,6 +431,36 @@ function displayWeekView(data, employees) {
     
     html += '</tr></thead><tbody>';
     
+    // Add vacation periods row (Ferienzeiten) at the very top
+    if (data.vacationPeriods && data.vacationPeriods.length > 0) {
+        html += '<tr class="vacation-period-row">';
+        html += '<td class="vacation-period-label"><strong>🏖️ Ferien</strong></td>';
+        
+        dates.forEach(dateStr => {
+            const date = new Date(dateStr);
+            const activePeriods = data.vacationPeriods.filter(period => {
+                const startDate = new Date(period.startDate);
+                const endDate = new Date(period.endDate);
+                return date >= startDate && date <= endDate;
+            });
+            
+            let content = '';
+            if (activePeriods.length > 0) {
+                // Show vacation period name(s)
+                activePeriods.forEach(period => {
+                    content += `<div class="vacation-period-badge" style="background-color: ${period.colorCode};" title="${escapeHtml(period.name)}">${escapeHtml(period.name)}</div>`;
+                });
+            }
+            
+            const isSunday = date.getDay() === 0;
+            const isHoliday = isHessianHoliday(date);
+            const cellClass = (isSunday || isHoliday) ? 'vacation-period-cell sunday-cell' : 'vacation-period-cell';
+            html += `<td class="${cellClass}">${content}</td>`;
+        });
+        
+        html += '</tr>';
+    }
+    
     // Add rows for each team and employee
     teamGroups.forEach(team => {
         // Team header row
@@ -516,6 +546,40 @@ function displayMonthView(data, employees) {
     });
     
     html += '</tr></thead><tbody>';
+    
+    // Add vacation periods row (Ferienzeiten) at the very top
+    if (data.vacationPeriods && data.vacationPeriods.length > 0) {
+        const totalDays = weekGroups.reduce((sum, w) => sum + w.days.length, 0);
+        html += '<tr class="vacation-period-row">';
+        html += '<td class="vacation-period-label"><strong>🏖️ Ferien</strong></td>';
+        
+        weekGroups.forEach(week => {
+            week.days.forEach(dateStr => {
+                const date = new Date(dateStr);
+                const activePeriods = data.vacationPeriods.filter(period => {
+                    const startDate = new Date(period.startDate);
+                    const endDate = new Date(period.endDate);
+                    return date >= startDate && date <= endDate;
+                });
+                
+                let content = '';
+                if (activePeriods.length > 0) {
+                    // Show vacation period name(s) - abbreviated for month view
+                    activePeriods.forEach(period => {
+                        const shortName = period.name.length > 10 ? period.name.substring(0, 8) + '...' : period.name;
+                        content += `<div class="vacation-period-badge-compact" style="background-color: ${period.colorCode};" title="${escapeHtml(period.name)}">${escapeHtml(shortName)}</div>`;
+                    });
+                }
+                
+                const isSunday = date.getDay() === 0;
+                const isHoliday = isHessianHoliday(date);
+                const cellClass = (isSunday || isHoliday) ? 'vacation-period-cell sunday-cell' : 'vacation-period-cell';
+                html += `<td class="${cellClass}">${content}</td>`;
+            });
+        });
+        
+        html += '</tr>';
+    }
     
     // Add rows for each team and employee
     teamGroups.forEach(team => {
@@ -607,6 +671,38 @@ function displayYearView(data, employees) {
         });
         
         html += '</tr></thead><tbody>';
+        
+        // Add vacation periods row (Ferienzeiten) at the very top of each month
+        if (data.vacationPeriods && data.vacationPeriods.length > 0) {
+            html += '<tr class="vacation-period-row">';
+            html += '<td class="vacation-period-label"><strong>🏖️ Ferien</strong></td>';
+            
+            month.weeks.forEach(weekNum => {
+                const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
+                const activePeriods = [];
+                
+                weekDates.forEach(dateStr => {
+                    const date = new Date(dateStr);
+                    data.vacationPeriods.forEach(period => {
+                        const startDate = new Date(period.startDate);
+                        const endDate = new Date(period.endDate);
+                        if (date >= startDate && date <= endDate && !activePeriods.find(p => p.id === period.id)) {
+                            activePeriods.push(period);
+                        }
+                    });
+                });
+                
+                let content = '';
+                if (activePeriods.length > 0) {
+                    // Show just an indicator for year view
+                    content = '<div class="vacation-period-indicator" title="' + activePeriods.map(p => escapeHtml(p.name)).join(', ') + '">🏖️</div>';
+                }
+                
+                html += `<td class="vacation-period-cell">${content}</td>`;
+            });
+            
+            html += '</tr>';
+        }
         
         // Add rows for each team and employee
         teamGroups.forEach(team => {
@@ -2852,6 +2948,199 @@ function saveGlobalSettings() {
     alert(`Globale Einstellungen gespeichert:\n• Max Stunden/Monat: ${maxHoursMonth}\n• Max Stunden/Woche: ${maxHoursWeek}\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Diese Einstellungen werden lokal im Browser gespeichert.`);
 }
 
+// ===========================
+// Vacation Periods (Ferienzeiten) Functions
+// ===========================
+
+async function loadVacationPeriods() {
+    try {
+        const response = await fetch(`${API_BASE}/vacation-periods`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const periods = await response.json();
+            displayVacationPeriods(periods);
+        } else {
+            document.getElementById('vacation-periods-content').innerHTML = '<p class="error">Fehler beim Laden der Ferienzeiten.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading vacation periods:', error);
+        document.getElementById('vacation-periods-content').innerHTML = '<p class="error">Fehler beim Laden der Ferienzeiten.</p>';
+    }
+}
+
+function displayVacationPeriods(periods) {
+    const content = document.getElementById('vacation-periods-content');
+    
+    if (periods.length === 0) {
+        content.innerHTML = '<p>Keine Ferienzeiten definiert.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Name</th>';
+    html += '<th>Von</th>';
+    html += '<th>Bis</th>';
+    html += '<th>Farbe</th>';
+    html += '<th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    periods.forEach(period => {
+        const startDate = new Date(period.startDate).toLocaleDateString('de-DE');
+        const endDate = new Date(period.endDate).toLocaleDateString('de-DE');
+        
+        html += '<tr>';
+        html += `<td><strong>${escapeHtml(period.name)}</strong></td>`;
+        html += `<td>${startDate}</td>`;
+        html += `<td>${endDate}</td>`;
+        html += `<td><span style="display:inline-block;width:30px;height:20px;background-color:${period.colorCode};border:1px solid #ccc;border-radius:3px;"></span></td>`;
+        html += '<td class="actions">';
+        html += `<button onclick="editVacationPeriod(${period.id})" class="btn-icon" title="Bearbeiten">✏️</button>`;
+        
+        if (hasRole('Admin')) {
+            html += `<button onclick="deleteVacationPeriod(${period.id}, '${escapeHtml(period.name)}')" class="btn-icon" title="Löschen">🗑️</button>`;
+        }
+        
+        html += '</td></tr>';
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+function showVacationPeriodModal(periodId = null) {
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Ferienzeiten zu verwalten.');
+        return;
+    }
+    
+    // Reset form
+    document.getElementById('vacationPeriodForm').reset();
+    document.getElementById('vacationPeriodId').value = '';
+    document.getElementById('vacationPeriodColor').value = '#E8F5E9';
+    
+    if (periodId) {
+        // Load existing period data for editing
+        document.getElementById('vacationPeriodModalTitle').textContent = 'Ferienzeit bearbeiten';
+        loadVacationPeriodForEdit(periodId);
+    } else {
+        // New period
+        document.getElementById('vacationPeriodModalTitle').textContent = 'Ferienzeit hinzufügen';
+    }
+    
+    document.getElementById('vacationPeriodModal').style.display = 'block';
+}
+
+async function loadVacationPeriodForEdit(periodId) {
+    try {
+        const response = await fetch(`${API_BASE}/vacation-periods/${periodId}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const period = await response.json();
+            document.getElementById('vacationPeriodId').value = period.id;
+            document.getElementById('vacationPeriodName').value = period.name;
+            document.getElementById('vacationPeriodStartDate').value = period.startDate;
+            document.getElementById('vacationPeriodEndDate').value = period.endDate;
+            document.getElementById('vacationPeriodColor').value = period.colorCode || '#E8F5E9';
+        } else {
+            alert('Fehler beim Laden der Ferienzeit.');
+            closeVacationPeriodModal();
+        }
+    } catch (error) {
+        console.error('Error loading vacation period:', error);
+        alert('Fehler beim Laden der Ferienzeit.');
+        closeVacationPeriodModal();
+    }
+}
+
+function editVacationPeriod(periodId) {
+    showVacationPeriodModal(periodId);
+}
+
+function closeVacationPeriodModal() {
+    document.getElementById('vacationPeriodModal').style.display = 'none';
+    document.getElementById('vacationPeriodForm').reset();
+}
+
+async function saveVacationPeriod(event) {
+    event.preventDefault();
+    
+    const periodId = document.getElementById('vacationPeriodId').value;
+    const isEdit = periodId !== '';
+    
+    const data = {
+        name: document.getElementById('vacationPeriodName').value,
+        startDate: document.getElementById('vacationPeriodStartDate').value,
+        endDate: document.getElementById('vacationPeriodEndDate').value,
+        colorCode: document.getElementById('vacationPeriodColor').value
+    };
+    
+    try {
+        const url = isEdit 
+            ? `${API_BASE}/vacation-periods/${periodId}`
+            : `${API_BASE}/vacation-periods`;
+        
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            closeVacationPeriodModal();
+            loadVacationPeriods();
+            // Reload schedule to show updated vacation periods
+            loadSchedule();
+            alert(isEdit ? 'Ferienzeit erfolgreich aktualisiert!' : 'Ferienzeit erfolgreich hinzugefügt!');
+        } else {
+            const error = await response.json();
+            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error saving vacation period:', error);
+        alert('Fehler beim Speichern der Ferienzeit.');
+    }
+}
+
+async function deleteVacationPeriod(periodId, periodName) {
+    if (!hasRole('Admin')) {
+        alert('Nur Administratoren können Ferienzeiten löschen.');
+        return;
+    }
+    
+    if (!confirm(`Möchten Sie die Ferienzeit "${periodName}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacation-periods/${periodId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            loadVacationPeriods();
+            // Reload schedule to remove deleted vacation period
+            loadSchedule();
+            alert('Ferienzeit erfolgreich gelöscht!');
+        } else {
+            const error = await response.json();
+            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error deleting vacation period:', error);
+        alert('Fehler beim Löschen der Ferienzeit.');
+    }
+}
+
 // Helper function to escape HTML
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -3222,6 +3511,9 @@ function showAdminTab(tabName, clickedElement) {
     if (tabName === 'users') {
         stopAuditLogAutoRefresh(); // Stop auto-refresh when switching away from audit logs
         loadUsers();
+    } else if (tabName === 'vacation-periods') {
+        stopAuditLogAutoRefresh();
+        loadVacationPeriods();
     } else if (tabName === 'audit-logs') {
         loadAuditLogs(1, 50);
         startAuditLogAutoRefresh(AUDIT_LOG_DEFAULT_REFRESH_INTERVAL); // Start auto-refresh with default interval

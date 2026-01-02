@@ -46,7 +46,7 @@ def test_weekday_consistency():
             continue
         
         emp = next((e for e in employees if e.id == emp_id), None)
-        if not emp or emp.is_springer:
+        if not emp or not emp.team_id:
             continue
         
         week_num = 0 if date_val < date(2025, 1, 13) else 1
@@ -119,7 +119,7 @@ def test_weekend_team_consistency():
     for assignment in assignments:
         emp_id = assignment.employee_id
         emp = next((e for e in employees if e.id == emp_id), None)
-        if not emp or emp.is_springer or not emp.team_id:
+        if not emp or not emp.team_id:
             continue
         
         shift_type = get_shift_type_by_id(assignment.shift_type_id)
@@ -208,7 +208,7 @@ def test_team_rotation():
     
     for assignment in assignments:
         emp = next((e for e in employees if e.id == assignment.employee_id), None)
-        if not emp or not emp.team_id or emp.is_springer:
+        if not emp or not emp.team_id:
             continue
         
         # Only weekdays

@@ -17,7 +17,7 @@ from constraints import (
     add_consecutive_shifts_constraints,
     add_working_hours_constraints,
     add_td_constraints,
-    add_springer_constraints,
+    add_weekly_available_employee_constraint,
     add_fairness_objectives
 )
 
@@ -52,7 +52,7 @@ class ShiftPlanningSolver:
         Add all constraints to the TEAM-BASED model.
         """
         model = self.planning_model.get_model()
-        team_shift, employee_active, employee_weekend_shift, td_vars, springer_cross_team, ferienjobber_cross_team = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars, ferienjobber_cross_team = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -74,11 +74,11 @@ class ShiftPlanningSolver:
         add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
-        add_employee_team_linkage_constraints(model, team_shift, employee_active, springer_cross_team, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes, absences)
+        add_employee_team_linkage_constraints(model, team_shift, employee_active, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes, absences)
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift)")
-        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, springer_cross_team, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
+        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
         
         print("  - Rest time constraints (11 hours minimum)")
         add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, dates, weeks, shift_codes)
@@ -93,12 +93,12 @@ class ShiftPlanningSolver:
         print("  - TD constraints (Tagdienst = organizational marker)")
         add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)
         
-        print("  - Springer constraints (at least 1 available)")
-        add_springer_constraints(model, employee_active, employee_weekend_shift, employees, dates)
+        print("  - Weekly available employee constraint (at least 1 free per week)")
+        add_weekly_available_employee_constraint(model, employee_active, employee_weekend_shift, employees, teams, weeks)
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
         print("  - Fairness objectives")
-        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, td_vars, springer_cross_team, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
+        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, td_vars, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
@@ -177,7 +177,7 @@ class ShiftPlanningSolver:
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}, {}
         
-        team_shift, employee_active, employee_weekend_shift, td_vars, springer_cross_team, ferienjobber_cross_team = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars, ferienjobber_cross_team = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -193,38 +193,6 @@ class ShiftPlanningSolver:
         
         # Extract shift assignments based on team shifts and employee activity
         for emp in employees:
-            # Handle springers separately - they don't follow team shifts
-            if emp.is_springer:
-                # Springer can work any shift on any day
-                # For weekdays and weekends, use employee_active/employee_weekend_shift
-                # 
-                # NOTE: Springers don't have weekend_shift variables (they have no team).
-                # Weekend springer coverage is a known limitation - springers primarily
-                # cover weekdays. If weekend springer coverage is needed, extend the
-                # model to create weekend variables for springers with flexible shift types.
-                for d in dates:
-                    if d.weekday() < 5:  # Weekday
-                        if (emp.id, d) not in employee_active:
-                            continue
-                        
-                        if self.solution.Value(employee_active[(emp.id, d)]) == 0:
-                            continue  # Not working this day
-                        
-                        # For springer, assign to shift that needs coverage (default to F)
-                        shift_type_id = 1  # F shift by default
-                        
-                        assignment = ShiftAssignment(
-                            id=assignment_id,
-                            employee_id=emp.id,
-                            shift_type_id=shift_type_id,
-                            date=d,
-                            is_springer_assignment=True
-                        )
-                        assignments.append(assignment)
-                        assignment_id += 1
-                    # Weekend: Springers not assigned (no team for weekend shift type)
-                continue
-            
             # Regular team members
             if not emp.team_id:
                 continue
@@ -276,8 +244,7 @@ class ShiftPlanningSolver:
                             id=assignment_id,
                             employee_id=emp.id,
                             shift_type_id=shift_type_id,
-                            date=d,
-                            is_springer_assignment=False
+                            date=d
                         )
                         assignments.append(assignment)
                         assignment_id += 1
@@ -316,8 +283,7 @@ class ShiftPlanningSolver:
                             id=assignment_id,
                             employee_id=emp.id,
                             shift_type_id=shift_type_id,
-                            date=d,
-                            is_springer_assignment=False
+                            date=d
                         )
                         assignments.append(assignment)
                         assignment_id += 1

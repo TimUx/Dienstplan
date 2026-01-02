@@ -1434,14 +1434,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             for assignment in assignments:
                 cursor.execute("""
                     INSERT INTO ShiftAssignments 
-                    (EmployeeId, ShiftTypeId, Date, IsManual, IsSpringerAssignment, IsFixed, CreatedAt, CreatedBy)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     assignment.employee_id,
                     assignment.shift_type_id,
                     assignment.date.isoformat(),
                     0,
-                    1 if assignment.is_springer_assignment else 0,
                     0,
                     datetime.utcnow().isoformat(),
                     "Python-OR-Tools"

@@ -167,9 +167,9 @@ def test_all_employees_visible():
     
     print(f"✓ All {len(employees)} employees visible for all {len(dates)} days")
     
-    # Check that springers are included
-    springers = [e for e in employees if e.is_springer]
-    print(f"✓ {len(springers)} springers included in schedule")
+    # Check that all regular team members are included
+    regular_members = [e for e in employees if e.team_id and e.team_id != 99 and not e.is_ferienjobber]
+    print(f"✓ {len(regular_members)} regular team members included in schedule")
     
     return True
 

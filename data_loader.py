@@ -18,7 +18,7 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     According to requirements:
     - 17 employees total
     - 3 teams with 5 members each (15 employees)
-    - 2 springers (not in teams)
+    - 2 additional regular team members (not fixed as Springers)
     - TD-qualified employees (combining BMT/BSB roles)
     - Virtual team "Fire Alarm System" for TD-qualified employees without regular teams
     
@@ -38,7 +38,7 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     
     teams = [team_alpha, team_beta, team_gamma, team_fire_alarm]
     
-    # Create employees (15 in teams + 2 springers = 17 total)
+    # Create employees (15 in teams + 2 additional = 17 total)
     employees = []
     
     # Team Alpha (5 members)
@@ -68,12 +68,12 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(15, "Christian", "Neumann", "3005", team_id=3),
     ])
     
-    # Springers (2 backup workers)
-    # One springer is TD-qualified and assigned to virtual "Fire Alarm System" team
-    # The other is a regular springer without TD qualification
+    # Additional employees - assigned to teams as regular members
+    # One is TD-qualified and assigned to virtual "Fire Alarm System" team
+    # The other is a regular team member
     employees.extend([
-        Employee(16, "Robert", "Franke", "S001", is_springer=True, team_id=99, is_td_qualified=True),
-        Employee(17, "Thomas", "Zimmermann", "S002", is_springer=True, team_id=None),
+        Employee(16, "Robert", "Franke", "1006", team_id=99, is_td_qualified=True),
+        Employee(17, "Thomas", "Zimmermann", "2006", team_id=2),  # Added to Team Beta
     ])
     
     # Assign employees to teams
@@ -131,7 +131,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     # Load employees
     cursor.execute("""
         SELECT Id, Vorname, Name, Personalnummer, Email, Geburtsdatum, 
-               Funktion, IsSpringer, IsFerienjobber, IsBrandmeldetechniker, 
+               Funktion, IsFerienjobber, IsBrandmeldetechniker, 
                IsBrandschutzbeauftragter, TeamId
         FROM Employees
     """)
@@ -145,11 +145,10 @@ def load_from_database(db_path: str = "dienstplan.db"):
     COL_EMAIL = 4
     COL_GEBURTSDATUM = 5
     COL_FUNKTION = 6
-    COL_IS_SPRINGER = 7
-    COL_IS_FERIENJOBBER = 8
-    COL_IS_BMT = 9
-    COL_IS_BSB = 10
-    COL_TEAM_ID = 11
+    COL_IS_FERIENJOBBER = 7
+    COL_IS_BMT = 8
+    COL_IS_BSB = 9
+    COL_TEAM_ID = 10
     
     for row in cursor.fetchall():
         # TD qualification: employee is qualified if they have either BMT or BSB qualification
@@ -168,7 +167,6 @@ def load_from_database(db_path: str = "dienstplan.db"):
             email=row[COL_EMAIL],
             geburtsdatum=date.fromisoformat(row[COL_GEBURTSDATUM]) if row[COL_GEBURTSDATUM] else None,
             funktion=row[COL_FUNKTION],
-            is_springer=bool(row[COL_IS_SPRINGER]),
             is_ferienjobber=bool(row[COL_IS_FERIENJOBBER]),
             is_brandmeldetechniker=bool(row[COL_IS_BMT]),
             is_brandschutzbeauftragter=bool(row[COL_IS_BSB]),
@@ -253,7 +251,7 @@ def get_existing_assignments(db_path: str, start_date: date, end_date: date) -> 
     
     cursor.execute("""
         SELECT Id, EmployeeId, ShiftTypeId, Date, IsManual, 
-               IsSpringerAssignment, IsFixed, Notes
+               IsFixed, Notes
         FROM ShiftAssignments
         WHERE Date >= ? AND Date <= ?
     """, (start_date.isoformat(), end_date.isoformat()))
@@ -266,9 +264,8 @@ def get_existing_assignments(db_path: str, start_date: date, end_date: date) -> 
             shift_type_id=row[2],
             date=date.fromisoformat(row[3]),
             is_manual=bool(row[4]),
-            is_springer_assignment=bool(row[5]),
-            is_fixed=bool(row[6]),
-            notes=row[7]
+            is_fixed=bool(row[5]),
+            notes=row[6]
         )
         assignments.append(assignment)
     
@@ -288,8 +285,6 @@ if __name__ == "__main__":
         print(f"\n{team.name}: {len(team.employees)} members")
         for emp in team.employees:
             qualifications = []
-            if emp.is_springer:
-                qualifications.append("Springer")
             if emp.is_td_qualified:
                 qualifications.append("TD")
             if emp.is_brandmeldetechniker:

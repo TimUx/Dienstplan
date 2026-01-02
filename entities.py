@@ -86,7 +86,6 @@ class Employee:
     email: Optional[str] = None
     geburtsdatum: Optional[date] = None  # Birth date
     funktion: Optional[str] = None  # Function/Role
-    is_springer: bool = False  # Backup worker
     is_ferienjobber: bool = False  # Temporary worker
     is_brandmeldetechniker: bool = False  # BMT qualified (for legacy compatibility)
     is_brandschutzbeauftragter: bool = False  # BSB qualified (for legacy compatibility)
@@ -155,7 +154,6 @@ class ShiftAssignment:
     shift_type_id: int
     date: date
     is_manual: bool = False
-    is_springer_assignment: bool = False
     is_fixed: bool = False
     notes: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.utcnow)

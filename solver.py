@@ -244,8 +244,7 @@ class ShiftPlanningSolver:
                             id=assignment_id,
                             employee_id=emp.id,
                             shift_type_id=shift_type_id,
-                            date=d,
-                            
+                            date=d
                         )
                         assignments.append(assignment)
                         assignment_id += 1
@@ -284,8 +283,7 @@ class ShiftPlanningSolver:
                             id=assignment_id,
                             employee_id=emp.id,
                             shift_type_id=shift_type_id,
-                            date=d,
-                            
+                            date=d
                         )
                         assignments.append(assignment)
                         assignment_id += 1

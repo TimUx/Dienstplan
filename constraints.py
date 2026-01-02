@@ -491,8 +491,8 @@ def add_working_hours_constraints(
     
     # Maximum 48 hours per week
     for emp in employees:
-        if not emp.team_id or emp.is_springer:
-            continue  # Springers handled separately
+        if not emp.team_id or emp.is_ferienjobber:
+            continue  # Only check regular team members
         
         for week_idx, week_dates in enumerate(weeks):
             # Calculate hours for this week

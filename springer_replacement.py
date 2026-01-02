@@ -1,16 +1,17 @@
 """
-Springer replacement logic for automatic shift coverage.
+Automatic shift replacement logic for absences.
 
-This module handles automatic springer assignment when absences are entered
+This module handles automatic replacement when absences are entered
 AFTER the schedule has been generated.
 
 Requirements:
 - Attempt automatic replacement when employee becomes absent
-- Springer can only be assigned if:
+- Available employee can only be assigned if:
   - Not absent (U, AU, L)
   - Not assigned to another shift
   - Legally allowed (rest times, max shifts)
-- Notify springer if assigned
+  - Is from a regular shift team (not special role)
+- Notify assigned employee if replacement made
 - Notify admins/dispatchers if no replacement possible
 """
 
@@ -20,18 +21,18 @@ from entities import Employee, Absence, ShiftAssignment, Team, get_shift_type_by
 from notifications import notification_service
 
 
-def can_springer_work_shift(
-    springer: Employee,
+def can_employee_work_shift(
+    employee: Employee,
     shift_date: date,
     shift_code: str,
     existing_assignments: List[ShiftAssignment],
     absences: List[Absence]
 ) -> Tuple[bool, str]:
     """
-    Check if a springer can work a specific shift.
+    Check if an employee can work a specific shift.
     
     Args:
-        springer: The springer employee
+        employee: The employee to check
         shift_date: Date of the shift
         shift_code: Shift code (F, S, N)
         existing_assignments: All existing shift assignments
@@ -39,24 +40,24 @@ def can_springer_work_shift(
         
     Returns:
         Tuple of (can_work, reason)
-        - can_work: True if springer can work this shift
+        - can_work: True if employee can work this shift
         - reason: Explanation if cannot work
     """
-    # Check if springer is absent on this date
+    # Check if employee is absent on this date
     for absence in absences:
-        if absence.employee_id == springer.id and absence.overlaps_date(shift_date):
+        if absence.employee_id == employee.id and absence.overlaps_date(shift_date):
             return False, f"Absent ({absence.get_code()})"
     
-    # Check if springer already has a shift on this date
+    # Check if employee already has a shift on this date
     for assignment in existing_assignments:
-        if assignment.employee_id == springer.id and assignment.date == shift_date:
+        if assignment.employee_id == employee.id and assignment.date == shift_date:
             return False, "Already assigned to another shift"
     
     # Check rest time constraints (11 hours minimum)
     # Look at previous day's shift
     previous_day = shift_date - timedelta(days=1)
     for assignment in existing_assignments:
-        if assignment.employee_id == springer.id and assignment.date == previous_day:
+        if assignment.employee_id == employee.id and assignment.date == previous_day:
             # Get shift type from assignment
             prev_shift = get_shift_type_by_id(assignment.shift_type_id)
             if prev_shift:
@@ -76,7 +77,7 @@ def can_springer_work_shift(
     check_date = shift_date - timedelta(days=1)
     for _ in range(6):  # Maximum 6 consecutive
         has_shift = any(
-            a.employee_id == springer.id and a.date == check_date
+            a.employee_id == employee.id and a.date == check_date
             for a in existing_assignments
         )
         if not has_shift:
@@ -88,7 +89,7 @@ def can_springer_work_shift(
     check_date = shift_date + timedelta(days=1)
     for _ in range(6):
         has_shift = any(
-            a.employee_id == springer.id and a.date == check_date
+            a.employee_id == employee.id and a.date == check_date
             for a in existing_assignments
         )
         if not has_shift:
@@ -103,63 +104,63 @@ def can_springer_work_shift(
     return True, "Available"
 
 
-def find_available_springer(
+def find_available_employee(
     shift_date: date,
     shift_code: str,
-    springers: List[Employee],
+    available_employees: List[Employee],
     existing_assignments: List[ShiftAssignment],
     absences: List[Absence]
 ) -> Optional[Tuple[Employee, str]]:
     """
-    Find an available springer for a shift.
+    Find an available employee for a shift replacement.
     
     Args:
         shift_date: Date of the shift
         shift_code: Shift code (F, S, N)
-        springers: List of all springer employees
+        available_employees: List of employees who could potentially fill in
         existing_assignments: All existing shift assignments
         absences: All absences
         
     Returns:
-        Tuple of (springer, reason) if found, None if no springer available
-        - springer: The available springer
-        - reason: Why this springer was selected
+        Tuple of (employee, reason) if found, None if no one available
+        - employee: The available employee
+        - reason: Why this employee was selected
     """
-    available_springers = []
+    available = []
     
-    for springer in springers:
-        can_work, reason = can_springer_work_shift(
-            springer, shift_date, shift_code, existing_assignments, absences
+    for emp in available_employees:
+        can_work, reason = can_employee_work_shift(
+            emp, shift_date, shift_code, existing_assignments, absences
         )
         if can_work:
-            available_springers.append((springer, reason))
+            available.append((emp, reason))
     
-    if not available_springers:
+    if not available:
         return None
     
-    # Return first available springer
+    # Return first available employee
     # In a more sophisticated implementation, could prioritize by:
     # - Fewest shifts this month
     # - Closest to home/facility
     # - Preferences
-    return available_springers[0]
+    return available[0]
 
 
-def attempt_springer_replacement(
+def attempt_replacement(
     absent_employee: Employee,
     absence: Absence,
     team: Team,
     shift_date: date,
     shift_code: str,
-    springers: List[Employee],
+    available_employees: List[Employee],
     existing_assignments: List[ShiftAssignment],
     all_absences: List[Absence]
 ) -> Optional[ShiftAssignment]:
     """
-    Attempt to assign a springer to replace an absent employee.
+    Attempt to assign an available employee to replace an absent employee.
     
     This function:
-    1. Finds an available springer
+    1. Finds an available employee from shift teams
     2. Creates a shift assignment if found
     3. Triggers appropriate notifications
     
@@ -169,27 +170,27 @@ def attempt_springer_replacement(
         team: The team of the absent employee
         shift_date: Date of the shift
         shift_code: Shift code (F, S, N)
-        springers: List of all springer employees
+        available_employees: List of employees who could potentially fill in (from shift teams)
         existing_assignments: All existing shift assignments
         all_absences: All absences
         
     Returns:
         ShiftAssignment if replacement successful, None otherwise
     """
-    # Find available springer
-    result = find_available_springer(
-        shift_date, shift_code, springers, existing_assignments, all_absences
+    # Find available employee
+    result = find_available_employee(
+        shift_date, shift_code, available_employees, existing_assignments, all_absences
     )
     
     if result is None:
-        # No springer available - notify admins/dispatchers
-        # Collect reasons why springers are not available
+        # No employee available - notify admins/dispatchers
+        # Collect reasons why employees are not available
         reasons = []
-        for springer in springers:
-            can_work, reason = can_springer_work_shift(
-                springer, shift_date, shift_code, existing_assignments, all_absences
+        for emp in available_employees:
+            can_work, reason = can_employee_work_shift(
+                emp, shift_date, shift_code, existing_assignments, all_absences
             )
-            reasons.append(f"{springer.full_name}: {reason}")
+            reasons.append(f"{emp.full_name}: {reason}")
         
         reason_str = "; ".join(reasons)
         
@@ -205,9 +206,9 @@ def attempt_springer_replacement(
         
         return None
     
-    springer, _ = result
+    replacement_employee, _ = result
     
-    # Create springer assignment
+    # Create replacement assignment
     shift_type = get_shift_type_by_code(shift_code)
     
     if not shift_type:
@@ -218,18 +219,17 @@ def attempt_springer_replacement(
     
     assignment = ShiftAssignment(
         id=new_id,
-        employee_id=springer.id,
+        employee_id=replacement_employee.id,
         shift_type_id=shift_type.id,
         date=shift_date,
         is_manual=False,
-        is_springer_assignment=True,
         is_fixed=True,  # Lock this assignment
-        notes=f"Automatic springer replacement for {absent_employee.full_name} ({absence.get_code()})"
+        notes=f"Automatic replacement for {absent_employee.full_name} ({absence.get_code()})"
     )
     
-    # Notify springer about assignment
+    # Notify replacement employee about assignment
     notification_service.trigger_springer_assigned(
-        springer=springer,
+        springer=replacement_employee,
         original_employee=absent_employee,
         shift_date=shift_date,
         shift_code=shift_code,
@@ -246,7 +246,7 @@ def handle_post_scheduling_absence(
     schedule_month: str,
     affected_dates: List[date],
     affected_shifts: Dict[date, str],  # date -> shift_code
-    springers: List[Employee],
+    all_employees: List[Employee],
     existing_assignments: List[ShiftAssignment],
     all_absences: List[Absence]
 ) -> Tuple[List[ShiftAssignment], List[date]]:
@@ -262,13 +262,13 @@ def handle_post_scheduling_absence(
         schedule_month: Month name for notifications (e.g., "January 2026")
         affected_dates: List of dates affected by the absence
         affected_shifts: Dict mapping date to shift_code for shifts that need replacement
-        springers: List of all springer employees
+        all_employees: List of all employees (will filter for eligible replacements)
         existing_assignments: All existing shift assignments
         all_absences: All absences (including the new one)
         
     Returns:
         Tuple of (new_assignments, dates_without_replacement)
-        - new_assignments: List of new springer assignments created
+        - new_assignments: List of new replacement assignments created
         - dates_without_replacement: List of dates where no replacement was found
     """
     # Notify admins/dispatchers about the absence
@@ -280,6 +280,14 @@ def handle_post_scheduling_absence(
         replacement_attempted=True
     )
     
+    # Get eligible employees for replacement (from regular shift teams)
+    # Exclude: Ferienjobber, employees without teams, virtual team members
+    VIRTUAL_TEAM_ID = 99  # Fire Alarm System
+    available_employees = [
+        emp for emp in all_employees
+        if emp.team_id and emp.team_id != VIRTUAL_TEAM_ID and not emp.is_ferienjobber
+    ]
+    
     new_assignments = []
     dates_without_replacement = []
     
@@ -290,14 +298,14 @@ def handle_post_scheduling_absence(
             dates_without_replacement.append(shift_date)
             continue
         
-        # Attempt springer replacement
-        assignment = attempt_springer_replacement(
+        # Attempt replacement
+        assignment = attempt_replacement(
             absent_employee=employee,
             absence=absence,
             team=team,
             shift_date=shift_date,
             shift_code=shift_code,
-            springers=springers,
+            available_employees=available_employees,
             existing_assignments=existing_assignments + new_assignments,  # Include newly created
             all_absences=all_absences
         )

@@ -657,18 +657,20 @@ python main.py serve
 
 ### Rollenbasierte Autorisierung
 - **Admin**: Volle Berechtigung - alle Funktionen
-  - Mitarbeiter erstellen, bearbeiten, löschen
-  - Schichtplanung durchführen
-  - Abwesenheiten verwalten
-  - Neue Benutzer registrieren
-- **Disponent**: Schichtplanung und Bearbeitung
-  - Mitarbeiter erstellen und bearbeiten
-  - Schichtplanung durchführen
-  - Abwesenheiten verwalten
-- **Mitarbeiter**: Nur Lesezugriff
-  - Dienstplan ansehen
+  - Benutzerverwaltung (erstellen, bearbeiten, löschen)
+  - Mitarbeiterverwaltung (erstellen, bearbeiten, löschen)
+  - Schichtplanung durchführen und bearbeiten
+  - Abwesenheiten verwalten (erstellen, bearbeiten, löschen)
+  - Urlaubsanträge genehmigen/ablehnen
+  - Schichttausch genehmigen/ablehnen
+  - Teams verwalten
+  - Ferienzeiten verwalten
+- **Mitarbeiter**: Eingeschränkte Berechtigungen
+  - Dienstplan ansehen (nur lesend)
   - Statistiken einsehen
   - Mitarbeiterliste ansehen
+  - Urlaubsanträge einreichen
+  - Schichttausch anfragen/einreichen
 
 ### Standard-Anmeldedaten
 Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:

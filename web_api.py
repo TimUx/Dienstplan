@@ -84,6 +84,7 @@ def get_user_by_email(db, email: str) -> Optional[Dict]:
         'email': row['Email'],
         'passwordHash': row['PasswordHash'],
         'fullName': row['FullName'],
+        'employeeId': row['EmployeeId'] if 'EmployeeId' in row.keys() else None,
         'lockoutEnd': row['LockoutEnd'],
         'accessFailedCount': row['AccessFailedCount'],
         'roles': row['roles'].split(',') if row['roles'] else []
@@ -309,20 +310,27 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'roles': session.get('user_roles', [])
         })
     
-    @app.route('/api/auth/users', methods=['GET'])
+    # ============================================================================
+    # USER MANAGEMENT ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/users', methods=['GET'])
     @require_role('Admin')
-    def get_users():
-        """Get all users (Admin only)"""
+    def get_all_users():
+        """Get all users with their roles and linked employees (Admin only)"""
         conn = db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT u.Id, u.Email, u.FullName, u.LockoutEnd, u.AccessFailedCount,
+            SELECT u.Id, u.Email, u.FullName, u.EmployeeId, u.LockoutEnd, u.AccessFailedCount,
+                   e.Vorname, e.Name, e.Personalnummer,
                    GROUP_CONCAT(r.Name) as roles
             FROM AspNetUsers u
+            LEFT JOIN Employees e ON u.EmployeeId = e.Id
             LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
             LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
             GROUP BY u.Id
+            ORDER BY u.Email
         """)
         
         users = []
@@ -331,6 +339,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'id': row['Id'],
                 'email': row['Email'],
                 'fullName': row['FullName'],
+                'employeeId': row['EmployeeId'],
+                'employeeName': f"{row['Vorname']} {row['Name']}" if row['Vorname'] else None,
+                'employeePersonalnummer': row['Personalnummer'],
                 'lockoutEnd': row['LockoutEnd'],
                 'accessFailedCount': row['AccessFailedCount'],
                 'roles': row['roles'].split(',') if row['roles'] else []
@@ -339,55 +350,307 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         conn.close()
         return jsonify(users)
     
-    @app.route('/api/auth/register', methods=['POST'])
+    @app.route('/api/users/<user_id>', methods=['GET'])
     @require_role('Admin')
-    def register_user():
-        """Register new user (Admin only)"""
+    def get_user(user_id):
+        """Get single user by ID (Admin only)"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT u.Id, u.Email, u.FullName, u.EmployeeId, u.LockoutEnd, u.AccessFailedCount,
+                   e.Vorname, e.Name, e.Personalnummer,
+                   GROUP_CONCAT(r.Name) as roles
+            FROM AspNetUsers u
+            LEFT JOIN Employees e ON u.EmployeeId = e.Id
+            LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+            LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
+            WHERE u.Id = ?
+            GROUP BY u.Id
+        """, (user_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify({'error': 'Benutzer nicht gefunden'}), 404
+        
+        return jsonify({
+            'id': row['Id'],
+            'email': row['Email'],
+            'fullName': row['FullName'],
+            'employeeId': row['EmployeeId'],
+            'employeeName': f"{row['Vorname']} {row['Name']}" if row['Vorname'] else None,
+            'employeePersonalnummer': row['Personalnummer'],
+            'lockoutEnd': row['LockoutEnd'],
+            'accessFailedCount': row['AccessFailedCount'],
+            'roles': row['roles'].split(',') if row['roles'] else []
+        })
+    
+    @app.route('/api/users', methods=['POST'])
+    @require_role('Admin')
+    def create_user():
+        """Create new user (Admin only)"""
         try:
             data = request.get_json()
             email = data.get('email')
             password = data.get('password')
             full_name = data.get('fullName')
-            role = data.get('role', 'Mitarbeiter')
+            roles = data.get('roles', ['Mitarbeiter'])  # Support multiple roles
+            employee_id = data.get('employeeId')
             
             if not email or not password:
                 return jsonify({'error': 'Email und Passwort sind erforderlich'}), 400
             
+            # Validate roles
+            valid_roles = ['Admin', 'Mitarbeiter']
+            if not isinstance(roles, list):
+                roles = [roles]
+            for role in roles:
+                if role not in valid_roles:
+                    return jsonify({'error': f'Ungültige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
             # Check if user already exists
-            existing_user = get_user_by_email(db, email)
-            if existing_user:
-                return jsonify({'error': 'Benutzer existiert bereits'}), 400
+            cursor.execute("SELECT Id FROM AspNetUsers WHERE Email = ?", (email,))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Benutzer mit dieser E-Mail existiert bereits'}), 400
+            
+            # If employeeId is provided, check if it exists and is not already linked
+            if employee_id:
+                cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (employee_id,))
+                if not cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
+                
+                cursor.execute("SELECT Id FROM AspNetUsers WHERE EmployeeId = ?", (employee_id,))
+                if cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Dieser Mitarbeiter ist bereits mit einem Benutzer verknüpft'}), 400
             
             # Create user
             user_id = secrets.token_hex(16)
             password_hash = hash_password(password)
             security_stamp = secrets.token_hex(16)
             
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            
             cursor.execute("""
-                INSERT INTO AspNetUsers (Id, Email, NormalizedEmail, PasswordHash, SecurityStamp, FullName)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user_id, email, email.upper(), password_hash, security_stamp, full_name))
+                INSERT INTO AspNetUsers (Id, Email, NormalizedEmail, PasswordHash, SecurityStamp, FullName, EmployeeId)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, email, email.upper(), password_hash, security_stamp, full_name, employee_id))
             
-            # Assign role
-            cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))
-            role_row = cursor.fetchone()
-            if role_row:
-                cursor.execute("""
-                    INSERT INTO AspNetUserRoles (UserId, RoleId)
-                    VALUES (?, ?)
-                """, (user_id, role_row['Id']))
+            # Assign roles
+            for role in roles:
+                cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))
+                role_row = cursor.fetchone()
+                if role_row:
+                    cursor.execute("""
+                        INSERT INTO AspNetUserRoles (UserId, RoleId)
+                        VALUES (?, ?)
+                    """, (user_id, role_row['Id']))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'email': email,
+                'fullName': full_name,
+                'roles': roles,
+                'employeeId': employee_id
+            }, ensure_ascii=False)
+            log_audit(conn, 'User', user_id, 'Create', changes)
             
             conn.commit()
             conn.close()
             
-            return jsonify({'success': True, 'userId': user_id})
+            return jsonify({'success': True, 'userId': user_id}), 201
             
         except Exception as e:
-            app.logger.error(f"Register error: {str(e)}")
-            return jsonify({'error': 'Registrierungsfehler'}), 500
+            app.logger.error(f"Create user error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/users/<user_id>', methods=['PUT'])
+    @require_role('Admin')
+    def update_user(user_id):
+        """Update user (Admin only)"""
+        try:
+            data = request.get_json()
+            email = data.get('email')
+            full_name = data.get('fullName')
+            roles = data.get('roles', [])
+            employee_id = data.get('employeeId')
+            password = data.get('password')  # Optional password change
+            
+            if not email:
+                return jsonify({'error': 'Email ist erforderlich'}), 400
+            
+            # Validate roles
+            valid_roles = ['Admin', 'Mitarbeiter']
+            if not isinstance(roles, list):
+                roles = [roles]
+            for role in roles:
+                if role not in valid_roles:
+                    return jsonify({'error': f'Ungültige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if user exists
+            cursor.execute("""
+                SELECT Email, FullName, EmployeeId 
+                FROM AspNetUsers WHERE Id = ?
+            """, (user_id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                conn.close()
+                return jsonify({'error': 'Benutzer nicht gefunden'}), 404
+            
+            # Check if email is taken by another user
+            cursor.execute("SELECT Id FROM AspNetUsers WHERE Email = ? AND Id != ?", (email, user_id))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Email wird bereits von einem anderen Benutzer verwendet'}), 400
+            
+            # If employeeId is provided, check if it exists and is not already linked to another user
+            if employee_id:
+                cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (employee_id,))
+                if not cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
+                
+                cursor.execute("SELECT Id FROM AspNetUsers WHERE EmployeeId = ? AND Id != ?", (employee_id, user_id))
+                if cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Dieser Mitarbeiter ist bereits mit einem anderen Benutzer verknüpft'}), 400
+            
+            # Update user
+            if password:
+                password_hash = hash_password(password)
+                cursor.execute("""
+                    UPDATE AspNetUsers 
+                    SET Email = ?, NormalizedEmail = ?, FullName = ?, EmployeeId = ?, PasswordHash = ?
+                    WHERE Id = ?
+                """, (email, email.upper(), full_name, employee_id, password_hash, user_id))
+            else:
+                cursor.execute("""
+                    UPDATE AspNetUsers 
+                    SET Email = ?, NormalizedEmail = ?, FullName = ?, EmployeeId = ?
+                    WHERE Id = ?
+                """, (email, email.upper(), full_name, employee_id, user_id))
+            
+            # Update roles - delete old roles and insert new ones
+            cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (user_id,))
+            for role in roles:
+                cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))
+                role_row = cursor.fetchone()
+                if role_row:
+                    cursor.execute("""
+                        INSERT INTO AspNetUserRoles (UserId, RoleId)
+                        VALUES (?, ?)
+                    """, (user_id, role_row['Id']))
+            
+            # Log audit entry with changes
+            changes_dict = {}
+            if old_row['Email'] != email:
+                changes_dict['email'] = {'old': old_row['Email'], 'new': email}
+            if old_row['FullName'] != full_name:
+                changes_dict['fullName'] = {'old': old_row['FullName'], 'new': full_name}
+            if old_row['EmployeeId'] != employee_id:
+                changes_dict['employeeId'] = {'old': old_row['EmployeeId'], 'new': employee_id}
+            changes_dict['roles'] = roles
+            if password:
+                changes_dict['passwordChanged'] = True
+            
+            if changes_dict:
+                changes = json.dumps(changes_dict, ensure_ascii=False)
+                log_audit(conn, 'User', user_id, 'Update', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update user error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/users/<user_id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_user(user_id):
+        """Delete user (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if user exists and get info for audit
+            cursor.execute("SELECT Email, FullName FROM AspNetUsers WHERE Id = ?", (user_id,))
+            user_row = cursor.fetchone()
+            if not user_row:
+                conn.close()
+                return jsonify({'error': 'Benutzer nicht gefunden'}), 404
+            
+            # Prevent deleting the last admin
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM AspNetUsers u
+                JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+                JOIN AspNetRoles r ON ur.RoleId = r.Id
+                WHERE r.Name = 'Admin'
+            """)
+            admin_count = cursor.fetchone()['count']
+            
+            cursor.execute("""
+                SELECT COUNT(*) as is_admin
+                FROM AspNetUserRoles ur
+                JOIN AspNetRoles r ON ur.RoleId = r.Id
+                WHERE ur.UserId = ? AND r.Name = 'Admin'
+            """, (user_id,))
+            is_admin = cursor.fetchone()['is_admin'] > 0
+            
+            if is_admin and admin_count <= 1:
+                conn.close()
+                return jsonify({'error': 'Der letzte Administrator kann nicht gelöscht werden'}), 400
+            
+            # Delete user roles first (foreign key constraint)
+            cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (user_id,))
+            
+            # Delete user
+            cursor.execute("DELETE FROM AspNetUsers WHERE Id = ?", (user_id,))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'email': user_row['Email'],
+                'fullName': user_row['FullName']
+            }, ensure_ascii=False)
+            log_audit(conn, 'User', user_id, 'Delete', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete user error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
+    @app.route('/api/roles', methods=['GET'])
+    @require_role('Admin')
+    def get_roles():
+        """Get all available roles (Admin only)"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT Id, Name FROM AspNetRoles ORDER BY Name")
+        
+        roles = []
+        for row in cursor.fetchall():
+            roles.append({
+                'id': row['Id'],
+                'name': row['Name']
+            })
+        
+        conn.close()
+        return jsonify(roles)
     
     # ============================================================================
     # EMPLOYEE ENDPOINTS
@@ -402,9 +665,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT e.*, t.Name as TeamName
+                SELECT e.*, t.Name as TeamName, u.Id as UserId, u.Email as UserEmail
                 FROM Employees e
                 LEFT JOIN Teams t ON e.TeamId = t.Id
+                LEFT JOIN AspNetUsers u ON e.Id = u.EmployeeId
                 ORDER BY e.Name, e.Vorname
             """)
             
@@ -430,7 +694,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'email': row['Email'],
                     'geburtsdatum': row['Geburtsdatum'],
                     'funktion': row['Funktion'],
-                    'isSpringer': bool(row['IsSpringer']),
+                    'isSpringer': bool(row['IsSpringer']) if 'IsSpringer' in row.keys() else False,
                     'isFerienjobber': bool(row['IsFerienjobber']),
                     'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                     'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
@@ -438,7 +702,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'isTeamLeader': is_team_leader,
                     'teamId': row['TeamId'],
                     'teamName': row['TeamName'],
-                    'fullName': f"{row['Vorname']} {row['Name']}"
+                    'fullName': f"{row['Vorname']} {row['Name']}",
+                    'userId': row['UserId'],
+                    'userEmail': row['UserEmail'],
+                    'hasUserAccount': row['UserId'] is not None
                 })
             
             return jsonify(employees)
@@ -530,7 +797,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         return jsonify(springers)
     
     @app.route('/api/employees', methods=['POST'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def create_employee():
         """Create new employee"""
         try:
@@ -605,7 +872,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
     @app.route('/api/employees/<int:id>', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def update_employee(id):
         """Update employee"""
         try:
@@ -823,7 +1090,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn.close()
     
     @app.route('/api/teams', methods=['POST'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def create_team():
         """Create new team"""
         try:
@@ -867,7 +1134,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
     @app.route('/api/teams/<int:id>', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def update_team(id):
         """Update team"""
         try:
@@ -1039,7 +1306,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
     
     @app.route('/api/vacation-periods', methods=['POST'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def create_vacation_period():
         """Create new vacation period"""
         try:
@@ -1099,7 +1366,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
     @app.route('/api/vacation-periods/<int:id>', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def update_vacation_period(id):
         """Update vacation period"""
         try:
@@ -1483,7 +1750,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': str(e)}), 500
     
     @app.route('/api/shifts/assignments/<int:id>', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def update_shift_assignment(id):
         """Update a shift assignment (manual edit)"""
         try:
@@ -1560,7 +1827,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
     
     @app.route('/api/shifts/assignments', methods=['POST'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def create_shift_assignment():
         """Create a shift assignment manually"""
         try:
@@ -1632,7 +1899,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
     @app.route('/api/shifts/assignments/<int:id>', methods=['DELETE'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def delete_shift_assignment(id):
         """Delete a shift assignment"""
         try:
@@ -1679,7 +1946,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
     @app.route('/api/shifts/assignments/<int:id>/toggle-fixed', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def toggle_fixed_assignment(id):
         """Toggle the IsFixed flag on an assignment (lock/unlock)"""
         try:
@@ -2375,7 +2642,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         return jsonify(absences)
     
     @app.route('/api/absences', methods=['POST'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def create_absence():
         """Create new absence (AU or Lehrgang)"""
         try:
@@ -2423,7 +2690,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
     @app.route('/api/absences/<int:id>', methods=['DELETE'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def delete_absence(id):
         """Delete an absence"""
         try:
@@ -2545,7 +2812,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
     @app.route('/api/vacationrequests/<int:id>/status', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def update_vacation_request_status(id):
         """Update vacation request status (Disponent only)"""
         try:
@@ -2623,7 +2890,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         return jsonify(exchanges)
     
     @app.route('/api/shiftexchanges/pending', methods=['GET'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def get_pending_shift_exchanges():
         """Get pending shift exchanges (Disponent only)"""
         conn = db.get_connection()
@@ -2732,7 +2999,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Anfragen: {str(e)}'}), 500
     
     @app.route('/api/shiftexchanges/<int:id>/process', methods=['PUT'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def process_shift_exchange(id):
         """Process shift exchange (approve/reject)"""
         try:
@@ -2937,7 +3204,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     # ============================================================================
     
     @app.route('/api/auditlogs', methods=['GET'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def get_audit_logs():
         """Get audit logs with pagination and filters"""
         try:
@@ -3036,7 +3303,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}), 500
     
     @app.route('/api/auditlogs/recent/<int:count>', methods=['GET'])
-    @require_role('Admin', 'Disponent')
+    @require_role('Admin')
     def get_recent_audit_logs(count):
         """Get recent audit logs (simplified endpoint for backwards compatibility)"""
         try:

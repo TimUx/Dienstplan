@@ -41,6 +41,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             Email TEXT,
             Geburtsdatum TEXT,
             Funktion TEXT,
+            IsSpringer INTEGER NOT NULL DEFAULT 0,
             IsFerienjobber INTEGER NOT NULL DEFAULT 0,
             IsBrandmeldetechniker INTEGER NOT NULL DEFAULT 0,
             IsBrandschutzbeauftragter INTEGER NOT NULL DEFAULT 0,
@@ -109,9 +110,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             PasswordHash TEXT NOT NULL,
             SecurityStamp TEXT NOT NULL,
             FullName TEXT,
+            EmployeeId INTEGER,
             LockoutEnd TEXT,
             AccessFailedCount INTEGER NOT NULL DEFAULT 0,
-            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
         )
     """)
     
@@ -238,6 +241,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         ON VacationPeriods(StartDate, EndDate)
     """)
     
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_aspnetusers_employeeid 
+        ON AspNetUsers(EmployeeId)
+    """)
+    
     conn.commit()
     conn.close()
     
@@ -245,13 +253,12 @@ def create_database_schema(db_path: str = "dienstplan.db"):
 
 
 def initialize_default_roles(db_path: str = "dienstplan.db"):
-    """Initialize default roles (Admin, Disponent, Mitarbeiter)"""
+    """Initialize default roles (Admin, Mitarbeiter)"""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     roles = [
         ("admin-role-id", "Admin", "ADMIN"),
-        ("disponent-role-id", "Disponent", "DISPONENT"),
         ("mitarbeiter-role-id", "Mitarbeiter", "MITARBEITER")
     ]
     
@@ -263,7 +270,7 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Default roles initialized")
+    print("✅ Default roles initialized (Admin, Mitarbeiter)")
 
 
 def hash_password(password: str) -> str:

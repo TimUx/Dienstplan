@@ -95,14 +95,6 @@ def run_cli_planning(
             emp_assignments = [a for a in assignments if a.employee_id == emp.id]
             print(f"  {emp.full_name}: {len(emp_assignments)} shifts")
     
-    # Springers
-    springers = [emp for emp in employees if emp.is_springer]
-    if springers:
-        print(f"\nSpringer:")
-        for emp in springers:
-            emp_assignments = [a for a in assignments if a.employee_id == emp.id]
-            print(f"  {emp.full_name}: {len(emp_assignments)} shifts")
-    
     print("\n" + "=" * 60)
     
     # Save results if database mode
@@ -138,14 +130,13 @@ def save_assignments_to_database(assignments, db_path: str):
     for assignment in assignments:
         cursor.execute("""
             INSERT INTO ShiftAssignments 
-            (EmployeeId, ShiftTypeId, Date, IsManual, IsSpringerAssignment, IsFixed, CreatedAt, CreatedBy)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             assignment.employee_id,
             assignment.shift_type_id,
             assignment.date.isoformat(),
             0,  # IsManual = False (automatic)
-            1 if assignment.is_springer_assignment else 0,
             0,  # IsFixed = False
             datetime.utcnow().isoformat(),
             "Python-OR-Tools"

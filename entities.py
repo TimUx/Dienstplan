@@ -91,6 +91,7 @@ class Employee:
     is_brandmeldetechniker: bool = False  # BMT qualified (for legacy compatibility)
     is_brandschutzbeauftragter: bool = False  # BSB qualified (for legacy compatibility)
     is_td_qualified: bool = False  # TD (Tagdienst) qualified - combines BMT and BSB
+    is_team_leader: bool = False  # Team leader
     team_id: Optional[int] = None
     
     @property

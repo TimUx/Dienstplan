@@ -46,6 +46,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             IsBrandmeldetechniker INTEGER NOT NULL DEFAULT 0,
             IsBrandschutzbeauftragter INTEGER NOT NULL DEFAULT 0,
             IsTdQualified INTEGER NOT NULL DEFAULT 0,
+            IsTeamLeader INTEGER NOT NULL DEFAULT 0,
             TeamId INTEGER,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (TeamId) REFERENCES Teams(Id)

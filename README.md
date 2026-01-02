@@ -37,7 +37,7 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - **Pflichtfelder**: Vorname, Name, Personalnummer
 - **Erweiterte Daten**: Geburtsdatum, Funktion (z.B. Brandmeldetechniker, Brandschutzbeauftragter)
 - **Teamzuordnung**: Mitarbeiter können Teams zugeordnet werden
-- **Springer-System**: Markierung von Backup-Mitarbeitern für automatische Vertretung bei Ausfällen
+- **Dynamische Vertretung**: System stellt sicher, dass jede Woche mindestens ein Mitarbeiter aus Schicht-Teams komplett frei ist für flexible Vertretung bei Ausfällen
 - **Ferienjobber**: Unterstützung für temporäre Mitarbeiter (meist in Sommerferien)
 - **Abwesenheiten**: Verwaltung von Krank, Urlaub, Lehrgang
 - **Arbeitszeitregeln**: Maximal 192 Stunden pro Monat, 48 Stunden pro Woche
@@ -88,7 +88,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 - 🌙 Maximal 5 aufeinanderfolgende Nachtschichten
 - ⏱️ Maximal 48 Stunden pro Woche
 - 📅 Maximal 192 Stunden pro Monat
-- 🔧 Mindestens 1 Springer muss verfügbar bleiben
+- 🔧 Jede Woche mindestens 1 Mitarbeiter aus Schicht-Teams komplett frei für dynamische Vertretung
 - 🎯 1 BMT (Brandmeldetechniker) pro Werktag
 - 🎯 1 BSB (Brandschutzbeauftragter) pro Werktag
 
@@ -136,7 +136,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 
 ### Mitarbeiterverwaltung
 ![Mitarbeiterverwaltung](docs/screenshots/06-employees-list.png)
-*Übersicht aller Mitarbeiter mit Teams, Personalnummern und Springer-Kennzeichnung*
+*Übersicht aller Mitarbeiter mit Teams und Personalnummern*
 
 ### Urlaubsverwaltung
 ![Urlaubsanträge](docs/screenshots/07-vacation-requests.png)
@@ -347,7 +347,6 @@ python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --sample-data
 Dies erstellt automatisch:
 - 3 Teams (Alpha, Beta, Gamma)
 - 17 Mitarbeiter mit verschiedenen Rollen
-- 4 Springer
 - Beispiel-Abwesenheiten
 
 ## 📖 API-Dokumentation
@@ -406,15 +405,8 @@ Authorization: Required (Admin oder Disponent)
   "vorname": "Max",
   "name": "Mustermann",
   "personalnummer": "12345",
-  "isSpringer": false,
   "teamId": 1
 }
-```
-
-#### Springer abrufen
-```http
-GET /api/employees/springers
-Authorization: Optional (öffentlich lesbar)
 ```
 
 ### Schicht-Endpoints
@@ -848,7 +840,7 @@ Bei Fragen oder Problemen:
 - [x] **Migration zu Python** ✅ **v2.0**
 - [x] **Google OR-Tools Integration** ✅ **v2.0**
 - [x] **Optimale Schichtplanung** ✅ **v2.0**
-- [x] **Mitarbeiterverwaltung** mit Springer-System ✅ **v2.0**
+- [x] **Mitarbeiterverwaltung** mit dynamischer Vertretung ✅ **v2.0**
 - [x] **Teamverwaltung** mit virtuellen Teams ✅ **v2.0**
 - [x] **Urlaubsantrags-System** mit Workflow ✅ **v2.0**
 - [x] **Diensttausch-Plattform** ✅ **v2.0**

@@ -133,7 +133,6 @@ def add_employee_team_linkage_constraints(
     model: cp_model.CpModel,
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
-    springer_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
@@ -148,27 +147,9 @@ def add_employee_team_linkage_constraints(
     - Team members CAN work when their team works (but not required to work every day)
     - Employees CANNOT work if their team doesn't have a shift
     - Employees cannot work when absent
-    - Springers can work with own team OR one foreign team (not both)
-    - Ferienjobbers can help any team (similar to springers but without own team)
+    - Ferienjobbers can help any team (temporary workers without own team)
     - Employees in virtual team "Fire Alarm System" (ID 99) do NOT work regular shifts
     """
-    
-    # CONSTRAINT: Springer can help at most ONE foreign team per week
-    # (either work with own team OR help exactly one foreign team)
-    springers = [emp for emp in employees if emp.is_springer and emp.team_id]
-    for springer in springers:
-        for week_idx in range(len(weeks)):
-            # Collect all cross-team variables for this springer in this week
-            cross_team_vars = []
-            for team in teams:
-                if team.id == springer.team_id or team.id == VIRTUAL_TEAM_ID or team.id == FERIENJOBBER_TEAM_ID:
-                    continue
-                if (springer.id, team.id, week_idx) in springer_cross_team:
-                    cross_team_vars.append(springer_cross_team[(springer.id, team.id, week_idx)])
-            
-            # At most 1 cross-team assignment per week
-            if cross_team_vars:
-                model.Add(sum(cross_team_vars) <= 1)
     
     # CONSTRAINT: Ferienjobber can help at most ONE team per week
     # Ferienjobbers don't have an own team, so they can only help other teams
@@ -189,39 +170,6 @@ def add_employee_team_linkage_constraints(
     
     # For each employee
     for emp in employees:
-        # Springers handled specially - can work own team OR cross-team
-        if emp.is_springer and emp.team_id:
-            for d in dates:
-                if d.weekday() >= 5:  # Weekend - skip (no cross-team on weekends)
-                    continue
-                    
-                if (emp.id, d) not in employee_active:
-                    continue
-                
-                # Check if absent
-                is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-                if is_absent:
-                    model.Add(employee_active[(emp.id, d)] == 0)
-                    continue
-                
-                # Find which week this day is in
-                week_idx = None
-                for w_idx, week_dates in enumerate(weeks):
-                    if d in week_dates:
-                        week_idx = w_idx
-                        break
-                
-                if week_idx is None:
-                    continue
-                
-                # Springer is active if:
-                # 1. Working with own team (team has a shift AND springer assigned to own team)
-                # 2. Working with foreign team (springer assigned to help that team)
-                
-                # Constraint handled by staffing requirements
-            
-            continue
-        
         # Ferienjobbers handled specially - can help any team
         if emp.is_ferienjobber:
             for d in dates:
@@ -320,7 +268,6 @@ def add_staffing_constraints(
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
-    springer_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
@@ -360,10 +307,6 @@ def add_staffing_constraints(
             if is_weekend:
                 # WEEKEND: Count team members working this weekend with their team's shift
                 # For each team with this shift, count active members
-                # 
-                # NOTE: Springers excluded from weekends by design - they don't have 
-                # weekend variables (see model.py line 198). Weekend staffing is lower
-                # (2-3 vs 4-5) so regular team members can usually meet requirements.
                 assigned = []
                 
                 for team in teams:
@@ -372,8 +315,8 @@ def add_staffing_constraints(
                     
                     # Count members of this team working on this weekend day
                     for emp in employees:
-                        if emp.team_id != team.id or emp.is_springer or emp.is_ferienjobber:
-                            continue  # Only count regular team members (springers have no weekend variables)
+                        if emp.team_id != team.id or emp.is_ferienjobber:
+                            continue  # Only count regular team members
                         
                         if (emp.id, d) not in employee_weekend_shift:
                             continue
@@ -397,19 +340,16 @@ def add_staffing_constraints(
                 # A member works this shift if:
                 # 1. Their team has this shift this week
                 # 2. They are active on this day
-                # 
-                # IMPORTANT: Include springers in count - they can fill in for absent team members
-                # ALSO: Count cross-team springers helping this team
                 assigned = []
                 
                 for team in teams:
                     if (team.id, week_idx, shift) not in team_shift:
                         continue
                     
-                    # Count active members of this team on this day (including own springers)
+                    # Count active members of this team on this day
                     for emp in employees:
                         if emp.team_id != team.id:
-                            continue  # Only count team members (springers ARE team members)
+                            continue  # Only count team members
                         
                         if (emp.id, d) not in employee_active:
                             continue
@@ -419,30 +359,6 @@ def add_staffing_constraints(
                         model.AddMultiplicationEquality(
                             is_on_shift,
                             [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
-                        )
-                        assigned.append(is_on_shift)
-                    
-                    # CROSS-TEAM SPRINGERS: Count springers from other teams helping this team
-                    for emp in employees:
-                        if not emp.is_springer or emp.team_id == team.id or not emp.team_id:
-                            continue  # Only count springers from OTHER teams
-                        
-                        if (emp.id, d) not in employee_active:
-                            continue
-                        
-                        if (emp.id, team.id, week_idx) not in springer_cross_team:
-                            continue
-                        
-                        # This springer helps this team if:
-                        # 1. Team has this shift this week
-                        # 2. Springer is assigned to help this team
-                        # 3. Springer is active on this day
-                        is_on_shift = model.NewBoolVar(f"springer{emp.id}_helps_team{team.id}_shift{shift}_date{d}")
-                        model.AddMultiplicationEquality(
-                            is_on_shift,
-                            [employee_active[(emp.id, d)], 
-                             team_shift[(team.id, week_idx, shift)],
-                             springer_cross_team[(emp.id, team.id, week_idx)]]
                         )
                         assigned.append(is_on_shift)
                     
@@ -707,40 +623,79 @@ def add_td_constraints(
                     model.Add(employee_active[(emp.id, d)] <= 1 - td_vars[(emp.id, week_idx)])
 
 
-def add_springer_constraints(
+def add_weekly_available_employee_constraint(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     employees: List[Employee],
-    dates: List[date]
+    teams: List[Team],
+    weeks: List[List[date]]
 ):
     """
-    HARD CONSTRAINT: Springer (backup worker) availability.
+    HARD CONSTRAINT: Weekly available employee for dynamic coverage.
     
-    - At least 1 springer must remain available each day
-    - Springers can work in any team
-    - Springers should not all be assigned simultaneously
+    Requirements:
+    - Each week, at least 1 employee from shift-teams must not be assigned to any shift
+    - This employee can be dynamically deployed as a substitute in case of absences
+    - Must be from regular shift-teams (not special roles like TD-only employees)
+    - Must be a team member (not Ferienjobber or employees without teams)
+    
+    Implementation:
+    - For each week, count total working days for each eligible employee
+    - Ensure at least 1 eligible employee has 0 working days that week
     """
-    springers = [emp for emp in employees if emp.is_springer]
+    # Get eligible employees: regular shift-team members (not special roles)
+    eligible_employees = []
+    for emp in employees:
+        # Must have a team
+        if not emp.team_id:
+            continue
+        # Must not be in virtual team (TD-only employees)
+        if emp.team_id == VIRTUAL_TEAM_ID:
+            continue
+        # Must not be Ferienjobber (temporary workers)
+        if emp.is_ferienjobber:
+            continue
+        # This is a regular shift-team member
+        eligible_employees.append(emp)
     
-    if not springers:
-        return
+    if not eligible_employees:
+        return  # No eligible employees
     
-    # At least 1 springer available per day
-    for d in dates:
-        springer_working = []
-        for emp in springers:
-            if d.weekday() < 5:  # Weekday
-                if (emp.id, d) in employee_active:
-                    springer_working.append(employee_active[(emp.id, d)])
-            else:  # Weekend
-                # Springer works if assigned to work on weekend
-                if (emp.id, d) in employee_weekend_shift:
-                    springer_working.append(employee_weekend_shift[(emp.id, d)])
+    # For each week, ensure at least 1 eligible employee is completely free
+    for week_idx, week_dates in enumerate(weeks):
+        # For each eligible employee, create a variable indicating if they're free this week
+        employee_free_vars = []
         
-        if springer_working:
-            # At least one springer must be free
-            model.Add(sum(springer_working) <= len(springers) - 1)
+        for emp in eligible_employees:
+            # Count working days for this employee in this week
+            working_days = []
+            
+            for d in week_dates:
+                if d.weekday() < 5:  # Weekday
+                    if (emp.id, d) in employee_active:
+                        working_days.append(employee_active[(emp.id, d)])
+                else:  # Weekend
+                    if (emp.id, d) in employee_weekend_shift:
+                        working_days.append(employee_weekend_shift[(emp.id, d)])
+            
+            if working_days:
+                # Create variable: is this employee completely free this week?
+                is_free = model.NewBoolVar(f"emp{emp.id}_free_week{week_idx}")
+                
+                # Employee is free if sum of working days == 0
+                # Equivalently: is_free == 1 iff sum(working_days) == 0
+                # We can express this as: sum(working_days) <= (1 - is_free) * len(working_days)
+                # When is_free=1: sum <= 0 (must be 0)
+                # When is_free=0: sum <= len (can be anything)
+                model.Add(sum(working_days) == 0).OnlyEnforceIf(is_free)
+                model.Add(sum(working_days) >= 1).OnlyEnforceIf(is_free.Not())
+                
+                employee_free_vars.append(is_free)
+        
+        if employee_free_vars:
+            # At least 1 employee must be completely free this week
+            model.Add(sum(employee_free_vars) >= 1)
 
 
 def add_fairness_objectives(
@@ -749,7 +704,6 @@ def add_fairness_objectives(
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
-    springer_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
@@ -773,8 +727,8 @@ def add_fairness_objectives(
     # 1. Fair distribution of total shifts per employee (including weekends)
     shift_counts = []
     for emp in employees:
-        if emp.is_springer or not emp.team_id:
-            continue  # Don't include springers in fairness
+        if not emp.team_id or emp.team_id == VIRTUAL_TEAM_ID:
+            continue  # Only include regular team members in fairness
         
         # Count weekday active days
         weekday_active = []
@@ -811,7 +765,7 @@ def add_fairness_objectives(
     # 2. Fair distribution of weekend work per employee
     weekend_counts = []
     for emp in employees:
-        if emp.is_springer or not emp.team_id:
+        if not emp.team_id or emp.team_id == VIRTUAL_TEAM_ID:
             continue
         
         weekend_work = []
@@ -886,17 +840,8 @@ def add_fairness_objectives(
                     model.AddAbsEquality(abs_diff, diff)
                     objective_terms.append(abs_diff)
     
-    # MINIMIZE CROSS-TEAM SPRINGER USAGE (NEW)
-    # Prefer springers to work with their own team rather than helping other teams
-    # This is a soft constraint - cross-team is allowed but not preferred
-    # Weight: 10 (higher than other objectives to strongly prefer own-team)
-    for springer_id, foreign_team_id, week_idx in springer_cross_team:
-        # Add penalty for each week a springer helps a foreign team
-        # This encourages the solver to use cross-team only when necessary
-        objective_terms.append(10 * springer_cross_team[(springer_id, foreign_team_id, week_idx)])
-    
-    # MINIMIZE FERIENJOBBER USAGE (NEW)
-    # Prefer to use regular team members and own springers before using Ferienjobbers
+    # MINIMIZE FERIENJOBBER USAGE
+    # Prefer to use regular team members before using Ferienjobbers
     # Ferienjobbers are temporary workers - use them to fill gaps when needed
     # Weight: 8 (high but less than cross-team springers, as they're meant for gap-filling)
     for ferienjobber_id, team_id, week_idx in ferienjobber_cross_team:

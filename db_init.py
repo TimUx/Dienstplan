@@ -173,6 +173,21 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # VacationPeriods table (Ferienzeiten)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS VacationPeriods (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            StartDate TEXT NOT NULL,
+            EndDate TEXT NOT NULL,
+            ColorCode TEXT,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CreatedBy TEXT,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+    
     # AuditLogs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS AuditLogs (
@@ -217,6 +232,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_auditlogs_entity 
         ON AuditLogs(EntityName, EntityId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_vacationperiods_dates 
+        ON VacationPeriods(StartDate, EndDate)
     """)
     
     conn.commit()

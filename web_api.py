@@ -24,7 +24,7 @@ from reportlab.lib.units import cm
 from data_loader import load_from_database, get_existing_assignments
 from model import create_shift_planning_model
 from solver import solve_shift_planning
-from entities import Employee, Team, Absence, AbsenceType, ShiftAssignment
+from entities import Employee, Team, Absence, AbsenceType, ShiftAssignment, VacationPeriod
 
 # Virtual team IDs (must match database and frontend)
 VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Fire Alarm System virtual team
@@ -946,6 +946,249 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
     # ============================================================================
+    # VACATION PERIODS ENDPOINTS (Ferienzeiten)
+    # ============================================================================
+    
+    @app.route('/api/vacation-periods', methods=['GET'])
+    def get_vacation_periods():
+        """Get all vacation periods"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Id, Name, StartDate, EndDate, ColorCode, 
+                       CreatedAt, CreatedBy, ModifiedAt, ModifiedBy
+                FROM VacationPeriods
+                ORDER BY StartDate
+            """)
+            
+            periods = []
+            for row in cursor.fetchall():
+                periods.append({
+                    'id': row['Id'],
+                    'name': row['Name'],
+                    'startDate': row['StartDate'],
+                    'endDate': row['EndDate'],
+                    'colorCode': row['ColorCode'] or '#E8F5E9',
+                    'createdAt': row['CreatedAt'],
+                    'createdBy': row['CreatedBy'],
+                    'modifiedAt': row['ModifiedAt'],
+                    'modifiedBy': row['ModifiedBy']
+                })
+            
+            conn.close()
+            return jsonify(periods)
+            
+        except Exception as e:
+            app.logger.error(f"Get vacation periods error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+    
+    @app.route('/api/vacation-periods/<int:id>', methods=['GET'])
+    def get_vacation_period(id):
+        """Get a specific vacation period"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Id, Name, StartDate, EndDate, ColorCode, 
+                       CreatedAt, CreatedBy, ModifiedAt, ModifiedBy
+                FROM VacationPeriods
+                WHERE Id = ?
+            """, (id,))
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return jsonify({'error': 'Ferienzeit nicht gefunden'}), 404
+            
+            return jsonify({
+                'id': row['Id'],
+                'name': row['Name'],
+                'startDate': row['StartDate'],
+                'endDate': row['EndDate'],
+                'colorCode': row['ColorCode'] or '#E8F5E9',
+                'createdAt': row['CreatedAt'],
+                'createdBy': row['CreatedBy'],
+                'modifiedAt': row['ModifiedAt'],
+                'modifiedBy': row['ModifiedBy']
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Get vacation period error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+    
+    @app.route('/api/vacation-periods', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def create_vacation_period():
+        """Create new vacation period"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('name'):
+                return jsonify({'error': 'Name ist Pflichtfeld'}), 400
+            if not data.get('startDate'):
+                return jsonify({'error': 'Startdatum ist Pflichtfeld'}), 400
+            if not data.get('endDate'):
+                return jsonify({'error': 'Enddatum ist Pflichtfeld'}), 400
+            
+            # Validate dates
+            try:
+                start_date = date.fromisoformat(data.get('startDate'))
+                end_date = date.fromisoformat(data.get('endDate'))
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Ungültiges Datumsformat'}), 400
+            
+            if end_date < start_date:
+                return jsonify({'error': 'Enddatum muss nach Startdatum liegen'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO VacationPeriods (Name, StartDate, EndDate, ColorCode, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('name'),
+                start_date.isoformat(),
+                end_date.isoformat(),
+                data.get('colorCode', '#E8F5E9'),
+                datetime.utcnow().isoformat(),
+                session.get('user_email')
+            ))
+            
+            period_id = cursor.lastrowid
+            
+            # Log audit entry
+            changes = json.dumps({
+                'name': data.get('name'),
+                'startDate': start_date.isoformat(),
+                'endDate': end_date.isoformat(),
+                'colorCode': data.get('colorCode', '#E8F5E9')
+            }, ensure_ascii=False)
+            log_audit(conn, 'VacationPeriod', period_id, 'Create', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': period_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create vacation period error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/vacation-periods/<int:id>', methods=['PUT'])
+    @require_role('Admin', 'Disponent')
+    def update_vacation_period(id):
+        """Update vacation period"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('name'):
+                return jsonify({'error': 'Name ist Pflichtfeld'}), 400
+            if not data.get('startDate'):
+                return jsonify({'error': 'Startdatum ist Pflichtfeld'}), 400
+            if not data.get('endDate'):
+                return jsonify({'error': 'Enddatum ist Pflichtfeld'}), 400
+            
+            # Validate dates
+            try:
+                start_date = date.fromisoformat(data.get('startDate'))
+                end_date = date.fromisoformat(data.get('endDate'))
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Ungültiges Datumsformat'}), 400
+            
+            if end_date < start_date:
+                return jsonify({'error': 'Enddatum muss nach Startdatum liegen'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if period exists and get old values for audit
+            cursor.execute("""
+                SELECT Name, StartDate, EndDate, ColorCode 
+                FROM VacationPeriods WHERE Id = ?
+            """, (id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                conn.close()
+                return jsonify({'error': 'Ferienzeit nicht gefunden'}), 404
+            
+            cursor.execute("""
+                UPDATE VacationPeriods 
+                SET Name = ?, StartDate = ?, EndDate = ?, ColorCode = ?,
+                    ModifiedAt = ?, ModifiedBy = ?
+                WHERE Id = ?
+            """, (
+                data.get('name'),
+                start_date.isoformat(),
+                end_date.isoformat(),
+                data.get('colorCode', '#E8F5E9'),
+                datetime.utcnow().isoformat(),
+                session.get('user_email'),
+                id
+            ))
+            
+            # Log audit entry with changes
+            changes_dict = {}
+            if old_row['Name'] != data.get('name'):
+                changes_dict['name'] = {'old': old_row['Name'], 'new': data.get('name')}
+            if old_row['StartDate'] != start_date.isoformat():
+                changes_dict['startDate'] = {'old': old_row['StartDate'], 'new': start_date.isoformat()}
+            if old_row['EndDate'] != end_date.isoformat():
+                changes_dict['endDate'] = {'old': old_row['EndDate'], 'new': end_date.isoformat()}
+            if old_row['ColorCode'] != data.get('colorCode', '#E8F5E9'):
+                changes_dict['colorCode'] = {'old': old_row['ColorCode'], 'new': data.get('colorCode', '#E8F5E9')}
+            
+            if changes_dict:
+                changes = json.dumps(changes_dict, ensure_ascii=False)
+                log_audit(conn, 'VacationPeriod', id, 'Update', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update vacation period error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/vacation-periods/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_vacation_period(id):
+        """Delete vacation period (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if period exists and get info for audit
+            cursor.execute("SELECT Name FROM VacationPeriods WHERE Id = ?", (id,))
+            period_row = cursor.fetchone()
+            if not period_row:
+                conn.close()
+                return jsonify({'error': 'Ferienzeit nicht gefunden'}), 404
+            
+            # Delete period
+            cursor.execute("DELETE FROM VacationPeriods WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({'name': period_row['Name']}, ensure_ascii=False)
+            log_audit(conn, 'VacationPeriod', id, 'Delete', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete vacation period error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
+    # ============================================================================
     # SHIFT TYPE ENDPOINTS
     # ============================================================================
     
@@ -1094,11 +1337,32 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'notes': row['Notes'] or 'Genehmigter Urlaub'
                 })
             
+            # Get vacation periods (Ferienzeiten) that overlap with the date range
+            cursor.execute("""
+                SELECT Id, Name, StartDate, EndDate, ColorCode
+                FROM VacationPeriods
+                WHERE (StartDate <= ? AND EndDate >= ?)
+                   OR (StartDate >= ? AND StartDate <= ?)
+                ORDER BY StartDate
+            """, (end_date.isoformat(), start_date.isoformat(),
+                  start_date.isoformat(), end_date.isoformat()))
+            
+            vacation_periods = []
+            for row in cursor.fetchall():
+                vacation_periods.append({
+                    'id': row['Id'],
+                    'name': row['Name'],
+                    'startDate': row['StartDate'],
+                    'endDate': row['EndDate'],
+                    'colorCode': row['ColorCode'] or '#E8F5E9'
+                })
+            
             return jsonify({
                 'startDate': start_date.isoformat(),
                 'endDate': end_date.isoformat(),
                 'assignments': assignments,
-                'absences': absences
+                'absences': absences,
+                'vacationPeriods': vacation_periods
             })
             
         except Exception as e:

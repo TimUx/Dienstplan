@@ -178,6 +178,28 @@ class VacationRequest:
     processed_by: Optional[str] = None
 
 
+@dataclass
+class VacationPeriod:
+    """
+    Represents a vacation/holiday period (Ferienzeit).
+    E.g., Summer vacation, Christmas holidays, Easter break, etc.
+    These periods are displayed at the top of calendar views.
+    """
+    id: int
+    name: str  # e.g., "Sommerferien", "Weihnachtsferien", "Osterferien"
+    start_date: date
+    end_date: date
+    color_code: Optional[str] = "#E8F5E9"  # Light green default
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    modified_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    modified_by: Optional[str] = None
+    
+    def overlaps_date(self, check_date: date) -> bool:
+        """Check if vacation period overlaps with given date"""
+        return self.start_date <= check_date <= self.end_date
+
+
 # Predefined shift types for the system
 STANDARD_SHIFT_TYPES = [
     ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0),

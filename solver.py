@@ -177,7 +177,7 @@ class ShiftPlanningSolver:
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}, {}
         
-        team_shift, employee_active, employee_weekend_shift, td_vars, springer_cross_team, ferienjobber_cross_team = self.planning_model.get_variables()
+        team_shift, employee_active, employee_weekend_shift, td_vars, ferienjobber_cross_team = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -245,7 +245,7 @@ class ShiftPlanningSolver:
                             employee_id=emp.id,
                             shift_type_id=shift_type_id,
                             date=d,
-                            is_springer_assignment=False
+                            
                         )
                         assignments.append(assignment)
                         assignment_id += 1
@@ -285,7 +285,7 @@ class ShiftPlanningSolver:
                             employee_id=emp.id,
                             shift_type_id=shift_type_id,
                             date=d,
-                            is_springer_assignment=False
+                            
                         )
                         assignments.append(assignment)
                         assignment_id += 1

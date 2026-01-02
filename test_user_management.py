@@ -129,7 +129,7 @@ def test_update_user(user_id):
     response = session.put(f"{BASE_URL}/users/{user_id}", json={
         "email": "test.user@fritzwinter.de",
         "fullName": "Test User Updated",
-        "roles": ["Disponent"],
+        "roles": ["Admin"],  # Changed from Disponent to Admin
         "employeeId": None  # Unlink employee
     })
     

@@ -1657,8 +1657,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn.close()
     
     @app.route('/api/shifts/plan', methods=['POST'])
+    @require_role('Admin')
     def plan_shifts():
-        """Automatic shift planning using OR-Tools"""
+        """Automatic shift planning using OR-Tools (Admin only)"""
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
         force = request.args.get('force', 'false').lower() == 'true'

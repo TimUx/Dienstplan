@@ -340,9 +340,9 @@ def validate_staffing_requirements(
             
             # Only count F, S, N for staffing requirements
             if shift_code in ["F", "S", "N"]:
-                # Only count regular team members, not springers
+                # Only count regular team members
                 emp = emp_dict[assignment.employee_id]
-                if not emp.is_springer:
+                if emp.team_id and emp.team_id != 99:  # Not virtual team
                     if shift_code not in shift_counts:
                         shift_counts[shift_code] = 0
                     shift_counts[shift_code] += 1
@@ -417,28 +417,45 @@ def validate_springer_availability(
     assignments: List[ShiftAssignment],
     employees: List[Employee]
 ):
-    """Validate that at least one springer is available each day"""
-    springers = [emp for emp in employees if emp.is_springer]
+    """Validate that at least one employee is available (not working) each week"""
+    VIRTUAL_TEAM_ID = 99
+    regular_team_members = [emp for emp in employees 
+                           if emp.team_id and emp.team_id != VIRTUAL_TEAM_ID 
+                           and not emp.is_ferienjobber]
     
-    if not springers:
-        result.add_warning("No springers defined in the system")
+    if not regular_team_members:
+        result.add_warning("No regular team members defined in the system")
         return
     
-    # Group assignments by date
-    by_date = {}
-    for assignment in assignments:
-        if assignment.date not in by_date:
-            by_date[assignment.date] = set()
-        by_date[assignment.date].add(assignment.employee_id)
+    # Group assignments by week
+    # Group assignments by week
+    from datetime import timedelta
+    by_week = {}
     
-    for d, assigned_emp_ids in by_date.items():
-        # Count how many springers are working
-        working_springers = sum(1 for s in springers if s.id in assigned_emp_ids)
-        available_springers = len(springers) - working_springers
+    # Get all unique weeks from assignments
+    weeks = set()
+    for assignment in assignments:
+        week_start = assignment.date - timedelta(days=assignment.date.weekday())
+        weeks.add(week_start)
+    
+    for week_start in weeks:
+        week_dates = [week_start + timedelta(days=i) for i in range(7)]
+        assigned_emp_ids = set()
         
-        if available_springers < 1:
+        for assignment in assignments:
+            if assignment.date in week_dates:
+                assigned_emp_ids.add(assignment.employee_id)
+        
+        # Count how many regular team members are not working this week
+        available_employees = [e for e in regular_team_members if e.id not in assigned_emp_ids]
+        
+        if len(available_employees) < 1:
             result.add_violation(
-                f"No springer available on {d} (all {len(springers)} are assigned)"
+                f"No available employee for week starting {week_start} (constraint: at least 1 must be free)"
+            )
+        elif len(available_employees) == 0:
+            result.add_warning(
+                f"Only {len(available_employees)} employee(s) available for week starting {week_start}"
             )
 
 
@@ -488,8 +505,8 @@ def validate_weekend_team_consistency(
         emp_id = assignment.employee_id
         emp = next((e for e in employees if e.id == emp_id), None)
         
-        # Only check regular team members (not springers)
-        if not emp or emp.is_springer or not emp.team_id:
+        # Only check regular team members
+        if not emp or not emp.team_id or emp.team_id == 99:  # Skip virtual team
             continue
         
         shift_type = get_shift_type_by_id(assignment.shift_type_id)
@@ -699,7 +716,7 @@ def validate_locked_assignments(
                 continue
             
             # Check team members' shifts this week
-            team_members = [e for e in employees if e.team_id == team_id and not e.is_springer]
+            team_members = [e for e in employees if e.team_id == team_id]
             actual_shifts = set()
             
             for emp in team_members:

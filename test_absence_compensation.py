@@ -90,17 +90,23 @@ def test_january_2026_with_absences():
     
     # Verify springer compensation
     print("\nSpringer compensation analysis:")
-    springer_working_days = {}
+    # Track available employees (those not working)
+    available_employees_days = {}
     
-    for assignment in assignments:
-        emp = next((e for e in employees if e.id == assignment.employee_id), None)
-        if emp and emp.is_springer:
-            if emp.id not in springer_working_days:
-                springer_working_days[emp.id] = {
-                    'name': emp.full_name,
-                    'team': emp.team_id,
-                    'days': []
-                }
+    VIRTUAL_TEAM_ID = 99
+    regular_team_members = [e for e in employees 
+                           if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
+                           and not e.is_ferienjobber]
+    
+    working_employees = set(a.employee_id for a in assignments)
+    
+    for emp in regular_team_members:
+        if emp.id not in working_employees:
+            available_employees_days[emp.id] = {
+                'name': emp.full_name,
+                'team': emp.team_id,
+                'available': True
+            }
             springer_working_days[emp.id]['days'].append(assignment.date)
     
     if not springer_working_days:
@@ -180,15 +186,16 @@ def test_single_absence_per_team():
     if result:
         assignments, _, _ = result
         
-        # Count springer usage
-        springer_count = 0
-        for a in assignments:
-            emp = next((e for e in employees if e.id == a.employee_id), None)
-            if emp and emp.is_springer:
-                springer_count += 1
+        # Count available employees (not working)
+        VIRTUAL_TEAM_ID = 99
+        regular_members = [e for e in employees 
+                          if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
+                          and not e.is_ferienjobber]
+        working = set(a.employee_id for a in assignments)
+        available_count = len([e for e in regular_members if e.id not in working])
         
         print(f"\n✅ PASS: Solution found with 3 simultaneous absences")
-        print(f"  Springer working days: {springer_count}")
+        print(f"  Available employees not working: {available_count}")
         return True
     else:
         print("\n❌ FAIL: Could not handle one absence per team")

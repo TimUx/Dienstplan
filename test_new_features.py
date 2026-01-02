@@ -239,7 +239,9 @@ def test_virtual_team_fire_alarm():
     for emp in fire_alarm_team.employees:
         emp_assignments = [a for a in assignments if a.employee_id == emp.id]
         
-        if emp_assignments and not emp.is_springer:
+        # Fire alarm team members should not have regular shift assignments
+        # (they're in virtual team for TD duty only)
+        if emp_assignments:
             print(f"❌ FAIL: {emp.full_name} from Fire Alarm System has regular shift assignments")
             return False
     

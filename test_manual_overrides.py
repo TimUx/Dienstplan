@@ -52,7 +52,7 @@ def test_locked_team_shift():
     assignments, special_functions, complete_schedule = result
     
     # Verify Team Alpha has 'F' in week 0
-    team_alpha_members = [e for e in employees if e.team_id == 1 and not e.is_springer]
+    team_alpha_members = [e for e in employees if e.team_id == 1]
     week0_end = start + timedelta(days=4)  # Mon-Fri
     
     team_alpha_week0_shifts = set()

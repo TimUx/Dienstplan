@@ -1,9 +1,8 @@
 """
-Test for cross-team springer support in worst-case absence scenarios.
+Test for weekly available employee constraint.
 
-This test verifies that springers from other teams can help when multiple
-members of one team are absent (AU, U, L), enabling the shift planner to
-find feasible solutions even in extreme scenarios.
+This test verifies that the system ensures at least one regular shift-team
+member is completely free each week for dynamic coverage of absences.
 """
 
 from datetime import date
@@ -13,13 +12,12 @@ from solver import solve_shift_planning
 from entities import Absence, AbsenceType
 
 
-def test_cross_team_worst_case():
+def test_weekly_availability_constraint():
     """
-    Test worst case: 2 members of same team absent simultaneously.
-    Requires cross-team springer support to find solution.
+    Test that at least one regular shift-team member is free each week.
     """
     print("\n" + "=" * 70)
-    print("TEST: Cross-Team Springer Support - Worst Case")
+    print("TEST: Weekly Available Employee Constraint")
     print("=" * 70)
     
     employees, teams, absences = load_from_database('dienstplan.db')
@@ -27,7 +25,7 @@ def test_cross_team_worst_case():
     start_date = date(2026, 1, 5)
     end_date = date(2026, 1, 11)
     
-    # Worst case: 2 regular members of Team Alpha absent
+    # Test with absences
     test_absences = [
         Absence(
             id=9999,
@@ -35,7 +33,7 @@ def test_cross_team_worst_case():
             absence_type=AbsenceType.AU,
             start_date=start_date,
             end_date=end_date,
-            notes='Sick leave - severe case'
+            notes='Sick leave'
         ),
         Absence(
             id=9998,
@@ -43,18 +41,15 @@ def test_cross_team_worst_case():
             absence_type=AbsenceType.U,
             start_date=start_date,
             end_date=end_date,
-            notes='Vacation - pre-approved'
+            notes='Vacation'
         )
     ]
     
     all_absences = absences + test_absences
     
     print(f"\nScenario:")
-    print(f"  Team Alpha: 5 members (4 regular + 1 springer)")
-    print(f"  Absences: 2 regular members")
-    print(f"  Available: 2 regular + 1 springer = 3 people")
-    print(f"  Required: min 4 for F shift")
-    print(f"  Solution: Need cross-team springer help!\n")
+    print(f"  Testing with 2 absences in Team Alpha")
+    print(f"  System should still ensure at least 1 employee is completely free\n")
     
     # Create model and solve
     planning_model = create_shift_planning_model(
@@ -63,32 +58,42 @@ def test_cross_team_worst_case():
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if not result:
-        print("❌ FAIL: No solution found - cross-team support not working!")
+        print("❌ FAIL: No solution found!")
         return False
     
     assignments, _, _ = result
     
-    print("✅ PASS: Solution found with cross-team springer support!")
+    print("✅ PASS: Solution found!")
     print(f"  Total assignments: {len(assignments)}")
     
-    # Verify cross-team assistance
-    team_alpha_springer = next((e for e in employees if e.team_id == 1 and e.is_springer), None)
-    other_springers = [e for e in employees if e.is_springer and e.team_id != 1 and e.team_id is not None]
+    # Verify at least one employee is completely free
+    VIRTUAL_TEAM_ID = 99
+    regular_team_members = [e for e in employees 
+                           if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
+                           and not e.is_ferienjobber]
     
-    print(f"\nSpringer analysis:")
-    print(f"  Team Alpha springer: {team_alpha_springer.full_name if team_alpha_springer else 'None'}")
-    print(f"  Other team springers: {[e.full_name for e in other_springers]}")
+    working_employees = set(a.employee_id for a in assignments)
+    free_employees = [e for e in regular_team_members if e.id not in working_employees]
     
-    return True
+    print(f"\nAvailable employees this week: {len(free_employees)}")
+    for emp in free_employees:
+        team_name = next((t.name for t in teams if t.id == emp.team_id), 'Unknown')
+        print(f"  - {emp.full_name} ({team_name})")
+    
+    if len(free_employees) >= 1:
+        print("\n✅ Constraint satisfied: At least 1 employee completely free")
+        return True
+    else:
+        print("\n❌ Constraint violated: No employees completely free")
+        return False
 
 
-def test_cross_team_not_used_when_unnecessary():
+def test_weekly_availability_with_minimal_absences():
     """
-    Test that cross-team springers are NOT used when not necessary.
-    With only 1 absence, own-team springer should be sufficient.
+    Test weekly availability with minimal absences.
     """
     print("\n" + "=" * 70)
-    print("TEST: Cross-Team NOT Used When Unnecessary")
+    print("TEST: Weekly Availability - Minimal Absences")
     print("=" * 70)
     
     employees, teams, absences = load_from_database('dienstplan.db')
@@ -96,7 +101,7 @@ def test_cross_team_not_used_when_unnecessary():
     start_date = date(2026, 1, 5)
     end_date = date(2026, 1, 11)
     
-    # Only 1 absence - should be solvable with own-team springer
+    # Minimal absences
     test_absences = [
         Absence(
             id=9999,
@@ -111,11 +116,8 @@ def test_cross_team_not_used_when_unnecessary():
     all_absences = absences + test_absences
     
     print(f"\nScenario:")
-    print(f"  Team Alpha: 5 members (4 regular + 1 springer)")
-    print(f"  Absences: 1 regular member")
-    print(f"  Available: 3 regular + 1 springer = 4 people")
-    print(f"  Required: min 4 for F shift")
-    print(f"  Expected: Own-team springer sufficient (no cross-team needed)\n")
+    print(f"  Testing with 1 absence in Team Alpha")
+    print(f"  System should still ensure at least 1 employee is completely free\n")
     
     # Create model and solve
     planning_model = create_shift_planning_model(
@@ -127,16 +129,33 @@ def test_cross_team_not_used_when_unnecessary():
         print("❌ FAIL: No solution found!")
         return False
     
-    print("✅ PASS: Solution found (own-team springer sufficient)")
-    print("  Cross-team springers should be minimized by optimization")
+    assignments, _, _ = result
     
-    return True
+    print("✅ PASS: Solution found!")
+    print(f"  Total assignments: {len(assignments)}")
+    
+    # Verify at least one employee is completely free
+    VIRTUAL_TEAM_ID = 99
+    regular_team_members = [e for e in employees 
+                           if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
+                           and not e.is_ferienjobber]
+    
+    working_employees = set(a.employee_id for a in assignments)
+    free_employees = [e for e in regular_team_members if e.id not in working_employees]
+    
+    print(f"\nAvailable employees this week: {len(free_employees)}")
+    
+    if len(free_employees) >= 1:
+        print("✅ Constraint satisfied")
+        return True
+    else:
+        print("❌ Constraint violated")
+        return False
 
 
 def test_multiple_teams_with_absences():
     """
     Test with absences in multiple teams simultaneously.
-    Each team should use its own springer first, cross-team only if needed.
     """
     print("\n" + "=" * 70)
     print("TEST: Multiple Teams with Absences")
@@ -179,8 +198,7 @@ def test_multiple_teams_with_absences():
     
     print(f"\nScenario:")
     print(f"  Each team has 1 member absent")
-    print(f"  Each team: 3 regular + 1 springer = 4 available")
-    print(f"  Expected: All teams can meet requirements with own springers\n")
+    print(f"  System should still ensure at least 1 employee is completely free\n")
     
     # Create model and solve
     planning_model = create_shift_planning_model(
@@ -202,17 +220,17 @@ def test_multiple_teams_with_absences():
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("CROSS-TEAM SPRINGER SUPPORT TESTS")
-    print("Testing worst-case absence scenarios")
+    print("WEEKLY AVAILABILITY CONSTRAINT TESTS")
+    print("Testing that at least 1 employee is free each week")
     print("=" * 70)
     
     results = []
     
-    # Test 1: Worst case - needs cross-team
-    results.append(("Cross-team worst case", test_cross_team_worst_case()))
+    # Test 1: With multiple absences
+    results.append(("Weekly availability with absences", test_weekly_availability_constraint()))
     
-    # Test 2: Normal case - cross-team not needed
-    results.append(("Cross-team not used unnecessarily", test_cross_team_not_used_when_unnecessary()))
+    # Test 2: With minimal absences
+    results.append(("Weekly availability minimal", test_weekly_availability_with_minimal_absences()))
     
     # Test 3: Multiple teams with absences
     results.append(("Multiple teams with absences", test_multiple_teams_with_absences()))
@@ -231,6 +249,11 @@ if __name__ == "__main__":
     
     print(f"\nTotal: {passed_count}/{total_count} tests passed")
     
+    if passed_count == total_count:
+        print("\n🎉 ALL TESTS PASSED! Weekly availability constraint working correctly.")
+    else:
+        print("\n⚠️  SOME TESTS FAILED! Review weekly availability logic.")
+
     if passed_count == total_count:
         print("\n🎉 ALL TESTS PASSED! Cross-team springer support working correctly.")
     else:

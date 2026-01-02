@@ -469,7 +469,7 @@ function displayWeekView(data, employees) {
         // Employee rows
         team.employees.forEach(employee => {
             html += '<tr class="employee-row">';
-            html += `<td class="employee-name">  - ${employee.name}</td>`;
+            html += `<td class="employee-name">  - ${employee.name}${employee.isTeamLeader ? ' ⭐' : ''}</td>`;
             
             // Add shift cells for each date
             dates.forEach(dateStr => {
@@ -591,7 +591,7 @@ function displayMonthView(data, employees) {
         // Employee rows
         team.employees.forEach(employee => {
             html += '<tr class="employee-row">';
-            html += `<td class="employee-name">  - ${employee.name}</td>`;
+            html += `<td class="employee-name">  - ${employee.name}${employee.isTeamLeader ? ' ⭐' : ''}</td>`;
             
             // Add shift cells for all days across all weeks
             weekGroups.forEach(week => {
@@ -712,7 +712,7 @@ function displayYearView(data, employees) {
             // Employee rows
             team.employees.forEach(employee => {
                 html += '<tr class="employee-row">';
-                html += `<td class="employee-name">  - ${employee.name}</td>`;
+                html += `<td class="employee-name">  - ${employee.name}${employee.isTeamLeader ? ' ⭐' : ''}</td>`;
                 
                 // Add shift cells for each week
                 month.weeks.forEach(weekNum => {
@@ -882,6 +882,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                 id: emp.id,
                 name: displayName,
                 personalnummer: emp.personalnummer,
+                isTeamLeader: emp.isTeamLeader || false,
                 shifts: {},
                 absences: [] // Store absences for this employee
             };
@@ -900,6 +901,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                     id: emp.id,
                     name: displayName,
                     personalnummer: emp.personalnummer,
+                    isTeamLeader: emp.isTeamLeader || false,
                     shifts: {},
                     absences: []
                 };
@@ -941,6 +943,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                     id: a.employeeId,
                     name: displayName,
                     personalnummer: employee?.personalnummer || '',
+                    isTeamLeader: employee?.isTeamLeader || false,
                     shifts: {},
                     absences: []
                 };
@@ -968,6 +971,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                     id: a.employeeId,
                     name: displayName,
                     personalnummer: employee?.personalnummer || '',
+                    isTeamLeader: employee?.isTeamLeader || false,
                     shifts: {},
                     absences: []
                 };
@@ -1012,6 +1016,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                     id: absence.employeeId,
                     name: displayName,
                     personalnummer: employee?.personalnummer || '',
+                    isTeamLeader: employee?.isTeamLeader || false,
                     shifts: {},
                     absences: []
                 };
@@ -1034,6 +1039,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                     id: absence.employeeId,
                     name: displayName,
                     personalnummer: employee.personalnummer || '',
+                    isTeamLeader: employee.isTeamLeader || false,
                     shifts: {},
                     absences: []
                 };
@@ -1047,7 +1053,13 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     return Object.values(teams).map(team => ({
         teamId: team.teamId,
         teamName: team.teamName,
-        employees: Object.values(team.employees).sort((a, b) => a.name.localeCompare(b.name))
+        employees: Object.values(team.employees).sort((a, b) => {
+            // Team leaders always come first within their team
+            if (a.isTeamLeader && !b.isTeamLeader) return -1;
+            if (!a.isTeamLeader && b.isTeamLeader) return 1;
+            // Then sort alphabetically by name
+            return a.name.localeCompare(b.name);
+        })
     })).sort((a, b) => {
         // Put "Brandmeldeanlage" near the top (after regular teams, before "Ohne Team")
         if (a.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && b.teamId !== UNASSIGNED_TEAM_ID) return 1;
@@ -1637,6 +1649,7 @@ async function editEmployee(id) {
         document.getElementById('geburtsdatum').value = employee.geburtsdatum ? employee.geburtsdatum.split('T')[0] : '';
         document.getElementById('teamId').value = employee.teamId || '';
         document.getElementById('isSpringer').checked = employee.isSpringer;
+        document.getElementById('isTeamLeader').checked = employee.isTeamLeader || false;
         document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
@@ -1712,6 +1725,7 @@ async function saveEmployee(event) {
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
         isSpringer: document.getElementById('isSpringer').checked,
+        isTeamLeader: document.getElementById('isTeamLeader').checked,
         isFerienjobber: document.getElementById('isFerienjobber').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
         isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked

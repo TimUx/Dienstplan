@@ -416,6 +416,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 except (KeyError, IndexError):
                     is_td_qualified = False
                 
+                # Handle IsTeamLeader field which may not exist in older databases
+                try:
+                    is_team_leader = bool(row['IsTeamLeader'])
+                except (KeyError, IndexError):
+                    is_team_leader = False
+                
                 employees.append({
                     'id': row['Id'],
                     'vorname': row['Vorname'],
@@ -429,6 +435,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                     'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
                     'isTdQualified': is_td_qualified,
+                    'isTeamLeader': is_team_leader,
                     'teamId': row['TeamId'],
                     'teamName': row['TeamName'],
                     'fullName': f"{row['Vorname']} {row['Name']}"
@@ -466,6 +473,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         except (KeyError, IndexError):
             is_td_qualified = False
         
+        # Handle IsTeamLeader field which may not exist in older databases
+        try:
+            is_team_leader = bool(row['IsTeamLeader'])
+        except (KeyError, IndexError):
+            is_team_leader = False
+        
         return jsonify({
             'id': row['Id'],
             'vorname': row['Vorname'],
@@ -479,6 +492,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
             'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
             'isTdQualified': is_td_qualified,
+            'isTeamLeader': is_team_leader,
             'teamId': row['TeamId'],
             'teamName': row['TeamName'],
             'fullName': f"{row['Vorname']} {row['Name']}"
@@ -536,6 +550,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
             # TD qualification is automatically set if BMT or BSB is true
             is_td = 1 if (is_bmt or is_bsb) else 0
+            is_team_leader = 1 if data.get('isTeamLeader') else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -549,8 +564,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor.execute("""
                 INSERT INTO Employees 
                 (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
-                 IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, TeamId)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, TeamId)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('vorname'),
                 data.get('name'),
@@ -563,6 +578,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 is_bmt,
                 is_bsb,
                 is_td,
+                is_team_leader,
                 data.get('teamId')
             ))
             
@@ -609,6 +625,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             is_bsb = 1 if data.get('isBrandschutzbeauftragter') else 0
             # TD qualification is automatically set if BMT or BSB is true
             is_td = 1 if (is_bmt or is_bsb) else 0
+            is_team_leader = 1 if data.get('isTeamLeader') else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -636,7 +653,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 UPDATE Employees 
                 SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, Geburtsdatum = ?, 
                     Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
-                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, TeamId = ?
+                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, IsTeamLeader = ?, TeamId = ?
                 WHERE Id = ?
             """, (
                 data.get('vorname'),
@@ -650,6 +667,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 is_bmt,
                 is_bsb,
                 is_td,
+                is_team_leader,
                 data.get('teamId'),
                 id
             ))

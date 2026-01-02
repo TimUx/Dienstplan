@@ -59,18 +59,18 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hash_password(password) == password_hash
 
 
-def get_user_by_email(db, email: str) -> Optional[Dict]:
-    """Get user by email"""
+def get_employee_by_email(db, email: str) -> Optional[Dict]:
+    """Get employee by email (employees now include authentication data)"""
     conn = db.get_connection()
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT u.*, GROUP_CONCAT(r.Name) as roles
-        FROM AspNetUsers u
-        LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+        SELECT e.*, GROUP_CONCAT(r.Name) as roles
+        FROM Employees e
+        LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
         LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
-        WHERE u.Email = ?
-        GROUP BY u.Id
+        WHERE e.Email = ?
+        GROUP BY e.Id
     """, (email,))
     
     row = cursor.fetchone()
@@ -79,12 +79,16 @@ def get_user_by_email(db, email: str) -> Optional[Dict]:
     if not row:
         return None
     
+    full_name = f"{row['Vorname']} {row['Name']}"
+    
     return {
         'id': row['Id'],
         'email': row['Email'],
         'passwordHash': row['PasswordHash'],
-        'fullName': row['FullName'],
-        'employeeId': row['EmployeeId'] if 'EmployeeId' in row.keys() else None,
+        'fullName': full_name,
+        'vorname': row['Vorname'],
+        'name': row['Name'],
+        'personalnummer': row['Personalnummer'],
         'lockoutEnd': row['LockoutEnd'],
         'accessFailedCount': row['AccessFailedCount'],
         'roles': row['roles'].split(',') if row['roles'] else []
@@ -222,7 +226,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     
     @app.route('/api/auth/login', methods=['POST'])
     def login():
-        """Authenticate user and create session"""
+        """Authenticate employee and create session"""
         try:
             data = request.get_json()
             email = data.get('email')
@@ -232,28 +236,32 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not email or not password:
                 return jsonify({'error': 'Email und Passwort sind erforderlich'}), 400
             
-            # Get user from database
-            user = get_user_by_email(db, email)
+            # Get employee from database (employees now have auth data)
+            employee = get_employee_by_email(db, email)
             
-            if not user:
+            if not employee:
                 return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
             
+            # Check if password is set
+            if not employee.get('passwordHash'):
+                return jsonify({'error': 'Kein Passwort gesetzt. Bitte Administrator kontaktieren.'}), 401
+            
             # Check if account is locked
-            if user['lockoutEnd']:
-                lockout_end = datetime.fromisoformat(user['lockoutEnd'])
+            if employee['lockoutEnd']:
+                lockout_end = datetime.fromisoformat(employee['lockoutEnd'])
                 if lockout_end > datetime.utcnow():
                     return jsonify({'error': 'Konto ist gesperrt'}), 403
             
             # Verify password
-            if not verify_password(password, user['passwordHash']):
+            if not verify_password(password, employee['passwordHash']):
                 # Increment failed attempts
                 conn = db.get_connection()
                 cursor = conn.cursor()
                 cursor.execute("""
-                    UPDATE AspNetUsers 
+                    UPDATE Employees 
                     SET AccessFailedCount = AccessFailedCount + 1
                     WHERE Id = ?
-                """, (user['id'],))
+                """, (employee['id'],))
                 conn.commit()
                 conn.close()
                 
@@ -263,18 +271,18 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                UPDATE AspNetUsers 
+                UPDATE Employees 
                 SET AccessFailedCount = 0
                 WHERE Id = ?
-            """, (user['id'],))
+            """, (employee['id'],))
             conn.commit()
             conn.close()
             
             # Create session
-            session['user_id'] = user['id']
-            session['user_email'] = user['email']
-            session['user_fullname'] = user['fullName']
-            session['user_roles'] = user['roles']
+            session['user_id'] = employee['id']
+            session['user_email'] = employee['email']
+            session['user_fullname'] = employee['fullName']
+            session['user_roles'] = employee['roles']
             
             if remember_me:
                 session.permanent = True
@@ -282,9 +290,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({
                 'success': True,
                 'user': {
-                    'email': user['email'],
-                    'fullName': user['fullName'],
-                    'roles': user['roles']
+                    'email': employee['email'],
+                    'fullName': employee['fullName'],
+                    'roles': employee['roles']
                 }
             })
             
@@ -311,26 +319,30 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         })
     
     # ============================================================================
-    # USER MANAGEMENT ENDPOINTS
+    # EMPLOYEE/USER MANAGEMENT ENDPOINTS (Unified)
+    # Note: Employees now include authentication data - no separate users table
     # ============================================================================
     
     @app.route('/api/users', methods=['GET'])
     @require_role('Admin')
     def get_all_users():
-        """Get all users with their roles and linked employees (Admin only)"""
+        """Get all employees with authentication/roles (Admin only)"""
         conn = db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT u.Id, u.Email, u.FullName, u.EmployeeId, u.LockoutEnd, u.AccessFailedCount,
-                   e.Vorname, e.Name, e.Personalnummer,
+            SELECT e.Id, e.Vorname, e.Name, e.Personalnummer, e.Email, e.NormalizedEmail,
+                   e.Funktion, e.TeamId, e.LockoutEnd, e.AccessFailedCount, e.IsActive,
+                   e.IsFerienjobber, e.IsBrandmeldetechniker, e.IsBrandschutzbeauftragter,
+                   e.IsTdQualified, e.IsTeamLeader,
+                   t.Name as TeamName,
                    GROUP_CONCAT(r.Name) as roles
-            FROM AspNetUsers u
-            LEFT JOIN Employees e ON u.EmployeeId = e.Id
-            LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+            FROM Employees e
+            LEFT JOIN Teams t ON e.TeamId = t.Id
+            LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
             LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
-            GROUP BY u.Id
-            ORDER BY u.Email
+            GROUP BY e.Id
+            ORDER BY e.Name, e.Vorname
         """)
         
         users = []
@@ -338,69 +350,108 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             users.append({
                 'id': row['Id'],
                 'email': row['Email'],
-                'fullName': row['FullName'],
-                'employeeId': row['EmployeeId'],
-                'employeeName': f"{row['Vorname']} {row['Name']}" if row['Vorname'] else None,
-                'employeePersonalnummer': row['Personalnummer'],
+                'vorname': row['Vorname'],
+                'name': row['Name'],
+                'fullName': f"{row['Vorname']} {row['Name']}",
+                'personalnummer': row['Personalnummer'],
+                'funktion': row['Funktion'],
+                'teamId': row['TeamId'],
+                'teamName': row['TeamName'],
                 'lockoutEnd': row['LockoutEnd'],
                 'accessFailedCount': row['AccessFailedCount'],
-                'roles': row['roles'].split(',') if row['roles'] else []
+                'isActive': bool(row['IsActive']),
+                'hasPassword': bool(row['Email']),  # Has auth if email is set
+                'roles': row['roles'].split(',') if row['roles'] else [],
+                # Employee data
+                'isFerienjobber': bool(row['IsFerienjobber']),
+                'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
+                'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
+                'isTdQualified': bool(row['IsTdQualified']),
+                'isTeamLeader': bool(row['IsTeamLeader'])
             })
         
         conn.close()
         return jsonify(users)
     
-    @app.route('/api/users/<user_id>', methods=['GET'])
+    @app.route('/api/users/<int:user_id>', methods=['GET'])
     @require_role('Admin')
     def get_user(user_id):
-        """Get single user by ID (Admin only)"""
+        """Get single employee/user by ID (Admin only)"""
         conn = db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT u.Id, u.Email, u.FullName, u.EmployeeId, u.LockoutEnd, u.AccessFailedCount,
-                   e.Vorname, e.Name, e.Personalnummer,
+            SELECT e.*, t.Name as TeamName,
                    GROUP_CONCAT(r.Name) as roles
-            FROM AspNetUsers u
-            LEFT JOIN Employees e ON u.EmployeeId = e.Id
-            LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+            FROM Employees e
+            LEFT JOIN Teams t ON e.TeamId = t.Id
+            LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
             LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
-            WHERE u.Id = ?
-            GROUP BY u.Id
+            WHERE e.Id = ?
+            GROUP BY e.Id
         """, (user_id,))
         
         row = cursor.fetchone()
         conn.close()
         
         if not row:
-            return jsonify({'error': 'Benutzer nicht gefunden'}), 404
+            return jsonify({'error': 'Mitarbeiter/Benutzer nicht gefunden'}), 404
         
         return jsonify({
             'id': row['Id'],
             'email': row['Email'],
-            'fullName': row['FullName'],
-            'employeeId': row['EmployeeId'],
-            'employeeName': f"{row['Vorname']} {row['Name']}" if row['Vorname'] else None,
-            'employeePersonalnummer': row['Personalnummer'],
+            'vorname': row['Vorname'],
+            'name': row['Name'],
+            'fullName': f"{row['Vorname']} {row['Name']}",
+            'personalnummer': row['Personalnummer'],
+            'funktion': row['Funktion'],
+            'teamId': row['TeamId'],
+            'teamName': row['TeamName'],
             'lockoutEnd': row['LockoutEnd'],
             'accessFailedCount': row['AccessFailedCount'],
-            'roles': row['roles'].split(',') if row['roles'] else []
+            'isActive': bool(row['IsActive']),
+            'roles': row['roles'].split(',') if row['roles'] else [],
+            # Employee data
+            'isFerienjobber': bool(row['IsFerienjobber']),
+            'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
+            'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
+            'isTdQualified': bool(row['IsTdQualified']),
+            'isTeamLeader': bool(row['IsTeamLeader'])
         })
     
     @app.route('/api/users', methods=['POST'])
     @require_role('Admin')
     def create_user():
-        """Create new user (Admin only)"""
+        """Create new employee with authentication credentials (Admin only)"""
         try:
             data = request.get_json()
+            
+            # Required fields
+            vorname = data.get('vorname')
+            name = data.get('name')
+            personalnummer = data.get('personalnummer')
             email = data.get('email')
             password = data.get('password')
-            full_name = data.get('fullName')
-            roles = data.get('roles', ['Mitarbeiter'])  # Support multiple roles
-            employee_id = data.get('employeeId')
+            roles = data.get('roles', ['Mitarbeiter'])
             
-            if not email or not password:
-                return jsonify({'error': 'Email und Passwort sind erforderlich'}), 400
+            # Optional fields
+            funktion = data.get('funktion')
+            team_id = data.get('teamId')
+            geburtsdatum = data.get('geburtsdatum')
+            
+            # Qualifications
+            is_ferienjobber = data.get('isFerienjobber', False)
+            is_bmt = data.get('isBrandmeldetechniker', False)
+            is_bsb = data.get('isBrandschutzbeauftragter', False)
+            is_td_qualified = data.get('isTdQualified', is_bmt or is_bsb)  # Auto-set if BMT or BSB
+            is_team_leader = data.get('isTeamLeader', False)
+            
+            # Validation
+            if not vorname or not name or not personalnummer:
+                return jsonify({'error': 'Vorname, Name und Personalnummer sind erforderlich'}), 400
+            
+            if email and not password:
+                return jsonify({'error': 'Passwort ist erforderlich wenn E-Mail angegeben wird'}), 400
             
             # Validate roles
             valid_roles = ['Admin', 'Mitarbeiter']
@@ -413,35 +464,47 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if user already exists
-            cursor.execute("SELECT Id FROM AspNetUsers WHERE Email = ?", (email,))
+            # Check if personalnummer already exists
+            cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ?", (personalnummer,))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'Benutzer mit dieser E-Mail existiert bereits'}), 400
+                return jsonify({'error': 'Personalnummer bereits vorhanden'}), 400
             
-            # If employeeId is provided, check if it exists and is not already linked
-            if employee_id:
-                cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (employee_id,))
-                if not cursor.fetchone():
-                    conn.close()
-                    return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
-                
-                cursor.execute("SELECT Id FROM AspNetUsers WHERE EmployeeId = ?", (employee_id,))
+            # Check if email already exists
+            if email:
+                cursor.execute("SELECT Id FROM Employees WHERE Email = ?", (email,))
                 if cursor.fetchone():
                     conn.close()
-                    return jsonify({'error': 'Dieser Mitarbeiter ist bereits mit einem Benutzer verknüpft'}), 400
+                    return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
             
-            # Create user
-            user_id = secrets.token_hex(16)
-            password_hash = hash_password(password)
-            security_stamp = secrets.token_hex(16)
+            # Create employee with authentication data
+            password_hash = hash_password(password) if password else None
+            security_stamp = secrets.token_hex(16) if password else None
             
             cursor.execute("""
-                INSERT INTO AspNetUsers (Id, Email, NormalizedEmail, PasswordHash, SecurityStamp, FullName, EmployeeId)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, email, email.upper(), password_hash, security_stamp, full_name, employee_id))
+                INSERT INTO Employees 
+                (Vorname, Name, Personalnummer, Email, NormalizedEmail, PasswordHash, SecurityStamp,
+                 Geburtsdatum, Funktion, TeamId, AccessFailedCount, IsActive,
+                 IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, 
+                 IsTdQualified, IsTeamLeader)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?)
+            """, (
+                vorname, name, personalnummer,
+                email, email.upper() if email else None, password_hash, security_stamp,
+                geburtsdatum, funktion, team_id,
+                1 if is_ferienjobber else 0,
+                1 if is_bmt else 0,
+                1 if is_bsb else 0,
+                1 if is_td_qualified else 0,
+                1 if is_team_leader else 0
+            ))
             
-            # Assign roles
+            employee_id = cursor.lastrowid
+            
+            
+            employee_id = cursor.lastrowid
+            
+            # Assign roles (UserId in AspNetUserRoles now contains EmployeeId)
             for role in roles:
                 cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))
                 role_row = cursor.fetchone()
@@ -449,40 +512,57 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     cursor.execute("""
                         INSERT INTO AspNetUserRoles (UserId, RoleId)
                         VALUES (?, ?)
-                    """, (user_id, role_row['Id']))
+                    """, (str(employee_id), role_row['Id']))
             
             # Log audit entry
             changes = json.dumps({
+                'vorname': vorname,
+                'name': name,
+                'personalnummer': personalnummer,
                 'email': email,
-                'fullName': full_name,
-                'roles': roles,
-                'employeeId': employee_id
+                'funktion': funktion,
+                'teamId': team_id,
+                'roles': roles
             }, ensure_ascii=False)
-            log_audit(conn, 'User', user_id, 'Create', changes)
+            log_audit(conn, 'Employee', employee_id, 'Create', changes)
             
             conn.commit()
             conn.close()
             
-            return jsonify({'success': True, 'userId': user_id}), 201
+            return jsonify({'success': True, 'userId': employee_id, 'employeeId': employee_id}), 201
             
         except Exception as e:
-            app.logger.error(f"Create user error: {str(e)}")
+            app.logger.error(f"Create employee/user error: {str(e)}")
             return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
     
-    @app.route('/api/users/<user_id>', methods=['PUT'])
+    @app.route('/api/users/<int:user_id>', methods=['PUT'])
     @require_role('Admin')
     def update_user(user_id):
-        """Update user (Admin only)"""
+        """Update employee with authentication data (Admin only)"""
         try:
             data = request.get_json()
-            email = data.get('email')
-            full_name = data.get('fullName')
-            roles = data.get('roles', [])
-            employee_id = data.get('employeeId')
-            password = data.get('password')  # Optional password change
             
-            if not email:
-                return jsonify({'error': 'Email ist erforderlich'}), 400
+            # Employee data
+            vorname = data.get('vorname')
+            name = data.get('name')
+            personalnummer = data.get('personalnummer')
+            email = data.get('email')
+            password = data.get('password')  # Optional password change
+            funktion = data.get('funktion')
+            team_id = data.get('teamId')
+            geburtsdatum = data.get('geburtsdatum')
+            roles = data.get('roles', [])
+            
+            # Qualifications
+            is_ferienjobber = data.get('isFerienjobber', False)
+            is_bmt = data.get('isBrandmeldetechniker', False)
+            is_bsb = data.get('isBrandschutzbeauftragter', False)
+            is_td_qualified = data.get('isTdQualified', is_bmt or is_bsb)
+            is_team_leader = data.get('isTeamLeader', False)
+            
+            # Validation
+            if not vorname or not name or not personalnummer:
+                return jsonify({'error': 'Vorname, Name und Personalnummer sind erforderlich'}), 400
             
             # Validate roles
             valid_roles = ['Admin', 'Mitarbeiter']
@@ -495,51 +575,66 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if user exists
+            # Check if employee exists
             cursor.execute("""
-                SELECT Email, FullName, EmployeeId 
-                FROM AspNetUsers WHERE Id = ?
+                SELECT Vorname, Name, Personalnummer, Email, Funktion, TeamId
+                FROM Employees WHERE Id = ?
             """, (user_id,))
             old_row = cursor.fetchone()
             if not old_row:
                 conn.close()
-                return jsonify({'error': 'Benutzer nicht gefunden'}), 404
+                return jsonify({'error': 'Mitarbeiter/Benutzer nicht gefunden'}), 404
             
-            # Check if email is taken by another user
-            cursor.execute("SELECT Id FROM AspNetUsers WHERE Email = ? AND Id != ?", (email, user_id))
+            # Check if personalnummer is taken by another employee
+            cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ? AND Id != ?", 
+                          (personalnummer, user_id))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'Email wird bereits von einem anderen Benutzer verwendet'}), 400
+                return jsonify({'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}), 400
             
-            # If employeeId is provided, check if it exists and is not already linked to another user
-            if employee_id:
-                cursor.execute("SELECT Id FROM Employees WHERE Id = ?", (employee_id,))
-                if not cursor.fetchone():
-                    conn.close()
-                    return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
-                
-                cursor.execute("SELECT Id FROM AspNetUsers WHERE EmployeeId = ? AND Id != ?", (employee_id, user_id))
+            # Check if email is taken by another employee
+            if email:
+                cursor.execute("SELECT Id FROM Employees WHERE Email = ? AND Id != ?", (email, user_id))
                 if cursor.fetchone():
                     conn.close()
-                    return jsonify({'error': 'Dieser Mitarbeiter ist bereits mit einem anderen Benutzer verknüpft'}), 400
+                    return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
             
-            # Update user
+            # Update employee
             if password:
                 password_hash = hash_password(password)
+                security_stamp = secrets.token_hex(16)
                 cursor.execute("""
-                    UPDATE AspNetUsers 
-                    SET Email = ?, NormalizedEmail = ?, FullName = ?, EmployeeId = ?, PasswordHash = ?
+                    UPDATE Employees 
+                    SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, NormalizedEmail = ?,
+                        PasswordHash = ?, SecurityStamp = ?, Geburtsdatum = ?, Funktion = ?, TeamId = ?,
+                        IsFerienjobber = ?, IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?,
+                        IsTdQualified = ?, IsTeamLeader = ?
                     WHERE Id = ?
-                """, (email, email.upper(), full_name, employee_id, password_hash, user_id))
+                """, (
+                    vorname, name, personalnummer, email, email.upper() if email else None,
+                    password_hash, security_stamp, geburtsdatum, funktion, team_id,
+                    1 if is_ferienjobber else 0, 1 if is_bmt else 0, 1 if is_bsb else 0,
+                    1 if is_td_qualified else 0, 1 if is_team_leader else 0,
+                    user_id
+                ))
             else:
                 cursor.execute("""
-                    UPDATE AspNetUsers 
-                    SET Email = ?, NormalizedEmail = ?, FullName = ?, EmployeeId = ?
+                    UPDATE Employees 
+                    SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, NormalizedEmail = ?,
+                        Geburtsdatum = ?, Funktion = ?, TeamId = ?,
+                        IsFerienjobber = ?, IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?,
+                        IsTdQualified = ?, IsTeamLeader = ?
                     WHERE Id = ?
-                """, (email, email.upper(), full_name, employee_id, user_id))
+                """, (
+                    vorname, name, personalnummer, email, email.upper() if email else None,
+                    geburtsdatum, funktion, team_id,
+                    1 if is_ferienjobber else 0, 1 if is_bmt else 0, 1 if is_bsb else 0,
+                    1 if is_td_qualified else 0, 1 if is_team_leader else 0,
+                    user_id
+                ))
             
             # Update roles - delete old roles and insert new ones
-            cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (user_id,))
+            cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (str(user_id),))
             for role in roles:
                 cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))
                 role_row = cursor.fetchone()
@@ -547,23 +642,25 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     cursor.execute("""
                         INSERT INTO AspNetUserRoles (UserId, RoleId)
                         VALUES (?, ?)
-                    """, (user_id, role_row['Id']))
+                    """, (str(user_id), role_row['Id']))
             
             # Log audit entry with changes
             changes_dict = {}
+            if old_row['Vorname'] != vorname:
+                changes_dict['vorname'] = {'old': old_row['Vorname'], 'new': vorname}
+            if old_row['Name'] != name:
+                changes_dict['name'] = {'old': old_row['Name'], 'new': name}
+            if old_row['Personalnummer'] != personalnummer:
+                changes_dict['personalnummer'] = {'old': old_row['Personalnummer'], 'new': personalnummer}
             if old_row['Email'] != email:
                 changes_dict['email'] = {'old': old_row['Email'], 'new': email}
-            if old_row['FullName'] != full_name:
-                changes_dict['fullName'] = {'old': old_row['FullName'], 'new': full_name}
-            if old_row['EmployeeId'] != employee_id:
-                changes_dict['employeeId'] = {'old': old_row['EmployeeId'], 'new': employee_id}
             changes_dict['roles'] = roles
             if password:
                 changes_dict['passwordChanged'] = True
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
-                log_audit(conn, 'User', user_id, 'Update', changes)
+                log_audit(conn, 'Employee', user_id, 'Update', changes)
             
             conn.commit()
             conn.close()
@@ -571,29 +668,29 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'success': True})
             
         except Exception as e:
-            app.logger.error(f"Update user error: {str(e)}")
+            app.logger.error(f"Update employee/user error: {str(e)}")
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
     
-    @app.route('/api/users/<user_id>', methods=['DELETE'])
+    @app.route('/api/users/<int:user_id>', methods=['DELETE'])
     @require_role('Admin')
     def delete_user(user_id):
-        """Delete user (Admin only)"""
+        """Delete employee/user (Admin only)"""
         try:
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Check if user exists and get info for audit
-            cursor.execute("SELECT Email, FullName FROM AspNetUsers WHERE Id = ?", (user_id,))
-            user_row = cursor.fetchone()
-            if not user_row:
+            # Check if employee exists and get info for audit
+            cursor.execute("SELECT Vorname, Name, Email FROM Employees WHERE Id = ?", (user_id,))
+            employee_row = cursor.fetchone()
+            if not employee_row:
                 conn.close()
-                return jsonify({'error': 'Benutzer nicht gefunden'}), 404
+                return jsonify({'error': 'Mitarbeiter/Benutzer nicht gefunden'}), 404
             
             # Prevent deleting the last admin
             cursor.execute("""
                 SELECT COUNT(*) as count
-                FROM AspNetUsers u
-                JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+                FROM Employees e
+                JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
                 JOIN AspNetRoles r ON ur.RoleId = r.Id
                 WHERE r.Name = 'Admin'
             """)
@@ -604,25 +701,26 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 FROM AspNetUserRoles ur
                 JOIN AspNetRoles r ON ur.RoleId = r.Id
                 WHERE ur.UserId = ? AND r.Name = 'Admin'
-            """, (user_id,))
+            """, (str(user_id),))
             is_admin = cursor.fetchone()['is_admin'] > 0
             
             if is_admin and admin_count <= 1:
                 conn.close()
                 return jsonify({'error': 'Der letzte Administrator kann nicht gelöscht werden'}), 400
             
-            # Delete user roles first (foreign key constraint)
-            cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (user_id,))
+            # Delete roles first (foreign key constraint)
+            cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (str(user_id),))
             
-            # Delete user
-            cursor.execute("DELETE FROM AspNetUsers WHERE Id = ?", (user_id,))
+            # Delete employee (cascade will handle related data)
+            cursor.execute("DELETE FROM Employees WHERE Id = ?", (user_id,))
             
             # Log audit entry
             changes = json.dumps({
-                'email': user_row['Email'],
-                'fullName': user_row['FullName']
+                'vorname': employee_row['Vorname'],
+                'name': employee_row['Name'],
+                'email': employee_row['Email']
             }, ensure_ascii=False)
-            log_audit(conn, 'User', user_id, 'Delete', changes)
+            log_audit(conn, 'Employee', user_id, 'Delete', changes)
             
             conn.commit()
             conn.close()
@@ -630,7 +728,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'success': True})
             
         except Exception as e:
-            app.logger.error(f"Delete user error: {str(e)}")
+            app.logger.error(f"Delete employee/user error: {str(e)}")
             return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
     @app.route('/api/roles', methods=['GET'])
@@ -658,33 +756,40 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     
     @app.route('/api/employees', methods=['GET'])
     def get_employees():
-        """Get all employees"""
+        """Get all employees (now includes authentication data)"""
         conn = None
         try:
             conn = db.get_connection()
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT e.*, t.Name as TeamName, u.Id as UserId, u.Email as UserEmail
+                SELECT e.*, t.Name as TeamName,
+                       GROUP_CONCAT(r.Name) as roles
                 FROM Employees e
                 LEFT JOIN Teams t ON e.TeamId = t.Id
-                LEFT JOIN AspNetUsers u ON e.Id = u.EmployeeId
+                LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
+                LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
+                GROUP BY e.Id
                 ORDER BY e.Name, e.Vorname
             """)
             
             employees = []
             for row in cursor.fetchall():
-                # Handle IsTdQualified field which may not exist in older databases
+                # Handle fields which may not exist in older databases
                 try:
                     is_td_qualified = bool(row['IsTdQualified'])
                 except (KeyError, IndexError):
                     is_td_qualified = False
                 
-                # Handle IsTeamLeader field which may not exist in older databases
                 try:
                     is_team_leader = bool(row['IsTeamLeader'])
                 except (KeyError, IndexError):
                     is_team_leader = False
+                
+                try:
+                    is_active = bool(row['IsActive'])
+                except (KeyError, IndexError):
+                    is_active = True
                 
                 employees.append({
                     'id': row['Id'],
@@ -694,18 +799,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'email': row['Email'],
                     'geburtsdatum': row['Geburtsdatum'],
                     'funktion': row['Funktion'],
-                    'isSpringer': bool(row['IsSpringer']) if 'IsSpringer' in row.keys() else False,
                     'isFerienjobber': bool(row['IsFerienjobber']),
                     'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                     'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
                     'isTdQualified': is_td_qualified,
                     'isTeamLeader': is_team_leader,
+                    'isActive': is_active,
                     'teamId': row['TeamId'],
                     'teamName': row['TeamName'],
                     'fullName': f"{row['Vorname']} {row['Name']}",
-                    'userId': row['UserId'],
-                    'userEmail': row['UserEmail'],
-                    'hasUserAccount': row['UserId'] is not None
+                    'hasPassword': bool(row['Email']),  # Has auth if email is set
+                    'roles': row['roles'].split(',') if row['roles'] else []
                 })
             
             return jsonify(employees)

@@ -4286,11 +4286,8 @@ function toggleShiftSelection(shiftId) {
         selectedShifts.add(shiftId);
     }
     
-    // Update the visual state of the shift badge
-    const shiftBadges = document.querySelectorAll(`span[onclick*="toggleShiftSelection(${shiftId})"]`);
-    shiftBadges.forEach(badge => {
-        badge.classList.toggle('shift-selected');
-    });
+    // Reload the schedule to update all shift badges
+    loadSchedule();
     
     // Update selection counter
     updateSelectionCounter();

@@ -31,14 +31,21 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
-    # Employees table
+    # Employees table (unified with user authentication)
+    # This table combines employee data AND user authentication
+    # Every employee IS a user with login credentials
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS Employees (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
             Vorname TEXT NOT NULL,
             Name TEXT NOT NULL,
             Personalnummer TEXT NOT NULL UNIQUE,
-            Email TEXT,
+            Email TEXT UNIQUE,
+            NormalizedEmail TEXT,
+            PasswordHash TEXT,
+            SecurityStamp TEXT,
+            LockoutEnd TEXT,
+            AccessFailedCount INTEGER NOT NULL DEFAULT 0,
             Geburtsdatum TEXT,
             Funktion TEXT,
             IsFerienjobber INTEGER NOT NULL DEFAULT 0,
@@ -46,6 +53,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             IsBrandschutzbeauftragter INTEGER NOT NULL DEFAULT 0,
             IsTdQualified INTEGER NOT NULL DEFAULT 0,
             IsTeamLeader INTEGER NOT NULL DEFAULT 0,
+            IsActive INTEGER NOT NULL DEFAULT 1,
             TeamId INTEGER,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (TeamId) REFERENCES Teams(Id)
@@ -100,7 +108,10 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
-    # AspNetUsers table (for authentication)
+    # AspNetUsers table - DEPRECATED
+    # This table is no longer used. Authentication is now part of Employees table.
+    # Kept for backwards compatibility during migration only.
+    # Will be removed in future versions.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS AspNetUsers (
             Id TEXT PRIMARY KEY,
@@ -109,9 +120,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             PasswordHash TEXT NOT NULL,
             SecurityStamp TEXT NOT NULL,
             FullName TEXT,
+            EmployeeId INTEGER,
             LockoutEnd TEXT,
             AccessFailedCount INTEGER NOT NULL DEFAULT 0,
-            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
         )
     """)
     
@@ -124,13 +137,14 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
-    # AspNetUserRoles table (many-to-many)
+    # AspNetUserRoles table (maps Employees to Roles)
+    # Note: UserId column actually contains EmployeeId after migration
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS AspNetUserRoles (
             UserId TEXT NOT NULL,
             RoleId TEXT NOT NULL,
             PRIMARY KEY (UserId, RoleId),
-            FOREIGN KEY (UserId) REFERENCES AspNetUsers(Id),
+            FOREIGN KEY (UserId) REFERENCES Employees(Id),
             FOREIGN KEY (RoleId) REFERENCES AspNetRoles(Id)
         )
     """)
@@ -238,6 +252,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         ON VacationPeriods(StartDate, EndDate)
     """)
     
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_aspnetusers_employeeid 
+        ON AspNetUsers(EmployeeId)
+    """)
+    
     conn.commit()
     conn.close()
     
@@ -245,13 +264,12 @@ def create_database_schema(db_path: str = "dienstplan.db"):
 
 
 def initialize_default_roles(db_path: str = "dienstplan.db"):
-    """Initialize default roles (Admin, Disponent, Mitarbeiter)"""
+    """Initialize default roles (Admin, Mitarbeiter)"""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     roles = [
         ("admin-role-id", "Admin", "ADMIN"),
-        ("disponent-role-id", "Disponent", "DISPONENT"),
         ("mitarbeiter-role-id", "Mitarbeiter", "MITARBEITER")
     ]
     
@@ -263,7 +281,7 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Default roles initialized")
+    print("✅ Default roles initialized (Admin, Mitarbeiter)")
 
 
 def hash_password(password: str) -> str:
@@ -277,40 +295,54 @@ def hash_password(password: str) -> str:
 
 
 def create_default_admin(db_path: str = "dienstplan.db"):
-    """Create default admin user"""
+    """Create default admin employee with login credentials"""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    admin_id = "admin-user-id"
     admin_email = "admin@fritzwinter.de"
     admin_password = "Admin123!"
     
-    # Check if admin already exists
-    cursor.execute("SELECT Id FROM AspNetUsers WHERE Email = ?", (admin_email,))
-    if cursor.fetchone():
-        print("⚠️  Admin user already exists")
-        conn.close()
-        return
+    # Check if admin already exists (check Employees table now)
+    cursor.execute("SELECT Id FROM Employees WHERE Email = ?", (admin_email,))
+    existing_admin = cursor.fetchone()
     
-    # Create admin user
-    password_hash = hash_password(admin_password)
-    security_stamp = secrets.token_hex(16)
+    if existing_admin:
+        print("⚠️  Admin employee already exists")
+        admin_id = existing_admin[0]
+    else:
+        # Create admin employee with authentication credentials
+        password_hash = hash_password(admin_password)
+        security_stamp = secrets.token_hex(16)
+        
+        cursor.execute("""
+            INSERT INTO Employees 
+            (Vorname, Name, Personalnummer, Email, NormalizedEmail, PasswordHash, SecurityStamp,
+             Funktion, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter,
+             IsTdQualified, IsTeamLeader, TeamId, AccessFailedCount, IsActive)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, NULL, 0, 1)
+        """, (
+            "Admin",  # Vorname
+            "Administrator",  # Name
+            "ADMIN001",  # Personalnummer
+            admin_email,
+            admin_email.upper(),
+            password_hash,
+            security_stamp,
+            "Administrator"  # Funktion
+        ))
+        
+        admin_id = cursor.lastrowid
+        print(f"✅ Default admin employee created (ID: {admin_id})")
     
+    # Assign Admin role (UserId in AspNetUserRoles now refers to Employee Id)
     cursor.execute("""
-        INSERT INTO AspNetUsers (Id, Email, NormalizedEmail, PasswordHash, SecurityStamp, FullName)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (admin_id, admin_email, admin_email.upper(), password_hash, security_stamp, "Administrator"))
-    
-    # Assign Admin role
-    cursor.execute("""
-        INSERT INTO AspNetUserRoles (UserId, RoleId)
+        INSERT OR IGNORE INTO AspNetUserRoles (UserId, RoleId)
         VALUES (?, ?)
-    """, (admin_id, "admin-role-id"))
+    """, (str(admin_id), "admin-role-id"))
     
     conn.commit()
     conn.close()
     
-    print(f"✅ Default admin user created:")
     print(f"   Email: {admin_email}")
     print(f"   Password: {admin_password}")
     print(f"   ⚠️  CHANGE THIS PASSWORD AFTER FIRST LOGIN!")

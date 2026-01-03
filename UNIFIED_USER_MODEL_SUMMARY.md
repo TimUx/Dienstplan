@@ -11,7 +11,7 @@ Successfully implemented a unified data model that merges employee and user auth
 
 ## Architecture Change
 
-### Previous Architecture (Linked Model)
+### Previous Concept (Linked Model)
 ```
 ┌─────────────┐         ┌──────────────┐
 │ AspNetUsers │◄────────┤  Employees   │
@@ -226,29 +226,6 @@ Now includes authentication status (public endpoint):
 ]
 ```
 
-## Migration for Existing Databases
-
-### Step 1: Merge Users into Employees
-```bash
-python migrate_merge_users_employees.py dienstplan.db
-```
-
-This script:
-1. Adds authentication fields to Employees table
-2. Migrates AspNetUsers data to Employees
-3. Updates AspNetUserRoles to reference Employees.Id
-4. Creates backup of AspNetUsers table
-5. Preserves all existing data
-
-### Step 2: Remove Disponent Role
-```bash
-python migrate_remove_disponent_role.py dienstplan.db
-```
-
-This script:
-1. Converts all Disponent users to Admin role
-2. Removes Disponent role from database
-
 ## Code Changes Summary
 
 ### web_api.py
@@ -306,21 +283,9 @@ All tests passed successfully:
 - PUT /api/users updates employee
 - DELETE /api/users with admin protection works
 
-✅ **Employee Endpoint**
+- ✅ **Employee Endpoint**
 - GET /api/employees shows hasPassword and roles
 - Public access works correctly
-
-## Backward Compatibility
-
-### During Migration
-- AspNetUsers table kept as backup
-- Migration script is interactive (requires confirmation)
-- All data preserved during migration
-
-### After Migration
-- Old `/api/users` endpoints work with new model
-- Frontend changes not required (API contract maintained)
-- Can drop AspNetUsers after verification
 
 ## Security Considerations
 
@@ -352,6 +317,6 @@ The unified employee/user model simplifies the architecture, improves maintainab
 **Status:** ✅ **PRODUCTION READY**
 
 For questions or issues, refer to:
-- Migration scripts: `migrate_merge_users_employees.py`
 - API implementation: `web_api.py`
 - Database schema: `db_init.py`
+- This documentation: `UNIFIED_USER_MODEL_SUMMARY.md`

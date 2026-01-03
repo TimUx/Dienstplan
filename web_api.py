@@ -2476,6 +2476,130 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             app.logger.error(f"Delete shift assignment error: {str(e)}")
             return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
+    @app.route('/api/shifts/assignments/bulk', methods=['PUT'])
+    @require_role('Admin')
+    def bulk_update_shift_assignments():
+        """Bulk update multiple shift assignments"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            if not data.get('shiftIds') or not isinstance(data.get('shiftIds'), list):
+                return jsonify({'error': 'ShiftIds array ist erforderlich'}), 400
+            
+            if not data.get('changes') or not isinstance(data.get('changes'), dict):
+                return jsonify({'error': 'Changes object ist erforderlich'}), 400
+            
+            shift_ids = data['shiftIds']
+            changes = data['changes']
+            
+            if len(shift_ids) == 0:
+                return jsonify({'error': 'Keine Schichten zum Aktualisieren ausgewählt'}), 400
+            
+            # Validate that at least one field is being changed
+            allowed_fields = {'employeeId', 'shiftTypeId', 'isFixed', 'notes'}
+            if not any(key in changes for key in allowed_fields):
+                return jsonify({'error': 'Mindestens ein Feld muss geändert werden'}), 400
+            
+            # Validate that only allowed fields are present
+            invalid_fields = set(changes.keys()) - allowed_fields
+            if invalid_fields:
+                return jsonify({'error': f'Ungültige Felder: {", ".join(invalid_fields)}'}), 400
+            
+            conn = None
+            updated_count = 0
+            try:
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                
+                # Whitelist for allowed column names to prevent SQL injection
+                ALLOWED_COLUMNS = {
+                    'employeeId': 'EmployeeId',
+                    'shiftTypeId': 'ShiftTypeId',
+                    'isFixed': 'IsFixed',
+                    'notes': 'Notes'
+                }
+                
+                # Process each shift
+                for shift_id in shift_ids:
+                    # Verify shift exists
+                    cursor.execute("SELECT Id FROM ShiftAssignments WHERE Id = ?", (shift_id,))
+                    if not cursor.fetchone():
+                        app.logger.warning(f"Shift {shift_id} not found, skipping")
+                        continue
+                    
+                    # Build UPDATE query dynamically based on changes
+                    update_fields = []
+                    update_values = []
+                    
+                    if 'employeeId' in changes:
+                        update_fields.append(f"{ALLOWED_COLUMNS['employeeId']} = ?")
+                        update_values.append(changes['employeeId'])
+                    
+                    if 'shiftTypeId' in changes:
+                        update_fields.append(f"{ALLOWED_COLUMNS['shiftTypeId']} = ?")
+                        update_values.append(changes['shiftTypeId'])
+                    
+                    if 'isFixed' in changes:
+                        update_fields.append(f"{ALLOWED_COLUMNS['isFixed']} = ?")
+                        update_values.append(1 if changes['isFixed'] else 0)
+                    
+                    if 'notes' in changes:
+                        # Append notes instead of replacing
+                        cursor.execute("SELECT Notes FROM ShiftAssignments WHERE Id = ?", (shift_id,))
+                        row = cursor.fetchone()
+                        existing_notes = row['Notes'] if row and row['Notes'] else ''
+                        new_notes = existing_notes
+                        if existing_notes:
+                            new_notes += '\n' + changes['notes']
+                        else:
+                            new_notes = changes['notes']
+                        update_fields.append(f"{ALLOWED_COLUMNS['notes']} = ?")
+                        update_values.append(new_notes)
+                    
+                    # Always update modification timestamp and user
+                    update_fields.append("ModifiedAt = ?")
+                    update_fields.append("ModifiedBy = ?")
+                    update_values.append(datetime.utcnow().isoformat())
+                    update_values.append(session.get('user_email'))
+                    
+                    # Add shift ID as last parameter
+                    update_values.append(shift_id)
+                    
+                    # Execute update - fields are from whitelist, safe to use in f-string
+                    update_query = f"""
+                        UPDATE ShiftAssignments 
+                        SET {', '.join(update_fields)}
+                        WHERE Id = ?
+                    """
+                    
+                    cursor.execute(update_query, update_values)
+                    
+                    # Log audit entry
+                    changes_json = json.dumps(changes, ensure_ascii=False)
+                    log_audit(conn, 'ShiftAssignment', shift_id, 'BulkUpdate', changes_json)
+                    
+                    updated_count += 1
+                
+                conn.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'updated': updated_count,
+                    'total': len(shift_ids)
+                })
+                
+            finally:
+                if conn:
+                    conn.close()
+            
+        except ValueError as e:
+            app.logger.error(f"Bulk update validation error: {str(e)}")
+            return jsonify({'error': f'Validierungsfehler: {str(e)}'}), 400
+        except Exception as e:
+            app.logger.error(f"Bulk update shift assignments error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
     @app.route('/api/shifts/assignments/<int:id>/toggle-fixed', methods=['PUT'])
     @require_role('Admin')
     def toggle_fixed_assignment(id):

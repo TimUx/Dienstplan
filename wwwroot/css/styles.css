@@ -1842,4 +1842,63 @@ body.disponent button.admin-only.admin-strict {
     margin-right: 8px;
 }
 
+/* Multi-Select Mode Styles */
+.shift-selected {
+    box-shadow: 0 0 0 3px #2196F3 !important;
+    background-color: #E3F2FD !important;
+    transform: scale(1.05);
+    z-index: 10;
+    position: relative;
+}
+
+.btn-active {
+    background-color: #2196F3 !important;
+    color: white !important;
+    box-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+}
+
+#selectionCounter {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background-color: #E3F2FD;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Bulk Edit Modal Styles */
+#bulkEditSummary ul {
+    list-style-type: none;
+}
+
+#bulkEditSummary li {
+    padding: 4px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+#bulkEditSummary li:last-child {
+    border-bottom: none;
+}
+
+/* Improved spacing for multi-select controls */
+.view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.view-controls button {
+    white-space: nowrap;
+}
+
+
 

@@ -2497,14 +2497,28 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 return jsonify({'error': 'Keine Schichten zum Aktualisieren ausgewählt'}), 400
             
             # Validate that at least one field is being changed
-            if not any(key in changes for key in ['employeeId', 'shiftTypeId', 'isFixed', 'notes']):
+            allowed_fields = {'employeeId', 'shiftTypeId', 'isFixed', 'notes'}
+            if not any(key in changes for key in allowed_fields):
                 return jsonify({'error': 'Mindestens ein Feld muss geändert werden'}), 400
+            
+            # Validate that only allowed fields are present
+            invalid_fields = set(changes.keys()) - allowed_fields
+            if invalid_fields:
+                return jsonify({'error': f'Ungültige Felder: {", ".join(invalid_fields)}'}), 400
             
             conn = None
             updated_count = 0
             try:
                 conn = db.get_connection()
                 cursor = conn.cursor()
+                
+                # Whitelist for allowed column names to prevent SQL injection
+                ALLOWED_COLUMNS = {
+                    'employeeId': 'EmployeeId',
+                    'shiftTypeId': 'ShiftTypeId',
+                    'isFixed': 'IsFixed',
+                    'notes': 'Notes'
+                }
                 
                 # Process each shift
                 for shift_id in shift_ids:
@@ -2519,15 +2533,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     update_values = []
                     
                     if 'employeeId' in changes:
-                        update_fields.append("EmployeeId = ?")
+                        update_fields.append(f"{ALLOWED_COLUMNS['employeeId']} = ?")
                         update_values.append(changes['employeeId'])
                     
                     if 'shiftTypeId' in changes:
-                        update_fields.append("ShiftTypeId = ?")
+                        update_fields.append(f"{ALLOWED_COLUMNS['shiftTypeId']} = ?")
                         update_values.append(changes['shiftTypeId'])
                     
                     if 'isFixed' in changes:
-                        update_fields.append("IsFixed = ?")
+                        update_fields.append(f"{ALLOWED_COLUMNS['isFixed']} = ?")
                         update_values.append(1 if changes['isFixed'] else 0)
                     
                     if 'notes' in changes:
@@ -2540,7 +2554,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                             new_notes += '\n' + changes['notes']
                         else:
                             new_notes = changes['notes']
-                        update_fields.append("Notes = ?")
+                        update_fields.append(f"{ALLOWED_COLUMNS['notes']} = ?")
                         update_values.append(new_notes)
                     
                     # Always update modification timestamp and user
@@ -2552,7 +2566,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     # Add shift ID as last parameter
                     update_values.append(shift_id)
                     
-                    # Execute update
+                    # Execute update - fields are from whitelist, safe to use in f-string
                     update_query = f"""
                         UPDATE ShiftAssignments 
                         SET {', '.join(update_fields)}

@@ -4401,11 +4401,11 @@ async function saveBulkEdit(event) {
     
     const employeeId = document.getElementById('bulkEditEmployeeId').value;
     const shiftTypeId = document.getElementById('bulkEditShiftTypeId').value;
-    const isFixed = document.getElementById('bulkEditIsFixed').checked;
+    const isFixedChecked = document.getElementById('bulkEditIsFixed').checked;
     const notes = document.getElementById('bulkEditNotes').value;
     
     // Validate that at least one change is specified
-    if (!employeeId && !shiftTypeId && !isFixed && !notes) {
+    if (!employeeId && !shiftTypeId && !isFixedChecked && !notes) {
         alert('Bitte wählen Sie mindestens eine Änderung aus.');
         return;
     }
@@ -4414,7 +4414,7 @@ async function saveBulkEdit(event) {
     const changes = {};
     if (employeeId) changes.employeeId = parseInt(employeeId);
     if (shiftTypeId) changes.shiftTypeId = parseInt(shiftTypeId);
-    if (isFixed) changes.isFixed = true;
+    if (isFixedChecked) changes.isFixed = true;
     if (notes) changes.notes = notes;
     
     // Confirm the bulk edit
@@ -4438,10 +4438,11 @@ async function saveBulkEdit(event) {
             const result = await response.json();
             alert(`Erfolgreich ${result.updated || selectedShifts.size} Schicht${(result.updated || selectedShifts.size) !== 1 ? 'en' : ''} aktualisiert!`);
             closeBulkEditModal();
-            clearShiftSelection();
-            multiSelectMode = false;
-            toggleMultiSelectMode(); // Reset UI
-            loadSchedule();
+            
+            // Deactivate multi-select mode if it's active
+            if (multiSelectMode) {
+                toggleMultiSelectMode();
+            }
         } else if (response.status === 400) {
             const error = await response.json();
             document.getElementById('bulkEditWarningText').textContent = error.error || 'Validierungsfehler';

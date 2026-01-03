@@ -55,6 +55,56 @@ def migrate_database(db_path: str = "data/dienstplan.db"):
         else:
             print("  ℹ ModifiedBy column already exists")
         
+        # Add working days columns
+        if 'WorksMonday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksMonday INTEGER NOT NULL DEFAULT 1")
+            print("  ✓ Added WorksMonday column")
+        else:
+            print("  ℹ WorksMonday column already exists")
+            
+        if 'WorksTuesday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksTuesday INTEGER NOT NULL DEFAULT 1")
+            print("  ✓ Added WorksTuesday column")
+        else:
+            print("  ℹ WorksTuesday column already exists")
+            
+        if 'WorksWednesday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksWednesday INTEGER NOT NULL DEFAULT 1")
+            print("  ✓ Added WorksWednesday column")
+        else:
+            print("  ℹ WorksWednesday column already exists")
+            
+        if 'WorksThursday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksThursday INTEGER NOT NULL DEFAULT 1")
+            print("  ✓ Added WorksThursday column")
+        else:
+            print("  ℹ WorksThursday column already exists")
+            
+        if 'WorksFriday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksFriday INTEGER NOT NULL DEFAULT 1")
+            print("  ✓ Added WorksFriday column")
+        else:
+            print("  ℹ WorksFriday column already exists")
+            
+        if 'WorksSaturday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksSaturday INTEGER NOT NULL DEFAULT 0")
+            print("  ✓ Added WorksSaturday column")
+        else:
+            print("  ℹ WorksSaturday column already exists")
+            
+        if 'WorksSunday' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WorksSunday INTEGER NOT NULL DEFAULT 0")
+            print("  ✓ Added WorksSunday column")
+        else:
+            print("  ℹ WorksSunday column already exists")
+        
+        # Add weekly working hours column
+        if 'WeeklyWorkingHours' not in columns:
+            cursor.execute("ALTER TABLE ShiftTypes ADD COLUMN WeeklyWorkingHours REAL NOT NULL DEFAULT 40.0")
+            print("  ✓ Added WeeklyWorkingHours column")
+        else:
+            print("  ℹ WeeklyWorkingHours column already exists")
+        
         # Step 2: Create TeamShiftAssignments table
         print("\n[2/7] Creating TeamShiftAssignments table...")
         cursor.execute("""

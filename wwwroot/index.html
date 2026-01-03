@@ -965,6 +965,24 @@
                     <small>Farbe für die Darstellung im Schichtplan</small>
                 </div>
                 <div class="form-group">
+                    <label>Arbeitstage*</label>
+                    <small>An welchen Wochentagen wird diese Schicht gearbeitet?</small>
+                    <div class="workdays-checkboxes">
+                        <label><input type="checkbox" id="shiftTypeMonday" checked> Montag</label>
+                        <label><input type="checkbox" id="shiftTypeTuesday" checked> Dienstag</label>
+                        <label><input type="checkbox" id="shiftTypeWednesday" checked> Mittwoch</label>
+                        <label><input type="checkbox" id="shiftTypeThursday" checked> Donnerstag</label>
+                        <label><input type="checkbox" id="shiftTypeFriday" checked> Freitag</label>
+                        <label><input type="checkbox" id="shiftTypeSaturday"> Samstag</label>
+                        <label><input type="checkbox" id="shiftTypeSunday"> Sonntag</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Wochen-Arbeitszeit*</label>
+                    <input type="number" id="shiftTypeWeeklyHours" required step="0.5" min="0" max="168" value="40.0" placeholder="z.B. 40.0">
+                    <small>Wöchentliche Arbeitszeit in Stunden, die Mitarbeiter leisten müssen</small>
+                </div>
+                <div class="form-group">
                     <label>
                         <input type="checkbox" id="shiftTypeIsActive" checked>
                         Aktiv (Schicht kann verwendet werden)

@@ -1624,8 +1624,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Insert shift type
             cursor.execute("""
-                INSERT INTO ShiftTypes (Code, Name, StartTime, EndTime, DurationHours, ColorCode, IsActive, CreatedBy)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                INSERT INTO ShiftTypes (Code, Name, StartTime, EndTime, DurationHours, ColorCode, IsActive,
+                                      WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
+                                      WorksSaturday, WorksSunday, WeeklyWorkingHours, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('code'),
                 data.get('name'),
@@ -1633,6 +1635,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 data.get('endTime'),
                 data.get('durationHours'),
                 data.get('colorCode', '#808080'),
+                1 if data.get('worksMonday', True) else 0,
+                1 if data.get('worksTuesday', True) else 0,
+                1 if data.get('worksWednesday', True) else 0,
+                1 if data.get('worksThursday', True) else 0,
+                1 if data.get('worksFriday', True) else 0,
+                1 if data.get('worksSaturday', False) else 0,
+                1 if data.get('worksSunday', False) else 0,
+                data.get('weeklyWorkingHours', 40.0),
                 session.get('user_email', 'system')
             ))
             
@@ -1672,7 +1682,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'endTime': row['EndTime'],
             'durationHours': row['DurationHours'],
             'colorCode': row['ColorCode'],
-            'isActive': bool(row['IsActive'])
+            'isActive': bool(row['IsActive']),
+            'worksMonday': bool(row['WorksMonday']),
+            'worksTuesday': bool(row['WorksTuesday']),
+            'worksWednesday': bool(row['WorksWednesday']),
+            'worksThursday': bool(row['WorksThursday']),
+            'worksFriday': bool(row['WorksFriday']),
+            'worksSaturday': bool(row['WorksSaturday']),
+            'worksSunday': bool(row['WorksSunday']),
+            'weeklyWorkingHours': row['WeeklyWorkingHours']
         }
         
         conn.close()
@@ -1708,6 +1726,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 UPDATE ShiftTypes 
                 SET Code = ?, Name = ?, StartTime = ?, EndTime = ?, 
                     DurationHours = ?, ColorCode = ?, IsActive = ?,
+                    WorksMonday = ?, WorksTuesday = ?, WorksWednesday = ?, WorksThursday = ?, WorksFriday = ?,
+                    WorksSaturday = ?, WorksSunday = ?, WeeklyWorkingHours = ?,
                     ModifiedAt = ?, ModifiedBy = ?
                 WHERE Id = ?
             """, (
@@ -1718,6 +1738,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 data.get('durationHours', old_row['DurationHours']),
                 data.get('colorCode', old_row['ColorCode']),
                 1 if data.get('isActive', True) else 0,
+                1 if data.get('worksMonday', old_row.get('WorksMonday', True)) else 0,
+                1 if data.get('worksTuesday', old_row.get('WorksTuesday', True)) else 0,
+                1 if data.get('worksWednesday', old_row.get('WorksWednesday', True)) else 0,
+                1 if data.get('worksThursday', old_row.get('WorksThursday', True)) else 0,
+                1 if data.get('worksFriday', old_row.get('WorksFriday', True)) else 0,
+                1 if data.get('worksSaturday', old_row.get('WorksSaturday', False)) else 0,
+                1 if data.get('worksSunday', old_row.get('WorksSunday', False)) else 0,
+                data.get('weeklyWorkingHours', old_row.get('WeeklyWorkingHours', 40.0)),
                 datetime.utcnow().isoformat(),
                 session.get('user_email', 'system'),
                 id

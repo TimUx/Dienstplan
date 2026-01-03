@@ -3186,18 +3186,31 @@ function displayShiftTypes(shiftTypes) {
     }
     
     let html = '<table class="data-table"><thead><tr>';
-    html += '<th>Kürzel</th><th>Name</th><th>Zeiten</th><th>Stunden</th><th>Farbe</th><th>Status</th><th>Aktionen</th>';
+    html += '<th>Kürzel</th><th>Name</th><th>Zeiten</th><th>Tagesstunden</th><th>Wochenstunden</th><th>Arbeitstage</th><th>Farbe</th><th>Status</th><th>Aktionen</th>';
     html += '</tr></thead><tbody>';
     
     shiftTypes.forEach(shift => {
         const isActive = shift.isActive !== false;
         const statusBadge = isActive ? '<span class="badge badge-success">Aktiv</span>' : '<span class="badge badge-secondary">Inaktiv</span>';
         
+        // Build working days display
+        const days = [];
+        if (shift.worksMonday) days.push('Mo');
+        if (shift.worksTuesday) days.push('Di');
+        if (shift.worksWednesday) days.push('Mi');
+        if (shift.worksThursday) days.push('Do');
+        if (shift.worksFriday) days.push('Fr');
+        if (shift.worksSaturday) days.push('Sa');
+        if (shift.worksSunday) days.push('So');
+        const workDays = days.length > 0 ? days.join(', ') : 'Keine';
+        
         html += '<tr>';
         html += `<td><span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span></td>`;
         html += `<td>${escapeHtml(shift.name)}</td>`;
         html += `<td>${shift.startTime} - ${shift.endTime}</td>`;
         html += `<td>${shift.durationHours}h</td>`;
+        html += `<td>${shift.weeklyWorkingHours || 40.0}h</td>`;
+        html += `<td><small>${workDays}</small></td>`;
         html += `<td><div class="color-preview" style="background-color: ${shift.colorCode}"></div></td>`;
         html += `<td>${statusBadge}</td>`;
         html += '<td class="actions">';
@@ -3250,6 +3263,14 @@ async function loadShiftTypeForEdit(shiftTypeId) {
         document.getElementById('shiftTypeEndTime').value = shiftType.endTime;
         document.getElementById('shiftTypeDuration').value = shiftType.durationHours;
         document.getElementById('shiftTypeColor').value = shiftType.colorCode;
+        document.getElementById('shiftTypeMonday').checked = shiftType.worksMonday !== false;
+        document.getElementById('shiftTypeTuesday').checked = shiftType.worksTuesday !== false;
+        document.getElementById('shiftTypeWednesday').checked = shiftType.worksWednesday !== false;
+        document.getElementById('shiftTypeThursday').checked = shiftType.worksThursday !== false;
+        document.getElementById('shiftTypeFriday').checked = shiftType.worksFriday !== false;
+        document.getElementById('shiftTypeSaturday').checked = shiftType.worksSaturday === true;
+        document.getElementById('shiftTypeSunday').checked = shiftType.worksSunday === true;
+        document.getElementById('shiftTypeWeeklyHours').value = shiftType.weeklyWorkingHours || 40.0;
         document.getElementById('shiftTypeIsActive').checked = shiftType.isActive !== false;
     } catch (error) {
         console.error('Error loading shift type:', error);
@@ -3277,6 +3298,14 @@ async function saveShiftType(event) {
         endTime: document.getElementById('shiftTypeEndTime').value,
         durationHours: parseFloat(document.getElementById('shiftTypeDuration').value),
         colorCode: document.getElementById('shiftTypeColor').value,
+        worksMonday: document.getElementById('shiftTypeMonday').checked,
+        worksTuesday: document.getElementById('shiftTypeTuesday').checked,
+        worksWednesday: document.getElementById('shiftTypeWednesday').checked,
+        worksThursday: document.getElementById('shiftTypeThursday').checked,
+        worksFriday: document.getElementById('shiftTypeFriday').checked,
+        worksSaturday: document.getElementById('shiftTypeSaturday').checked,
+        worksSunday: document.getElementById('shiftTypeSunday').checked,
+        weeklyWorkingHours: parseFloat(document.getElementById('shiftTypeWeeklyHours').value),
         isActive: document.getElementById('shiftTypeIsActive').checked
     };
     

@@ -354,6 +354,293 @@ Dies erstellt automatisch:
 - 17 Mitarbeiter mit verschiedenen Rollen
 - Beispiel-Abwesenheiten
 
+---
+
+## 🔄 Abhängigkeiten & Initiale Inbetriebnahme
+
+### Übersicht der Systemabhängigkeiten
+
+Das Dienstplan-System basiert auf einer hierarchischen Datenstruktur, bei der bestimmte Daten vor anderen erstellt werden müssen. Diese Abhängigkeiten sind entscheidend für eine erfolgreiche Inbetriebnahme.
+
+### Abhängigkeitsdiagramm
+
+```
+1. Rollen (Admin, Disponent, Mitarbeiter)
+   ↓
+2. Benutzer (AspNetUsers mit Rollen)
+   ↓
+3. Teams (Alpha, Beta, Gamma, etc.)
+   ↓
+4. Schichttypen (F, S, N, Z, BMT, BSB, TD)
+   ↓
+5. Mitarbeiter (verknüpft mit Teams und Benutzern)
+   ↓
+6. Abwesenheiten (verknüpft mit Mitarbeitern)
+   ↓
+7. Schichtplanung (verknüpft mit Mitarbeitern, Schichttypen, Abwesenheiten)
+   ↓
+8. Urlaubsanträge & Diensttausch (verknüpft mit Mitarbeitern und Schichten)
+```
+
+### Schritt-für-Schritt-Anleitung: Erstinbetriebnahme
+
+#### Schritt 1: Datenbank initialisieren
+```bash
+python main.py init-db
+```
+
+**Was wird automatisch erstellt:**
+- ✅ Alle Datenbanktabellen
+- ✅ **Rollen**: Admin, Disponent, Mitarbeiter
+- ✅ **Admin-Benutzer**: admin@fritzwinter.de (Passwort: Admin123!)
+- ✅ **Standard-Schichttypen**: F, S, N, Z, BMT, BSB, TD
+
+**Ergebnis**: System ist einsatzbereit mit minimaler Konfiguration.
+
+#### Schritt 2: Teams erstellen (erforderlich)
+
+**Warum zuerst?** Mitarbeiter müssen einem Team zugeordnet werden.
+
+**Navigation:** Nach Login → **Teams** → **➕ Team hinzufügen**
+
+**Beispiel:**
+- Team Alpha (Beschreibung: "Hauptteam Frühschicht")
+- Team Beta (Beschreibung: "Hauptteam Spätschicht")
+- Team Gamma (Beschreibung: "Hauptteam Nachtschicht")
+
+**Virtuelle Teams (automatisch):**
+- Brandmeldeanlage Virtuell (ID: 99) - für BMT-qualifizierte Mitarbeiter
+- Ferienjobber Virtuell (ID: 98) - für temporäre Mitarbeiter
+
+#### Schritt 3: Mitarbeiter anlegen (erforderlich)
+
+**Abhängigkeit:** Teams müssen existieren.
+
+**Navigation:** Nach Login → **Mitarbeiter** → **➕ Mitarbeiter hinzufügen**
+
+**Pflichtfelder:**
+- Vorname
+- Name
+- Personalnummer (eindeutig!)
+
+**Wichtige optionale Felder:**
+- **E-Mail**: Erforderlich, wenn Mitarbeiter sich anmelden soll
+- **Team**: Verknüpfung zum Team (wichtig für Planung)
+- **Qualifikationen**: BMT, BSB, TD (für Sonderschichten)
+- **Springer**: Checkbox für flexible Vertretung
+- **Ferienjobber**: Checkbox für temporäre Mitarbeiter
+
+**Best Practice:**
+- Mindestens 10-15 Mitarbeiter für realistische Planung
+- Mindestens 3-4 Springer markieren
+- BMT/BSB-Qualifikationen für Wochentags-Abdeckung
+
+#### Schritt 4: Benutzerkonten erstellen (optional)
+
+**Abhängigkeit:** Mitarbeiter müssen existieren.
+
+**Warum?** Nur wenn Mitarbeiter sich selbst anmelden sollen.
+
+**Navigation:** Nach Login als Admin → **Administration** → **Benutzer** → **➕ Benutzer hinzufügen**
+
+**Für jeden Mitarbeiter:**
+1. E-Mail (muss mit Mitarbeiter-E-Mail übereinstimmen)
+2. Passwort (Standardpasswort vergeben)
+3. Rolle zuweisen:
+   - **Mitarbeiter**: Nur Lesezugriff, eigene Urlaubsanträge
+   - **Disponent**: Planung und Verwaltung
+   - **Admin**: Voller Zugriff
+
+**Verknüpfung:** System verknüpft Benutzer automatisch mit Mitarbeiter über E-Mail.
+
+#### Schritt 5: Schichttypen prüfen (optional)
+
+**Standardmäßig verfügbar:**
+- **F** - Früh (05:45-13:45, 8h)
+- **S** - Spät (13:45-21:45, 8h)
+- **N** - Nacht (21:45-05:45, 8h)
+- **Z** - Zwischendienst (08:00-16:00, 8h)
+- **BMT** - Brandmeldetechniker (06:00-14:00, 8h, Mo-Fr)
+- **BSB** - Brandschutzbeauftragter (07:00-16:30, 9.5h, Mo-Fr)
+- **TD** - Tagdienst (speziell für qualifizierte Mitarbeiter)
+
+**Anpassungen (falls erforderlich):**
+
+**Navigation:** Nach Login als Admin → **Administration** → **Schichtverwaltung**
+
+Ändern Sie:
+- Arbeitszeiten (Start/Ende)
+- Wochenarbeitsstunden
+- Arbeitstage (Mo-So)
+- Farbcodes
+
+#### Schritt 6: Abwesenheiten erfassen (vor Planung)
+
+**Abhängigkeit:** Mitarbeiter müssen existieren.
+
+**Warum wichtig?** Planung berücksichtigt nur verfügbare Mitarbeiter.
+
+**Navigation:** **Abwesenheiten** → **➕ Abwesenheit hinzufügen**
+
+**Typen:**
+- **U** - Urlaub (geplant)
+- **AU** - Arbeitsunfähigkeit / Krank
+- **L** - Lehrgang / Schulung
+
+**Best Practice:**
+- Bekannte Urlaube vor Planung eintragen
+- Minimiert Nachbearbeitungen
+- Verhindert Planungskonflikte
+
+#### Schritt 7: Erste Schichtplanung durchführen
+
+**Abhängigkeit:** Mitarbeiter, Teams, Schichttypen müssen existieren.
+
+**Navigation:** **Dienstplan** → **Schichten planen**
+
+**Empfohlene Einstellungen für erstes Mal:**
+1. **Zeitraum**: 2-4 Wochen (nicht zu lang)
+2. **Startdatum**: Montag (sauberer Start)
+3. **Vorhandene Schichten überschreiben**: Nein (für ersten Lauf)
+
+**Klick auf "Planen"** - Warten Sie 1-5 Minuten
+
+**Was passiert:**
+- OR-Tools CP-SAT Solver berechnet optimale Verteilung
+- Berücksichtigt alle Constraints (Ruhezeiten, Arbeitszeitgesetze, etc.)
+- Erstellt faire Schichtverteilung
+
+**Ergebnis prüfen:**
+- Sind alle Tage besetzt?
+- Sind Springer-Mitarbeiter gleichmäßig verteilt?
+- Gibt es BMT/BSB an allen Wochentagen?
+
+#### Schritt 8: Manuelle Anpassungen (optional)
+
+**Nach automatischer Planung:**
+
+1. **Schichten fixieren**: Wichtige Schichten markieren
+2. **Manuelle Änderungen**: Einzelne Schichten verschieben
+3. **Neu planen**: Nur offene Zeiträume planen lassen
+
+**Navigation:** Klick auf beliebige Schicht im Kalender
+
+**Optionen:**
+- Bearbeiten
+- Löschen
+- Fixieren (🔒)
+
+#### Schritt 9: Urlaubsanträge aktivieren (optional)
+
+**Abhängigkeit:** Mitarbeiter mit Benutzerkonten.
+
+**Workflow:**
+1. Mitarbeiter stellt Urlaubsantrag
+2. Disponent/Admin prüft und genehmigt/lehnt ab
+3. Bei Genehmigung → Automatische Erstellung der Abwesenheit
+4. Abwesenheit wird bei nächster Planung berücksichtigt
+
+**Navigation:** **Urlaubsanträge** → **➕ Antrag stellen**
+
+#### Schritt 10: Diensttausch aktivieren (optional)
+
+**Abhängigkeit:** Schichtplan muss existieren.
+
+**Workflow:**
+1. Mitarbeiter bietet Dienst zum Tausch an
+2. Anderer Mitarbeiter fragt Dienst an
+3. Disponent/Admin genehmigt/lehnt ab
+4. Bei Genehmigung → Automatischer Tausch der Schichten
+
+**Navigation:** **Diensttausch** → **Dienst anbieten**
+
+---
+
+### Zusammenfassung: Minimale Ersteinrichtung
+
+**Für produktiven Betrieb (ohne Beispieldaten):**
+
+```bash
+# 1. Datenbank initialisieren
+python main.py init-db
+
+# 2. Server starten
+python main.py serve
+
+# 3. Im Browser: http://localhost:5000
+# 4. Anmelden als Admin (admin@fritzwinter.de / Admin123!)
+# 5. Teams erstellen (mindestens 1)
+# 6. Mitarbeiter anlegen (mindestens 10-15)
+# 7. Abwesenheiten eintragen (bekannte Urlaube)
+# 8. Schichtplanung durchführen
+# 9. Ergebnis prüfen und bei Bedarf anpassen
+```
+
+**Für Tests mit Beispieldaten:**
+
+```bash
+# Alles in einem Schritt
+python main.py init-db --with-sample-data
+python main.py serve
+```
+
+---
+
+### Wichtige Hinweise
+
+#### ⚠️ Reihenfolge beachten
+Die Reihenfolge der Datenerstellung ist **zwingend erforderlich**:
+1. Rollen & Admin-Benutzer (automatisch)
+2. Teams
+3. Mitarbeiter (mit Team-Zuordnung)
+4. Optional: Benutzerkonten
+5. Optional: Abwesenheiten
+6. Schichtplanung
+
+#### 🔄 Abhängigkeiten im Detail
+
+**Teams → Mitarbeiter:**
+- Jeder Mitarbeiter benötigt ein Team
+- Ausnahme: Springer und Ferienjobber können ohne Team sein
+- Virtuelle Teams werden automatisch erstellt
+
+**Mitarbeiter → Schichtplanung:**
+- Mindestens 10 Mitarbeiter empfohlen
+- Mindestens 3-4 Springer für Flexibilität
+- BMT/BSB-Qualifikationen für Wochentage
+
+**Abwesenheiten → Schichtplanung:**
+- Werden automatisch berücksichtigt
+- Vor Planung eintragen für beste Ergebnisse
+- Nachträgliches Eintragen erfordert Neuplanung
+
+**Benutzerkonten → Funktionen:**
+- Nicht erforderlich für Basisbetrieb
+- Erforderlich für:
+  - Mitarbeiter-Login
+  - Urlaubsanträge durch Mitarbeiter
+  - Diensttausch durch Mitarbeiter
+
+#### 🎯 Best Practices
+
+1. **Immer mit Test-Zeitraum starten**: 2-4 Wochen für erste Planung
+2. **Springer strategisch auswählen**: Erfahrene, flexible Mitarbeiter
+3. **Qualifikationen pflegen**: BMT/BSB/TD für Sonderschichten
+4. **Abwesenheiten aktuell halten**: Vor jeder Planung prüfen
+5. **Admin-Passwort ändern**: Sofort nach erster Anmeldung
+6. **Regelmäßige Backups**: `data/dienstplan.db` sichern
+
+#### 📊 Empfohlene Mindestanzahlen
+
+Für erfolgreiche automatische Planung:
+- **Mitarbeiter gesamt**: 10-15 minimum
+- **Pro Team**: 3-5 Mitarbeiter
+- **Springer**: 3-4 Mitarbeiter
+- **BMT-Qualifizierte**: 5+ Mitarbeiter
+- **BSB-Qualifizierte**: 5+ Mitarbeiter
+
+---
+
 ## 📖 API-Dokumentation
 
 ### Authentifizierungs-Endpoints

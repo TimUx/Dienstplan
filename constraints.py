@@ -558,10 +558,12 @@ def add_working_hours_constraints(
                 # Maximum weekly hours based on shift configuration (scaled by 10)
                 # Use the shift's configured weekly working hours
                 # For safety, we'll use the maximum of all shifts the team might work
-                max_scaled_hours = max(int(shift_weekly_hours.get(sc, 48.0) * 10) 
-                                      for sc in shift_codes 
-                                      if (emp.team_id, week_idx, sc) in team_shift)
-                model.Add(sum(hours_terms) <= max_scaled_hours)
+                possible_max_hours = [shift_weekly_hours.get(sc, 48.0) 
+                                     for sc in shift_codes 
+                                     if (emp.team_id, week_idx, sc) in team_shift]
+                if possible_max_hours:
+                    max_scaled_hours = int(max(possible_max_hours) * 10)
+                    model.Add(sum(hours_terms) <= max_scaled_hours)
 
 
 def add_td_constraints(

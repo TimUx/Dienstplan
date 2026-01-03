@@ -202,6 +202,36 @@ def get_virtual_team_employee_count(cursor, team_id: int) -> int:
         return 0
 
 
+def validate_monthly_date_range(start_date: date, end_date: date) -> tuple[bool, str]:
+    """
+    Validate that the date range covers exactly one complete month.
+    
+    Args:
+        start_date: Start date of the range
+        end_date: End date of the range
+    
+    Returns:
+        Tuple of (is_valid, error_message). If valid, error_message is empty string.
+    """
+    # Validate that the date range is within a single month
+    if start_date.year != end_date.year or start_date.month != end_date.month:
+        return False, 'Shift planning is only allowed for a single month. Year-based planning has been removed.'
+    
+    # Validate that the date range covers the entire month
+    # First day of month
+    first_day = date(start_date.year, start_date.month, 1)
+    # Last day of month
+    if start_date.month == 12:
+        last_day = date(start_date.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last_day = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
+    
+    if start_date != first_day or end_date != last_day:
+        return False, f'Planning must cover the entire month. Expected: {first_day.isoformat()} to {last_day.isoformat()}'
+    
+    return True, ''
+
+
 def create_app(db_path: str = "dienstplan.db") -> Flask:
     """
     Create and configure Flask application.
@@ -2294,25 +2324,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             start_date = date.fromisoformat(start_date_str)
             end_date = date.fromisoformat(end_date_str)
             
-            # Validate that the date range is within a single month
-            if start_date.year != end_date.year or start_date.month != end_date.month:
-                return jsonify({
-                    'error': 'Shift planning is only allowed for a single month. Year-based planning has been removed.'
-                }), 400
-            
-            # Validate that the date range covers the entire month
-            # First day of month
-            first_day = date(start_date.year, start_date.month, 1)
-            # Last day of month
-            if start_date.month == 12:
-                last_day = date(start_date.year + 1, 1, 1) - timedelta(days=1)
-            else:
-                last_day = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
-            
-            if start_date != first_day or end_date != last_day:
-                return jsonify({
-                    'error': f'Planning must cover the entire month. Expected: {first_day.isoformat()} to {last_day.isoformat()}'
-                }), 400
+            # Validate that planning is for a complete single month
+            is_valid, error_msg = validate_monthly_date_range(start_date, end_date)
+            if not is_valid:
+                return jsonify({'error': error_msg}), 400
             
             # Load data
             employees, teams, absences, shift_types = load_from_database(db.db_path)

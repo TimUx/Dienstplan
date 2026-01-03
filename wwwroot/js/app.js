@@ -1383,7 +1383,9 @@ async function executePlanShifts(event) {
         
         if (response.ok) {
             const data = await response.json();
-            alert(`Erfolgreich! ${data.assignmentsCount || 0} Schichten wurden für ${periodText} geplant.\n\nHinweis: Der Dienstplan muss noch freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.`);
+            const successMsg = `Erfolgreich! ${data.assignmentsCount || 0} Schichten wurden für ${periodText} geplant.`;
+            const reminderMsg = 'Hinweis: Der Dienstplan muss noch freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.';
+            alert(`${successMsg}\n\n${reminderMsg}`);
             closePlanShiftsModal();
             loadSchedule();
         } else if (response.status === 401) {

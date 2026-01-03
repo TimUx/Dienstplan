@@ -26,13 +26,14 @@ Neu im System? Starten Sie hier:
 | **[Schnellstart](docs/QUICKSTART.md)** | Installation und erste Schritte | Neue Benutzer |
 | **[Windows Standalone](docs/WINDOWS_EXECUTABLE.md)** | Anleitung für die Windows-Exe | Windows-Nutzer |
 
-### Für Administratoren und Disponenten
+### Für Administratoren
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|--------------|------------|
-| **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** | CLI-Befehle und API-Nutzung | Admins, Disponenten |
-| **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** | Details zum OR-Tools Solver | Disponenten, Admins |
+| **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** | CLI-Befehle und API-Nutzung | Admins |
+| **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** | Details zum OR-Tools Solver | Admins |
 | **[Beispieldaten](docs/SAMPLE_DATA.md)** | Testdaten und API-Beispiele | Admins, Entwickler |
+| **[Mehrfachauswahl-Anleitung](MEHRFACHAUSWAHL_ANLEITUNG.md)** | Multi-Select Schichtbearbeitung | Admins |
 
 ### Für Entwickler
 
@@ -53,10 +54,10 @@ Neu im System? Starten Sie hier:
 → **[Schnellstart-Anleitung](docs/QUICKSTART.md)**
 
 #### ...das System als Mitarbeiter nutzen?
-→ **[Benutzerhandbuch - Mitarbeiteransicht](BENUTZERHANDBUCH.md#mitarbeiteransicht)**
+→ **[Benutzerhandbuch - Für Mitarbeiter](BENUTZERHANDBUCH.md#für-mitarbeiter)**
 
-#### ...Schichten planen als Disponent?
-→ **[Benutzerhandbuch - Schichtplanung](BENUTZERHANDBUCH.md#schichtplanung)**
+#### ...Schichten planen als Administrator?
+→ **[Benutzerhandbuch - Schichtplanung](BENUTZERHANDBUCH.md#9-schichtplanung)**
 
 #### ...das System administrieren?
 → **[Benutzerhandbuch - Administration](BENUTZERHANDBUCH.md#administration)**
@@ -76,7 +77,9 @@ Neu im System? Starten Sie hier:
 
 Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
 
+**Existierende Screenshots:**
 - **Anmeldung**: `00-login-modal.png`
+- **Hauptansicht**: `00-main-view.png`
 - **Dienstplan-Ansichten**: `03-schedule-week-admin.png`, `04-schedule-month-admin.png`, `05-schedule-year-admin.png`
 - **Mitarbeiterverwaltung**: `06-employees-list.png`
 - **Urlaubsverwaltung**: `07-vacation-requests.png`
@@ -84,6 +87,17 @@ Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
 - **Statistiken**: `09-statistics.png`
 - **Hilfe-System**: `10-help-manual.png`
 - **Administration**: `11-admin-panel.png`
+
+**Benötigte Screenshots** (noch zu erstellen):
+- **Schichtverwaltung**: `12-shift-management.png` - Dynamische Schichttypen-Verwaltung
+- **Schichttyp bearbeiten**: `13-shift-type-edit.png` - Bearbeitungsformular
+- **Team-Zuordnung**: `14-shift-team-assignment.png` - Teams zu Schichten zuweisen
+- **Mehrfachauswahl**: `15-multi-select-active.png` - Multi-Select für Schichten
+- **Bearbeitungsdialog**: `16-multi-select-edit-dialog.png` - Massenbearbeitung
+- **Jahresurlaubsplan**: `17-vacation-year-plan.png` - Jahresübersicht Urlaube
+- **Teamverwaltung**: `18-team-management.png` - Team-Übersicht
+
+Siehe **[BENUTZERHANDBUCH - Benötigte Screenshots](BENUTZERHANDBUCH.md#benötigte-screenshots)** für Details.
 
 ---
 

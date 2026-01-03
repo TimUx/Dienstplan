@@ -59,7 +59,7 @@ def run_cli_planning(
     # Create model
     print(f"Creating planning model for {start_date} to {end_date}...")
     planning_model = create_shift_planning_model(
-        employees, teams, start_date, end_date, absences
+        employees, teams, start_date, end_date, absences, shift_types=shift_types
     )
     planning_model.print_model_statistics()
     

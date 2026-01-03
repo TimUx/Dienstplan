@@ -118,6 +118,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     from entities import ShiftType
     
     conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row  # Enable access by column name
     cursor = conn.cursor()
     
     # Load shift types from database
@@ -130,14 +131,14 @@ def load_from_database(db_path: str = "dienstplan.db"):
     shift_types = []
     for row in cursor.fetchall():
         shift_type = ShiftType(
-            id=row[0],
-            code=row[1],
-            name=row[2],
-            start_time=row[3],
-            end_time=row[4],
-            hours=row[5],
-            color_code=row[6],
-            weekly_working_hours=row[7] if len(row) > 7 else 40.0
+            id=row['Id'],
+            code=row['Code'],
+            name=row['Name'],
+            start_time=row['StartTime'],
+            end_time=row['EndTime'],
+            hours=row['DurationHours'],
+            color_code=row['ColorCode'],
+            weekly_working_hours=row['WeeklyWorkingHours']
         )
         shift_types.append(shift_type)
     
@@ -146,8 +147,9 @@ def load_from_database(db_path: str = "dienstplan.db"):
     teams = []
     for row in cursor.fetchall():
         # IsVirtual column added in migration - default to False if not present
-        is_virtual = bool(row[4]) if len(row) > 4 else False
-        team = Team(id=row[0], name=row[1], description=row[2], email=row[3], is_virtual=is_virtual)
+        is_virtual = bool(row['IsVirtual']) if 'IsVirtual' in row.keys() else False
+        team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 
+                   email=row['Email'], is_virtual=is_virtual)
         teams.append(team)
     
     # Load employees

@@ -1600,6 +1600,435 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         conn.close()
         return jsonify(shift_types)
     
+    @app.route('/api/shifttypes', methods=['POST'])
+    @require_role('Admin')
+    def create_shift_type():
+        """Create new shift type (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            required_fields = ['code', 'name', 'startTime', 'endTime', 'durationHours']
+            for field in required_fields:
+                if not data.get(field):
+                    return jsonify({'error': f'{field} ist Pflichtfeld'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if code already exists
+            cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = ?", (data.get('code'),))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
+            
+            # Insert shift type
+            cursor.execute("""
+                INSERT INTO ShiftTypes (Code, Name, StartTime, EndTime, DurationHours, ColorCode, IsActive,
+                                      WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
+                                      WorksSaturday, WorksSunday, WeeklyWorkingHours, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('code'),
+                data.get('name'),
+                data.get('startTime'),
+                data.get('endTime'),
+                data.get('durationHours'),
+                data.get('colorCode', '#808080'),
+                1 if data.get('worksMonday', True) else 0,
+                1 if data.get('worksTuesday', True) else 0,
+                1 if data.get('worksWednesday', True) else 0,
+                1 if data.get('worksThursday', True) else 0,
+                1 if data.get('worksFriday', True) else 0,
+                1 if data.get('worksSaturday', False) else 0,
+                1 if data.get('worksSunday', False) else 0,
+                data.get('weeklyWorkingHours', 40.0),
+                session.get('user_email', 'system')
+            ))
+            
+            shift_type_id = cursor.lastrowid
+            
+            # Log audit entry
+            changes = json.dumps(data, ensure_ascii=False)
+            log_audit(conn, 'ShiftType', shift_type_id, 'Create', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': shift_type_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create shift type error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/shifttypes/<int:id>', methods=['GET'])
+    def get_shift_type(id):
+        """Get single shift type by ID"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM ShiftTypes WHERE Id = ?", (id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+        
+        shift_type = {
+            'id': row['Id'],
+            'code': row['Code'],
+            'name': row['Name'],
+            'startTime': row['StartTime'],
+            'endTime': row['EndTime'],
+            'durationHours': row['DurationHours'],
+            'colorCode': row['ColorCode'],
+            'isActive': bool(row['IsActive']),
+            'worksMonday': bool(row['WorksMonday']),
+            'worksTuesday': bool(row['WorksTuesday']),
+            'worksWednesday': bool(row['WorksWednesday']),
+            'worksThursday': bool(row['WorksThursday']),
+            'worksFriday': bool(row['WorksFriday']),
+            'worksSaturday': bool(row['WorksSaturday']),
+            'worksSunday': bool(row['WorksSunday']),
+            'weeklyWorkingHours': row['WeeklyWorkingHours']
+        }
+        
+        conn.close()
+        return jsonify(shift_type)
+    
+    @app.route('/api/shifttypes/<int:id>', methods=['PUT'])
+    @require_role('Admin')
+    def update_shift_type(id):
+        """Update shift type (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if shift type exists
+            cursor.execute("SELECT * FROM ShiftTypes WHERE Id = ?", (id,))
+            old_row = cursor.fetchone()
+            if not old_row:
+                conn.close()
+                return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            
+            # Check if new code conflicts with existing
+            if data.get('code') and data.get('code') != old_row['Code']:
+                cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = ? AND Id != ?", 
+                             (data.get('code'), id))
+                if cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
+            
+            # Update shift type
+            cursor.execute("""
+                UPDATE ShiftTypes 
+                SET Code = ?, Name = ?, StartTime = ?, EndTime = ?, 
+                    DurationHours = ?, ColorCode = ?, IsActive = ?,
+                    WorksMonday = ?, WorksTuesday = ?, WorksWednesday = ?, WorksThursday = ?, WorksFriday = ?,
+                    WorksSaturday = ?, WorksSunday = ?, WeeklyWorkingHours = ?,
+                    ModifiedAt = ?, ModifiedBy = ?
+                WHERE Id = ?
+            """, (
+                data.get('code', old_row['Code']),
+                data.get('name', old_row['Name']),
+                data.get('startTime', old_row['StartTime']),
+                data.get('endTime', old_row['EndTime']),
+                data.get('durationHours', old_row['DurationHours']),
+                data.get('colorCode', old_row['ColorCode']),
+                1 if data.get('isActive', True) else 0,
+                1 if data.get('worksMonday', old_row.get('WorksMonday', True)) else 0,
+                1 if data.get('worksTuesday', old_row.get('WorksTuesday', True)) else 0,
+                1 if data.get('worksWednesday', old_row.get('WorksWednesday', True)) else 0,
+                1 if data.get('worksThursday', old_row.get('WorksThursday', True)) else 0,
+                1 if data.get('worksFriday', old_row.get('WorksFriday', True)) else 0,
+                1 if data.get('worksSaturday', old_row.get('WorksSaturday', False)) else 0,
+                1 if data.get('worksSunday', old_row.get('WorksSunday', False)) else 0,
+                data.get('weeklyWorkingHours', old_row.get('WeeklyWorkingHours', 40.0)),
+                datetime.utcnow().isoformat(),
+                session.get('user_email', 'system'),
+                id
+            ))
+            
+            # Log audit entry
+            changes_dict = {}
+            for field in ['code', 'name', 'startTime', 'endTime', 'durationHours', 'colorCode', 'isActive']:
+                old_key = field.replace('Time', 'Time').replace('Hours', 'Hours')
+                db_field = field[0].upper() + field[1:]
+                if field == 'isActive':
+                    db_field = 'IsActive'
+                elif field == 'startTime':
+                    db_field = 'StartTime'
+                elif field == 'endTime':
+                    db_field = 'EndTime'
+                elif field == 'durationHours':
+                    db_field = 'DurationHours'
+                elif field == 'colorCode':
+                    db_field = 'ColorCode'
+                else:
+                    db_field = field[0].upper() + field[1:]
+                
+                if field in data:
+                    old_val = old_row[db_field]
+                    new_val = data[field]
+                    if field == 'isActive':
+                        old_val = bool(old_val)
+                    if old_val != new_val:
+                        changes_dict[field] = {'old': old_val, 'new': new_val}
+            
+            if changes_dict:
+                changes = json.dumps(changes_dict, ensure_ascii=False)
+                log_audit(conn, 'ShiftType', id, 'Update', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update shift type error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/shifttypes/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_shift_type(id):
+        """Delete shift type (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if shift type exists
+            cursor.execute("SELECT Code, Name FROM ShiftTypes WHERE Id = ?", (id,))
+            shift_row = cursor.fetchone()
+            if not shift_row:
+                conn.close()
+                return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            
+            # Check if shift type is used in assignments
+            cursor.execute("SELECT COUNT(*) as count FROM ShiftAssignments WHERE ShiftTypeId = ?", (id,))
+            assignment_count = cursor.fetchone()['count']
+            
+            if assignment_count > 0:
+                conn.close()
+                return jsonify({'error': f'Schichttyp wird in {assignment_count} Zuweisungen verwendet und kann nicht gelöscht werden'}), 400
+            
+            # Delete shift type (cascade will delete relationships and team assignments)
+            cursor.execute("DELETE FROM ShiftTypes WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({'code': shift_row['Code'], 'name': shift_row['Name']}, ensure_ascii=False)
+            log_audit(conn, 'ShiftType', id, 'Delete', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete shift type error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
+    # Team-Shift Assignment endpoints
+    @app.route('/api/shifttypes/<int:shift_id>/teams', methods=['GET'])
+    def get_shift_type_teams(shift_id):
+        """Get teams assigned to a shift type"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT t.Id, t.Name
+            FROM Teams t
+            INNER JOIN TeamShiftAssignments tsa ON t.Id = tsa.TeamId
+            WHERE tsa.ShiftTypeId = ? AND t.IsVirtual = 0
+            ORDER BY t.Name
+        """, (shift_id,))
+        
+        teams = []
+        for row in cursor.fetchall():
+            teams.append({
+                'id': row['Id'],
+                'name': row['Name']
+            })
+        
+        conn.close()
+        return jsonify(teams)
+    
+    @app.route('/api/shifttypes/<int:shift_id>/teams', methods=['PUT'])
+    @require_role('Admin')
+    def update_shift_type_teams(shift_id):
+        """Update teams assigned to a shift type (Admin only)"""
+        try:
+            data = request.get_json()
+            team_ids = data.get('teamIds', [])
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if shift type exists
+            cursor.execute("SELECT Id FROM ShiftTypes WHERE Id = ?", (shift_id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            
+            # Delete all existing assignments for this shift
+            cursor.execute("DELETE FROM TeamShiftAssignments WHERE ShiftTypeId = ?", (shift_id,))
+            
+            # Insert new assignments
+            for team_id in team_ids:
+                cursor.execute("""
+                    INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId, CreatedBy)
+                    VALUES (?, ?, ?)
+                """, (team_id, shift_id, session.get('user_email', 'system')))
+            
+            # Log audit entry
+            changes = json.dumps({'shiftTypeId': shift_id, 'teamIds': team_ids}, ensure_ascii=False)
+            log_audit(conn, 'TeamShiftAssignment', shift_id, 'Update', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update shift type teams error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/teams/<int:team_id>/shifttypes', methods=['GET'])
+    def get_team_shift_types(team_id):
+        """Get shift types assigned to a team"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT st.Id, st.Code, st.Name, st.ColorCode
+            FROM ShiftTypes st
+            INNER JOIN TeamShiftAssignments tsa ON st.Id = tsa.ShiftTypeId
+            WHERE tsa.TeamId = ? AND st.IsActive = 1
+            ORDER BY st.Code
+        """, (team_id,))
+        
+        shift_types = []
+        for row in cursor.fetchall():
+            shift_types.append({
+                'id': row['Id'],
+                'code': row['Code'],
+                'name': row['Name'],
+                'colorCode': row['ColorCode']
+            })
+        
+        conn.close()
+        return jsonify(shift_types)
+    
+    @app.route('/api/teams/<int:team_id>/shifttypes', methods=['PUT'])
+    @require_role('Admin')
+    def update_team_shift_types(team_id):
+        """Update shift types assigned to a team (Admin only)"""
+        try:
+            data = request.get_json()
+            shift_type_ids = data.get('shiftTypeIds', [])
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if team exists
+            cursor.execute("SELECT Id FROM Teams WHERE Id = ?", (team_id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Team nicht gefunden'}), 404
+            
+            # Delete all existing assignments for this team
+            cursor.execute("DELETE FROM TeamShiftAssignments WHERE TeamId = ?", (team_id,))
+            
+            # Insert new assignments
+            for shift_type_id in shift_type_ids:
+                cursor.execute("""
+                    INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId, CreatedBy)
+                    VALUES (?, ?, ?)
+                """, (team_id, shift_type_id, session.get('user_email', 'system')))
+            
+            # Log audit entry
+            changes = json.dumps({'teamId': team_id, 'shiftTypeIds': shift_type_ids}, ensure_ascii=False)
+            log_audit(conn, 'TeamShiftAssignment', team_id, 'Update', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update team shift types error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    # Shift Type Relationships endpoints
+    @app.route('/api/shifttypes/<int:shift_id>/relationships', methods=['GET'])
+    def get_shift_type_relationships(shift_id):
+        """Get related shift types for a shift"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT st.Id, st.Code, st.Name, st.ColorCode, str.DisplayOrder
+            FROM ShiftTypes st
+            INNER JOIN ShiftTypeRelationships str ON st.Id = str.RelatedShiftTypeId
+            WHERE str.ShiftTypeId = ?
+            ORDER BY str.DisplayOrder
+        """, (shift_id,))
+        
+        relationships = []
+        for row in cursor.fetchall():
+            relationships.append({
+                'id': row['Id'],
+                'code': row['Code'],
+                'name': row['Name'],
+                'colorCode': row['ColorCode'],
+                'displayOrder': row['DisplayOrder']
+            })
+        
+        conn.close()
+        return jsonify(relationships)
+    
+    @app.route('/api/shifttypes/<int:shift_id>/relationships', methods=['PUT'])
+    @require_role('Admin')
+    def update_shift_type_relationships(shift_id):
+        """Update related shift types (Admin only)"""
+        try:
+            data = request.get_json()
+            relationships = data.get('relationships', [])  # [{shiftTypeId, displayOrder}]
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if shift type exists
+            cursor.execute("SELECT Id FROM ShiftTypes WHERE Id = ?", (shift_id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            
+            # Delete all existing relationships for this shift
+            cursor.execute("DELETE FROM ShiftTypeRelationships WHERE ShiftTypeId = ?", (shift_id,))
+            
+            # Insert new relationships
+            for rel in relationships:
+                cursor.execute("""
+                    INSERT INTO ShiftTypeRelationships 
+                    (ShiftTypeId, RelatedShiftTypeId, DisplayOrder, CreatedBy)
+                    VALUES (?, ?, ?, ?)
+                """, (shift_id, rel['shiftTypeId'], rel['displayOrder'], session.get('user_email', 'system')))
+            
+            # Log audit entry
+            changes = json.dumps({'shiftTypeId': shift_id, 'relationships': relationships}, ensure_ascii=False)
+            log_audit(conn, 'ShiftTypeRelationship', shift_id, 'Update', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update shift type relationships error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
     # ============================================================================
     # SHIFT PLANNING ENDPOINTS
     # ============================================================================

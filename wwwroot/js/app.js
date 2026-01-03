@@ -3155,6 +3155,479 @@ async function deleteVacationPeriod(periodId, periodName) {
     }
 }
 
+// ============================================================================
+// SHIFT TYPE MANAGEMENT FUNCTIONS
+// ============================================================================
+
+async function loadShiftTypesAdmin() {
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load shift types');
+        }
+        
+        const shiftTypes = await response.json();
+        displayShiftTypes(shiftTypes);
+    } catch (error) {
+        console.error('Error loading shift types:', error);
+        document.getElementById('shift-types-content').innerHTML = '<p class="error">Fehler beim Laden der Schichttypen.</p>';
+    }
+}
+
+function displayShiftTypes(shiftTypes) {
+    const container = document.getElementById('shift-types-content');
+    
+    if (shiftTypes.length === 0) {
+        container.innerHTML = '<p class="info">Keine Schichttypen vorhanden. Klicken Sie auf "+ Schichttyp hinzufügen" um einen neuen Schichttyp anzulegen.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Kürzel</th><th>Name</th><th>Zeiten</th><th>Tagesstunden</th><th>Wochenstunden</th><th>Arbeitstage</th><th>Farbe</th><th>Status</th><th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    shiftTypes.forEach(shift => {
+        const isActive = shift.isActive !== false;
+        const statusBadge = isActive ? '<span class="badge badge-success">Aktiv</span>' : '<span class="badge badge-secondary">Inaktiv</span>';
+        
+        // Build working days display
+        const days = [];
+        if (shift.worksMonday) days.push('Mo');
+        if (shift.worksTuesday) days.push('Di');
+        if (shift.worksWednesday) days.push('Mi');
+        if (shift.worksThursday) days.push('Do');
+        if (shift.worksFriday) days.push('Fr');
+        if (shift.worksSaturday) days.push('Sa');
+        if (shift.worksSunday) days.push('So');
+        const workDays = days.length > 0 ? days.join(', ') : 'Keine';
+        
+        html += '<tr>';
+        html += `<td><span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span></td>`;
+        html += `<td>${escapeHtml(shift.name)}</td>`;
+        html += `<td>${shift.startTime} - ${shift.endTime}</td>`;
+        html += `<td>${shift.durationHours}h</td>`;
+        html += `<td>${shift.weeklyWorkingHours || 40.0}h</td>`;
+        html += `<td><small>${workDays}</small></td>`;
+        html += `<td><div class="color-preview" style="background-color: ${shift.colorCode}"></div></td>`;
+        html += `<td>${statusBadge}</td>`;
+        html += '<td class="actions">';
+        html += `<button onclick="editShiftType(${shift.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
+        html += `<button onclick="showShiftTypeTeamsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">👥 Teams</button> `;
+        html += `<button onclick="showShiftTypeRelationshipsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">🔗 Reihenfolge</button> `;
+        html += `<button onclick="deleteShiftType(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
+        html += '</td>';
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function showShiftTypeModal(shiftTypeId = null) {
+    const modal = document.getElementById('shiftTypeModal');
+    const title = document.getElementById('shiftTypeModalTitle');
+    const form = document.getElementById('shiftTypeForm');
+    
+    form.reset();
+    document.getElementById('shiftTypeId').value = '';
+    
+    if (shiftTypeId) {
+        title.textContent = 'Schichttyp bearbeiten';
+        loadShiftTypeForEdit(shiftTypeId);
+    } else {
+        title.textContent = 'Schichttyp hinzufügen';
+    }
+    
+    modal.style.display = 'block';
+}
+
+async function loadShiftTypeForEdit(shiftTypeId) {
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load shift type');
+        }
+        
+        const shiftType = await response.json();
+        
+        document.getElementById('shiftTypeId').value = shiftType.id;
+        document.getElementById('shiftTypeCode').value = shiftType.code;
+        document.getElementById('shiftTypeName').value = shiftType.name;
+        document.getElementById('shiftTypeStartTime').value = shiftType.startTime;
+        document.getElementById('shiftTypeEndTime').value = shiftType.endTime;
+        document.getElementById('shiftTypeDuration').value = shiftType.durationHours;
+        document.getElementById('shiftTypeColor').value = shiftType.colorCode;
+        document.getElementById('shiftTypeMonday').checked = shiftType.worksMonday !== false;
+        document.getElementById('shiftTypeTuesday').checked = shiftType.worksTuesday !== false;
+        document.getElementById('shiftTypeWednesday').checked = shiftType.worksWednesday !== false;
+        document.getElementById('shiftTypeThursday').checked = shiftType.worksThursday !== false;
+        document.getElementById('shiftTypeFriday').checked = shiftType.worksFriday !== false;
+        document.getElementById('shiftTypeSaturday').checked = shiftType.worksSaturday === true;
+        document.getElementById('shiftTypeSunday').checked = shiftType.worksSunday === true;
+        document.getElementById('shiftTypeWeeklyHours').value = shiftType.weeklyWorkingHours || 40.0;
+        document.getElementById('shiftTypeIsActive').checked = shiftType.isActive !== false;
+    } catch (error) {
+        console.error('Error loading shift type:', error);
+        alert('Fehler beim Laden des Schichttyps.');
+        closeShiftTypeModal();
+    }
+}
+
+function editShiftType(shiftTypeId) {
+    showShiftTypeModal(shiftTypeId);
+}
+
+function closeShiftTypeModal() {
+    document.getElementById('shiftTypeModal').style.display = 'none';
+}
+
+async function saveShiftType(event) {
+    event.preventDefault();
+    
+    const shiftTypeId = document.getElementById('shiftTypeId').value;
+    const data = {
+        code: document.getElementById('shiftTypeCode').value.trim().toUpperCase(),
+        name: document.getElementById('shiftTypeName').value.trim(),
+        startTime: document.getElementById('shiftTypeStartTime').value,
+        endTime: document.getElementById('shiftTypeEndTime').value,
+        durationHours: parseFloat(document.getElementById('shiftTypeDuration').value),
+        colorCode: document.getElementById('shiftTypeColor').value,
+        worksMonday: document.getElementById('shiftTypeMonday').checked,
+        worksTuesday: document.getElementById('shiftTypeTuesday').checked,
+        worksWednesday: document.getElementById('shiftTypeWednesday').checked,
+        worksThursday: document.getElementById('shiftTypeThursday').checked,
+        worksFriday: document.getElementById('shiftTypeFriday').checked,
+        worksSaturday: document.getElementById('shiftTypeSaturday').checked,
+        worksSunday: document.getElementById('shiftTypeSunday').checked,
+        weeklyWorkingHours: parseFloat(document.getElementById('shiftTypeWeeklyHours').value),
+        isActive: document.getElementById('shiftTypeIsActive').checked
+    };
+    
+    try {
+        const url = shiftTypeId ? `${API_BASE}/shifttypes/${shiftTypeId}` : `${API_BASE}/shifttypes`;
+        const method = shiftTypeId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(shiftTypeId ? 'Schichttyp erfolgreich aktualisiert!' : 'Schichttyp erfolgreich erstellt!');
+            closeShiftTypeModal();
+            loadShiftTypesAdmin();
+        } else {
+            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error saving shift type:', error);
+        alert('Fehler beim Speichern des Schichttyps.');
+    }
+}
+
+async function deleteShiftType(shiftTypeId, shiftCode) {
+    if (!confirm(`Möchten Sie den Schichttyp "${shiftCode}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Schichttyp erfolgreich gelöscht!');
+            loadShiftTypesAdmin();
+        } else {
+            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error deleting shift type:', error);
+        alert('Fehler beim Löschen des Schichttyps.');
+    }
+}
+
+// Team-Shift Assignment Functions
+async function showShiftTypeTeamsModal(shiftTypeId, shiftCode) {
+    const modal = document.getElementById('shiftTypeTeamsModal');
+    const title = document.getElementById('shiftTypeTeamsModalTitle');
+    
+    title.textContent = `Teams für Schicht "${shiftCode}" zuweisen`;
+    document.getElementById('shiftTypeTeamsId').value = shiftTypeId;
+    
+    modal.style.display = 'block';
+    
+    await loadShiftTypeTeams(shiftTypeId);
+}
+
+async function loadShiftTypeTeams(shiftTypeId) {
+    try {
+        // Load all non-virtual teams
+        const teamsResponse = await fetch(`${API_BASE}/teams`, {
+            credentials: 'include'
+        });
+        
+        if (!teamsResponse.ok) {
+            throw new Error('Failed to load teams');
+        }
+        
+        const allTeams = await teamsResponse.json();
+        const nonVirtualTeams = allTeams.filter(t => !t.isVirtual);
+        
+        // Load assigned teams for this shift type
+        const assignedResponse = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/teams`, {
+            credentials: 'include'
+        });
+        
+        if (!assignedResponse.ok) {
+            throw new Error('Failed to load assigned teams');
+        }
+        
+        const assignedTeams = await assignedResponse.json();
+        const assignedTeamIds = assignedTeams.map(t => t.id);
+        
+        // Display checkboxes
+        const container = document.getElementById('shiftTypeTeamsList');
+        let html = '';
+        
+        nonVirtualTeams.forEach(team => {
+            const isChecked = assignedTeamIds.includes(team.id);
+            html += '<div class="checkbox-item">';
+            html += `<label><input type="checkbox" name="team-${team.id}" value="${team.id}" ${isChecked ? 'checked' : ''}> ${escapeHtml(team.name)}</label>`;
+            html += '</div>';
+        });
+        
+        container.innerHTML = html || '<p>Keine Teams verfügbar.</p>';
+    } catch (error) {
+        console.error('Error loading shift type teams:', error);
+        document.getElementById('shiftTypeTeamsList').innerHTML = '<p class="error">Fehler beim Laden der Teams.</p>';
+    }
+}
+
+function closeShiftTypeTeamsModal() {
+    document.getElementById('shiftTypeTeamsModal').style.display = 'none';
+}
+
+async function saveShiftTypeTeams(event) {
+    event.preventDefault();
+    
+    const shiftTypeId = document.getElementById('shiftTypeTeamsId').value;
+    const checkboxes = document.querySelectorAll('#shiftTypeTeamsList input[type="checkbox"]');
+    const teamIds = Array.from(checkboxes)
+        .filter(cb => cb.checked)
+        .map(cb => parseInt(cb.value));
+    
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/teams`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ teamIds })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Team-Zuweisungen erfolgreich gespeichert!');
+            closeShiftTypeTeamsModal();
+        } else {
+            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error saving shift type teams:', error);
+        alert('Fehler beim Speichern der Team-Zuweisungen.');
+    }
+}
+
+// Shift Type Relationships Functions
+async function showShiftTypeRelationshipsModal(shiftTypeId, shiftCode) {
+    const modal = document.getElementById('shiftTypeRelationshipsModal');
+    const title = document.getElementById('shiftTypeRelationshipsModalTitle');
+    
+    title.textContent = `Schichtreihenfolge für "${shiftCode}" festlegen`;
+    document.getElementById('shiftTypeRelationshipsId').value = shiftTypeId;
+    
+    modal.style.display = 'block';
+    
+    await loadShiftTypeRelationships(shiftTypeId);
+}
+
+async function loadShiftTypeRelationships(shiftTypeId) {
+    try {
+        // Load all shift types
+        const allShiftsResponse = await fetch(`${API_BASE}/shifttypes`, {
+            credentials: 'include'
+        });
+        
+        if (!allShiftsResponse.ok) {
+            throw new Error('Failed to load shift types');
+        }
+        
+        const allShifts = await allShiftsResponse.json();
+        const otherShifts = allShifts.filter(s => s.id != shiftTypeId);
+        
+        // Load existing relationships
+        const relResponse = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/relationships`, {
+            credentials: 'include'
+        });
+        
+        if (!relResponse.ok) {
+            throw new Error('Failed to load relationships');
+        }
+        
+        const relationships = await relResponse.json();
+        const relatedIds = relationships.map(r => r.id);
+        
+        // Display sortable list
+        const container = document.getElementById('shiftTypeRelationshipsList');
+        let html = '';
+        
+        // First add existing relationships in order
+        relationships.forEach(rel => {
+            html += '<div class="sortable-item" data-shift-id="' + rel.id + '">';
+            html += '<span class="drag-handle">☰</span>';
+            html += `<span class="shift-badge" style="background-color: ${rel.colorCode}">${escapeHtml(rel.code)}</span>`;
+            html += `<span>${escapeHtml(rel.name)}</span>`;
+            html += '</div>';
+        });
+        
+        // Then add unrelated shifts as checkboxes
+        const unrelatedShifts = otherShifts.filter(s => !relatedIds.includes(s.id));
+        if (unrelatedShifts.length > 0) {
+            html += '<div class="form-group" style="margin-top: 20px;"><label>Weitere Schichten hinzufügen:</label></div>';
+            unrelatedShifts.forEach(shift => {
+                html += '<div class="checkbox-item">';
+                html += `<label><input type="checkbox" name="related-shift-${shift.id}" value="${shift.id}">`;
+                html += `<span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
+                html += '</label></div>';
+            });
+        }
+        
+        container.innerHTML = html || '<p>Keine weiteren Schichten verfügbar.</p>';
+        
+        // Make sortable (simple drag and drop)
+        makeSortable();
+    } catch (error) {
+        console.error('Error loading shift type relationships:', error);
+        document.getElementById('shiftTypeRelationshipsList').innerHTML = '<p class="error">Fehler beim Laden der Beziehungen.</p>';
+    }
+}
+
+function makeSortable() {
+    const container = document.getElementById('shiftTypeRelationshipsList');
+    const items = container.querySelectorAll('.sortable-item');
+    
+    items.forEach(item => {
+        item.draggable = true;
+        
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', item.innerHTML);
+            item.classList.add('dragging');
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+        });
+        
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const dragging = container.querySelector('.dragging');
+            const afterElement = getDragAfterElement(container, e.clientY);
+            
+            if (afterElement == null) {
+                container.appendChild(dragging);
+            } else {
+                container.insertBefore(dragging, afterElement);
+            }
+        });
+    });
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function closeShiftTypeRelationshipsModal() {
+    document.getElementById('shiftTypeRelationshipsModal').style.display = 'none';
+}
+
+async function saveShiftTypeRelationships(event) {
+    event.preventDefault();
+    
+    const shiftTypeId = document.getElementById('shiftTypeRelationshipsId').value;
+    const container = document.getElementById('shiftTypeRelationshipsList');
+    
+    // Get sorted items
+    const sortedItems = container.querySelectorAll('.sortable-item');
+    const relationships = Array.from(sortedItems).map((item, index) => ({
+        shiftTypeId: parseInt(item.dataset.shiftId),
+        displayOrder: index + 1
+    }));
+    
+    // Get newly selected items
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+    checkboxes.forEach((cb, index) => {
+        relationships.push({
+            shiftTypeId: parseInt(cb.value),
+            displayOrder: relationships.length + 1
+        });
+    });
+    
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/relationships`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ relationships })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Schichtreihenfolge erfolgreich gespeichert!');
+            closeShiftTypeRelationshipsModal();
+        } else {
+            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error saving shift type relationships:', error);
+        alert('Fehler beim Speichern der Schichtreihenfolge.');
+    }
+}
+
 // Helper function to escape HTML
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -3525,6 +3998,9 @@ function showAdminTab(tabName, clickedElement) {
     if (tabName === 'users') {
         stopAuditLogAutoRefresh(); // Stop auto-refresh when switching away from audit logs
         loadUsers();
+    } else if (tabName === 'shift-management') {
+        stopAuditLogAutoRefresh();
+        loadShiftTypesAdmin();
     } else if (tabName === 'vacation-periods') {
         stopAuditLogAutoRefresh();
         loadVacationPeriods();

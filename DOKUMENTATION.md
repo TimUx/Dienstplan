@@ -87,17 +87,13 @@ Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
 - **Statistiken**: `09-statistics.png`
 - **Hilfe-System**: `10-help-manual.png`
 - **Administration**: `11-admin-panel.png`
-
-**Benötigte Screenshots** (noch zu erstellen):
-- **Schichtverwaltung**: `12-shift-management.png` - Dynamische Schichttypen-Verwaltung
-- **Schichttyp bearbeiten**: `13-shift-type-edit.png` - Bearbeitungsformular
-- **Team-Zuordnung**: `14-shift-team-assignment.png` - Teams zu Schichten zuweisen
-- **Mehrfachauswahl**: `15-multi-select-active.png` - Multi-Select für Schichten
-- **Bearbeitungsdialog**: `16-multi-select-edit-dialog.png` - Massenbearbeitung
-- **Jahresurlaubsplan**: `17-vacation-year-plan.png` - Jahresübersicht Urlaube
-- **Teamverwaltung**: `18-team-management.png` - Team-Übersicht
-
-Siehe **[BENUTZERHANDBUCH - Benötigte Screenshots](BENUTZERHANDBUCH.md#benötigte-screenshots)** für Details.
+- **Schichtverwaltung**: `12-shift-management.png` - Dynamische Schichttypen-Verwaltung ✅
+- **Schichttyp bearbeiten**: `13-shift-type-edit.png` - Bearbeitungsformular ✅
+- **Team-Zuordnung**: `14-shift-team-assignment.png` - Teams zu Schichten zuweisen ✅
+- **Mehrfachauswahl**: `15-multi-select-active.png` - Multi-Select für Schichten ✅
+- **Bearbeitungsdialog**: `16-multi-select-edit-dialog.png` - Massenbearbeitung ✅
+- **Jahresurlaubsplan**: `17-vacation-year-plan.png` - Jahresübersicht Urlaube ✅
+- **Teamverwaltung**: `18-team-management.png` - Team-Übersicht ✅
 
 ---
 

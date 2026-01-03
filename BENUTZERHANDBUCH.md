@@ -912,7 +912,9 @@ Um Fixierung aufzuheben:
 
 Die Mehrfachauswahl-Funktion ermöglicht es, mehrere Schichten gleichzeitig zu bearbeiten. Dies spart Zeit bei Massenänderungen.
 
-**Hinweis:** Für Screenshots siehe Abschnitt "Benötigte Screenshots" am Ende des Dokuments und die separate Anleitung in MEHRFACHAUSWAHL_ANLEITUNG.md.
+![Mehrfachauswahl aktiv](docs/screenshots/15-multi-select-active.png)
+
+**Hinweis:** Siehe auch die separate Anleitung in MEHRFACHAUSWAHL_ANLEITUNG.md.
 
 #### Mehrfachauswahl aktivieren
 
@@ -934,6 +936,8 @@ Im Mehrfachauswahl-Modus:
 **Wichtig:** Im Mehrfachauswahl-Modus öffnet ein Klick auf eine Schicht NICHT den Bearbeitungsdialog, sondern wählt die Schicht aus.
 
 #### Ausgewählte Schichten bearbeiten
+
+![Mehrfachauswahl Bearbeitungsdialog](docs/screenshots/16-multi-select-edit-dialog.png)
 
 1. Wählen Sie gewünschte Schichten aus (mindestens eine)
 2. Klicken Sie auf **✏ Auswahl bearbeiten**
@@ -1316,7 +1320,7 @@ Der Administrationsbereich ist nur für Benutzer mit Admin-Rolle zugänglich.
 
 Die Schichtverwaltung ermöglicht es Administratoren, Schichttypen dynamisch zu erstellen, zu bearbeiten und zu verwalten. Diese Funktion ersetzt die vorher fest codierten Schichttypen.
 
-**Hinweis:** Für neue Screenshots siehe Abschnitt "Benötigte Screenshots" am Ende des Dokuments.
+![Schichtverwaltung](docs/screenshots/12-shift-management.png)
 
 #### Schichttypen anzeigen
 
@@ -1334,6 +1338,8 @@ In der Schichtverwaltung sehen Sie eine Tabelle mit allen verfügbaren Schichtty
 - **Aktionen**: Bearbeiten, Löschen, Teams, Reihenfolge
 
 #### Neuen Schichttyp erstellen
+
+![Schichttyp bearbeiten](docs/screenshots/13-shift-type-edit.png)
 
 1. Klicken Sie auf **➕ Schichttyp hinzufügen**
 2. Füllen Sie das Formular aus:
@@ -1368,6 +1374,8 @@ In der Schichtverwaltung sehen Sie eine Tabelle mit allen verfügbaren Schichtty
 #### Teams zuweisen
 
 Definieren Sie, welche Teams für welche Schichttypen qualifiziert sind:
+
+![Team-Schicht-Zuordnung](docs/screenshots/14-shift-team-assignment.png)
 
 1. Klicken Sie auf **👥 Teams** neben dem Schichttyp
 2. Wählen Sie die Teams aus, die diese Schicht arbeiten können
@@ -2065,98 +2073,6 @@ Vollständige API-Dokumentation: Siehe README.md
 **Navigation:**
 - `←` / `→` - Vorherige/Nächste Woche (im Kalender)
 - `↑` / `↓` - Scrollen in Listen
-
----
-
-## Benötigte Screenshots
-
-**Hinweis für Dokumentations-Pflege:**
-
-Die folgenden Screenshots sollten noch erstellt und in `docs/screenshots/` eingefügt werden:
-
-### 1. Schichtverwaltung (Dynamische Schichttypen)
-**Dateiname:** `12-shift-management.png`
-**Zeigt:**
-- Übersicht der Schichtverwaltung im Admin-Bereich
-- Tabelle mit allen Schichttypen (Kürzel, Name, Zeiten, Tage, etc.)
-- Action-Buttons (Bearbeiten, Löschen, Teams, Reihenfolge)
-
-### 2. Schichttyp bearbeiten
-**Dateiname:** `13-shift-type-edit.png`
-**Zeigt:**
-- Bearbeitungsformular für Schichttypen
-- Alle Felder: Kürzel, Name, Start-/Endzeit, Arbeitsstunden
-- Arbeitstage-Checkboxen (Mo-So)
-- Farbauswahl (Color Picker)
-- Wochenarbeitszeit
-
-### 3. Team-Schicht-Zuordnung
-**Dateiname:** `14-shift-team-assignment.png`
-**Zeigt:**
-- Dialog "Teams zuweisen"
-- Checkboxen für alle Teams
-- Welche Teams können diese Schicht arbeiten
-
-### 4. Mehrfachauswahl aktiviert
-**Dateiname:** `15-multi-select-active.png`
-**Zeigt:**
-- Dienstplan mit aktivierter Mehrfachauswahl
-- Blauer "Mehrfachauswahl aktiv" Button
-- Mehrere ausgewählte Schichten (blau markiert)
-- Zähler "X Schichten ausgewählt"
-- Buttons "Auswahl bearbeiten" und "Auswahl löschen"
-
-### 5. Mehrfachauswahl Bearbeitungsdialog
-**Dateiname:** `16-multi-select-edit-dialog.png`
-**Zeigt:**
-- Dialog "Mehrere Schichten bearbeiten"
-- Liste der ausgewählten Schichten
-- Bearbeitungsoptionen: Mitarbeiter, Schichttyp, Fixierung, Notizen
-- Button "Alle ausgewählten Schichten aktualisieren"
-
-### 6. Jahresurlaubsplan
-**Dateiname:** `17-vacation-year-plan.png`
-**Zeigt:**
-- Jahresübersicht aller Urlaubsanträge
-- Kalenderansicht mit Urlaubszeiträumen
-- Status-Kennzeichnung (Genehmigt/In Bearbeitung/Abgelehnt)
-
-### 7. Teamverwaltung
-**Dateiname:** `18-team-management.png`
-**Zeigt:**
-- Übersicht aller Teams
-- Team-Details (Name, Beschreibung, Mitgliederanzahl)
-- Funktionen: Team erstellen, bearbeiten, löschen
-
-### Verwendung in der Dokumentation
-
-Die Screenshots sollten wie folgt referenziert werden:
-
-```markdown
-![Schichtverwaltung](docs/screenshots/12-shift-management.png)
-*Dynamische Schichtverwaltung im Admin-Bereich*
-
-![Mehrfachauswahl](docs/screenshots/15-multi-select-active.png)
-*Mehrfachauswahl für Massenbearbeitung von Schichten*
-```
-
-### Screenshot-Erstellungshinweise
-
-**Für Administrator:**
-1. Starten Sie die Anwendung im Entwicklungsmodus
-2. Melden Sie sich als Admin an
-3. Navigieren Sie zur jeweiligen Funktion
-4. Machen Sie einen Screenshot (z.B. mit Snipping Tool)
-5. Speichern Sie im Format PNG
-6. Benennung: Fortlaufende Nummer + aussagekräftiger Name
-7. Ablage in `docs/screenshots/`
-
-**Qualitätskriterien:**
-- Auflösung: Mind. 1920x1080
-- Format: PNG (für beste Qualität)
-- Keine sensiblen Daten (verwenden Sie Testdaten)
-- Deutsche Benutzeroberfläche
-- Vollständiger Browseransicht (mit Navigationsleiste)
 
 ---
 

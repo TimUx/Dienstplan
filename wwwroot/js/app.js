@@ -809,7 +809,7 @@ function createShiftBadge(shift) {
     let onclickAttr = '';
     if (canEdit && shiftId) {
         if (multiSelectMode) {
-            onclickAttr = `onclick="toggleShiftSelection(${shiftId}); event.stopPropagation();" style="cursor:pointer;"`;
+            onclickAttr = `onclick="toggleShiftSelection(${shiftId}); return false;" style="cursor:pointer;"`;
         } else {
             onclickAttr = `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"`;
         }
@@ -4263,6 +4263,9 @@ function toggleMultiSelectMode() {
     if (clearSelectionBtn) {
         clearSelectionBtn.style.display = multiSelectMode ? 'inline-block' : 'none';
     }
+    
+    // Update counter
+    updateSelectionCounter();
     
     // Reload the schedule to update shift badges
     loadSchedule();

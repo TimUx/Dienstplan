@@ -505,14 +505,14 @@ Empfohlene Tools:
 #### Workflow-Features
 - ✅ **Urlaubsantrags-System** mit Genehmigungsworkflow
   - Mitarbeiter können Urlaubsanträge stellen
-  - Disponenten/Admins können genehmigen/ablehnen
+  - Admins können genehmigen/ablehnen
   - Automatische Umwandlung zu Abwesenheiten bei Genehmigung
   - Status-Tracking (In Bearbeitung, Genehmigt, Abgelehnt)
 
 - ✅ **Diensttausch-Plattform**
   - Mitarbeiter können Dienste zum Tausch anbieten
   - Andere Mitarbeiter können Tausch anfragen
-  - Disponenten/Admins genehmigen Tausche
+  - Admins genehmigen Tausche
   - Automatische Umschichtung nach Genehmigung
 
 #### Export & Reporting
@@ -520,10 +520,10 @@ Empfohlene Tools:
 - ✅ **PDF-Export** mit ReportLab für Ausdrucke
 - ✅ **Excel-Export** mit OpenPyXL für Weiterverarbeitung
 - ✅ **Statistiken & Dashboard** mit umfangreichen Auswertungen
-- ✅ **Wochenend-Statistiken** (nur für Disponenten/Admins)
+- ✅ **Wochenend-Statistiken** (nur für Admins)
 
 #### Sicherheit & Administration
-- ✅ **Rollenbasierte Zugriffskontrolle** (Admin, Disponent, Mitarbeiter)
+- ✅ **Rollenbasierte Zugriffskontrolle** (Admin, Mitarbeiter)
 - ✅ **Cookie-basierte Authentifizierung**
 - ✅ **Audit-Logging** für alle Änderungen
 - ✅ **Passwort-Hashing** mit SHA-256

@@ -913,6 +913,7 @@ Um Fixierung aufzuheben:
 Die Mehrfachauswahl-Funktion ermöglicht es, mehrere Schichten gleichzeitig zu bearbeiten. Dies spart Zeit bei Massenänderungen.
 
 ![Mehrfachauswahl aktiv](docs/screenshots/15-multi-select-active.png)
+*Mehrfachauswahl-Modus mit ausgewählten Schichten im Dienstplan*
 
 **Hinweis:** Siehe auch die separate Anleitung in MEHRFACHAUSWAHL_ANLEITUNG.md.
 
@@ -938,6 +939,7 @@ Im Mehrfachauswahl-Modus:
 #### Ausgewählte Schichten bearbeiten
 
 ![Mehrfachauswahl Bearbeitungsdialog](docs/screenshots/16-multi-select-edit-dialog.png)
+*Dialog zur Massenbearbeitung ausgewählter Schichten*
 
 1. Wählen Sie gewünschte Schichten aus (mindestens eine)
 2. Klicken Sie auf **✏ Auswahl bearbeiten**

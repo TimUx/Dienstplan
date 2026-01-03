@@ -29,7 +29,7 @@ def test_january_2026_with_absences():
     print("=" * 70)
     
     # Load data from database (has correct springer structure)
-    employees, teams, absences = load_from_database('dienstplan.db')
+    employees, teams, absences, shift_types = load_from_database('data/dienstplan.db')
     
     # Define planning period (as in problem statement)
     start_date = date(2025, 12, 31)
@@ -70,7 +70,7 @@ def test_january_2026_with_absences():
     # Create model
     print("\nCreating shift planning model...")
     planning_model = create_shift_planning_model(
-        employees, teams, start_date, end_date, all_absences
+        employees, teams, start_date, end_date, all_absences, shift_types=shift_types
     )
     
     # Solve
@@ -138,7 +138,7 @@ def test_single_absence_per_team():
     print("TEST: Single Absence Per Team")
     print("=" * 70)
     
-    employees, teams, absences = load_from_database('dienstplan.db')
+    employees, teams, absences, shift_types = load_from_database('data/dienstplan.db')
     
     # Short planning period
     start_date = date(2026, 1, 5)
@@ -179,7 +179,7 @@ def test_single_absence_per_team():
     
     # Create model and solve
     planning_model = create_shift_planning_model(
-        employees, teams, start_date, end_date, all_absences
+        employees, teams, start_date, end_date, all_absences, shift_types=shift_types
     )
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     

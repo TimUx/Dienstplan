@@ -45,7 +45,7 @@ def test_ferienjobber_virtual_team():
     conn.close()
     
     # Load and check
-    employees, teams, absences = load_from_database(test_db)
+    employees, teams, absences, shift_types = load_from_database(test_db)
     
     ferienjobbers = [e for e in employees if e.is_ferienjobber]
     print(f"\nFerienjobbers found: {len(ferienjobbers)}")
@@ -112,7 +112,7 @@ def test_ferienjobber_can_help_teams():
     conn.close()
     
     # Load data
-    employees, teams, absences = load_from_database(test_db)
+    employees, teams, absences, shift_types = load_from_database(test_db)
     
     # Create absences to trigger need for Ferienjobbers
     # 2 absences in Team Alpha - own springer + Ferienjobber should help
@@ -133,7 +133,7 @@ def test_ferienjobber_can_help_teams():
     print(f"Available Ferienjobbers: {len([e for e in employees if e.is_ferienjobber])}")
     
     # Try to create a plan
-    planning_model = create_shift_planning_model(employees, teams, start_date, end_date, all_absences)
+    planning_model = create_shift_planning_model(employees, teams, start_date, end_date, all_absences, shift_types=shift_types)
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if not result:

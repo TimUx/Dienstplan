@@ -112,20 +112,53 @@ def load_from_database(db_path: str = "dienstplan.db"):
         db_path: Path to the SQLite database file
         
     Returns:
-        Tuple of (employees, teams, absences)
+        Tuple of (employees, teams, absences, shift_types)
     """
     import sqlite3
+    from entities import ShiftType
     
     conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row  # Enable access by column name
     cursor = conn.cursor()
+    
+    # Load shift types from database
+    cursor.execute("""
+        SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours
+        FROM ShiftTypes
+        WHERE IsActive = 1
+        ORDER BY Id
+    """)
+    shift_types = []
+    for row in cursor.fetchall():
+        # Handle missing WeeklyWorkingHours column for older database schemas
+        try:
+            weekly_hours = row['WeeklyWorkingHours']
+        except (KeyError, IndexError):
+            weekly_hours = 40.0  # Default to standard 40-hour work week
+        
+        shift_type = ShiftType(
+            id=row['Id'],
+            code=row['Code'],
+            name=row['Name'],
+            start_time=row['StartTime'],
+            end_time=row['EndTime'],
+            hours=row['DurationHours'],
+            color_code=row['ColorCode'],
+            weekly_working_hours=weekly_hours
+        )
+        shift_types.append(shift_type)
     
     # Load teams
     cursor.execute("SELECT Id, Name, Description, Email, IsVirtual FROM Teams")
     teams = []
     for row in cursor.fetchall():
         # IsVirtual column added in migration - default to False if not present
-        is_virtual = bool(row[4]) if len(row) > 4 else False
-        team = Team(id=row[0], name=row[1], description=row[2], email=row[3], is_virtual=is_virtual)
+        try:
+            is_virtual = bool(row['IsVirtual'])
+        except (KeyError, IndexError):
+            is_virtual = False
+        team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 
+                   email=row['Email'], is_virtual=is_virtual)
         teams.append(team)
     
     # Load employees
@@ -229,7 +262,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     
     conn.close()
     
-    return employees, teams, absences
+    return employees, teams, absences, shift_types
 
 
 def get_existing_assignments(db_path: str, start_date: date, end_date: date) -> List[ShiftAssignment]:

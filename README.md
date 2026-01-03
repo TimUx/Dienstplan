@@ -40,7 +40,10 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - **Dynamische Vertretung**: System stellt sicher, dass jede Woche mindestens ein Mitarbeiter aus Schicht-Teams komplett frei ist für flexible Vertretung bei Ausfällen
 - **Ferienjobber**: Unterstützung für temporäre Mitarbeiter (meist in Sommerferien)
 - **Abwesenheiten**: Verwaltung von Krank, Urlaub, Lehrgang
-- **Arbeitszeitregeln**: Maximal 192 Stunden pro Monat, 48 Stunden pro Woche
+- **Dynamische Arbeitszeitregeln**: Arbeitszeiten werden aus der Schichtverwaltung berechnet
+  - Jede Schicht definiert ihre Wochenarbeitszeit (z.B. 40 oder 48 Stunden)
+  - Monatsarbeitszeit ergibt sich automatisch aus Wochenarbeitszeit × 4
+  - Keine festen globalen Limits - flexibel konfigurierbar pro Schicht
 
 ### Urlaubsverwaltung
 - **Urlaubsanträge**: Mitarbeiter können Urlaubswünsche einreichen
@@ -86,8 +89,9 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 - ⏰ Gesetzliche Ruhezeiten (11 Stunden Minimum)
 - 📊 Maximal 6 aufeinanderfolgende Schichten
 - 🌙 Maximal 5 aufeinanderfolgende Nachtschichten
-- ⏱️ Maximal 48 Stunden pro Woche
-- 📅 Maximal 192 Stunden pro Monat
+- ⏱️ Dynamische Arbeitszeitgrenzen basierend auf Schichtkonfiguration
+  - Wöchentliche Arbeitszeit: aus Schicht-Definition (z.B. 40 oder 48h)
+  - Monatliche Arbeitszeit: Wöchentliche Arbeitszeit × 4
 - 🔧 Jede Woche mindestens 1 Mitarbeiter aus Schicht-Teams komplett frei für dynamische Vertretung
 - 🎯 1 BMT (Brandmeldetechniker) pro Werktag
 - 🎯 1 BSB (Brandschutzbeauftragter) pro Werktag
@@ -96,6 +100,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 - ⚖️ Gleichmäßige Schichtverteilung über alle Mitarbeiter
 - 🔄 Bevorzugter Rhythmus: Früh → Nacht → Spät
 - 📊 Faire Workload-Verteilung
+- 🏖️ Faire Wochenendverteilung innerhalb jedes Teams (hohe Priorität)
 
 ### Dashboard & Statistiken
 - 📊 Arbeitsstunden pro Mitarbeiter

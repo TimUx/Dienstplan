@@ -23,8 +23,12 @@ FERIENJOBBER_TEAM_ID = 98  # "Ferienjobber" virtual team (for temporary holiday 
 MINIMUM_REST_HOURS = 11
 MAXIMUM_CONSECUTIVE_SHIFTS = 6
 MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS = 5
-MAXIMUM_HOURS_PER_MONTH = 192
-MAXIMUM_HOURS_PER_WEEK = 48
+DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calculations
+                              # Note: Different from ShiftType default (40.0) which represents
+                              # standard work week. This is the safety limit.
+# NOTE: MAXIMUM_HOURS_PER_MONTH and MAXIMUM_HOURS_PER_WEEK are now calculated
+# dynamically based on each employee's team's assigned shift(s) and their
+# WeeklyWorkingHours configuration in the database.
 
 # Staffing requirements
 WEEKDAY_STAFFING = {
@@ -470,26 +474,48 @@ def add_working_hours_constraints(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
+    teams: List[Team],
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
     shift_types: List[ShiftType]
 ):
     """
-    HARD CONSTRAINT: Working hours limits.
+    HARD CONSTRAINT: Working hours limits based on shift configuration.
     
-    - Maximum 48 hours per week
-    - Maximum 192 hours per month
+    This constraint ensures that employees:
+    1. Meet minimum required working hours based on their shift's WeeklyWorkingHours
+    2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration)
+    3. Monthly hours are calculated as WeeklyWorkingHours * 4
     
-    Note: All main shifts (F, S, N) are 8 hours.
+    The limits are now DYNAMIC per employee based on their team's assigned shift(s),
+    replacing the previous fixed limits of 192 hours/month and 48 hours/week.
+    
+    Note: All main shifts (F, S, N) are 8 hours by default.
     Weekend hours are based on team's shift type (same as weekday).
     """
     # Create shift hours lookup
     shift_hours = {}
+    shift_weekly_hours = {}
     for st in shift_types:
         shift_hours[st.code] = st.hours
+        shift_weekly_hours[st.code] = st.weekly_working_hours
     
-    # Maximum 48 hours per week
+    # Pre-calculate maximum weekly hours per team per week to avoid repeated computation
+    team_week_max_hours = {}
+    for emp in employees:
+        if not emp.team_id or emp.is_ferienjobber:
+            continue
+        for week_idx in range(len(weeks)):
+            key = (emp.team_id, week_idx)
+            if key not in team_week_max_hours:
+                # Calculate max hours for this team in this week
+                possible_max_hours = [shift_weekly_hours.get(sc, DEFAULT_WEEKLY_HOURS) 
+                                     for sc in shift_codes 
+                                     if (emp.team_id, week_idx, sc) in team_shift]
+                team_week_max_hours[key] = max(possible_max_hours) if possible_max_hours else DEFAULT_WEEKLY_HOURS
+    
+    # Calculate working hours per week and enforce limits
     for emp in employees:
         if not emp.team_id or emp.is_ferienjobber:
             continue  # Only check regular team members
@@ -539,8 +565,9 @@ def add_working_hours_constraints(
                 hours_terms.append(conditional_days * scaled_hours)
             
             if hours_terms:
-                # Maximum 48 hours = 480 scaled hours
-                model.Add(sum(hours_terms) <= 480)
+                # Use pre-calculated maximum weekly hours (scaled by 10)
+                max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), DEFAULT_WEEKLY_HOURS) * 10)
+                model.Add(sum(hours_terms) <= max_scaled_hours)
 
 
 def add_td_constraints(
@@ -762,32 +789,38 @@ def add_fairness_objectives(
     num_weeks = len(weeks)
     num_weekend_days = len([d for d in dates if d.weekday() >= 5])
     
-    # 2. Fair distribution of weekend work per employee
-    weekend_counts = []
-    for emp in employees:
-        if not emp.team_id or emp.team_id == VIRTUAL_TEAM_ID:
-            continue
+    # 2. Fair distribution of weekend work per employee WITHIN EACH TEAM
+    # This ensures that weekend work is balanced among team members
+    for team in teams:
+        if team.id == VIRTUAL_TEAM_ID or team.id == FERIENJOBBER_TEAM_ID:
+            continue  # Skip virtual teams
         
-        weekend_work = []
-        for d in dates:
-            if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
-                weekend_work.append(employee_weekend_shift[(emp.id, d)])
+        team_members = [emp for emp in employees if emp.team_id == team.id and not emp.is_ferienjobber]
+        if len(team_members) < 2:
+            continue  # Need at least 2 members to balance
         
-        if weekend_work:
-            total_weekends = model.NewIntVar(0, num_weekend_days, f"weekends_{emp.id}")
-            model.Add(total_weekends == sum(weekend_work))
-            weekend_counts.append(total_weekends)
-    
-    # Minimize variance in weekend distribution
-    if len(weekend_counts) > 1:
-        for i in range(len(weekend_counts)):
-            for j in range(i + 1, len(weekend_counts)):
-                diff = model.NewIntVar(-num_weekend_days, num_weekend_days, 
-                                      f"weekend_diff_{i}_{j}")
-                model.Add(diff == weekend_counts[i] - weekend_counts[j])
-                abs_diff = model.NewIntVar(0, num_weekend_days, f"weekend_abs_diff_{i}_{j}")
-                model.AddAbsEquality(abs_diff, diff)
-                objective_terms.append(abs_diff * 3)  # Weight weekend fairness higher
+        weekend_counts = []
+        for emp in team_members:
+            weekend_work = []
+            for d in dates:
+                if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                    weekend_work.append(employee_weekend_shift[(emp.id, d)])
+            
+            if weekend_work:
+                total_weekends = model.NewIntVar(0, num_weekend_days, f"weekends_{emp.id}_team{team.id}")
+                model.Add(total_weekends == sum(weekend_work))
+                weekend_counts.append(total_weekends)
+        
+        # Minimize variance in weekend distribution WITHIN this team
+        if len(weekend_counts) > 1:
+            for i in range(len(weekend_counts)):
+                for j in range(i + 1, len(weekend_counts)):
+                    diff = model.NewIntVar(-num_weekend_days, num_weekend_days, 
+                                          f"weekend_diff_team{team.id}_{i}_{j}")
+                    model.Add(diff == weekend_counts[i] - weekend_counts[j])
+                    abs_diff = model.NewIntVar(0, num_weekend_days, f"weekend_abs_diff_team{team.id}_{i}_{j}")
+                    model.AddAbsEquality(abs_diff, diff)
+                    objective_terms.append(abs_diff * 5)  # Weight weekend fairness within teams VERY high
     
     # 3. Fair distribution of night shifts (count by team)
     if "N" in shift_codes:

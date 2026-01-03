@@ -2959,18 +2959,14 @@ async function testEmailSettings() {
 }
 
 function saveGlobalSettings() {
-    const maxHoursMonth = document.getElementById('setting-max-hours-month').value;
-    const maxHoursWeek = document.getElementById('setting-max-hours-week').value;
     const maxConsecutiveShifts = document.getElementById('setting-max-consecutive-shifts').value;
     const maxConsecutiveNights = document.getElementById('setting-max-consecutive-nights').value;
     
     // Store in localStorage for now (in production, these would be saved to a backend configuration)
-    localStorage.setItem('maxHoursMonth', maxHoursMonth);
-    localStorage.setItem('maxHoursWeek', maxHoursWeek);
     localStorage.setItem('maxConsecutiveShifts', maxConsecutiveShifts);
     localStorage.setItem('maxConsecutiveNights', maxConsecutiveNights);
     
-    alert(`Globale Einstellungen gespeichert:\n• Max Stunden/Monat: ${maxHoursMonth}\n• Max Stunden/Woche: ${maxHoursWeek}\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Diese Einstellungen werden lokal im Browser gespeichert.`);
+    alert(`Einstellungen gespeichert:\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Arbeitszeitgrenzen werden jetzt dynamisch aus den Schichteinstellungen berechnet.`);
 }
 
 // ===========================

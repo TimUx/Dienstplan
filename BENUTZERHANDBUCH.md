@@ -10,20 +10,21 @@ Vollständiges Handbuch für die Nutzung des automatischen Schichtverwaltungssys
 
 1. [Einführung](#1-einführung)
 2. [Erste Schritte](#2-erste-schritte)
-3. [Benutzerrollen](#3-benutzerrollen)
-4. [Anmeldung und Navigation](#4-anmeldung-und-navigation)
-5. [Dienstplan-Ansichten](#5-dienstplan-ansichten)
-6. [Mitarbeiterverwaltung](#6-mitarbeiterverwaltung)
-7. [Teamverwaltung](#7-teamverwaltung)
-8. [Schichtplanung](#8-schichtplanung)
-9. [Abwesenheitsverwaltung](#9-abwesenheitsverwaltung)
-10. [Urlaubsanträge](#10-urlaubsanträge)
-11. [Diensttausch-System](#11-diensttausch-system)
-12. [Statistiken und Auswertungen](#12-statistiken-und-auswertungen)
-13. [Administration](#13-administration)
-14. [Export-Funktionen](#14-export-funktionen)
-15. [Fehlerbehebung](#15-fehlerbehebung)
-16. [FAQ](#16-faq)
+3. [Systemabhängigkeiten und Ersteinrichtung](#3-systemabhängigkeiten-und-ersteinrichtung)
+4. [Benutzerrollen](#4-benutzerrollen)
+5. [Anmeldung und Navigation](#5-anmeldung-und-navigation)
+6. [Dienstplan-Ansichten](#6-dienstplan-ansichten)
+7. [Mitarbeiterverwaltung](#7-mitarbeiterverwaltung)
+8. [Teamverwaltung](#8-teamverwaltung)
+9. [Schichtplanung](#9-schichtplanung)
+10. [Abwesenheitsverwaltung](#10-abwesenheitsverwaltung)
+11. [Urlaubsanträge](#11-urlaubsanträge)
+12. [Diensttausch-System](#12-diensttausch-system)
+13. [Statistiken und Auswertungen](#13-statistiken-und-auswertungen)
+14. [Administration](#14-administration)
+15. [Export-Funktionen](#15-export-funktionen)
+16. [Fehlerbehebung](#16-fehlerbehebung)
+17. [FAQ](#17-faq)
 
 ---
 
@@ -107,7 +108,431 @@ python main.py serve
 
 ---
 
-## 3. Benutzerrollen
+## 3. Systemabhängigkeiten und Ersteinrichtung
+
+### 3.1 Übersicht der Datenabhängigkeiten
+
+Das Dienstplan-System basiert auf einer hierarchischen Datenstruktur. **Die Reihenfolge der Datenerstellung ist entscheidend für eine erfolgreiche Inbetriebnahme.**
+
+#### Abhängigkeitskette (von oben nach unten)
+
+```
+┌─────────────────────────────────────────────────┐
+│ 1. ROLLEN                                       │
+│    - Admin, Disponent, Mitarbeiter              │
+│    (automatisch bei DB-Initialisierung)         │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 2. ADMIN-BENUTZER                               │
+│    - admin@fritzwinter.de                       │
+│    (automatisch bei DB-Initialisierung)         │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 3. TEAMS                                        │
+│    - Team Alpha, Beta, Gamma, etc.              │
+│    - MUSS VOR Mitarbeitern erstellt werden      │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 4. SCHICHTTYPEN                                 │
+│    - F, S, N, Z, BMT, BSB, TD                   │
+│    (automatisch bei DB-Initialisierung)         │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 5. MITARBEITER                                  │
+│    - Benötigen Team-Zuordnung                   │
+│    - MUSS VOR Schichtplanung erstellt werden    │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 6. BENUTZERKONTEN (Optional)                    │
+│    - Für Mitarbeiter-Login                      │
+│    - E-Mail muss mit Mitarbeiter übereinstimmen │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 7. ABWESENHEITEN (Optional, vor Planung)        │
+│    - Urlaub, Krankheit, Lehrgänge               │
+│    - Benötigen existierende Mitarbeiter         │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 8. SCHICHTPLANUNG                               │
+│    - Benötigt: Mitarbeiter, Teams, Schichttypen │
+│    - Berücksichtigt: Abwesenheiten              │
+└─────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────┐
+│ 9. URLAUBSANTRÄGE & DIENSTTAUSCH (Optional)     │
+│    - Benötigen: Benutzerkonten, Schichtplan     │
+└─────────────────────────────────────────────────┘
+```
+
+### 3.2 Schritt-für-Schritt-Anleitung: Ersteinrichtung
+
+Diese Anleitung führt Sie durch die **komplette Ersteinrichtung** des Systems von Grund auf.
+
+---
+
+#### **Schritt 1: Datenbank initialisieren** ✅ AUTOMATISCH
+
+**Was geschieht automatisch:**
+
+Bei der ersten Initialisierung (`python main.py init-db`) werden automatisch erstellt:
+
+1. **Alle Datenbanktabellen** (Teams, Employees, ShiftTypes, etc.)
+2. **Standard-Rollen:**
+   - Admin (volle Berechtigung)
+   - Disponent (Planung und Personal)
+   - Mitarbeiter (Lesezugriff)
+3. **Administrator-Konto:**
+   - E-Mail: `admin@fritzwinter.de`
+   - Passwort: `Admin123!`
+   - Rolle: Admin
+4. **Standard-Schichttypen:**
+   - F (Früh: 05:45-13:45, 8h)
+   - S (Spät: 13:45-21:45, 8h)
+   - N (Nacht: 21:45-05:45, 8h)
+   - Z (Zwischendienst: 08:00-16:00, 8h)
+   - BMT (Brandmeldetechniker: 06:00-14:00, 8h, Mo-Fr)
+   - BSB (Brandschutzbeauftragter: 07:00-16:30, 9.5h, Mo-Fr)
+   - TD (Tagdienst für qualifizierte Mitarbeiter)
+
+**Ergebnis:** ✅ System ist grundlegend einsatzbereit.
+
+---
+
+#### **Schritt 2: Teams erstellen** 🏢 ERFORDERLICH
+
+**Warum zuerst?**
+- Mitarbeiter **müssen** einem Team zugeordnet werden
+- Teams strukturieren die Schichtplanung
+- Ohne Teams können keine Mitarbeiter angelegt werden
+
+**So geht's:**
+
+1. Melden Sie sich als Administrator an
+2. Navigieren Sie zu **Teams** (im Hauptmenü)
+3. Klicken Sie auf **➕ Team hinzufügen**
+4. Füllen Sie das Formular aus:
+   - **Name:** z.B. "Team Alpha" (Pflichtfeld)
+   - **Beschreibung:** z.B. "Hauptteam Frühschicht" (optional)
+5. Klicken Sie auf **Erstellen**
+
+**Empfohlene Team-Struktur:**
+- **Team Alpha** - Hauptteam 1
+- **Team Beta** - Hauptteam 2
+- **Team Gamma** - Hauptteam 3
+- *(Optional)* Weitere Teams nach Bedarf
+
+**Virtuelle Teams (automatisch vorhanden):**
+- **Brandmeldeanlage Virtuell** (ID: 99) - für BMT-Mitarbeiter
+- **Ferienjobber Virtuell** (ID: 98) - für temporäre Mitarbeiter
+
+**Screenshot:** Siehe [Teamverwaltung](#7-teamverwaltung)
+
+---
+
+#### **Schritt 3: Mitarbeiter anlegen** 👥 ERFORDERLICH
+
+**Abhängigkeit:** ⚠️ Mindestens 1 Team muss existieren!
+
+**Warum wichtig:**
+- Ohne Mitarbeiter keine Schichtplanung möglich
+- Mindestens 10-15 Mitarbeiter empfohlen für realistische Planung
+- Qualifikationen (BMT/BSB/TD) für Sonderschichten wichtig
+
+**So geht's:**
+
+1. Navigieren Sie zu **Mitarbeiter**
+2. Klicken Sie auf **➕ Mitarbeiter hinzufügen**
+3. Füllen Sie das Formular aus:
+
+**Pflichtfelder:**
+- **Vorname:** z.B. "Max"
+- **Name:** z.B. "Mustermann"
+- **Personalnummer:** z.B. "PN001" (muss eindeutig sein!)
+
+**Wichtige optionale Felder:**
+- **E-Mail:** Erforderlich, wenn Mitarbeiter sich anmelden soll
+- **Team:** Wählen Sie ein Team aus (wichtig für Planung!)
+- **Funktion:** z.B. "Schichtleiter", "Techniker"
+- **Geburtsdatum:** Format TT.MM.JJJJ
+
+**Qualifikationen (Checkboxen):**
+- ☑ **Springer:** Flexible Vertretung bei Ausfällen
+- ☑ **Ferienjobber:** Temporärer Mitarbeiter
+- ☑ **Brandmeldetechniker (BMT):** Qualifiziert für BMT-Schichten
+- ☑ **Brandschutzbeauftragter (BSB):** Qualifiziert für BSB-Schichten
+
+**Best Practices:**
+- **Mindestens 10-15 Mitarbeiter** für erfolgreiche Planung
+- **3-5 Mitarbeiter pro Team** verteilen
+- **3-4 Springer** markieren für Flexibilität
+- **5+ BMT-Qualifizierte** für Wochentags-Abdeckung
+- **5+ BSB-Qualifizierte** für Wochentags-Abdeckung
+
+**Screenshot:** Siehe [Mitarbeiterverwaltung](#6-mitarbeiterverwaltung)
+
+---
+
+#### **Schritt 4: Schichttypen prüfen** ⏰ OPTIONAL
+
+**Standardmäßig verfügbar:**
+
+Alle wichtigen Schichttypen sind bereits vorhanden:
+
+| Code | Name | Zeiten | Dauer | Tage |
+|------|------|--------|-------|------|
+| F | Früh | 05:45-13:45 | 8h | Mo-So |
+| S | Spät | 13:45-21:45 | 8h | Mo-So |
+| N | Nacht | 21:45-05:45 | 8h | Mo-So |
+| Z | Zwischendienst | 08:00-16:00 | 8h | Mo-So |
+| BMT | Brandmeldetechniker | 06:00-14:00 | 8h | Mo-Fr |
+| BSB | Brandschutzbeauftragter | 07:00-16:30 | 9.5h | Mo-Fr |
+| TD | Tagdienst | variabel | variabel | variabel |
+
+**Wann anpassen?**
+- Wenn Ihre Arbeitszeiten abweichen
+- Wenn andere Schichtmodelle benötigt werden
+- Wenn Wochenarbeitsstunden geändert werden sollen
+
+**Wo anpassen?**
+
+Als Administrator: **Administration** → **Schichtverwaltung**
+
+**Anpassbare Parameter:**
+- Start- und Endzeit
+- Wochenarbeitsstunden (Standard: 40h)
+- Arbeitstage (Mo-So individual)
+- Farbcode für Darstellung
+
+---
+
+#### **Schritt 5: Benutzerkonten erstellen** 🔐 OPTIONAL
+
+**Abhängigkeit:** ⚠️ Mitarbeiter müssen existieren!
+
+**Wann erforderlich:**
+- Wenn Mitarbeiter sich selbst anmelden sollen
+- Für Urlaubsanträge durch Mitarbeiter
+- Für Diensttausch durch Mitarbeiter
+
+**Wann NICHT erforderlich:**
+- Wenn nur Admins/Disponenten das System nutzen
+- Für reinen Planungsbetrieb ohne Mitarbeiter-Interaktion
+
+**So geht's:**
+
+1. Als Administrator: **Administration** → **Benutzer**
+2. Klicken Sie auf **➕ Benutzer hinzufügen**
+3. Füllen Sie das Formular aus:
+   - **E-Mail:** Muss mit Mitarbeiter-E-Mail übereinstimmen!
+   - **Passwort:** Temporäres Passwort vergeben
+   - **Vorname/Nachname:** Wie bei Mitarbeiter
+   - **Rolle:** Wählen Sie passende Rolle
+
+**Rollenauswahl:**
+- **Mitarbeiter:** Für normale Angestellte (nur Lesezugriff)
+- **Disponent:** Für Schichtplaner (Planung + Verwaltung)
+- **Admin:** Für IT/Administratoren (voller Zugriff)
+
+**Wichtig:**
+- System verknüpft Benutzer automatisch mit Mitarbeiter über E-Mail
+- Mitarbeiter sollten beim ersten Login Passwort ändern
+
+**Screenshot:** Siehe [Administration](#13-administration)
+
+---
+
+#### **Schritt 6: Abwesenheiten erfassen** 📅 OPTIONAL (aber empfohlen)
+
+**Abhängigkeit:** ⚠️ Mitarbeiter müssen existieren!
+
+**Warum vor der Planung?**
+- Planung berücksichtigt nur verfügbare Mitarbeiter
+- Vermeidet Nachbearbeitung
+- Verhindert Planungskonflikte
+- Spart Zeit und Aufwand
+
+**So geht's:**
+
+1. Navigieren Sie zu **Abwesenheiten**
+2. Klicken Sie auf **➕ Abwesenheit hinzufügen**
+3. Füllen Sie das Formular aus:
+   - **Mitarbeiter:** Auswählen
+   - **Art:** Urlaub (U), Krank (AU), oder Lehrgang (L)
+   - **Startdatum:** Erster Abwesenheitstag
+   - **Enddatum:** Letzter Abwesenheitstag
+   - **Notizen:** Optional
+
+**Best Practice:**
+- Alle bekannten Urlaube **vor** Planung eintragen
+- Auch feste Lehrgangstermine vorab erfassen
+- Krankheit wird nachträglich eingetragen
+
+**Screenshot:** Siehe [Abwesenheitsverwaltung](#9-abwesenheitsverwaltung)
+
+---
+
+#### **Schritt 7: Erste Schichtplanung durchführen** 🎯 HAUPTFUNKTION
+
+**Abhängigkeiten:** ⚠️ ALLES VORHER MUSS FERTIG SEIN!
+- ✅ Teams erstellt
+- ✅ Mitarbeiter angelegt (mind. 10-15)
+- ✅ Schichttypen vorhanden (automatisch)
+- ✅ Abwesenheiten erfasst (empfohlen)
+
+**So geht's:**
+
+1. Navigieren Sie zu **Dienstplan**
+2. Klicken Sie auf **Schichten planen** (Button oben)
+3. Im Dialog:
+   - **Startdatum:** Wählen Sie Montag (empfohlen für sauberen Start)
+   - **Enddatum:** 2-4 Wochen später (nicht zu lang beim ersten Mal!)
+   - **Vorhandene Schichten überschreiben:** ☐ Nein (für ersten Lauf)
+4. Klicken Sie auf **Planen**
+5. **Warten Sie 1-5 Minuten** (je nach Zeitraum und Mitarbeiteranzahl)
+
+**Was passiert während der Planung:**
+- Google OR-Tools CP-SAT Solver berechnet optimale Verteilung
+- Berücksichtigt ALLE Constraints:
+  - Nur 1 Schicht pro Mitarbeiter und Tag
+  - Keine Arbeit während Abwesenheit
+  - Mindestbesetzung für alle Schichten
+  - Verbotene Schichtwechsel (z.B. Spät → Früh)
+  - Gesetzliche Ruhezeiten (11h minimum)
+  - Max. 6 aufeinanderfolgende Schichten
+  - Max. 5 aufeinanderfolgende Nachtschichten
+  - Dynamische Arbeitszeitgrenzen (40-48h/Woche)
+  - 1 Springer muss immer frei bleiben
+  - 1 BMT pro Werktag
+  - 1 BSB pro Werktag
+- Erstellt faire Schichtverteilung über alle Mitarbeiter
+
+**Ergebnis prüfen:**
+- ✅ Sind alle Tage besetzt?
+- ✅ Sind Springer gleichmäßig verteilt?
+- ✅ Gibt es BMT/BSB an allen Wochentagen (Mo-Fr)?
+- ✅ Sind Wochenenden fair verteilt?
+- ✅ Wurden Abwesenheiten berücksichtigt?
+
+**Bei Problemen:** Siehe [Fehlerbehebung - Keine Lösung gefunden](#15-fehlerbehebung)
+
+**Screenshot:** Siehe [Schichtplanung](#8-schichtplanung)
+
+---
+
+#### **Schritt 8: Manuelle Anpassungen** ✏️ OPTIONAL
+
+**Nach erfolgreicher automatischer Planung:**
+
+Sie können einzelne Schichten manuell anpassen:
+
+1. **Schicht hinzufügen:** Klick auf leere Zelle
+2. **Schicht ändern:** Klick auf bestehende Schicht
+3. **Schicht löschen:** Klick auf Schicht → Löschen
+4. **Schicht fixieren:** Klick auf Schicht → 🔒 Fixieren
+
+**Was bedeutet "Fixieren"?**
+- Fixierte Schichten werden bei erneuter Planung NICHT überschrieben
+- Nützlich für wichtige oder vereinbarte Dienste
+- Fixierung kann jederzeit aufgehoben werden (🔓)
+
+**Neu planen nach Änderungen:**
+- Option "Vorhandene Schichten überschreiben" auf ☐ Nein
+- Nur leere/nicht-fixierte Tage werden neu geplant
+- Spart Zeit und erhält manuelle Änderungen
+
+---
+
+#### **Schritt 9: Urlaubsanträge aktivieren** 🌴 OPTIONAL
+
+**Abhängigkeit:** ⚠️ Mitarbeiter müssen Benutzerkonten haben!
+
+**Workflow:**
+1. **Mitarbeiter** stellt Urlaubsantrag (Navigation: Urlaubsanträge → Antrag stellen)
+2. **Disponent/Admin** prüft Antrag
+3. **Disponent/Admin** genehmigt oder lehnt ab
+4. Bei **Genehmigung:** Automatische Erstellung der Abwesenheit
+5. Abwesenheit wird bei nächster Planung berücksichtigt
+
+**Vorteile:**
+- Strukturierter Genehmigungsprozess
+- Nachverfolgbarkeit aller Anträge
+- Automatische Umwandlung in Abwesenheit
+- Transparenz für Mitarbeiter
+
+**Screenshot:** Siehe [Urlaubsanträge](#10-urlaubsanträge)
+
+---
+
+#### **Schritt 10: Diensttausch aktivieren** 🔄 OPTIONAL
+
+**Abhängigkeit:** ⚠️ Schichtplan muss existieren!
+
+**Workflow:**
+1. **Mitarbeiter A** bietet Dienst zum Tausch an
+2. **Mitarbeiter B** fragt Dienst an
+3. **Disponent/Admin** prüft Tausch
+4. **Disponent/Admin** genehmigt oder lehnt ab
+5. Bei **Genehmigung:** Automatischer Tausch der Schichten
+
+**Automatische Prüfungen:**
+- ✅ Qualifikationen beider Mitarbeiter
+- ✅ Keine Konflikte mit Abwesenheiten
+- ✅ Arbeitszeitgesetze
+- ✅ Ruhezeiten
+
+**Vorteile:**
+- Flexibilität für Mitarbeiter
+- Kontrollierter Tauschprozess
+- Automatische Validierung
+- Nachverfolgbarkeit
+
+**Screenshot:** Siehe [Diensttausch-System](#11-diensttausch-system)
+
+---
+
+### 3.3 Zusammenfassung: Checkliste Ersteinrichtung
+
+**Für produktiven Betrieb:**
+
+- [ ] **Schritt 1:** Datenbank initialisieren (`python main.py init-db`) ✅ AUTOMATISCH
+- [ ] **Schritt 2:** Als Admin anmelden (admin@fritzwinter.de / Admin123!)
+- [ ] **Schritt 3:** Admin-Passwort ändern (sicher!)
+- [ ] **Schritt 4:** Teams erstellen (mind. 3 Teams) ✅ ERFORDERLICH
+- [ ] **Schritt 5:** Mitarbeiter anlegen (mind. 10-15) ✅ ERFORDERLICH
+  - [ ] Team-Zuordnung für jeden Mitarbeiter
+  - [ ] 3-4 Springer markieren
+  - [ ] BMT/BSB-Qualifikationen vergeben
+- [ ] **Schritt 6:** Schichttypen prüfen (optional anpassen)
+- [ ] **Schritt 7:** Benutzerkonten erstellen (falls Mitarbeiter-Login gewünscht)
+- [ ] **Schritt 8:** Bekannte Abwesenheiten erfassen (Urlaube)
+- [ ] **Schritt 9:** Erste Schichtplanung durchführen (2-4 Wochen) ✅ HAUPTFUNKTION
+- [ ] **Schritt 10:** Ergebnis prüfen und ggf. anpassen
+- [ ] **Schritt 11:** Urlaubsanträge aktivieren (optional)
+- [ ] **Schritt 12:** Diensttausch aktivieren (optional)
+
+**Kritische Reihenfolge (MUSS eingehalten werden):**
+```
+Teams → Mitarbeiter → Schichtplanung
+```
+
+**Empfohlene Mindestanzahlen:**
+- Teams: 3
+- Mitarbeiter gesamt: 10-15
+- Mitarbeiter pro Team: 3-5
+- Springer: 3-4
+- BMT-Qualifizierte: 5+
+- BSB-Qualifizierte: 5+
+
+---
+
+## 4. Benutzerrollen
 
 Das System kennt drei Benutzerrollen mit unterschiedlichen Berechtigungen:
 
@@ -151,7 +576,7 @@ Das System kennt drei Benutzerrollen mit unterschiedlichen Berechtigungen:
 
 ---
 
-## 4. Anmeldung und Navigation
+## 5. Anmeldung und Navigation
 
 ### Hauptmenü (Navigationsleiste)
 
@@ -179,7 +604,7 @@ Klicken Sie auf Ihren Namen (rechts oben) für:
 
 ---
 
-## 5. Dienstplan-Ansichten
+## 6. Dienstplan-Ansichten
 
 Der Dienstplan kann in drei verschiedenen Ansichten dargestellt werden:
 
@@ -240,7 +665,7 @@ Klicken Sie auf die Buttons oben:
 
 ---
 
-## 6. Mitarbeiterverwaltung
+## 7. Mitarbeiterverwaltung
 
 ### Mitarbeiterliste anzeigen
 
@@ -355,7 +780,7 @@ Ferienjobber sind temporäre Mitarbeiter, die typischerweise in den Sommerferien
 
 ---
 
-## 7. Teamverwaltung
+## 8. Teamverwaltung
 
 ### Teams anzeigen
 
@@ -422,7 +847,7 @@ Das System erstellt automatisch virtuelle Teams für Sonderfunktionen:
 
 ---
 
-## 8. Schichtplanung
+## 9. Schichtplanung
 
 ### Automatische Planung starten
 
@@ -524,7 +949,7 @@ Um Fixierung aufzuheben:
 
 ---
 
-## 9. Abwesenheitsverwaltung
+## 10. Abwesenheitsverwaltung
 
 ### Abwesenheiten anzeigen
 
@@ -577,7 +1002,7 @@ Abwesenheiten werden im Dienstplan farblich markiert:
 
 ---
 
-## 10. Urlaubsanträge
+## 11. Urlaubsanträge
 
 Das System verfügt über ein vollständiges Urlaubsantragssystem mit Genehmigungsworkflow.
 
@@ -641,7 +1066,7 @@ Sie sehen alle offenen und vergangenen Anträge:
 
 ---
 
-## 11. Diensttausch-System
+## 12. Diensttausch-System
 
 Das Diensttausch-System ermöglicht es Mitarbeitern, Dienste untereinander zu tauschen.
 
@@ -723,7 +1148,7 @@ Das Diensttausch-System ermöglicht es Mitarbeitern, Dienste untereinander zu ta
 
 ---
 
-## 12. Statistiken und Auswertungen
+## 13. Statistiken und Auswertungen
 
 Das System bietet umfangreiche Statistiken und Auswertungen.
 
@@ -805,7 +1230,7 @@ Alle Statistiken können exportiert werden:
 
 ---
 
-## 13. Administration
+## 14. Administration
 
 Der Administrationsbereich ist nur für Benutzer mit Admin-Rolle zugänglich.
 
@@ -918,7 +1343,7 @@ DELETE FROM Absences WHERE StartDate < date('now', '-2 years');
 
 ---
 
-## 14. Export-Funktionen
+## 15. Export-Funktionen
 
 Das System bietet umfangreiche Export-Funktionen für Dienstpläne.
 
@@ -997,7 +1422,7 @@ GET /api/shifts/export/excel?startDate=2025-01-01&endDate=2025-01-31
 
 ---
 
-## 15. Fehlerbehebung
+## 16. Fehlerbehebung
 
 ### Häufige Probleme und Lösungen
 
@@ -1161,7 +1586,7 @@ python --version  # Sollte 3.9 oder höher sein
 
 ---
 
-## 16. FAQ
+## 17. FAQ
 
 ### Allgemeine Fragen
 
@@ -1184,6 +1609,49 @@ A: Ja, das System speichert Daten lokal in Ihrer eigenen Datenbank. Sie haben vo
 
 **F: Kann ich das System offline nutzen?**
 A: Das System benötigt keine Internetverbindung für den Betrieb. Sie benötigen nur Netzwerkzugriff auf den Server (kann auch localhost sein).
+
+### Abhängigkeiten & Ersteinrichtung
+
+**F: In welcher Reihenfolge muss ich Daten erstellen?**
+A: Zwingend erforderliche Reihenfolge:
+1. Teams erstellen
+2. Mitarbeiter anlegen (mit Team-Zuordnung)
+3. Schichten planen
+
+Optional aber empfohlen: Abwesenheiten vor der Planung erfassen.
+
+**F: Warum kann ich keine Mitarbeiter ohne Team anlegen?**
+A: Mitarbeiter benötigen eine Team-Zuordnung für die Schichtplanung. Erstellen Sie zuerst mindestens ein Team. Ausnahme: Springer und Ferienjobber können auch ohne explizites Team sein, werden dann virtuellen Teams zugeordnet.
+
+**F: Wie viele Mitarbeiter brauche ich mindestens für die Planung?**
+A: Minimum: 5-7 Mitarbeiter, empfohlen: 10-15 Mitarbeiter. Mit zu wenigen Mitarbeitern findet der Algorithmus möglicherweise keine Lösung, die alle Constraints erfüllt.
+
+**F: Muss ich Benutzerkonten für alle Mitarbeiter erstellen?**
+A: Nein, das ist optional. Benutzerkonten sind nur erforderlich, wenn:
+- Mitarbeiter sich selbst anmelden sollen
+- Mitarbeiter Urlaubsanträge stellen sollen
+- Mitarbeiter Diensttausch nutzen sollen
+
+Für reine Planung durch Admin/Disponent sind keine Benutzerkonten nötig.
+
+**F: Was passiert, wenn ich die Reihenfolge nicht beachte?**
+A: Das System verhindert fehlerhafte Eingaben:
+- Mitarbeiter ohne Team → Fehlermeldung "Team erforderlich"
+- Planung ohne Mitarbeiter → Fehlermeldung "Keine Mitarbeiter vorhanden"
+- Benutzer ohne Mitarbeiter-E-Mail → Keine automatische Verknüpfung
+
+**F: Wie viele Teams soll ich erstellen?**
+A: Empfohlen: 3 Teams (Alpha, Beta, Gamma) für klassische Schichtrotation. Sie können mehr oder weniger Teams erstellen, je nach Ihrer Organisationsstruktur. Virtuelle Teams (BMT, BSB, Ferienjobber) werden automatisch erstellt.
+
+**F: Was sind virtuelle Teams?**
+A: Virtuelle Teams sind automatisch erstellte Teams für Sonderfunktionen:
+- **Brandmeldeanlage Virtuell** (ID 99): Alle BMT-qualifizierten Mitarbeiter
+- **Ferienjobber Virtuell** (ID 98): Alle als Ferienjobber markierten Mitarbeiter
+
+Diese Teams können nicht gelöscht werden und dienen nur der Verwaltung.
+
+**F: Muss ich Schichttypen manuell erstellen?**
+A: Nein, bei der Datenbankinitialisierung werden automatisch die Standard-Schichttypen erstellt (F, S, N, Z, BMT, BSB, TD). Sie können diese bei Bedarf anpassen oder neue hinzufügen.
 
 ### Planung & Algorithmus
 
@@ -1310,6 +1778,155 @@ A: Ja! Erstellen Sie ein Feature Request auf GitHub Issues. Beschreiben Sie den 
 
 ## 📄 Anhang
 
+### Quick Reference: Wichtigste Funktionen
+
+#### Für Administratoren
+
+| Aufgabe | Navigation | Wichtige Hinweise |
+|---------|------------|-------------------|
+| **Teams erstellen** | Teams → ➕ Team hinzufügen | MUSS vor Mitarbeitern erstellt werden |
+| **Mitarbeiter anlegen** | Mitarbeiter → ➕ Mitarbeiter hinzufügen | Benötigt existierendes Team |
+| **Benutzer erstellen** | Administration → Benutzer → ➕ Benutzer hinzufügen | E-Mail muss mit Mitarbeiter übereinstimmen |
+| **Schichten planen** | Dienstplan → Schichten planen | 10-15 Mitarbeiter erforderlich |
+| **Abwesenheit erfassen** | Abwesenheiten → ➕ Abwesenheit hinzufügen | Vor Planung empfohlen |
+| **Urlaubsantrag genehmigen** | Urlaubsanträge → Status ändern | Erstellt automatisch Abwesenheit |
+| **Diensttausch genehmigen** | Diensttausch → Offene Anfragen → Genehmigen | Prüft automatisch Qualifikationen |
+| **Statistiken ansehen** | Statistiken → Dashboard | Zeitraum anpassbar |
+| **Daten exportieren** | Dienstplan → Export → CSV/PDF/Excel | Verschiedene Formate verfügbar |
+| **Audit-Logs prüfen** | Administration → Audit-Logs | Alle Änderungen nachvollziehbar |
+
+#### Für Disponenten
+
+| Aufgabe | Navigation | Wichtige Hinweise |
+|---------|------------|-------------------|
+| **Mitarbeiter verwalten** | Mitarbeiter | Erstellen, Bearbeiten möglich |
+| **Schichten planen** | Dienstplan → Schichten planen | Hauptaufgabe |
+| **Manuelle Anpassungen** | Dienstplan → Schicht anklicken | Fixieren möglich |
+| **Abwesenheiten verwalten** | Abwesenheiten | Alle Typen (U/AU/L) |
+| **Urlaubsanträge bearbeiten** | Urlaubsanträge | Genehmigen/Ablehnen |
+| **Diensttausch bearbeiten** | Diensttausch | Genehmigen/Ablehnen |
+| **Wochenend-Statistik** | Statistiken → Wochenend-Dienste | Nur für Disponent/Admin |
+
+#### Für Mitarbeiter
+
+| Aufgabe | Navigation | Wichtige Hinweise |
+|---------|------------|-------------------|
+| **Dienstplan ansehen** | Dienstplan | Alle Ansichten verfügbar (Woche/Monat/Jahr) |
+| **Urlaubsantrag stellen** | Urlaubsanträge → ➕ Antrag stellen | Status-Verfolgung möglich |
+| **Dienst zum Tausch anbieten** | Diensttausch → Dienst anbieten | Genehmigung erforderlich |
+| **Dienst anfragen** | Diensttausch → Verfügbare Angebote | Auswahl aus Angeboten |
+| **Statistiken ansehen** | Statistiken | Eigene Daten sichtbar |
+
+### Wichtigste Abhängigkeiten auf einen Blick
+
+```
+ERFORDERLICH für Schichtplanung:
+├─ Teams (mind. 1)
+├─ Mitarbeiter (mind. 10-15)
+│  ├─ mit Team-Zuordnung
+│  ├─ mind. 3-4 Springer
+│  └─ mind. 5 BMT und 5 BSB
+└─ Schichttypen (automatisch vorhanden)
+
+OPTIONAL aber empfohlen:
+├─ Abwesenheiten (bekannte Urlaube vor Planung)
+├─ Benutzerkonten (für Mitarbeiter-Login)
+├─ Urlaubsanträge (strukturierter Prozess)
+└─ Diensttausch (Flexibilität)
+```
+
+### Kritische Reihenfolge (IMMER beachten!)
+
+1. **Teams erstellen** → 2. **Mitarbeiter anlegen** → 3. **Schichten planen**
+
+Diese Reihenfolge ist zwingend und kann nicht umgangen werden!
+
+### Empfohlene Mindestanzahlen
+
+| Element | Minimum | Empfohlen | Zweck |
+|---------|---------|-----------|-------|
+| **Teams** | 1 | 3 | Strukturierte Planung |
+| **Mitarbeiter gesamt** | 5 | 10-15 | Realistische Verteilung |
+| **Mitarbeiter pro Team** | 2 | 3-5 | Teamrotation |
+| **Springer** | 1 | 3-4 | Flexibilität bei Ausfällen |
+| **BMT-Qualifizierte** | 1 | 5+ | Abdeckung Mo-Fr |
+| **BSB-Qualifizierte** | 1 | 5+ | Abdeckung Mo-Fr |
+
+### Schichtcodes und Zeiten
+
+| Code | Name | Zeiten | Dauer | Tage | Farbe |
+|------|------|--------|-------|------|-------|
+| **F** | Früh | 05:45-13:45 | 8h | Mo-So | Gelb |
+| **S** | Spät | 13:45-21:45 | 8h | Mo-So | Orange |
+| **N** | Nacht | 21:45-05:45 | 8h | Mo-So | Blau |
+| **Z** | Zwischendienst | 08:00-16:00 | 8h | Mo-So | Lila |
+| **BMT** | Brandmeldetechniker | 06:00-14:00 | 8h | Mo-Fr | Grün |
+| **BSB** | Brandschutzbeauftragter | 07:00-16:30 | 9.5h | Mo-Fr | Türkis |
+| **TD** | Tagdienst | variabel | variabel | variabel | Grau |
+| **U** | Urlaub | - | - | - | Grün (hell) |
+| **AU** | Krank | - | - | - | Rot |
+| **L** | Lehrgang | - | - | - | Blau (hell) |
+
+### Status-Übersichten
+
+#### Urlaubsanträge
+
+| Status | Symbol | Bedeutung | Aktion möglich |
+|--------|--------|-----------|----------------|
+| In Bearbeitung | 🟡 | Warten auf Genehmigung | Disponent: Genehmigen/Ablehnen |
+| Genehmigt | 🟢 | Urlaubsantrag genehmigt | Abwesenheit automatisch erstellt |
+| Abgelehnt | 🔴 | Urlaubsantrag abgelehnt | Keine Abwesenheit erstellt |
+
+#### Diensttausch
+
+| Status | Symbol | Bedeutung | Aktion möglich |
+|--------|--------|-----------|----------------|
+| Angeboten | 🟡 | Dienst zum Tausch verfügbar | Mitarbeiter: Anfragen |
+| Angefragt | 🟠 | Tausch angefragt, wartet auf Genehmigung | Disponent: Genehmigen/Ablehnen |
+| Genehmigt | 🟢 | Tausch durchgeführt | Keine, abgeschlossen |
+| Abgelehnt | 🔴 | Tausch abgelehnt | Keine, abgeschlossen |
+
+### Häufigste Fehlermeldungen
+
+| Fehlermeldung | Ursache | Lösung |
+|---------------|---------|--------|
+| "Keine Lösung gefunden" | Zu wenige Mitarbeiter, zu viele Abwesenheiten | Mehr Mitarbeiter, weniger Abwesenheiten, längeres Zeitlimit |
+| "Ungültige Anmeldedaten" | Falsches Passwort oder E-Mail | Admin-Passwort: Admin123!, Groß-/Kleinschreibung beachten |
+| "Team erforderlich" | Mitarbeiter ohne Team | Team zuerst erstellen, dann zuordnen |
+| "Qualifikation fehlt" | BMT/BSB-Dienst ohne qualifizierten Mitarbeiter | Mehr Mitarbeiter qualifizieren |
+| "Konflikt mit Abwesenheit" | Schicht während Abwesenheit | Abwesenheit löschen oder Schicht verschieben |
+
+### Wichtige Tastenkürzel
+
+| Kürzel | Funktion | Wo verfügbar |
+|--------|----------|--------------|
+| `Strg+S` | Formular speichern | Alle Formulare |
+| `Esc` | Dialog schließen | Alle Dialoge |
+| `Strg+F` | Suche | Alle Tabellen |
+| `←` / `→` | Vorherige/Nächste Woche | Dienstplan |
+| `↑` / `↓` | Scrollen | Alle Listen |
+
+### API-Endpunkte (für Entwickler)
+
+| Endpunkt | Methode | Beschreibung |
+|----------|---------|--------------|
+| `/api/auth/login` | POST | Benutzer anmelden |
+| `/api/employees` | GET | Alle Mitarbeiter abrufen |
+| `/api/teams` | GET | Alle Teams abrufen |
+| `/api/shifts/schedule` | GET | Dienstplan anzeigen |
+| `/api/shifts/plan` | POST | Schichten planen |
+| `/api/absences` | GET/POST | Abwesenheiten verwalten |
+| `/api/vacationrequests` | GET/POST | Urlaubsanträge verwalten |
+| `/api/shiftexchanges` | GET/POST | Diensttausch verwalten |
+| `/api/statistics/dashboard` | GET | Dashboard-Statistiken |
+| `/api/shifts/export/csv` | GET | CSV-Export |
+| `/api/shifts/export/pdf` | GET | PDF-Export |
+| `/api/shifts/export/excel` | GET | Excel-Export |
+
+Vollständige API-Dokumentation: Siehe README.md
+
+---
+
 ### Glossar
 
 **BMT** - Brandmeldetechniker, Sonderfunktion für Brandmeldeanlagen
@@ -1355,4 +1972,4 @@ Powered by **Google OR-Tools**
 
 ---
 
-*Letzte Aktualisierung: Dezember 2024*
+*Letzte Aktualisierung: Januar 2026*

@@ -4029,11 +4029,16 @@ function getEntityNameTranslation(entityName) {
         'Absence': 'Abwesenheit',
         'VacationPeriod': 'Ferienzeit',
         'VacationRequest': 'Urlaubsantrag',
-        'VacationYearApproval': 'Urlaubsjahresplan-Genehmigung',
+        'VacationYearApproval': 'Jahresurlaubsgenehmigung',
         'ShiftExchange': 'Diensttausch',
         'TeamShiftAssignment': 'Team-Schicht-Zuweisung',
         'ShiftTypeRelationship': 'Schichttyp-Beziehung'
     };
+    
+    if (!translations[entityName]) {
+        console.warn(`Missing translation for entity: ${entityName}`);
+    }
+    
     return translations[entityName] || entityName;
 }
 

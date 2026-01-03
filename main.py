@@ -40,14 +40,16 @@ def run_cli_planning(
     if use_sample_data:
         print("Loading sample data...")
         employees, teams, absences = generate_sample_data()
+        shift_types = None  # Use default STANDARD_SHIFT_TYPES
     else:
         print(f"Loading data from database: {db_path}")
         try:
-            employees, teams, absences = load_from_database(db_path)
+            employees, teams, absences, shift_types = load_from_database(db_path)
         except Exception as e:
             print(f"Error loading database: {e}")
             print("Using sample data instead...")
             employees, teams, absences = generate_sample_data()
+            shift_types = None  # Use default STANDARD_SHIFT_TYPES
     
     print(f"  - Loaded {len(employees)} employees")
     print(f"  - Loaded {len(teams)} teams")

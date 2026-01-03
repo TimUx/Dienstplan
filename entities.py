@@ -57,7 +57,8 @@ class ShiftType:
     start_time: str  # Format: "HH:MM"
     end_time: str  # Format: "HH:MM"
     color_code: Optional[str] = None
-    hours: float = 8.0  # Duration in hours
+    hours: float = 8.0  # Duration in hours (daily)
+    weekly_working_hours: float = 40.0  # Expected weekly working hours for this shift
     
     def get_duration_hours(self) -> float:
         """Calculate duration in hours"""
@@ -74,6 +75,10 @@ class ShiftType:
         
         duration_minutes = end_minutes - start_minutes
         return duration_minutes / 60.0
+    
+    def get_monthly_hours(self) -> float:
+        """Calculate expected monthly hours (4 weeks)"""
+        return self.weekly_working_hours * 4.0
 
 
 @dataclass
@@ -201,12 +206,12 @@ class VacationPeriod:
 
 # Predefined shift types for the system
 STANDARD_SHIFT_TYPES = [
-    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0),
-    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0),
-    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0),
-    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0),
-    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0),
-    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5),
+    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 40.0),
+    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 40.0),
+    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 40.0),
+    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0),
+    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0),
+    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0),
 ]
 
 

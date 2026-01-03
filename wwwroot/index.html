@@ -346,17 +346,9 @@
                     <!-- Global Settings Tab -->
                     <div id="admin-tab-settings" class="admin-tab-content">
                         <div class="admin-section">
-                            <h3>🔧 Globale Einstellungen</h3>
-                            <p>Allgemeine Systemeinstellungen und Parameter.</p>
+                            <h3>🔧 Systemeinstellungen</h3>
+                            <p>Allgemeine Schichtplanungseinstellungen.</p>
                             <div class="settings-grid">
-                                <div class="setting-item">
-                                    <label>Maximale Arbeitsstunden pro Monat:</label>
-                                    <input type="number" id="setting-max-hours-month" value="192" min="1" max="300">
-                                </div>
-                                <div class="setting-item">
-                                    <label>Maximale Arbeitsstunden pro Woche:</label>
-                                    <input type="number" id="setting-max-hours-week" value="48" min="1" max="60">
-                                </div>
                                 <div class="setting-item">
                                     <label>Maximale aufeinanderfolgende Schichten:</label>
                                     <input type="number" id="setting-max-consecutive-shifts" value="6" min="1" max="10">
@@ -367,6 +359,13 @@
                                 </div>
                             </div>
                             <button onclick="saveGlobalSettings()" class="btn-primary">Einstellungen speichern</button>
+                            
+                            <div class="info-box" style="margin-top: 20px;">
+                                <p><strong>Hinweis zu Arbeitszeitgrenzen:</strong></p>
+                                <p>Die maximalen Arbeitszeiten (Stunden pro Woche und Monat) werden jetzt dynamisch aus der <strong>Schichtverwaltung</strong> berechnet.</p>
+                                <p>Jede Schicht hat eine konfigurierbare <strong>Wochenarbeitszeit</strong>, die als Grundlage für die monatlichen Sollstunden dient.</p>
+                                <p>Diese Einstellungen können in der Schichtverwaltung (Admin → Schichtarten) angepasst werden.</p>
+                            </div>
                         </div>
                     </div>
 

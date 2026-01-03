@@ -2202,11 +2202,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             end_date = date.fromisoformat(end_date_str)
             
             # Load data
-            employees, teams, absences = load_from_database(db.db_path)
+            employees, teams, absences, shift_types = load_from_database(db.db_path)
             
             # Create model
             planning_model = create_shift_planning_model(
-                employees, teams, start_date, end_date, absences
+                employees, teams, start_date, end_date, absences, shift_types=shift_types
             )
             
             # Solve

@@ -20,7 +20,7 @@ def test_weekly_availability_constraint():
     print("TEST: Weekly Available Employee Constraint")
     print("=" * 70)
     
-    employees, teams, absences = load_from_database('dienstplan.db')
+    employees, teams, absences, shift_types = load_from_database('dienstplan.db')
     
     start_date = date(2026, 1, 5)
     end_date = date(2026, 1, 11)
@@ -96,7 +96,7 @@ def test_weekly_availability_with_minimal_absences():
     print("TEST: Weekly Availability - Minimal Absences")
     print("=" * 70)
     
-    employees, teams, absences = load_from_database('dienstplan.db')
+    employees, teams, absences, shift_types = load_from_database('dienstplan.db')
     
     start_date = date(2026, 1, 5)
     end_date = date(2026, 1, 11)
@@ -161,7 +161,7 @@ def test_multiple_teams_with_absences():
     print("TEST: Multiple Teams with Absences")
     print("=" * 70)
     
-    employees, teams, absences = load_from_database('dienstplan.db')
+    employees, teams, absences, shift_types = load_from_database('dienstplan.db')
     
     start_date = date(2026, 1, 5)
     end_date = date(2026, 1, 11)

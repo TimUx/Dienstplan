@@ -45,7 +45,7 @@ def test_ferienjobber_virtual_team():
     conn.close()
     
     # Load and check
-    employees, teams, absences = load_from_database(test_db)
+    employees, teams, absences, shift_types = load_from_database(test_db)
     
     ferienjobbers = [e for e in employees if e.is_ferienjobber]
     print(f"\nFerienjobbers found: {len(ferienjobbers)}")
@@ -112,7 +112,7 @@ def test_ferienjobber_can_help_teams():
     conn.close()
     
     # Load data
-    employees, teams, absences = load_from_database(test_db)
+    employees, teams, absences, shift_types = load_from_database(test_db)
     
     # Create absences to trigger need for Ferienjobbers
     # 2 absences in Team Alpha - own springer + Ferienjobber should help

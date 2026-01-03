@@ -86,8 +86,8 @@ class ShiftPlanningSolver:
         print("  - Consecutive shifts constraints (max 6 days)")
         add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, td_vars, employees, dates, shift_codes)
         
-        print("  - Working hours constraints (48h/week, 192h/month)")
-        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, dates, weeks, shift_codes, shift_types)
+        print("  - Working hours constraints (dynamic based on shift configuration)")
+        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, teams, dates, weeks, shift_codes, shift_types)
         
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")

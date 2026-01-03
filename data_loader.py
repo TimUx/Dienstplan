@@ -112,12 +112,34 @@ def load_from_database(db_path: str = "dienstplan.db"):
         db_path: Path to the SQLite database file
         
     Returns:
-        Tuple of (employees, teams, absences)
+        Tuple of (employees, teams, absences, shift_types)
     """
     import sqlite3
+    from entities import ShiftType
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+    
+    # Load shift types from database
+    cursor.execute("""
+        SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours
+        FROM ShiftTypes
+        WHERE IsActive = 1
+        ORDER BY Id
+    """)
+    shift_types = []
+    for row in cursor.fetchall():
+        shift_type = ShiftType(
+            id=row[0],
+            code=row[1],
+            name=row[2],
+            start_time=row[3],
+            end_time=row[4],
+            hours=row[5],
+            color_code=row[6],
+            weekly_working_hours=row[7] if len(row) > 7 else 40.0
+        )
+        shift_types.append(shift_type)
     
     # Load teams
     cursor.execute("SELECT Id, Name, Description, Email, IsVirtual FROM Teams")
@@ -229,7 +251,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     
     conn.close()
     
-    return employees, teams, absences
+    return employees, teams, absences, shift_types
 
 
 def get_existing_assignments(db_path: str, start_date: date, end_date: date) -> List[ShiftAssignment]:

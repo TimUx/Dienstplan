@@ -557,7 +557,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'teamId': team_id,
                 'roles': roles
             }, ensure_ascii=False)
-            log_audit(conn, 'Employee', employee_id, 'Create', changes)
+            log_audit(conn, 'Employee', employee_id, 'Created', changes)
             
             conn.commit()
             conn.close()
@@ -693,7 +693,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
-                log_audit(conn, 'Employee', user_id, 'Update', changes)
+                log_audit(conn, 'Employee', user_id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -753,7 +753,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'name': employee_row['Name'],
                 'email': employee_row['Email']
             }, ensure_ascii=False)
-            log_audit(conn, 'Employee', user_id, 'Delete', changes)
+            log_audit(conn, 'Employee', user_id, 'Deleted', changes)
             
             conn.commit()
             conn.close()
@@ -997,7 +997,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'funktion': funktion,
                 'teamId': data.get('teamId')
             }, ensure_ascii=False)
-            log_audit(conn, 'Employee', employee_id, 'Create', changes)
+            log_audit(conn, 'Employee', employee_id, 'Created', changes)
             
             conn.commit()
             conn.close()
@@ -1093,7 +1093,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
-                log_audit(conn, 'Employee', id, 'Update', changes)
+                log_audit(conn, 'Employee', id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -1136,7 +1136,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'name': emp_row['Name'],
                 'personalnummer': emp_row['Personalnummer']
             }, ensure_ascii=False)
-            log_audit(conn, 'Employee', id, 'Delete', changes)
+            log_audit(conn, 'Employee', id, 'Deleted', changes)
             
             conn.commit()
             conn.close()
@@ -1259,7 +1259,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'email': data.get('email'),
                 'isVirtual': data.get('isVirtual')
             }, ensure_ascii=False)
-            log_audit(conn, 'Team', team_id, 'Create', changes)
+            log_audit(conn, 'Team', team_id, 'Created', changes)
             
             conn.commit()
             conn.close()
@@ -1317,7 +1317,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
-                log_audit(conn, 'Team', id, 'Update', changes)
+                log_audit(conn, 'Team', id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -1356,7 +1356,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({'name': team_row['Name']}, ensure_ascii=False)
-            log_audit(conn, 'Team', id, 'Delete', changes)
+            log_audit(conn, 'Team', id, 'Deleted', changes)
             
             conn.commit()
             conn.close()
@@ -1491,7 +1491,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'endDate': end_date.isoformat(),
                 'colorCode': data.get('colorCode', '#E8F5E9')
             }, ensure_ascii=False)
-            log_audit(conn, 'VacationPeriod', period_id, 'Create', changes)
+            log_audit(conn, 'VacationPeriod', period_id, 'Created', changes)
             
             conn.commit()
             conn.close()
@@ -1568,7 +1568,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
-                log_audit(conn, 'VacationPeriod', id, 'Update', changes)
+                log_audit(conn, 'VacationPeriod', id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -1599,7 +1599,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({'name': period_row['Name']}, ensure_ascii=False)
-            log_audit(conn, 'VacationPeriod', id, 'Delete', changes)
+            log_audit(conn, 'VacationPeriod', id, 'Deleted', changes)
             
             conn.commit()
             conn.close()
@@ -1716,7 +1716,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps(data, ensure_ascii=False)
-            log_audit(conn, 'ShiftType', shift_type_id, 'Create', changes)
+            log_audit(conn, 'ShiftType', shift_type_id, 'Created', changes)
             
             conn.commit()
             conn.close()
@@ -1867,7 +1867,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
-                log_audit(conn, 'ShiftType', id, 'Update', changes)
+                log_audit(conn, 'ShiftType', id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -1906,7 +1906,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({'code': shift_row['Code'], 'name': shift_row['Name']}, ensure_ascii=False)
-            log_audit(conn, 'ShiftType', id, 'Delete', changes)
+            log_audit(conn, 'ShiftType', id, 'Deleted', changes)
             
             conn.commit()
             conn.close()
@@ -1971,7 +1971,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({'shiftTypeId': shift_id, 'teamIds': team_ids}, ensure_ascii=False)
-            log_audit(conn, 'TeamShiftAssignment', shift_id, 'Update', changes)
+            log_audit(conn, 'TeamShiftAssignment', shift_id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -2037,7 +2037,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({'teamId': team_id, 'shiftTypeIds': shift_type_ids}, ensure_ascii=False)
-            log_audit(conn, 'TeamShiftAssignment', team_id, 'Update', changes)
+            log_audit(conn, 'TeamShiftAssignment', team_id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -2106,7 +2106,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({'shiftTypeId': shift_id, 'relationships': relationships}, ensure_ascii=False)
-            log_audit(conn, 'ShiftTypeRelationship', shift_id, 'Update', changes)
+            log_audit(conn, 'ShiftTypeRelationship', shift_id, 'Updated', changes)
             
             conn.commit()
             conn.close()
@@ -2613,7 +2613,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 
                 if changes_dict:
                     changes = json.dumps(changes_dict, ensure_ascii=False)
-                    log_audit(conn, 'ShiftAssignment', id, 'Update', changes)
+                    log_audit(conn, 'ShiftAssignment', id, 'Updated', changes)
                 
                 conn.commit()
                 
@@ -2685,7 +2685,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'isFixed': data.get('isFixed'),
                     'notes': data.get('notes')
                 }, ensure_ascii=False)
-                log_audit(conn, 'ShiftAssignment', assignment_id, 'Create', changes)
+                log_audit(conn, 'ShiftAssignment', assignment_id, 'Created', changes)
                 
                 conn.commit()
                 
@@ -2732,7 +2732,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'shiftTypeId': row['ShiftTypeId'],
                     'date': row['Date']
                 }, ensure_ascii=False)
-                log_audit(conn, 'ShiftAssignment', id, 'Delete', changes)
+                log_audit(conn, 'ShiftAssignment', id, 'Deleted', changes)
                 
                 conn.commit()
                 
@@ -3603,7 +3603,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'endDate': data.get('endDate'),
                 'notes': data.get('notes')
             }, ensure_ascii=False)
-            log_audit(conn, 'Absence', absence_id, 'Create', changes)
+            log_audit(conn, 'Absence', absence_id, 'Created', changes)
             
             # Check for understaffing and create notifications
             try:
@@ -3663,7 +3663,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'startDate': absence_row['StartDate'],
                 'endDate': absence_row['EndDate']
             }, ensure_ascii=False)
-            log_audit(conn, 'Absence', id, 'Delete', changes)
+            log_audit(conn, 'Absence', id, 'Deleted', changes)
             
             conn.commit()
             conn.close()
@@ -3899,7 +3899,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 ))
                 
                 approval_id = existing['Id']
-                action = 'Update'
+                action = 'Updated'
             else:
                 # Create new entry
                 cursor.execute("""
@@ -3916,7 +3916,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 ))
                 
                 approval_id = cursor.lastrowid
-                action = 'Create'
+                action = 'Created'
             
             # Log audit entry
             changes = json.dumps({

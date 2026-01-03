@@ -4287,6 +4287,8 @@ function toggleShiftSelection(shiftId) {
     }
     
     // Reload the schedule to update all shift badges
+    // NOTE: This could be optimized to only update visual state without full reload,
+    // but full reload ensures consistent state and is simpler for initial implementation
     loadSchedule();
     
     // Update selection counter
@@ -4402,13 +4404,7 @@ async function saveBulkEdit(event) {
     const employeeId = document.getElementById('bulkEditEmployeeId').value;
     const shiftTypeId = document.getElementById('bulkEditShiftTypeId').value;
     const isFixedChecked = document.getElementById('bulkEditIsFixed').checked;
-    const notes = document.getElementById('bulkEditNotes').value;
-    
-    // Validate that at least one change is specified
-    if (!employeeId && !shiftTypeId && !isFixedChecked && !notes) {
-        alert('Bitte wählen Sie mindestens eine Änderung aus.');
-        return;
-    }
+    const notes = document.getElementById('bulkEditNotes').value.trim();
     
     // Build the changes object
     const changes = {};
@@ -4416,6 +4412,12 @@ async function saveBulkEdit(event) {
     if (shiftTypeId) changes.shiftTypeId = parseInt(shiftTypeId);
     if (isFixedChecked) changes.isFixed = true;
     if (notes) changes.notes = notes;
+    
+    // Validate that at least one change is specified
+    if (Object.keys(changes).length === 0) {
+        alert('Bitte wählen Sie mindestens eine Änderung aus.');
+        return;
+    }
     
     // Confirm the bulk edit
     if (!confirm(`Möchten Sie ${selectedShifts.size} Schicht${selectedShifts.size !== 1 ? 'en' : ''} wirklich ändern?`)) {

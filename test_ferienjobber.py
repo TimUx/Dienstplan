@@ -133,7 +133,7 @@ def test_ferienjobber_can_help_teams():
     print(f"Available Ferienjobbers: {len([e for e in employees if e.is_ferienjobber])}")
     
     # Try to create a plan
-    planning_model = create_shift_planning_model(employees, teams, start_date, end_date, all_absences)
+    planning_model = create_shift_planning_model(employees, teams, start_date, end_date, all_absences, shift_types=shift_types)
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if not result:

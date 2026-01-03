@@ -70,7 +70,7 @@ def test_january_2026_with_absences():
     # Create model
     print("\nCreating shift planning model...")
     planning_model = create_shift_planning_model(
-        employees, teams, start_date, end_date, all_absences
+        employees, teams, start_date, end_date, all_absences, shift_types=shift_types
     )
     
     # Solve
@@ -179,7 +179,7 @@ def test_single_absence_per_team():
     
     # Create model and solve
     planning_model = create_shift_planning_model(
-        employees, teams, start_date, end_date, all_absences
+        employees, teams, start_date, end_date, all_absences, shift_types=shift_types
     )
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     

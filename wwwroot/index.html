@@ -26,6 +26,10 @@
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
                         <button onclick="showView('admin')" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
                     </nav>
+                    <div id="notification-bell" class="notification-bell admin-only" style="display:none;" onclick="showNotificationModal()">
+                        <span class="bell-icon">🔔</span>
+                        <span id="notification-badge" class="notification-badge" style="display:none;">0</span>
+                    </div>
                     <div id="user-info" class="user-info" style="display: none;">
                         <span id="user-name"></span>
                         <button onclick="logout()" class="btn-logout">Abmelden</button>
@@ -1414,6 +1418,24 @@
                     <button type="submit" class="btn-primary">Schichten planen</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Notification Modal -->
+    <div id="notificationModal" class="modal">
+        <div class="modal-content large">
+            <span class="close" onclick="closeNotificationModal()">&times;</span>
+            <h2>🔔 Benachrichtigungen über Mindestschichtstärke</h2>
+            
+            <div class="notification-header">
+                <button onclick="filterNotifications('all')" class="btn-secondary" id="filter-all">Alle</button>
+                <button onclick="filterNotifications('unread')" class="btn-secondary active" id="filter-unread">Ungelesen</button>
+                <button onclick="markAllNotificationsRead()" class="btn-secondary">Alle als gelesen markieren</button>
+            </div>
+            
+            <div id="notification-list" class="notification-list">
+                <p class="loading">Lade Benachrichtigungen...</p>
+            </div>
         </div>
     </div>
 

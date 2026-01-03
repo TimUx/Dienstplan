@@ -370,6 +370,8 @@ def validate_staffing_requirements(
         
         # Validate each main shift
         for shift_code in ["F", "S", "N"]:
+            # Skip if shift code is not in staffing requirements (e.g., shift type not active or not configured)
+            # This is expected behavior as not all shifts may be used in every planning period
             if shift_code not in staffing:
                 continue
             count = shift_counts.get(shift_code, 0)

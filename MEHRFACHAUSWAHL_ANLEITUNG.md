@@ -2,7 +2,7 @@
 
 ## Überblick
 
-Die neue Mehrfachauswahl-Funktion ermöglicht es Administratoren und Disponenten, mehrere Schichten gleichzeitig zu bearbeiten. Dies spart Zeit und reduziert Fehler bei Massenänderungen.
+Die neue Mehrfachauswahl-Funktion ermöglicht es Administratoren, mehrere Schichten gleichzeitig zu bearbeiten. Dies spart Zeit und reduziert Fehler bei Massenänderungen.
 
 ## Funktionen
 
@@ -102,7 +102,6 @@ Sie können eine oder mehrere der folgenden Änderungen vornehmen:
 ## Berechtigungen
 
 - **Administrator:** Vollzugriff auf alle Mehrfachauswahl-Funktionen
-- **Disponent:** Vollzugriff auf alle Mehrfachauswahl-Funktionen
 - **Mitarbeiter:** Kein Zugriff auf Mehrfachauswahl (nur Lesezugriff)
 
 ## Technische Hinweise
@@ -123,7 +122,7 @@ Sie können eine oder mehrere der folgenden Änderungen vornehmen:
 
 **Problem:** Schichten lassen sich nicht auswählen
 - **Lösung:** Stellen Sie sicher, dass der Mehrfachauswahl-Modus aktiviert ist (blauer Button)
-- **Lösung:** Überprüfen Sie, ob Sie als Administrator oder Disponent angemeldet sind
+- **Lösung:** Überprüfen Sie, ob Sie als Administrator angemeldet sind
 
 **Problem:** "Auswahl bearbeiten" ist nicht verfügbar
 - **Lösung:** Wählen Sie mindestens eine Schicht aus

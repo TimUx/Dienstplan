@@ -119,7 +119,7 @@ Das Dienstplan-System basiert auf einer hierarchischen Datenstruktur. **Die Reih
 ```
 ┌─────────────────────────────────────────────────┐
 │ 1. ROLLEN                                       │
-│    - Admin, Disponent, Mitarbeiter              │
+│    - Admin, Mitarbeiter                         │
 │    (automatisch bei DB-Initialisierung)         │
 └─────────────────────────────────────────────────┘
                     ↓
@@ -186,7 +186,6 @@ Bei der ersten Initialisierung (`python main.py init-db`) werden automatisch ers
 1. **Alle Datenbanktabellen** (Teams, Employees, ShiftTypes, etc.)
 2. **Standard-Rollen:**
    - Admin (volle Berechtigung)
-   - Disponent (Planung und Personal)
    - Mitarbeiter (Lesezugriff)
 3. **Administrator-Konto:**
    - E-Mail: `admin@fritzwinter.de`
@@ -322,7 +321,7 @@ Als Administrator: **Administration** → **Schichtverwaltung**
 - Für Diensttausch durch Mitarbeiter
 
 **Wann NICHT erforderlich:**
-- Wenn nur Admins/Disponenten das System nutzen
+- Wenn nur Admins das System nutzen
 - Für reinen Planungsbetrieb ohne Mitarbeiter-Interaktion
 
 **So geht's:**
@@ -337,7 +336,6 @@ Als Administrator: **Administration** → **Schichtverwaltung**
 
 **Rollenauswahl:**
 - **Mitarbeiter:** Für normale Angestellte (nur Lesezugriff)
-- **Disponent:** Für Schichtplaner (Planung + Verwaltung)
 - **Admin:** Für IT/Administratoren (voller Zugriff)
 
 **Wichtig:**
@@ -455,8 +453,8 @@ Sie können einzelne Schichten manuell anpassen:
 
 **Workflow:**
 1. **Mitarbeiter** stellt Urlaubsantrag (Navigation: Urlaubsanträge → Antrag stellen)
-2. **Disponent/Admin** prüft Antrag
-3. **Disponent/Admin** genehmigt oder lehnt ab
+2. **Admin** prüft Antrag
+3. **Admin** genehmigt oder lehnt ab
 4. Bei **Genehmigung:** Automatische Erstellung der Abwesenheit
 5. Abwesenheit wird bei nächster Planung berücksichtigt
 
@@ -477,8 +475,8 @@ Sie können einzelne Schichten manuell anpassen:
 **Workflow:**
 1. **Mitarbeiter A** bietet Dienst zum Tausch an
 2. **Mitarbeiter B** fragt Dienst an
-3. **Disponent/Admin** prüft Tausch
-4. **Disponent/Admin** genehmigt oder lehnt ab
+3. **Admin** prüft Tausch
+4. **Admin** genehmigt oder lehnt ab
 5. Bei **Genehmigung:** Automatischer Tausch der Schichten
 
 **Automatische Prüfungen:**
@@ -534,7 +532,7 @@ Teams → Mitarbeiter → Schichtplanung
 
 ## 4. Benutzerrollen
 
-Das System kennt drei Benutzerrollen mit unterschiedlichen Berechtigungen:
+Das System kennt zwei Benutzerrollen mit unterschiedlichen Berechtigungen:
 
 ### 🔴 Administrator
 **Vollzugriff auf alle Funktionen**
@@ -549,18 +547,6 @@ Das System kennt drei Benutzerrollen mit unterschiedlichen Berechtigungen:
 - ✅ Systemeinstellungen ändern
 - ✅ Alle Statistiken einsehen
 - ✅ Audit-Logs einsehen
-
-### 🟡 Disponent
-**Schichtplanung und Personalverwaltung**
-
-- ✅ Mitarbeiter erstellen und bearbeiten
-- ✅ Schichtplanung durchführen
-- ✅ Abwesenheiten verwalten
-- ✅ Urlaubsanträge genehmigen/ablehnen
-- ✅ Diensttausch genehmigen/ablehnen
-- ✅ Statistiken einsehen
-- ❌ Keine Systemeinstellungen
-- ❌ Keine Benutzerregistrierung
 
 ### 🟢 Mitarbeiter
 **Lesezugriff und eigene Anträge**
@@ -684,7 +670,7 @@ Klicken Sie auf die Buttons oben:
 
 ### Neuen Mitarbeiter anlegen
 
-**Berechtigung:** Admin oder Disponent
+**Berechtigung:** Admin only
 
 1. Klicken Sie auf **➕ Mitarbeiter hinzufügen**
 2. Füllen Sie das Formular aus:
@@ -794,7 +780,7 @@ Ferienjobber sind temporäre Mitarbeiter, die typischerweise in den Sommerferien
 
 ### Neues Team erstellen
 
-**Berechtigung:** Admin oder Disponent
+**Berechtigung:** Admin only
 
 1. Klicken Sie auf **➕ Team hinzufügen**
 2. Füllen Sie das Formular aus:
@@ -851,7 +837,7 @@ Das System erstellt automatisch virtuelle Teams für Sonderfunktionen:
 
 ### Automatische Planung starten
 
-**Berechtigung:** Admin oder Disponent
+**Berechtigung:** Admin only
 
 **Navigation:** Menü → **Dienstplan** → Button **Schichten planen**
 
@@ -883,7 +869,7 @@ Das System erstellt automatisch virtuelle Teams für Sonderfunktionen:
 
 ### Manuelle Schichtbearbeitung
 
-**Berechtigung:** Admin oder Disponent
+**Berechtigung:** Admin only
 
 Sie können Schichten manuell hinzufügen, ändern oder löschen:
 
@@ -964,7 +950,7 @@ Um Fixierung aufzuheben:
 
 ### Neue Abwesenheit erfassen
 
-**Berechtigung:** Admin oder Disponent
+**Berechtigung:** Admin only
 
 1. Klicken Sie auf **➕ Abwesenheit hinzufügen**
 2. Füllen Sie das Formular aus:
@@ -1021,9 +1007,9 @@ Das System verfügt über ein vollständiges Urlaubsantragssystem mit Genehmigun
 
 **Status nach Einreichung:** "In Bearbeitung" (gelb)
 
-### Urlaubsanträge bearbeiten (als Disponent/Admin)
+### Urlaubsanträge bearbeiten (als Admin)
 
-**Berechtigung:** Admin oder Disponent
+**Berechtigung:** Admin only
 
 **Navigation:** Menü → **Urlaubsanträge**
 
@@ -1098,12 +1084,12 @@ Das Diensttausch-System ermöglicht es Mitarbeitern, Dienste untereinander zu ta
 
 **Was passiert:**
 - Eine Tausch-Anfrage wird erstellt
-- Der Disponent/Admin wird benachrichtigt
+- Der Admin wird benachrichtigt
 - Status: "Warten auf Genehmigung"
 
 ### Diensttausch genehmigen/ablehnen
 
-**Als Disponent/Admin:**
+**Als Admin:**
 
 **Navigation:** Menü → **Diensttausch** → **Offene Anfragen**
 
@@ -1191,7 +1177,7 @@ Das System bietet umfangreiche Statistiken und Auswertungen.
 - Lehrgangstage pro Mitarbeiter
 - Gesamtausfallzeiten
 
-#### 4. Wochenend-Dienste (Nur Disponent/Admin)
+#### 4. Wochenend-Dienste (Nur Admin)
 
 **Spezielle Auswertung:**
 - Anzahl Samstags-Dienste pro Mitarbeiter
@@ -1247,7 +1233,7 @@ Der Administrationsbereich ist nur für Benutzer mit Admin-Rolle zugänglich.
    - **Passwort** * - Mindestens 8 Zeichen
    - **Vorname**
    - **Nachname**
-   - **Rolle** * - Admin, Disponent oder Mitarbeiter
+   - **Rolle** * - Admin oder Mitarbeiter
 4. Klicken Sie auf **Registrieren**
 
 #### Benutzer bearbeiten
@@ -1552,7 +1538,7 @@ python --version  # Sollte 3.9 oder höher sein
 **Lösungen:**
 
 1. **Berechtigung prüfen:**
-   - Als Admin oder Disponent angemeldet?
+   - Als Admin only angemeldet?
    - Rolle in Admin-Panel prüfen
 
 2. **Browser-Konsole prüfen:**
@@ -1632,7 +1618,7 @@ A: Nein, das ist optional. Benutzerkonten sind nur erforderlich, wenn:
 - Mitarbeiter Urlaubsanträge stellen sollen
 - Mitarbeiter Diensttausch nutzen sollen
 
-Für reine Planung durch Admin/Disponent sind keine Benutzerkonten nötig.
+Für reine Planung durch Admin sind keine Benutzerkonten nötig.
 
 **F: Was passiert, wenn ich die Reihenfolge nicht beachte?**
 A: Das System verhindert fehlerhafte Eingaben:
@@ -1795,18 +1781,6 @@ A: Ja! Erstellen Sie ein Feature Request auf GitHub Issues. Beschreiben Sie den 
 | **Daten exportieren** | Dienstplan → Export → CSV/PDF/Excel | Verschiedene Formate verfügbar |
 | **Audit-Logs prüfen** | Administration → Audit-Logs | Alle Änderungen nachvollziehbar |
 
-#### Für Disponenten
-
-| Aufgabe | Navigation | Wichtige Hinweise |
-|---------|------------|-------------------|
-| **Mitarbeiter verwalten** | Mitarbeiter | Erstellen, Bearbeiten möglich |
-| **Schichten planen** | Dienstplan → Schichten planen | Hauptaufgabe |
-| **Manuelle Anpassungen** | Dienstplan → Schicht anklicken | Fixieren möglich |
-| **Abwesenheiten verwalten** | Abwesenheiten | Alle Typen (U/AU/L) |
-| **Urlaubsanträge bearbeiten** | Urlaubsanträge | Genehmigen/Ablehnen |
-| **Diensttausch bearbeiten** | Diensttausch | Genehmigen/Ablehnen |
-| **Wochenend-Statistik** | Statistiken → Wochenend-Dienste | Nur für Disponent/Admin |
-
 #### Für Mitarbeiter
 
 | Aufgabe | Navigation | Wichtige Hinweise |
@@ -1873,7 +1847,7 @@ Diese Reihenfolge ist zwingend und kann nicht umgangen werden!
 
 | Status | Symbol | Bedeutung | Aktion möglich |
 |--------|--------|-----------|----------------|
-| In Bearbeitung | 🟡 | Warten auf Genehmigung | Disponent: Genehmigen/Ablehnen |
+| In Bearbeitung | 🟡 | Warten auf Genehmigung | Admin: Genehmigen/Ablehnen |
 | Genehmigt | 🟢 | Urlaubsantrag genehmigt | Abwesenheit automatisch erstellt |
 | Abgelehnt | 🔴 | Urlaubsantrag abgelehnt | Keine Abwesenheit erstellt |
 
@@ -1882,7 +1856,7 @@ Diese Reihenfolge ist zwingend und kann nicht umgangen werden!
 | Status | Symbol | Bedeutung | Aktion möglich |
 |--------|--------|-----------|----------------|
 | Angeboten | 🟡 | Dienst zum Tausch verfügbar | Mitarbeiter: Anfragen |
-| Angefragt | 🟠 | Tausch angefragt, wartet auf Genehmigung | Disponent: Genehmigen/Ablehnen |
+| Angefragt | 🟠 | Tausch angefragt, wartet auf Genehmigung | Admin: Genehmigen/Ablehnen |
 | Genehmigt | 🟢 | Tausch durchgeführt | Keine, abgeschlossen |
 | Abgelehnt | 🔴 | Tausch abgelehnt | Keine, abgeschlossen |
 
@@ -1934,8 +1908,6 @@ Vollständige API-Dokumentation: Siehe README.md
 **BSB** - Brandschutzbeauftragter, Sonderfunktion für Brandschutz
 
 **CP-SAT** - Constraint Programming Satisfiability Solver (Google OR-Tools)
-
-**Disponent** - Benutzerrolle mit Planungsrechten
 
 **F, S, N** - Früh-, Spät-, Nachtdienst
 

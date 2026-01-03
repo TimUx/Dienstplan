@@ -47,14 +47,14 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 ### Urlaubsverwaltung
 - **Urlaubsanträge**: Mitarbeiter können Urlaubswünsche einreichen
 - **Status-Workflow**: In Bearbeitung → Genehmigt/Nicht genehmigt
-- **Bearbeitung**: Disponent/Admin kann Anträge genehmigen oder ablehnen
+- **Bearbeitung**: Admin kann Anträge genehmigen oder ablehnen
 - **Automatische Umwandlung**: Genehmigte Anträge werden automatisch zu Abwesenheiten
 - **Statusverfolgung**: Mitarbeiter können den Status ihrer Anträge einsehen
 
 ### Diensttausch-System
 - **Dienste anbieten**: Mitarbeiter können einzelne Dienste zum Tausch anbieten
 - **Tauschangebote annehmen**: Andere Mitarbeiter können Dienste anfragen
-- **Genehmigungspflicht**: Alle Tausche müssen vom Disponent genehmigt werden
+- **Genehmigungspflicht**: Alle Tausche müssen vom Admin genehmigt werden
 - **Automatische Umschichtung**: Nach Genehmigung wird der Dienst automatisch umgetauscht
 - **Nachverfolgung**: Vollständige Historie aller Tauschangebote
 
@@ -105,7 +105,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 - 📈 Schichtverteilung pro Team
 - 📅 Fehltageübersicht
 - 💼 Team-Workload Analyse
-- 📆 Samstags-/Sonntagsdienste je Mitarbeiter (Nur Disponent/Admin)
+- 📆 Samstags-/Sonntagsdienste je Mitarbeiter (Nur Admin)
 
 ### Änderungsverfolgung
 - 📝 Jede Schichtänderung wird protokolliert
@@ -123,7 +123,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 
 ### Anmeldung
 ![Anmeldedialog](docs/screenshots/00-login-modal.png)
-*Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle (Admin, Disponent, Mitarbeiter)*
+*Sichere Anmeldung mit Rollenbasierter Zugriffskontrolle (Admin, Mitarbeiter)*
 
 ### Dienstplan-Ansicht (Woche) - Administrator
 ![Dienstplan Wochenansicht Administrator](docs/screenshots/03-schedule-week-admin.png)
@@ -147,7 +147,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 
 ### Diensttausch-System
 ![Diensttausch](docs/screenshots/08-shift-exchange.png)
-*Mitarbeiter können Dienste zum Tausch anbieten - Genehmigung durch Disponent erforderlich*
+*Mitarbeiter können Dienste zum Tausch anbieten - Genehmigung durch Admin erforderlich*
 
 ### Statistiken & Auswertungen
 ![Statistiken](docs/screenshots/09-statistics.png)
@@ -294,7 +294,7 @@ python main.py init-db --with-sample-data
 
 Dies erstellt:
 - ✅ Alle erforderlichen Datenbanktabellen
-- ✅ Standard-Rollen (Admin, Disponent, Mitarbeiter)
+- ✅ Standard-Rollen (Admin, Mitarbeiter)
 - ✅ Admin-Benutzer (admin@fritzwinter.de / Admin123!)
 - ✅ Standard-Schichttypen
 - ✅ Beispiel-Teams (optional mit --with-sample-data)
@@ -363,7 +363,7 @@ Das Dienstplan-System basiert auf einer hierarchischen Datenstruktur, bei der be
 ### Abhängigkeitsdiagramm
 
 ```
-1. Rollen (Admin, Disponent, Mitarbeiter)
+1. Rollen (Admin, Mitarbeiter)
    ↓
 2. Benutzer (AspNetUsers mit Rollen)
    ↓
@@ -389,7 +389,7 @@ python main.py init-db
 
 **Was wird automatisch erstellt:**
 - ✅ Alle Datenbanktabellen
-- ✅ **Rollen**: Admin, Disponent, Mitarbeiter
+- ✅ **Rollen**: Admin, Mitarbeiter
 - ✅ **Admin-Benutzer**: admin@fritzwinter.de (Passwort: Admin123!)
 - ✅ **Standard-Schichttypen**: F, S, N, Z, BMT, BSB, TD
 
@@ -407,8 +407,10 @@ python main.py init-db
 - Team Gamma (Beschreibung: "Hauptteam Nachtschicht")
 
 **Virtuelle Teams (automatisch):**
-- Brandmeldeanlage Virtuell (ID: 99) - für BMT-qualifizierte Mitarbeiter
+- Brandmeldeanlage Virtuell (ID: 99) - für BMT/BSB-qualifizierte Mitarbeiter
 - Ferienjobber Virtuell (ID: 98) - für temporäre Mitarbeiter
+
+**Hinweis:** Diese virtuellen Teams werden automatisch vom System erstellt und verwaltet.
 
 #### Schritt 3: Mitarbeiter anlegen (erforderlich)
 
@@ -446,7 +448,7 @@ python main.py init-db
 2. Passwort (Standardpasswort vergeben)
 3. Rolle zuweisen:
    - **Mitarbeiter**: Nur Lesezugriff, eigene Urlaubsanträge
-   - **Disponent**: Planung und Verwaltung
+
    - **Admin**: Voller Zugriff
 
 **Verknüpfung:** System verknüpft Benutzer automatisch mit Mitarbeiter über E-Mail.
@@ -534,7 +536,7 @@ python main.py init-db
 
 **Workflow:**
 1. Mitarbeiter stellt Urlaubsantrag
-2. Disponent/Admin prüft und genehmigt/lehnt ab
+2. Admin prüft und genehmigt/lehnt ab
 3. Bei Genehmigung → Automatische Erstellung der Abwesenheit
 4. Abwesenheit wird bei nächster Planung berücksichtigt
 
@@ -547,7 +549,7 @@ python main.py init-db
 **Workflow:**
 1. Mitarbeiter bietet Dienst zum Tausch an
 2. Anderer Mitarbeiter fragt Dienst an
-3. Disponent/Admin genehmigt/lehnt ab
+3. Admin genehmigt/lehnt ab
 4. Bei Genehmigung → Automatischer Tausch der Schichten
 
 **Navigation:** **Diensttausch** → **Dienst anbieten**
@@ -689,7 +691,7 @@ Authorization: Optional (öffentlich lesbar)
 ```http
 POST /api/employees
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 
 {
   "vorname": "Max",
@@ -714,7 +716,7 @@ Parameter:
 #### Schichten automatisch planen
 ```http
 POST /api/shifts/plan?startDate=2025-01-01&endDate=2025-01-31&force=false
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 ### Statistik-Endpoints
@@ -725,10 +727,10 @@ GET /api/statistics/dashboard?startDate=2025-01-01&endDate=2025-01-31
 Authorization: Optional (öffentlich lesbar)
 ```
 
-#### Wochenend-Schicht-Statistiken (Nur Disponent/Admin)
+#### Wochenend-Schicht-Statistiken (Nur Admin)
 ```http
 GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 ### Export-Endpoints
@@ -763,7 +765,7 @@ Authorization: Optional (öffentlich lesbar)
 ```http
 POST /api/absences
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 
 {
   "employeeId": 1,
@@ -778,7 +780,7 @@ Typen: 1=Urlaub, 2=Krank, 3=Lehrgang
 #### Abwesenheit löschen
 ```http
 DELETE /api/absences/{id}
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 ### Urlaubsantrags-Endpoints
@@ -786,7 +788,7 @@ Authorization: Required (Admin oder Disponent)
 #### Urlaubsanträge abrufen
 ```http
 GET /api/vacationrequests
-Authorization: Required (eigene Anträge oder Admin/Disponent für alle)
+Authorization: Required (eigene Anträge oder Admin für alle)
 ```
 
 #### Urlaubsantrag erstellen
@@ -806,7 +808,7 @@ Authorization: Required (alle authentifizierten Benutzer)
 ```http
 PUT /api/vacationrequests/{id}/status
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 
 {
   "status": 2,
@@ -823,10 +825,10 @@ GET /api/shiftexchanges/available
 Authorization: Required (alle authentifizierten Benutzer)
 ```
 
-#### Offene Tausch-Anfragen (Admin/Disponent)
+#### Offene Tausch-Anfragen (Admin)
 ```http
 GET /api/shiftexchanges/pending
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 #### Dienst zum Tausch anbieten
@@ -851,7 +853,7 @@ Authorization: Required (alle authentifizierten Benutzer)
 ```http
 PUT /api/shiftexchanges/{id}/process
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 
 {
   "approve": true,
@@ -871,7 +873,7 @@ Authorization: Optional (öffentlich lesbar)
 ```http
 POST /api/teams
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 
 {
   "name": "Team Delta",
@@ -883,7 +885,7 @@ Authorization: Required (Admin oder Disponent)
 ```http
 PUT /api/teams/{id}
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 #### Team löschen

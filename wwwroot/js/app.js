@@ -6,6 +6,8 @@ let currentDate = new Date();
 let currentView = 'week';
 let currentUser = null;
 let userRoles = [];
+let multiSelectMode = false;
+let selectedShifts = new Set(); // Set of shift IDs for multi-edit
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -799,12 +801,21 @@ function createShiftBadge(shift) {
     const lockIcon = isFixed ? '🔒' : '';
     const badgeClass = isFixed ? 'shift-badge-fixed' : '';
     
-    // Only add onclick if we have a valid ID and user can edit
-    const onclickAttr = (canEdit && shiftId) 
-        ? `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"` 
-        : '';
+    // Check if this shift is selected in multi-select mode
+    const isSelected = multiSelectMode && shiftId && selectedShifts.has(shiftId);
+    const selectedClass = isSelected ? 'shift-selected' : '';
     
-    return `<span class="shift-badge shift-${shiftCode} ${badgeClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
+    // In multi-select mode, clicking toggles selection; otherwise, opens edit modal
+    let onclickAttr = '';
+    if (canEdit && shiftId) {
+        if (multiSelectMode) {
+            onclickAttr = `onclick="toggleShiftSelection(${shiftId}); event.stopPropagation();" style="cursor:pointer;"`;
+        } else {
+            onclickAttr = `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"`;
+        }
+    }
+    
+    return `<span class="shift-badge shift-${shiftCode} ${badgeClass} ${selectedClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
 }
 
 // Constants for team IDs
@@ -4222,5 +4233,229 @@ function setAuditLogRefreshInterval(intervalSeconds) {
     }
     
     console.log(`Audit log refresh interval set to ${intervalSeconds} seconds`);
+}
+
+// ============================================
+// Multi-Select Mode for Batch Editing
+// ============================================
+
+/**
+ * Toggle multi-select mode for batch editing shifts
+ */
+function toggleMultiSelectMode() {
+    multiSelectMode = !multiSelectMode;
+    selectedShifts.clear();
+    
+    // Update UI button states
+    const toggleBtn = document.getElementById('multiSelectToggleBtn');
+    const bulkEditBtn = document.getElementById('bulkEditBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    
+    if (toggleBtn) {
+        toggleBtn.textContent = multiSelectMode ? '✓ Mehrfachauswahl aktiv' : '☑ Mehrfachauswahl';
+        toggleBtn.classList.toggle('btn-active', multiSelectMode);
+    }
+    
+    if (bulkEditBtn) {
+        bulkEditBtn.style.display = multiSelectMode ? 'inline-block' : 'none';
+    }
+    
+    if (clearSelectionBtn) {
+        clearSelectionBtn.style.display = multiSelectMode ? 'inline-block' : 'none';
+    }
+    
+    // Reload the schedule to update shift badges
+    loadSchedule();
+}
+
+/**
+ * Toggle selection of a single shift
+ * @param {number} shiftId - The shift ID to toggle
+ */
+function toggleShiftSelection(shiftId) {
+    if (!multiSelectMode) {
+        return;
+    }
+    
+    if (selectedShifts.has(shiftId)) {
+        selectedShifts.delete(shiftId);
+    } else {
+        selectedShifts.add(shiftId);
+    }
+    
+    // Update the visual state of the shift badge
+    const shiftBadges = document.querySelectorAll(`span[onclick*="toggleShiftSelection(${shiftId})"]`);
+    shiftBadges.forEach(badge => {
+        badge.classList.toggle('shift-selected');
+    });
+    
+    // Update selection counter
+    updateSelectionCounter();
+}
+
+/**
+ * Clear all selected shifts
+ */
+function clearShiftSelection() {
+    selectedShifts.clear();
+    loadSchedule();
+    updateSelectionCounter();
+}
+
+/**
+ * Update the selection counter display
+ */
+function updateSelectionCounter() {
+    const counter = document.getElementById('selectionCounter');
+    if (counter) {
+        const count = selectedShifts.size;
+        counter.textContent = count > 0 ? `${count} Schicht${count !== 1 ? 'en' : ''} ausgewählt` : '';
+    }
+}
+
+/**
+ * Open bulk edit modal for selected shifts
+ */
+async function showBulkEditModal() {
+    if (selectedShifts.size === 0) {
+        alert('Bitte wählen Sie mindestens eine Schicht aus.');
+        return;
+    }
+    
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten zu bearbeiten.');
+        return;
+    }
+    
+    // Load employees and shift types if not already loaded
+    await loadEmployees();
+    if (allShiftTypes.length === 0) {
+        await loadShiftTypes();
+    }
+    
+    // Get details of selected shifts
+    const selectedShiftDetails = Array.from(selectedShifts).map(id => 
+        allShifts.find(s => s.id === id)
+    ).filter(s => s !== undefined);
+    
+    // Populate the bulk edit modal
+    document.getElementById('bulkEditShiftCount').textContent = selectedShifts.size;
+    
+    // Populate employee dropdown
+    const employeeSelect = document.getElementById('bulkEditEmployeeId');
+    employeeSelect.innerHTML = '<option value="">Keine Änderung</option>';
+    cachedEmployees.forEach(emp => {
+        const option = document.createElement('option');
+        option.value = emp.id;
+        const teamInfo = emp.teamName ? ` (${emp.teamName})` : '';
+        const funktionInfo = emp.funktion ? ` - ${emp.funktion}` : '';
+        option.textContent = `${emp.vorname} ${emp.name} (PN: ${emp.personalnummer})${teamInfo}${funktionInfo}`;
+        employeeSelect.appendChild(option);
+    });
+    
+    // Populate shift type dropdown
+    const shiftTypeSelect = document.getElementById('bulkEditShiftTypeId');
+    shiftTypeSelect.innerHTML = '<option value="">Keine Änderung</option>';
+    allShiftTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type.id;
+        option.textContent = `${type.name} (${type.code})`;
+        shiftTypeSelect.appendChild(option);
+    });
+    
+    // Show selected shifts summary
+    const summaryDiv = document.getElementById('bulkEditSummary');
+    let summaryHtml = '<div style="max-height: 200px; overflow-y: auto; margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px;">';
+    summaryHtml += '<strong>Ausgewählte Schichten:</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+    
+    selectedShiftDetails.forEach(shift => {
+        const date = new Date(shift.date).toLocaleDateString('de-DE');
+        summaryHtml += `<li>${shift.employeeName} - ${date} - ${shift.shiftCode}</li>`;
+    });
+    
+    summaryHtml += '</ul></div>';
+    summaryDiv.innerHTML = summaryHtml;
+    
+    // Clear form
+    document.getElementById('bulkEditForm').reset();
+    document.getElementById('bulkEditWarning').style.display = 'none';
+    
+    // Show modal
+    document.getElementById('bulkEditModal').style.display = 'block';
+}
+
+/**
+ * Close bulk edit modal
+ */
+function closeBulkEditModal() {
+    document.getElementById('bulkEditModal').style.display = 'none';
+    document.getElementById('bulkEditForm').reset();
+    document.getElementById('bulkEditWarning').style.display = 'none';
+}
+
+/**
+ * Save bulk edit changes
+ */
+async function saveBulkEdit(event) {
+    event.preventDefault();
+    
+    const employeeId = document.getElementById('bulkEditEmployeeId').value;
+    const shiftTypeId = document.getElementById('bulkEditShiftTypeId').value;
+    const isFixed = document.getElementById('bulkEditIsFixed').checked;
+    const notes = document.getElementById('bulkEditNotes').value;
+    
+    // Validate that at least one change is specified
+    if (!employeeId && !shiftTypeId && !isFixed && !notes) {
+        alert('Bitte wählen Sie mindestens eine Änderung aus.');
+        return;
+    }
+    
+    // Build the changes object
+    const changes = {};
+    if (employeeId) changes.employeeId = parseInt(employeeId);
+    if (shiftTypeId) changes.shiftTypeId = parseInt(shiftTypeId);
+    if (isFixed) changes.isFixed = true;
+    if (notes) changes.notes = notes;
+    
+    // Confirm the bulk edit
+    if (!confirm(`Möchten Sie ${selectedShifts.size} Schicht${selectedShifts.size !== 1 ? 'en' : ''} wirklich ändern?`)) {
+        return;
+    }
+    
+    try {
+        // Send bulk update request
+        const response = await fetch(`${API_BASE}/shifts/assignments/bulk`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                shiftIds: Array.from(selectedShifts),
+                changes: changes
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`Erfolgreich ${result.updated || selectedShifts.size} Schicht${(result.updated || selectedShifts.size) !== 1 ? 'en' : ''} aktualisiert!`);
+            closeBulkEditModal();
+            clearShiftSelection();
+            multiSelectMode = false;
+            toggleMultiSelectMode(); // Reset UI
+            loadSchedule();
+        } else if (response.status === 400) {
+            const error = await response.json();
+            document.getElementById('bulkEditWarningText').textContent = error.error || 'Validierungsfehler';
+            document.getElementById('bulkEditWarning').style.display = 'block';
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            alert('Fehler beim Aktualisieren der Schichten.');
+        }
+    } catch (error) {
+        console.error('Error saving bulk edit:', error);
+        alert(`Fehler: ${error.message}`);
+    }
 }
 

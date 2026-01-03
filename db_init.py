@@ -70,7 +70,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             EndTime TEXT NOT NULL,
             DurationHours REAL NOT NULL,
             ColorCode TEXT,
-            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            IsActive INTEGER NOT NULL DEFAULT 1,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            ModifiedAt TEXT,
+            CreatedBy TEXT,
+            ModifiedBy TEXT
         )
     """)
     
@@ -201,6 +205,35 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # TeamShiftAssignments table (many-to-many: which teams can work which shifts)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS TeamShiftAssignments (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            TeamId INTEGER NOT NULL,
+            ShiftTypeId INTEGER NOT NULL,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CreatedBy TEXT,
+            FOREIGN KEY (TeamId) REFERENCES Teams(Id) ON DELETE CASCADE,
+            FOREIGN KEY (ShiftTypeId) REFERENCES ShiftTypes(Id) ON DELETE CASCADE,
+            UNIQUE(TeamId, ShiftTypeId)
+        )
+    """)
+    
+    # ShiftTypeRelationships table (defines which shifts are related and their order)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ShiftTypeRelationships (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ShiftTypeId INTEGER NOT NULL,
+            RelatedShiftTypeId INTEGER NOT NULL,
+            DisplayOrder INTEGER NOT NULL,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CreatedBy TEXT,
+            FOREIGN KEY (ShiftTypeId) REFERENCES ShiftTypes(Id) ON DELETE CASCADE,
+            FOREIGN KEY (RelatedShiftTypeId) REFERENCES ShiftTypes(Id) ON DELETE CASCADE,
+            UNIQUE(ShiftTypeId, RelatedShiftTypeId)
+        )
+    """)
+    
     # AuditLogs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS AuditLogs (
@@ -255,6 +288,21 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_aspnetusers_employeeid 
         ON AspNetUsers(EmployeeId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_teamshiftassignments_team 
+        ON TeamShiftAssignments(TeamId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_teamshiftassignments_shift 
+        ON TeamShiftAssignments(ShiftTypeId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_shifttyperelationships_shift 
+        ON ShiftTypeRelationships(ShiftTypeId)
     """)
     
     conn.commit()

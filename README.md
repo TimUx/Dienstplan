@@ -24,7 +24,6 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - [🛠️ Entwicklung](#%EF%B8%8F-entwicklung)
 - [🤝 Beitragen](#-beitragen)
 - [📊 Migration von .NET zu Python](#-migration-von-net-zu-python)
-- [🗺️ Roadmap](#%EF%B8%8F-roadmap)
 - [📚 Dokumentation](#-dokumentation)
 - [📄 Lizenz](#-lizenz)
 - [🙋 Support & Kontakt](#-support--kontakt)
@@ -60,23 +59,22 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - **Nachverfolgung**: Vollständige Historie aller Tauschangebote
 
 ### Schichtarten
+Schichttypen werden flexibel durch die **Schichtverwaltung im Admin-Bereich** konfiguriert. Administratoren können eigene Schichttypen mit individuellen Arbeitszeiten, Arbeitstagen und Wochenarbeitsstunden definieren.
+
+**Standard-Schichttypen** (Beispiele, anpassbar):
 - **Früh (F)**: 05:45–13:45 Uhr
 - **Spät (S)**: 13:45–21:45 Uhr
 - **Nacht (N)**: 21:45–05:45 Uhr
 - **Zwischendienst (Z)**: 08:00–16:00 Uhr
 - **Brandmeldetechniker (BMT)**: 06:00-14:00 Uhr (Mo-Fr)
 - **Brandschutzbeauftragter (BSB)**: 07:00-16:30 Uhr (Mo-Fr, 9,5 Stunden)
-- **Tagdienst (TD)**: Speziell für qualifizierte Mitarbeiter (automatisch für BMT/BSB)
+- **Tagdienst (TD)**: Speziell für qualifizierte Mitarbeiter
 - **Abwesenheiten**: AU (Arbeitsunfähigkeit/Krank), U (Urlaub), L (Lehrgang)
 
-### Schichtbesetzung
-**Montag–Freitag:**
-- Früh: 4–5 Personen
-- Spät: 3–4 Personen
-- Nacht: 3 Personen
+**Navigation zur Schichtverwaltung:** Nach Login als Admin → **Administration** → **Schichtverwaltung**
 
-**Wochenende:**
-- Alle Schichten: 2-3 Personen (Minimum 2, Maximum 3)
+### Schichtbesetzung
+Besetzungsanforderungen werden über die **Schichtverwaltung im Admin-Bereich** konfiguriert. Jede Schicht kann individuelle Mindest- und Maximalbesetzungen für verschiedene Wochentage definieren.
 
 ### Automatische Schichtplanung mit OR-Tools
 Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplanung und beachtet folgende Regeln:
@@ -1127,62 +1125,6 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) f�
 Bei Fragen oder Problemen:
 - GitHub Issues: https://github.com/TimUx/Dienstplan/issues
 - Dokumentation: Siehe diese README und [docs/](docs/)
-
-## 🗺️ Roadmap
-
-### ✅ Version 2.0 - Abgeschlossen
-- [x] **Migration zu Python** ✅ **v2.0**
-- [x] **Google OR-Tools Integration** ✅ **v2.0**
-- [x] **Optimale Schichtplanung** ✅ **v2.0**
-- [x] **Mitarbeiterverwaltung** mit dynamischer Vertretung ✅ **v2.0**
-- [x] **Teamverwaltung** mit virtuellen Teams ✅ **v2.0**
-- [x] **Urlaubsantrags-System** mit Workflow ✅ **v2.0**
-- [x] **Diensttausch-Plattform** ✅ **v2.0**
-- [x] **Statistiken & Dashboard** ✅ **v2.0**
-- [x] **PDF/Excel/CSV-Export** ✅ **v2.0**
-- [x] **Windows Standalone Executable** ✅ **v2.0**
-- [x] **Ferienjobber-Support** ✅ **v2.0**
-- [x] **BMT/BSB/TD Sonderfunktionen** ✅ **v2.0**
-- [x] **Responsive Web-UI** ✅ **v2.0**
-- [x] **Audit-Logging** ✅ **v2.0**
-
-### 🔄 Version 2.1 - In Planung
-- [ ] **E-Mail-Benachrichtigungen** (SMTP-Integration)
-  - Urlaubsgenehmigungen
-  - Diensttausch-Bestätigungen
-  - Erinnerungen an bevorstehende Schichten
-- [ ] **Erweiterte Berichte und Analytics**
-  - Monatsberichte als PDF
-  - Jahresübersichten
-  - Export-Templates
-- [ ] **Verbesserungen am Planungsalgorithmus**
-  - Bevorzugte Rhythmen pro Mitarbeiter
-  - Team-basierte Präferenzen
-
-### 🚀 Version 3.0 - Zukünftig
-- [ ] **Wunschschichten**
-  - Mitarbeiter können bevorzugte Schichten angeben
-  - Berücksichtigung bei automatischer Planung
-  - Wunsch-Erfüllungsrate in Statistiken
-- [ ] **Urlaubssperren**
-  - Zeiträume definieren, in denen kein Urlaub möglich ist
-  - Saisonale Einschränkungen
-- [ ] **Zeiterfassung Integration**
-  - Tatsächliche Arbeitszeiten erfassen
-  - Überstunden-Tracking
-  - Soll/Ist-Vergleich
-- [ ] **Multi-Mandanten-Fähigkeit**
-  - Mehrere Firmen/Standorte in einer Installation
-  - Getrennte Datenbanken pro Mandant
-  - Zentrale Verwaltung
-- [ ] **Mobile App** (React Native)
-  - Native Apps für iOS und Android
-  - Push-Benachrichtigungen
-  - Offline-Modus
-- [ ] **Real-Time Benachrichtigungen** (WebSockets)
-  - Live-Updates bei Änderungen
-  - Chat-Funktion für Diensttausch
-  - Benachrichtigungs-Center
 
 ---
 

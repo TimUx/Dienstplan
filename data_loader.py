@@ -147,7 +147,10 @@ def load_from_database(db_path: str = "dienstplan.db"):
     teams = []
     for row in cursor.fetchall():
         # IsVirtual column added in migration - default to False if not present
-        is_virtual = bool(row['IsVirtual']) if 'IsVirtual' in row.keys() else False
+        try:
+            is_virtual = bool(row['IsVirtual'])
+        except (KeyError, IndexError):
+            is_virtual = False
         team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 
                    email=row['Email'], is_virtual=is_virtual)
         teams.append(team)

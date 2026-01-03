@@ -77,7 +77,12 @@ class ShiftType:
         return duration_minutes / 60.0
     
     def get_monthly_hours(self) -> float:
-        """Calculate expected monthly hours (4 weeks)"""
+        """
+        Calculate expected monthly hours assuming 4-week planning periods.
+        
+        Note: This is a simplified calculation. Actual months vary from 28-31 days,
+        but the system uses 4-week planning periods for consistency.
+        """
         return self.weekly_working_hours * 4.0
 
 

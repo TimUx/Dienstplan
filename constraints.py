@@ -23,6 +23,7 @@ FERIENJOBBER_TEAM_ID = 98  # "Ferienjobber" virtual team (for temporary holiday 
 MINIMUM_REST_HOURS = 11
 MAXIMUM_CONSECUTIVE_SHIFTS = 6
 MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS = 5
+DEFAULT_WEEKLY_HOURS = 48.0  # Default weekly working hours when not specified
 # NOTE: MAXIMUM_HOURS_PER_MONTH and MAXIMUM_HOURS_PER_WEEK are now calculated
 # dynamically based on each employee's team's assigned shift(s) and their
 # WeeklyWorkingHours configuration in the database.
@@ -507,10 +508,10 @@ def add_working_hours_constraints(
             key = (emp.team_id, week_idx)
             if key not in team_week_max_hours:
                 # Calculate max hours for this team in this week
-                possible_max_hours = [shift_weekly_hours.get(sc, 48.0) 
+                possible_max_hours = [shift_weekly_hours.get(sc, DEFAULT_WEEKLY_HOURS) 
                                      for sc in shift_codes 
                                      if (emp.team_id, week_idx, sc) in team_shift]
-                team_week_max_hours[key] = max(possible_max_hours) if possible_max_hours else 48.0
+                team_week_max_hours[key] = max(possible_max_hours) if possible_max_hours else DEFAULT_WEEKLY_HOURS
     
     # Calculate working hours per week and enforce limits
     for emp in employees:
@@ -563,7 +564,7 @@ def add_working_hours_constraints(
             
             if hours_terms:
                 # Use pre-calculated maximum weekly hours (scaled by 10)
-                max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), 48.0) * 10)
+                max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), DEFAULT_WEEKLY_HOURS) * 10)
                 model.Add(sum(hours_terms) <= max_scaled_hours)
 
 

@@ -501,9 +501,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             employee_id = cursor.lastrowid
             
-            
-            employee_id = cursor.lastrowid
-            
             # Assign roles (UserId in AspNetUserRoles now contains EmployeeId)
             for role in roles:
                 cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", (role,))

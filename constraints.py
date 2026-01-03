@@ -277,22 +277,42 @@ def add_staffing_constraints(
     teams: List[Team],
     dates: List[date],
     weeks: List[List[date]],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    shift_types: List[ShiftType] = None
 ):
     """
     HARD CONSTRAINT: Minimum and maximum staffing per shift.
     
-    Weekdays: F: 4-5, S: 3-4, N: 3
-    Weekends: All: 2-3
+    Staffing requirements are now configured per shift type in the database.
+    Defaults to historical values if shift_types not provided (backwards compatibility).
     
     Weekdays (Mon-Fri): Count active team members per shift based on team assignments.
     Weekends (Sat-Sun): Count employees working weekend based on team shift type.
     
     CRITICAL: Weekend employees work their team's shift type (only presence varies).
     """
+    # Build staffing lookup from shift_types
+    if shift_types:
+        staffing_weekday = {}
+        staffing_weekend = {}
+        for st in shift_types:
+            if st.code in shift_codes:
+                staffing_weekday[st.code] = {
+                    "min": st.min_staff_weekday,
+                    "max": st.max_staff_weekday
+                }
+                staffing_weekend[st.code] = {
+                    "min": st.min_staff_weekend,
+                    "max": st.max_staff_weekend
+                }
+    else:
+        # Fallback to hardcoded values for backwards compatibility
+        staffing_weekday = WEEKDAY_STAFFING
+        staffing_weekend = WEEKEND_STAFFING
+    
     for d in dates:
         is_weekend = d.weekday() >= 5
-        staffing = WEEKEND_STAFFING if is_weekend else WEEKDAY_STAFFING
+        staffing = staffing_weekend if is_weekend else staffing_weekday
         
         # Find which week this date belongs to
         week_idx = None

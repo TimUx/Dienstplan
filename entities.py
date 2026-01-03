@@ -59,6 +59,10 @@ class ShiftType:
     color_code: Optional[str] = None
     hours: float = 8.0  # Duration in hours (daily)
     weekly_working_hours: float = 40.0  # Expected weekly working hours (standard work week default)
+    min_staff_weekday: int = 3  # Minimum staff on weekdays
+    max_staff_weekday: int = 5  # Maximum staff on weekdays
+    min_staff_weekend: int = 2  # Minimum staff on weekends
+    max_staff_weekend: int = 3  # Maximum staff on weekends
     
     def get_duration_hours(self) -> float:
         """Calculate duration in hours"""

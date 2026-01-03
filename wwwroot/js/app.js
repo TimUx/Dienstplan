@@ -3286,6 +3286,10 @@ async function loadShiftTypeForEdit(shiftTypeId) {
         document.getElementById('shiftTypeSaturday').checked = shiftType.worksSaturday === true;
         document.getElementById('shiftTypeSunday').checked = shiftType.worksSunday === true;
         document.getElementById('shiftTypeWeeklyHours').value = shiftType.weeklyWorkingHours || 40.0;
+        document.getElementById('shiftTypeMinStaffWeekday').value = shiftType.minStaffWeekday || 3;
+        document.getElementById('shiftTypeMaxStaffWeekday').value = shiftType.maxStaffWeekday || 5;
+        document.getElementById('shiftTypeMinStaffWeekend').value = shiftType.minStaffWeekend || 2;
+        document.getElementById('shiftTypeMaxStaffWeekend').value = shiftType.maxStaffWeekend || 3;
         document.getElementById('shiftTypeIsActive').checked = shiftType.isActive !== false;
     } catch (error) {
         console.error('Error loading shift type:', error);
@@ -3306,6 +3310,21 @@ async function saveShiftType(event) {
     event.preventDefault();
     
     const shiftTypeId = document.getElementById('shiftTypeId').value;
+    const minStaffWeekday = parseInt(document.getElementById('shiftTypeMinStaffWeekday').value);
+    const maxStaffWeekday = parseInt(document.getElementById('shiftTypeMaxStaffWeekday').value);
+    const minStaffWeekend = parseInt(document.getElementById('shiftTypeMinStaffWeekend').value);
+    const maxStaffWeekend = parseInt(document.getElementById('shiftTypeMaxStaffWeekend').value);
+    
+    // Validate staffing requirements
+    if (minStaffWeekday > maxStaffWeekday) {
+        alert('Fehler: Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke.');
+        return;
+    }
+    if (minStaffWeekend > maxStaffWeekend) {
+        alert('Fehler: Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke.');
+        return;
+    }
+    
     const data = {
         code: document.getElementById('shiftTypeCode').value.trim().toUpperCase(),
         name: document.getElementById('shiftTypeName').value.trim(),
@@ -3321,6 +3340,10 @@ async function saveShiftType(event) {
         worksSaturday: document.getElementById('shiftTypeSaturday').checked,
         worksSunday: document.getElementById('shiftTypeSunday').checked,
         weeklyWorkingHours: parseFloat(document.getElementById('shiftTypeWeeklyHours').value),
+        minStaffWeekday: minStaffWeekday,
+        maxStaffWeekday: maxStaffWeekday,
+        minStaffWeekend: minStaffWeekend,
+        maxStaffWeekend: maxStaffWeekend,
         isActive: document.getElementById('shiftTypeIsActive').checked
     };
     

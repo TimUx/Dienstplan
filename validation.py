@@ -62,7 +62,8 @@ def validate_shift_plan(
     complete_schedule: Dict[Tuple[int, date], str] = None,
     locked_team_shift: Dict[Tuple[int, int], str] = None,
     locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
-    locked_td: Dict[Tuple[int, int], bool] = None
+    locked_td: Dict[Tuple[int, int], bool] = None,
+    shift_types: List = None
 ) -> ValidationResult:
     """
     Validate the complete shift plan against all rules.
@@ -79,6 +80,7 @@ def validate_shift_plan(
         locked_team_shift: Locked team shift assignments (optional, for checking manual overrides)
         locked_employee_weekend: Locked employee weekend assignments (optional)
         locked_td: Locked TD assignments (optional)
+        shift_types: List of shift types with staffing requirements (optional)
         
     Returns:
         ValidationResult with any violations or warnings
@@ -109,7 +111,7 @@ def validate_shift_plan(
     validate_rest_times(result, assignments, emp_dict)
     validate_consecutive_shifts(result, assignments, emp_dict)
     validate_working_hours(result, assignments, emp_dict, start_date, end_date)
-    validate_staffing_requirements(result, assignments_by_date, emp_dict)
+    validate_staffing_requirements(result, assignments_by_date, emp_dict, shift_types)
     validate_special_functions(result, assignments, emp_dict)
     validate_springer_availability(result, assignments, employees)
     
@@ -324,14 +326,33 @@ def validate_working_hours(
 def validate_staffing_requirements(
     result: ValidationResult,
     assignments_by_date: Dict[date, List[ShiftAssignment]],
-    emp_dict: Dict[int, Employee]
+    emp_dict: Dict[int, Employee],
+    shift_types: List = None
 ):
     """Validate minimum/maximum staffing per shift"""
-    from constraints import WEEKDAY_STAFFING, WEEKEND_STAFFING
+    # Build staffing lookup from shift_types
+    if shift_types:
+        staffing_weekday = {}
+        staffing_weekend = {}
+        for st in shift_types:
+            if st.code in ["F", "S", "N"]:
+                staffing_weekday[st.code] = {
+                    "min": st.min_staff_weekday,
+                    "max": st.max_staff_weekday
+                }
+                staffing_weekend[st.code] = {
+                    "min": st.min_staff_weekend,
+                    "max": st.max_staff_weekend
+                }
+    else:
+        # Fallback to hardcoded values for backwards compatibility
+        from constraints import WEEKDAY_STAFFING, WEEKEND_STAFFING
+        staffing_weekday = WEEKDAY_STAFFING
+        staffing_weekend = WEEKEND_STAFFING
     
     for d, day_assignments in assignments_by_date.items():
         is_weekend = d.weekday() >= 5
-        staffing = WEEKEND_STAFFING if is_weekend else WEEKDAY_STAFFING
+        staffing = staffing_weekend if is_weekend else staffing_weekday
         
         # Count by shift type
         shift_counts = {}
@@ -349,6 +370,10 @@ def validate_staffing_requirements(
         
         # Validate each main shift
         for shift_code in ["F", "S", "N"]:
+            # Skip if shift code is not in staffing requirements (e.g., shift type not active or not configured)
+            # This is expected behavior as not all shifts may be used in every planning period
+            if shift_code not in staffing:
+                continue
             count = shift_counts.get(shift_code, 0)
             min_req = staffing[shift_code]["min"]
             max_req = staffing[shift_code]["max"]

@@ -123,18 +123,31 @@ def load_from_database(db_path: str = "dienstplan.db"):
     
     # Load shift types from database
     cursor.execute("""
-        SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours
+        SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
+               MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend
         FROM ShiftTypes
         WHERE IsActive = 1
         ORDER BY Id
     """)
     shift_types = []
     for row in cursor.fetchall():
-        # Handle missing WeeklyWorkingHours column for older database schemas
+        # Handle missing columns for older database schemas
         try:
             weekly_hours = row['WeeklyWorkingHours']
         except (KeyError, IndexError):
             weekly_hours = 40.0  # Default to standard 40-hour work week
+        
+        try:
+            min_staff_weekday = row['MinStaffWeekday']
+            max_staff_weekday = row['MaxStaffWeekday']
+            min_staff_weekend = row['MinStaffWeekend']
+            max_staff_weekend = row['MaxStaffWeekend']
+        except (KeyError, IndexError):
+            # Default values if columns don't exist (for migration compatibility)
+            min_staff_weekday = 3
+            max_staff_weekday = 5
+            min_staff_weekend = 2
+            max_staff_weekend = 3
         
         shift_type = ShiftType(
             id=row['Id'],
@@ -144,7 +157,11 @@ def load_from_database(db_path: str = "dienstplan.db"):
             end_time=row['EndTime'],
             hours=row['DurationHours'],
             color_code=row['ColorCode'],
-            weekly_working_hours=weekly_hours
+            weekly_working_hours=weekly_hours,
+            min_staff_weekday=min_staff_weekday,
+            max_staff_weekday=max_staff_weekday,
+            min_staff_weekend=min_staff_weekend,
+            max_staff_weekend=max_staff_weekend
         )
         shift_types.append(shift_type)
     

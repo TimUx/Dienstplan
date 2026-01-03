@@ -989,6 +989,37 @@
                     <input type="number" id="shiftTypeWeeklyHours" required step="0.5" min="0" max="168" value="40.0" placeholder="z.B. 40.0">
                     <small>Wöchentliche Arbeitszeit in Stunden, die Mitarbeiter leisten müssen</small>
                 </div>
+                
+                <div class="form-group">
+                    <label>Personalstärke Wochentage (Mo-Fr)*</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Minimum*</label>
+                            <input type="number" id="shiftTypeMinStaffWeekday" required min="1" max="50" value="3" placeholder="z.B. 3">
+                        </div>
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Maximum*</label>
+                            <input type="number" id="shiftTypeMaxStaffWeekday" required min="1" max="50" value="5" placeholder="z.B. 5">
+                        </div>
+                    </div>
+                    <small>Mindest- und Maximalanzahl Mitarbeiter in dieser Schicht an Wochentagen</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Personalstärke Wochenende (Sa-So)*</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Minimum*</label>
+                            <input type="number" id="shiftTypeMinStaffWeekend" required min="1" max="50" value="2" placeholder="z.B. 2">
+                        </div>
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Maximum*</label>
+                            <input type="number" id="shiftTypeMaxStaffWeekend" required min="1" max="50" value="3" placeholder="z.B. 3">
+                        </div>
+                    </div>
+                    <small>Mindest- und Maximalanzahl Mitarbeiter in dieser Schicht am Wochenende</small>
+                </div>
+                
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="shiftTypeIsActive" checked>

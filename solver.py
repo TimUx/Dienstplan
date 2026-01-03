@@ -78,7 +78,7 @@ class ShiftPlanningSolver:
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift)")
-        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes)
+        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, ferienjobber_cross_team, employees, teams, dates, weeks, shift_codes, shift_types)
         
         print("  - Rest time constraints (11 hours minimum)")
         add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, dates, weeks, shift_codes)

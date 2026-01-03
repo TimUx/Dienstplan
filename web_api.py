@@ -3343,9 +3343,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Check for understaffing and create notifications
             try:
-                from datetime import date as date_class
-                start_date_obj = date_class.fromisoformat(data.get('startDate'))
-                end_date_obj = date_class.fromisoformat(data.get('endDate'))
+                start_date_obj = date.fromisoformat(data.get('startDate'))
+                end_date_obj = date.fromisoformat(data.get('endDate'))
                 
                 notification_ids = process_absence_for_notifications(
                     conn,

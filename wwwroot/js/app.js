@@ -4666,6 +4666,7 @@ function escapeHtml(text) {
 }
 
 // Poll for new notifications every 60 seconds when user is logged in
+const NOTIFICATION_POLL_INTERVAL_MS = 60000; // 60 seconds
 let notificationPollInterval = null;
 
 function startNotificationPolling() {
@@ -4677,10 +4678,10 @@ function startNotificationPolling() {
     // Load initial count
     loadNotificationCount();
     
-    // Poll every 60 seconds
+    // Poll every NOTIFICATION_POLL_INTERVAL_MS
     notificationPollInterval = setInterval(() => {
         loadNotificationCount();
-    }, 60000);
+    }, NOTIFICATION_POLL_INTERVAL_MS);
 }
 
 function stopNotificationPolling() {

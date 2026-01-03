@@ -12,6 +12,13 @@ from typing import List, Dict, Tuple, Optional
 import sqlite3
 
 
+# Virtual team IDs (must match web_api.py and database)
+VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Fire Alarm System virtual team
+VIRTUAL_TEAM_FERIENJOBBER_ID = 98      # Ferienjobber virtual team
+
+# Date format for German locale
+DATE_FORMAT_DE = '%d.%m.%Y'
+
 # Staffing requirements from constraints.py
 WEEKDAY_STAFFING = {
     "F": {"min": 4, "max": 5},  # Früh
@@ -55,7 +62,7 @@ def check_staffing_for_date(
     
     # Count actual staff assigned for this date and shift
     # Exclude employees who are absent on this date
-    # Only count regular team members (not virtual team 99)
+    # Only count regular team members (not virtual teams)
     cursor.execute("""
         SELECT COUNT(DISTINCT sa.EmployeeId) as StaffCount
         FROM ShiftAssignments sa
@@ -65,10 +72,11 @@ def check_staffing_for_date(
             AND ? BETWEEN a.StartDate AND a.EndDate
         WHERE sa.Date = ?
           AND st.Code = ?
-          AND (e.TeamId IS NULL OR e.TeamId != 99)
+          AND (e.TeamId IS NULL OR e.TeamId NOT IN (?, ?))
           AND e.IsFerienjobber = 0
           AND a.Id IS NULL
-    """, (check_date.isoformat(), check_date.isoformat(), shift_code))
+    """, (check_date.isoformat(), check_date.isoformat(), shift_code, 
+          VIRTUAL_TEAM_BRANDMELDEANLAGE_ID, VIRTUAL_TEAM_FERIENJOBBER_ID))
     
     row = cursor.fetchone()
     actual_staff = row[0] if row else 0
@@ -200,11 +208,11 @@ def create_understaffing_notification(
     # Build notification message
     day_name = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][issue['date'].weekday()]
     
-    title = f"Mindestschichtstärke unterschritten: {issue['shift_name']} am {issue['date'].strftime('%d.%m.%Y')}"
+    title = f"Mindestschichtstärke unterschritten: {issue['shift_name']} am {issue['date'].strftime(DATE_FORMAT_DE)}"
     
     message = (
         f"Die Mindestschichtstärke für die {issue['shift_name']} Schicht ({issue['shift_code']}) "
-        f"am {day_name}, {issue['date'].strftime('%d.%m.%Y')} wurde unterschritten.\n\n"
+        f"am {day_name}, {issue['date'].strftime(DATE_FORMAT_DE)} wurde unterschritten.\n\n"
         f"Grund: {issue['absence_type']} von {issue['employee_name']} ({issue['team_name']})\n"
         f"Erforderlich: {issue['required_staff']} Mitarbeiter\n"
         f"Verfügbar: {issue['actual_staff']} Mitarbeiter\n"

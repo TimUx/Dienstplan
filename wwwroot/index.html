@@ -205,6 +205,7 @@
                 <!-- Admin Navigation Tabs -->
                 <div class="admin-tabs">
                     <button class="admin-tab active" onclick="showAdminTab('users', this)">👥 Benutzerverwaltung</button>
+                    <button class="admin-tab" onclick="showAdminTab('shift-management', this)">🔄 Schichtverwaltung</button>
                     <button class="admin-tab" onclick="showAdminTab('vacation-periods', this)">📅 Ferienzeiten</button>
                     <button class="admin-tab" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" onclick="showAdminTab('email', this)">📧 E-Mail-Einstellungen</button>
@@ -224,6 +225,21 @@
                             </div>
                             <div id="users-content">
                                 <p class="loading">Lade Benutzer...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shift Management Tab -->
+                    <div id="admin-tab-shift-management" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>🔄 Schichtverwaltung</h3>
+                            <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
+                            <div class="controls">
+                                <button onclick="showShiftTypeModal()" class="btn-primary">+ Schichttyp hinzufügen</button>
+                                <button onclick="loadShiftTypes()" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="shift-types-content">
+                                <p class="loading">Lade Schichttypen...</p>
                             </div>
                         </div>
                     </div>
@@ -908,6 +924,97 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeVacationPeriodModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Type Modal -->
+    <div id="shiftTypeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeShiftTypeModal()">&times;</span>
+            <h2 id="shiftTypeModalTitle">Schichttyp hinzufügen</h2>
+            <form id="shiftTypeForm" onsubmit="saveShiftType(event)">
+                <input type="hidden" id="shiftTypeId">
+                <div class="form-group">
+                    <label>Schichtkürzel*</label>
+                    <input type="text" id="shiftTypeCode" required placeholder="z.B. F, S, N, TD" maxlength="10">
+                    <small>Eindeutiges Kürzel für die Schicht</small>
+                </div>
+                <div class="form-group">
+                    <label>Schichtname*</label>
+                    <input type="text" id="shiftTypeName" required placeholder="z.B. Frühdienst, Spätdienst, Nachtdienst">
+                </div>
+                <div class="form-group">
+                    <label>Startzeit*</label>
+                    <input type="time" id="shiftTypeStartTime" required>
+                </div>
+                <div class="form-group">
+                    <label>Endzeit*</label>
+                    <input type="time" id="shiftTypeEndTime" required>
+                </div>
+                <div class="form-group">
+                    <label>Arbeitsstunden*</label>
+                    <input type="number" id="shiftTypeDuration" required step="0.5" min="0" max="24" placeholder="z.B. 8.0">
+                    <small>Dauer der Schicht in Stunden</small>
+                </div>
+                <div class="form-group">
+                    <label>Farbe*</label>
+                    <input type="color" id="shiftTypeColor" value="#808080" required>
+                    <small>Farbe für die Darstellung im Schichtplan</small>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="shiftTypeIsActive" checked>
+                        Aktiv (Schicht kann verwendet werden)
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeShiftTypeModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Type Teams Modal -->
+    <div id="shiftTypeTeamsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeShiftTypeTeamsModal()">&times;</span>
+            <h2 id="shiftTypeTeamsModalTitle">Teams für Schicht zuweisen</h2>
+            <form id="shiftTypeTeamsForm" onsubmit="saveShiftTypeTeams(event)">
+                <input type="hidden" id="shiftTypeTeamsId">
+                <div class="form-group">
+                    <label>Wählen Sie die Teams aus, die diese Schicht arbeiten können:</label>
+                    <div id="shiftTypeTeamsList" class="checkbox-list">
+                        <p class="loading">Lade Teams...</p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeShiftTypeTeamsModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Type Relationships Modal -->
+    <div id="shiftTypeRelationshipsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeShiftTypeRelationshipsModal()">&times;</span>
+            <h2 id="shiftTypeRelationshipsModalTitle">Schichtreihenfolge festlegen</h2>
+            <form id="shiftTypeRelationshipsForm" onsubmit="saveShiftTypeRelationships(event)">
+                <input type="hidden" id="shiftTypeRelationshipsId">
+                <div class="form-group">
+                    <label>Definieren Sie die Reihenfolge der nachfolgenden Schichten:</label>
+                    <small>Ziehen Sie die Schichten in die gewünschte Reihenfolge.</small>
+                    <div id="shiftTypeRelationshipsList" class="sortable-list">
+                        <p class="loading">Lade Schichten...</p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeShiftTypeRelationshipsModal()" class="btn-secondary">Abbrechen</button>
                     <button type="submit" class="btn-primary">Speichern</button>
                 </div>
             </form>

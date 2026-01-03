@@ -25,6 +25,12 @@ from data_loader import load_from_database, get_existing_assignments
 from model import create_shift_planning_model
 from solver import solve_shift_planning
 from entities import Employee, Team, Absence, AbsenceType, ShiftAssignment, VacationPeriod
+from notification_manager import (
+    process_absence_for_notifications,
+    get_unread_notifications,
+    mark_notification_as_read,
+    get_notification_count
+)
 
 # Virtual team IDs (must match database and frontend)
 VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Fire Alarm System virtual team
@@ -3335,6 +3341,28 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             }, ensure_ascii=False)
             log_audit(conn, 'Absence', absence_id, 'Create', changes)
             
+            # Check for understaffing and create notifications
+            try:
+                from datetime import date as date_class
+                start_date_obj = date_class.fromisoformat(data.get('startDate'))
+                end_date_obj = date_class.fromisoformat(data.get('endDate'))
+                
+                notification_ids = process_absence_for_notifications(
+                    conn,
+                    absence_id,
+                    data.get('employeeId'),
+                    start_date_obj,
+                    end_date_obj,
+                    data.get('type'),
+                    session.get('user_email')
+                )
+                
+                if notification_ids:
+                    app.logger.info(f"Created {len(notification_ids)} understaffing notifications for absence {absence_id}")
+            except Exception as notif_error:
+                # Log notification error but don't fail the absence creation
+                app.logger.error(f"Error creating notifications for absence: {notif_error}")
+            
             conn.commit()
             conn.close()
             
@@ -3991,6 +4019,135 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         except Exception as e:
             app.logger.error(f"Get recent audit logs error: {str(e)}")
             return jsonify({'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}), 500
+    
+    # ============================================================================
+    # NOTIFICATION ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/notifications', methods=['GET'])
+    @require_role('Admin', 'Disponent')
+    def get_notifications():
+        """Get admin notifications (for Admins and Disponents only)"""
+        try:
+            unread_only = request.args.get('unreadOnly', 'false').lower() == 'true'
+            limit = int(request.args.get('limit', 50))
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            if unread_only:
+                cursor.execute("""
+                    SELECT 
+                        n.Id, n.Type, n.Severity, n.Title, n.Message,
+                        n.ShiftDate, n.ShiftCode, n.RequiredStaff, n.ActualStaff,
+                        n.CreatedAt, n.IsRead, n.ReadAt, n.ReadBy,
+                        e.Vorname, e.Name, 
+                        t.Name as TeamName
+                    FROM AdminNotifications n
+                    LEFT JOIN Employees e ON n.EmployeeId = e.Id
+                    LEFT JOIN Teams t ON n.TeamId = t.Id
+                    WHERE n.IsRead = 0
+                    ORDER BY n.CreatedAt DESC
+                    LIMIT ?
+                """, (limit,))
+            else:
+                cursor.execute("""
+                    SELECT 
+                        n.Id, n.Type, n.Severity, n.Title, n.Message,
+                        n.ShiftDate, n.ShiftCode, n.RequiredStaff, n.ActualStaff,
+                        n.CreatedAt, n.IsRead, n.ReadAt, n.ReadBy,
+                        e.Vorname, e.Name, 
+                        t.Name as TeamName
+                    FROM AdminNotifications n
+                    LEFT JOIN Employees e ON n.EmployeeId = e.Id
+                    LEFT JOIN Teams t ON n.TeamId = t.Id
+                    ORDER BY n.CreatedAt DESC
+                    LIMIT ?
+                """, (limit,))
+            
+            notifications = []
+            for row in cursor.fetchall():
+                notifications.append({
+                    'id': row[0],
+                    'type': row[1],
+                    'severity': row[2],
+                    'title': row[3],
+                    'message': row[4],
+                    'shiftDate': row[5],
+                    'shiftCode': row[6],
+                    'requiredStaff': row[7],
+                    'actualStaff': row[8],
+                    'createdAt': row[9],
+                    'isRead': bool(row[10]),
+                    'readAt': row[11],
+                    'readBy': row[12],
+                    'employeeName': f"{row[13]} {row[14]}" if row[13] else None,
+                    'teamName': row[15]
+                })
+            
+            conn.close()
+            return jsonify(notifications)
+            
+        except Exception as e:
+            app.logger.error(f"Get notifications error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden der Benachrichtigungen: {str(e)}'}), 500
+    
+    @app.route('/api/notifications/count', methods=['GET'])
+    @require_role('Admin', 'Disponent')
+    def get_notification_count_endpoint():
+        """Get count of unread notifications"""
+        try:
+            conn = db.get_connection()
+            count = get_notification_count(conn, unread_only=True)
+            conn.close()
+            
+            return jsonify({'count': count})
+            
+        except Exception as e:
+            app.logger.error(f"Get notification count error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/notifications/<int:id>/read', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def mark_notification_read(id):
+        """Mark notification as read"""
+        try:
+            conn = db.get_connection()
+            success = mark_notification_as_read(conn, id, session.get('user_email'))
+            conn.close()
+            
+            if success:
+                return jsonify({'success': True})
+            else:
+                return jsonify({'error': 'Benachrichtigung nicht gefunden'}), 404
+            
+        except Exception as e:
+            app.logger.error(f"Mark notification read error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/notifications/mark-all-read', methods=['POST'])
+    @require_role('Admin', 'Disponent')
+    def mark_all_notifications_read():
+        """Mark all notifications as read"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE AdminNotifications
+                SET IsRead = 1, ReadAt = CURRENT_TIMESTAMP, ReadBy = ?
+                WHERE IsRead = 0
+            """, (session.get('user_email'),))
+            
+            conn.commit()
+            count = cursor.rowcount
+            conn.close()
+            
+            return jsonify({'success': True, 'count': count})
+            
+        except Exception as e:
+            app.logger.error(f"Mark all notifications read error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
     
     # ============================================================================
     # STATIC FILES (Web UI)

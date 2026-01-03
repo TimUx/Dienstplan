@@ -1600,7 +1600,21 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'name': row['Name'],
                 'startTime': row['StartTime'],
                 'endTime': row['EndTime'],
-                'colorCode': row['ColorCode']
+                'colorCode': row['ColorCode'],
+                'durationHours': row['DurationHours'],
+                'weeklyWorkingHours': row['WeeklyWorkingHours'],
+                'isActive': bool(row['IsActive']),
+                'worksMonday': bool(row['WorksMonday']),
+                'worksTuesday': bool(row['WorksTuesday']),
+                'worksWednesday': bool(row['WorksWednesday']),
+                'worksThursday': bool(row['WorksThursday']),
+                'worksFriday': bool(row['WorksFriday']),
+                'worksSaturday': bool(row['WorksSaturday']),
+                'worksSunday': bool(row['WorksSunday']),
+                'minStaffWeekday': row['MinStaffWeekday'],
+                'maxStaffWeekday': row['MaxStaffWeekday'],
+                'minStaffWeekend': row['MinStaffWeekend'],
+                'maxStaffWeekend': row['MaxStaffWeekend']
             })
         
         conn.close()

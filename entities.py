@@ -58,7 +58,7 @@ class ShiftType:
     end_time: str  # Format: "HH:MM"
     color_code: Optional[str] = None
     hours: float = 8.0  # Duration in hours (daily)
-    weekly_working_hours: float = 40.0  # Expected weekly working hours for this shift
+    weekly_working_hours: float = 40.0  # Expected weekly working hours (standard work week default)
     
     def get_duration_hours(self) -> float:
         """Calculate duration in hours"""

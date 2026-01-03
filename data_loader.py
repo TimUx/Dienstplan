@@ -130,6 +130,12 @@ def load_from_database(db_path: str = "dienstplan.db"):
     """)
     shift_types = []
     for row in cursor.fetchall():
+        # Handle missing WeeklyWorkingHours column for older database schemas
+        try:
+            weekly_hours = row['WeeklyWorkingHours']
+        except (KeyError, IndexError):
+            weekly_hours = 40.0  # Default to standard 40-hour work week
+        
         shift_type = ShiftType(
             id=row['Id'],
             code=row['Code'],
@@ -138,7 +144,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
             end_time=row['EndTime'],
             hours=row['DurationHours'],
             color_code=row['ColorCode'],
-            weekly_working_hours=row['WeeklyWorkingHours']
+            weekly_working_hours=weekly_hours
         )
         shift_types.append(shift_type)
     

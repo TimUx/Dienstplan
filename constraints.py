@@ -23,7 +23,9 @@ FERIENJOBBER_TEAM_ID = 98  # "Ferienjobber" virtual team (for temporary holiday 
 MINIMUM_REST_HOURS = 11
 MAXIMUM_CONSECUTIVE_SHIFTS = 6
 MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS = 5
-DEFAULT_WEEKLY_HOURS = 48.0  # Default weekly working hours when not specified
+DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calculations
+                              # Note: Different from ShiftType default (40.0) which represents
+                              # standard work week. This is the safety limit.
 # NOTE: MAXIMUM_HOURS_PER_MONTH and MAXIMUM_HOURS_PER_WEEK are now calculated
 # dynamically based on each employee's team's assigned shift(s) and their
 # WeeklyWorkingHours configuration in the database.

@@ -252,7 +252,9 @@ select {
 .shift-BSB { background: #E91E63; color: #fff; }
 
 /* Absence badges */
-.shift-U { background: #9C27B0; color: #fff; } /* Vacation - Purple */
+.shift-U { background: #2196F3; color: #fff; } /* Vacation (approved) - Blue */
+.shift-U-pending { background: #FF9800; color: #fff; } /* Vacation (pending) - Orange */
+.shift-U-rejected { background: #9E9E9E; color: #fff; } /* Vacation (rejected) - Gray */
 .shift-AU { background: #FF5722; color: #fff; } /* Sick leave - Red-Orange */
 .shift-L { background: #2196F3; color: #fff; } /* Training - Blue */
 

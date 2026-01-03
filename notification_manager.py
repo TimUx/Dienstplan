@@ -54,17 +54,21 @@ def check_staffing_for_date(
     required_staff = staffing_reqs[shift_code]["min"]
     
     # Count actual staff assigned for this date and shift
+    # Exclude employees who are absent on this date
     # Only count regular team members (not virtual team 99)
     cursor.execute("""
         SELECT COUNT(DISTINCT sa.EmployeeId) as StaffCount
         FROM ShiftAssignments sa
         JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
         JOIN Employees e ON sa.EmployeeId = e.Id
+        LEFT JOIN Absences a ON sa.EmployeeId = a.EmployeeId
+            AND ? BETWEEN a.StartDate AND a.EndDate
         WHERE sa.Date = ?
           AND st.Code = ?
           AND (e.TeamId IS NULL OR e.TeamId != 99)
           AND e.IsFerienjobber = 0
-    """, (check_date.isoformat(), shift_code))
+          AND a.Id IS NULL
+    """, (check_date.isoformat(), check_date.isoformat(), shift_code))
     
     row = cursor.fetchone()
     actual_staff = row[0] if row else 0

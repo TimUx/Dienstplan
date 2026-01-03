@@ -906,6 +906,62 @@ Um Fixierung aufzuheben:
 1. Klicken Sie auf fixierte Schicht
 2. Klicken Sie auf **🔓 Fixierung aufheben**
 
+### Mehrfachauswahl für Schichtbearbeitung
+
+**Berechtigung:** Nur Admin
+
+Die Mehrfachauswahl-Funktion ermöglicht es, mehrere Schichten gleichzeitig zu bearbeiten. Dies spart Zeit bei Massenänderungen.
+
+**Hinweis:** Für Screenshots siehe Abschnitt "Benötigte Screenshots" am Ende des Dokuments und die separate Anleitung in MEHRFACHAUSWAHL_ANLEITUNG.md.
+
+#### Mehrfachauswahl aktivieren
+
+1. Navigieren Sie zur **Dienstplan**-Ansicht
+2. Klicken Sie auf **☑ Mehrfachauswahl** in der Steuerleiste
+3. Der Button wird blau: **✓ Mehrfachauswahl aktiv**
+4. Zusätzliche Buttons erscheinen:
+   - **✏ Auswahl bearbeiten**
+   - **✖ Auswahl löschen**
+
+#### Schichten auswählen
+
+Im Mehrfachauswahl-Modus:
+- Klicken Sie auf Schicht-Badges (F, S, N, etc.), um sie auszuwählen
+- Ausgewählte Schichten werden blau hervorgehoben
+- Zähler zeigt Anzahl: "X Schichten ausgewählt"
+- Erneutes Klicken hebt die Auswahl auf
+
+**Wichtig:** Im Mehrfachauswahl-Modus öffnet ein Klick auf eine Schicht NICHT den Bearbeitungsdialog, sondern wählt die Schicht aus.
+
+#### Ausgewählte Schichten bearbeiten
+
+1. Wählen Sie gewünschte Schichten aus (mindestens eine)
+2. Klicken Sie auf **✏ Auswahl bearbeiten**
+3. Der Dialog "Mehrere Schichten bearbeiten" öffnet sich
+4. Nehmen Sie Änderungen vor:
+   - **Mitarbeiter ändern**: Wählen Sie neuen Mitarbeiter
+   - **Schichttyp ändern**: Wählen Sie neuen Schichttyp (F, S, N, etc.)
+   - **Feste Schichten**: Markieren Sie alle als fest
+   - **Notizen**: Fügen Sie Notizen hinzu
+5. Klicken Sie auf **Alle ausgewählten Schichten aktualisieren**
+6. Bestätigen Sie die Aktion
+
+**Beispiel-Workflows:**
+- **Vertretung:** Alle Schichten eines kranken Mitarbeiters einem Springer zuweisen
+- **Fixierung:** Alle Schichten einer Woche als fest markieren
+- **Schichtwechsel:** Mehrere Früh- zu Spät-Schichten ändern
+
+#### Mehrfachauswahl beenden
+
+- Klicken Sie erneut auf **✓ Mehrfachauswahl aktiv** zum Deaktivieren
+- Oder klicken Sie auf **✖ Auswahl löschen** zum Zurücksetzen
+
+**Tipps:**
+- Überprüfen Sie die Liste im Dialog vor dem Speichern
+- Bei großen Änderungen kleinere Gruppen bearbeiten
+- Nutzen Sie Notizen zur Dokumentation
+- Alle Änderungen werden im Audit-Log protokolliert
+
 ### Schichtbesetzungsregeln
 
 **Wochentage (Mo-Fr):**
@@ -1253,6 +1309,84 @@ Der Administrationsbereich ist nur für Benutzer mit Admin-Rolle zugänglich.
 2. Klicken Sie auf **🔑 Passwort zurücksetzen**
 3. Geben Sie neues Passwort ein
 4. Bestätigen Sie
+
+### Schichtverwaltung (Dynamische Schichttypen)
+
+**Navigation:** **Administration** → **Schichtverwaltung**
+
+Die Schichtverwaltung ermöglicht es Administratoren, Schichttypen dynamisch zu erstellen, zu bearbeiten und zu verwalten. Diese Funktion ersetzt die vorher fest codierten Schichttypen.
+
+**Hinweis:** Für neue Screenshots siehe Abschnitt "Benötigte Screenshots" am Ende des Dokuments.
+
+#### Schichttypen anzeigen
+
+In der Schichtverwaltung sehen Sie eine Tabelle mit allen verfügbaren Schichttypen:
+
+**Angezeigte Informationen:**
+- **Kürzel**: Kurzbezeichnung (z.B. F, S, N, BMT)
+- **Name**: Vollständiger Schichtname
+- **Zeiten**: Start- und Endzeit der Schicht
+- **Tagesstunden**: Arbeitsstunden pro Tag
+- **Wochenstunden**: Wochenarbeitszeit
+- **Arbeitstage**: Welche Wochentage (Mo-So)
+- **Farbe**: Farbcode für die Darstellung
+- **Status**: Aktiv/Inaktiv
+- **Aktionen**: Bearbeiten, Löschen, Teams, Reihenfolge
+
+#### Neuen Schichttyp erstellen
+
+1. Klicken Sie auf **➕ Schichttyp hinzufügen**
+2. Füllen Sie das Formular aus:
+   - **Kürzel** * - Kurzbezeichnung (max. 10 Zeichen, z.B. "F", "TD")
+   - **Name** * - Vollständiger Name (z.B. "Frühdienst")
+   - **Startzeit** * - Schichtbeginn (Format: HH:MM, z.B. "05:45")
+   - **Endzeit** * - Schichtende (Format: HH:MM, z.B. "13:45")
+   - **Arbeitsstunden** * - Dauer in Stunden (z.B. 8.0)
+   - **Farbe** * - Farbcode (Colorpicker, z.B. #FFD700 für Gelb)
+   - **Arbeitstage** * - Checkboxen für Mo, Di, Mi, Do, Fr, Sa, So
+   - **Wochen-Arbeitszeit** * - Wöchentliche Sollarbeitszeit (z.B. 40.0)
+   - **Aktiv** - Checkbox zum Aktivieren/Deaktivieren
+3. Klicken Sie auf **Speichern**
+
+**Hinweis:** Alle Felder mit * sind Pflichtfelder.
+
+#### Schichttyp bearbeiten
+
+1. Klicken Sie auf **✏️ Bearbeiten** neben dem gewünschten Schichttyp
+2. Ändern Sie die gewünschten Felder
+3. Klicken Sie auf **Speichern**
+
+**Wichtig:** Änderungen an Schichttypen wirken sich auf zukünftige Planungen aus, nicht auf bereits geplante Schichten.
+
+#### Schichttyp löschen
+
+1. Klicken Sie auf **🗑️ Löschen**
+2. Bestätigen Sie die Sicherheitsabfrage
+
+⚠️ **ACHTUNG**: Das Löschen eines Schichttyps kann nicht rückgängig gemacht werden! Stellen Sie sicher, dass keine aktiven Schichtzuweisungen für diesen Typ existieren.
+
+#### Teams zuweisen
+
+Definieren Sie, welche Teams für welche Schichttypen qualifiziert sind:
+
+1. Klicken Sie auf **👥 Teams** neben dem Schichttyp
+2. Wählen Sie die Teams aus, die diese Schicht arbeiten können
+3. Klicken Sie auf **Speichern**
+
+**Anwendungsfall:** BMT-Schichten nur für qualifizierte Teams, reguläre Schichten (F/S/N) für alle Teams.
+
+#### Schicht-Reihenfolge festlegen
+
+Definieren Sie die bevorzugte Rotation zwischen Schichttypen:
+
+1. Klicken Sie auf **🔗 Reihenfolge** neben dem Schichttyp
+2. Ziehen Sie verwandte Schichten in die gewünschte Reihenfolge (Drag & Drop)
+3. Fügen Sie weitere Schichten über Checkboxen hinzu
+4. Klicken Sie auf **Speichern**
+
+**Beispiel:** Früh → Nacht → Spät (typische Rotation)
+
+**Hinweis:** Diese Reihenfolge wird vom Planungsalgorithmus als Präferenz berücksichtigt.
 
 ### System-Einstellungen
 
@@ -1931,6 +2065,98 @@ Vollständige API-Dokumentation: Siehe README.md
 **Navigation:**
 - `←` / `→` - Vorherige/Nächste Woche (im Kalender)
 - `↑` / `↓` - Scrollen in Listen
+
+---
+
+## Benötigte Screenshots
+
+**Hinweis für Dokumentations-Pflege:**
+
+Die folgenden Screenshots sollten noch erstellt und in `docs/screenshots/` eingefügt werden:
+
+### 1. Schichtverwaltung (Dynamische Schichttypen)
+**Dateiname:** `12-shift-management.png`
+**Zeigt:**
+- Übersicht der Schichtverwaltung im Admin-Bereich
+- Tabelle mit allen Schichttypen (Kürzel, Name, Zeiten, Tage, etc.)
+- Action-Buttons (Bearbeiten, Löschen, Teams, Reihenfolge)
+
+### 2. Schichttyp bearbeiten
+**Dateiname:** `13-shift-type-edit.png`
+**Zeigt:**
+- Bearbeitungsformular für Schichttypen
+- Alle Felder: Kürzel, Name, Start-/Endzeit, Arbeitsstunden
+- Arbeitstage-Checkboxen (Mo-So)
+- Farbauswahl (Color Picker)
+- Wochenarbeitszeit
+
+### 3. Team-Schicht-Zuordnung
+**Dateiname:** `14-shift-team-assignment.png`
+**Zeigt:**
+- Dialog "Teams zuweisen"
+- Checkboxen für alle Teams
+- Welche Teams können diese Schicht arbeiten
+
+### 4. Mehrfachauswahl aktiviert
+**Dateiname:** `15-multi-select-active.png`
+**Zeigt:**
+- Dienstplan mit aktivierter Mehrfachauswahl
+- Blauer "Mehrfachauswahl aktiv" Button
+- Mehrere ausgewählte Schichten (blau markiert)
+- Zähler "X Schichten ausgewählt"
+- Buttons "Auswahl bearbeiten" und "Auswahl löschen"
+
+### 5. Mehrfachauswahl Bearbeitungsdialog
+**Dateiname:** `16-multi-select-edit-dialog.png`
+**Zeigt:**
+- Dialog "Mehrere Schichten bearbeiten"
+- Liste der ausgewählten Schichten
+- Bearbeitungsoptionen: Mitarbeiter, Schichttyp, Fixierung, Notizen
+- Button "Alle ausgewählten Schichten aktualisieren"
+
+### 6. Jahresurlaubsplan
+**Dateiname:** `17-vacation-year-plan.png`
+**Zeigt:**
+- Jahresübersicht aller Urlaubsanträge
+- Kalenderansicht mit Urlaubszeiträumen
+- Status-Kennzeichnung (Genehmigt/In Bearbeitung/Abgelehnt)
+
+### 7. Teamverwaltung
+**Dateiname:** `18-team-management.png`
+**Zeigt:**
+- Übersicht aller Teams
+- Team-Details (Name, Beschreibung, Mitgliederanzahl)
+- Funktionen: Team erstellen, bearbeiten, löschen
+
+### Verwendung in der Dokumentation
+
+Die Screenshots sollten wie folgt referenziert werden:
+
+```markdown
+![Schichtverwaltung](docs/screenshots/12-shift-management.png)
+*Dynamische Schichtverwaltung im Admin-Bereich*
+
+![Mehrfachauswahl](docs/screenshots/15-multi-select-active.png)
+*Mehrfachauswahl für Massenbearbeitung von Schichten*
+```
+
+### Screenshot-Erstellungshinweise
+
+**Für Administrator:**
+1. Starten Sie die Anwendung im Entwicklungsmodus
+2. Melden Sie sich als Admin an
+3. Navigieren Sie zur jeweiligen Funktion
+4. Machen Sie einen Screenshot (z.B. mit Snipping Tool)
+5. Speichern Sie im Format PNG
+6. Benennung: Fortlaufende Nummer + aussagekräftiger Name
+7. Ablage in `docs/screenshots/`
+
+**Qualitätskriterien:**
+- Auflösung: Mind. 1920x1080
+- Format: PNG (für beste Qualität)
+- Keine sensiblen Daten (verwenden Sie Testdaten)
+- Deutsche Benutzeroberfläche
+- Vollständiger Browseransicht (mit Navigationsleiste)
 
 ---
 

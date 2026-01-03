@@ -2174,40 +2174,53 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             absences = []
             for row in cursor.fetchall():
+                type_index = row['Type']
                 absences.append({
                     'id': row['Id'],
                     'employeeId': row['EmployeeId'],
                     'employeeName': f"{row['Vorname']} {row['Name']}",
                     'teamId': row['TeamId'],
-                    'type': ['', 'Krank', 'Urlaub', 'Lehrgang'][row['Type']],
+                    'type': ['', 'Krank', 'Urlaub', 'Lehrgang'][type_index],
+                    'status': 'Genehmigt' if type_index == 2 else None,  # Only Urlaub type has status
                     'startDate': row['StartDate'],
                     'endDate': row['EndDate'],
                     'notes': row['Notes']
                 })
             
-            # Also get approved vacation requests and add them as absences
+            # Also get vacation requests (all statuses) and add them as absences
             cursor.execute("""
-                SELECT vr.Id, vr.EmployeeId, vr.StartDate, vr.EndDate, vr.Notes,
+                SELECT vr.Id, vr.EmployeeId, vr.StartDate, vr.EndDate, vr.Notes, vr.Status,
                        e.Vorname, e.Name, e.TeamId
                 FROM VacationRequests vr
                 JOIN Employees e ON vr.EmployeeId = e.Id
-                WHERE vr.Status = 'Genehmigt'
-                  AND ((vr.StartDate <= ? AND vr.EndDate >= ?)
+                WHERE ((vr.StartDate <= ? AND vr.EndDate >= ?)
                    OR (vr.StartDate >= ? AND vr.StartDate <= ?))
             """, (end_date.isoformat(), start_date.isoformat(),
                   start_date.isoformat(), end_date.isoformat()))
             
             vacation_id_offset = 10000  # Offset to avoid ID conflicts
             for row in cursor.fetchall():
+                # Determine the type label based on status
+                if row['Status'] == 'Genehmigt':
+                    type_label = 'Urlaub'
+                    notes = row['Notes'] or 'Genehmigter Urlaub'
+                elif row['Status'] == 'InBearbeitung':
+                    type_label = 'Urlaub (in Genehmigung)'
+                    notes = row['Notes'] or 'Urlaubsantrag in Bearbeitung'
+                else:  # Abgelehnt
+                    type_label = 'Urlaub (abgelehnt)'
+                    notes = row['Notes'] or 'Urlaubsantrag abgelehnt'
+                
                 absences.append({
                     'id': vacation_id_offset + row['Id'],
                     'employeeId': row['EmployeeId'],
                     'employeeName': f"{row['Vorname']} {row['Name']}",
                     'teamId': row['TeamId'],
-                    'type': 'Urlaub',
+                    'type': type_label,
+                    'status': row['Status'],  # Include status for color-coding
                     'startDate': row['StartDate'],
                     'endDate': row['EndDate'],
-                    'notes': row['Notes'] or 'Genehmigter Urlaub'
+                    'notes': notes
                 })
             
             # Get vacation periods (Ferienzeiten) that overlap with the date range
@@ -3580,6 +3593,260 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         except Exception as e:
             app.logger.error(f"Update vacation request error: {str(e)}")
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    # ============================================================================
+    # VACATION YEAR APPROVAL ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/vacationyearapprovals', methods=['GET'])
+    def get_vacation_year_approvals():
+        """Get all vacation year approvals"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM VacationYearApprovals
+            ORDER BY Year DESC
+        """)
+        
+        approvals = []
+        for row in cursor.fetchall():
+            approvals.append({
+                'id': row['Id'],
+                'year': row['Year'],
+                'isApproved': bool(row['IsApproved']),
+                'approvedAt': row['ApprovedAt'],
+                'approvedBy': row['ApprovedBy'],
+                'createdAt': row['CreatedAt'],
+                'modifiedAt': row['ModifiedAt'],
+                'notes': row['Notes']
+            })
+        
+        conn.close()
+        return jsonify(approvals)
+    
+    @app.route('/api/vacationyearapprovals/<int:year>', methods=['GET'])
+    def get_vacation_year_approval(year):
+        """Get vacation year approval status for a specific year"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM VacationYearApprovals WHERE Year = ?
+        """, (year,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify({
+                'year': year,
+                'isApproved': False,
+                'exists': False
+            })
+        
+        return jsonify({
+            'id': row['Id'],
+            'year': row['Year'],
+            'isApproved': bool(row['IsApproved']),
+            'approvedAt': row['ApprovedAt'],
+            'approvedBy': row['ApprovedBy'],
+            'createdAt': row['CreatedAt'],
+            'modifiedAt': row['ModifiedAt'],
+            'notes': row['Notes'],
+            'exists': True
+        })
+    
+    @app.route('/api/vacationyearapprovals', methods=['POST'])
+    @require_role('Admin')
+    def create_or_update_vacation_year_approval():
+        """Create or update vacation year approval (Admin only)"""
+        try:
+            data = request.get_json()
+            year = data.get('year')
+            is_approved = data.get('isApproved', False)
+            notes = data.get('notes')
+            
+            if not year:
+                return jsonify({'error': 'Jahr ist erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if entry exists
+            cursor.execute("""
+                SELECT Id FROM VacationYearApprovals WHERE Year = ?
+            """, (year,))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Update existing entry
+                cursor.execute("""
+                    UPDATE VacationYearApprovals 
+                    SET IsApproved = ?,
+                        ApprovedAt = ?,
+                        ApprovedBy = ?,
+                        ModifiedAt = ?,
+                        Notes = ?
+                    WHERE Year = ?
+                """, (
+                    1 if is_approved else 0,
+                    datetime.utcnow().isoformat() if is_approved else None,
+                    session.get('user_email') if is_approved else None,
+                    datetime.utcnow().isoformat(),
+                    notes,
+                    year
+                ))
+                
+                approval_id = existing['Id']
+                action = 'Update'
+            else:
+                # Create new entry
+                cursor.execute("""
+                    INSERT INTO VacationYearApprovals 
+                    (Year, IsApproved, ApprovedAt, ApprovedBy, CreatedAt, Notes)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    year,
+                    1 if is_approved else 0,
+                    datetime.utcnow().isoformat() if is_approved else None,
+                    session.get('user_email') if is_approved else None,
+                    datetime.utcnow().isoformat(),
+                    notes
+                ))
+                
+                approval_id = cursor.lastrowid
+                action = 'Create'
+            
+            # Log audit entry
+            changes = json.dumps({
+                'year': year,
+                'isApproved': is_approved,
+                'notes': notes
+            }, ensure_ascii=False)
+            log_audit(conn, 'VacationYearApproval', approval_id, action, changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': approval_id, 'year': year}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create/update vacation year approval error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Speichern: {str(e)}'}), 500
+    
+    @app.route('/api/vacationyearplan/<int:year>', methods=['GET'])
+    def get_vacation_year_plan(year):
+        """
+        Get vacation plan for a specific year.
+        Returns vacation data only if the year is approved by admin.
+        All users can access this endpoint.
+        """
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Check if year is approved
+        cursor.execute("""
+            SELECT IsApproved FROM VacationYearApprovals WHERE Year = ?
+        """, (year,))
+        
+        approval_row = cursor.fetchone()
+        
+        # If year is not approved, return empty data
+        if not approval_row or not approval_row['IsApproved']:
+            conn.close()
+            return jsonify({
+                'year': year,
+                'isApproved': False,
+                'vacations': [],
+                'message': 'Urlaubsdaten für dieses Jahr wurden noch nicht freigegeben.'
+            })
+        
+        # Get all vacation data for the year (from VacationRequests and Absences)
+        start_date = f"{year}-01-01"
+        end_date = f"{year}-12-31"
+        
+        # Get approved vacation requests
+        cursor.execute("""
+            SELECT 
+                vr.Id,
+                vr.EmployeeId,
+                e.Vorname,
+                e.Name,
+                e.TeamId,
+                t.Name as TeamName,
+                vr.StartDate,
+                vr.EndDate,
+                vr.Status,
+                vr.Notes,
+                'VacationRequest' as Source
+            FROM VacationRequests vr
+            JOIN Employees e ON vr.EmployeeId = e.Id
+            LEFT JOIN Teams t ON e.TeamId = t.Id
+            WHERE (vr.StartDate <= ? AND vr.EndDate >= ?)
+            ORDER BY vr.StartDate, e.Name, e.Vorname
+        """, (end_date, start_date))
+        
+        vacation_requests = []
+        for row in cursor.fetchall():
+            vacation_requests.append({
+                'id': row['Id'],
+                'employeeId': row['EmployeeId'],
+                'employeeName': f"{row['Vorname']} {row['Name']}",
+                'teamId': row['TeamId'],
+                'teamName': row['TeamName'],
+                'startDate': row['StartDate'],
+                'endDate': row['EndDate'],
+                'status': row['Status'],
+                'notes': row['Notes'],
+                'source': row['Source']
+            })
+        
+        # Get vacation absences (Type 2 = Urlaub)
+        cursor.execute("""
+            SELECT 
+                a.Id,
+                a.EmployeeId,
+                e.Vorname,
+                e.Name,
+                e.TeamId,
+                t.Name as TeamName,
+                a.StartDate,
+                a.EndDate,
+                a.Notes,
+                'Absence' as Source
+            FROM Absences a
+            JOIN Employees e ON a.EmployeeId = e.Id
+            LEFT JOIN Teams t ON e.TeamId = t.Id
+            WHERE a.Type = 2
+            AND (a.StartDate <= ? AND a.EndDate >= ?)
+            ORDER BY a.StartDate, e.Name, e.Vorname
+        """, (end_date, start_date))
+        
+        absences = []
+        for row in cursor.fetchall():
+            absences.append({
+                'id': row['Id'],
+                'employeeId': row['EmployeeId'],
+                'employeeName': f"{row['Vorname']} {row['Name']}",
+                'teamId': row['TeamId'],
+                'teamName': row['TeamName'],
+                'startDate': row['StartDate'],
+                'endDate': row['EndDate'],
+                'status': 'Genehmigt',  # Absences are always approved
+                'notes': row['Notes'],
+                'source': row['Source']
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'year': year,
+            'isApproved': True,
+            'vacationRequests': vacation_requests,
+            'absences': absences
+        })
     
     # ============================================================================
     # SHIFT EXCHANGE ENDPOINTS

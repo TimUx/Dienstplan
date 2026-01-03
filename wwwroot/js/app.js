@@ -493,9 +493,8 @@ function displayWeekView(data, employees) {
                 
                 let content = '';
                 if (absence) {
-                    // Show absence badge (AU for sick, U for vacation, L for training)
-                    const absenceCode = getAbsenceCode(absence.type);
-                    content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
+                    // Show absence badge with status-based color coding
+                    content = createAbsenceBadge(absence);
                 } else {
                     // Show regular shifts
                     content = shifts.map(s => createShiftBadge(s)).join(' ');
@@ -616,9 +615,8 @@ function displayMonthView(data, employees) {
                     
                     let content = '';
                     if (absence) {
-                        // Show absence badge (AU for sick, U for vacation, L for training)
-                        const absenceCode = getAbsenceCode(absence.type);
-                        content = `<span class="shift-badge shift-${absenceCode}" title="${absence.type}: ${absence.notes || ''}">${absenceCode}</span>`;
+                        // Show absence badge with status-based color coding
+                        content = createAbsenceBadge(absence);
                     } else {
                         // Show regular shifts
                         content = shifts.map(s => createShiftBadge(s)).join(' ');
@@ -729,22 +727,22 @@ function displayYearView(data, employees) {
                     const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
                     const shifts = [];
                     let hasAbsence = false;
-                    let absenceCode = '';
+                    let absenceForDisplay = null;
                     
                     weekDates.forEach(dateStr => {
                         // Check for absence first
                         const absence = getAbsenceForDate(employee.absences || [], dateStr);
                         if (absence) {
                             hasAbsence = true;
-                            absenceCode = getAbsenceCode(absence.type);
+                            absenceForDisplay = absence;  // Store the absence for display
                         } else if (employee.shifts[dateStr]) {
                             shifts.push(...employee.shifts[dateStr]);
                         }
                     });
                     
                     let content = '';
-                    if (hasAbsence) {
-                        content = `<span class="shift-badge shift-${absenceCode}">${absenceCode}</span>`;
+                    if (hasAbsence && absenceForDisplay) {
+                        content = createAbsenceBadge(absenceForDisplay);
                     } else {
                         content = shifts.map(s => createShiftBadge(s)).join(' ');
                     }
@@ -783,12 +781,39 @@ const ABSENCE_TYPES = {
 function getAbsenceCode(typeString) {
     if (typeString === 'Krank / AU' || typeString === 'Krank') {
         return 'AU';
-    } else if (typeString === 'Urlaub') {
+    } else if (typeString === 'Urlaub' || typeString.startsWith('Urlaub')) {
         return 'U';
     } else if (typeString === 'Lehrgang') {
         return 'L';
     }
     return 'A'; // Default for unknown types
+}
+
+/**
+ * Create an absence badge HTML element with status-based color coding
+ * @param {object} absence - Absence object with type, status, and notes
+ * @returns {string} HTML for absence badge
+ */
+function createAbsenceBadge(absence) {
+    if (!absence || !absence.type) {
+        return '';
+    }
+    
+    const absenceCode = getAbsenceCode(absence.type);
+    let cssClass = `shift-badge shift-${absenceCode}`;
+    
+    // Apply status-based styling for vacation (Urlaub) entries
+    if (absenceCode === 'U' && absence.status) {
+        if (absence.status === 'InBearbeitung') {
+            cssClass = 'shift-badge shift-U-pending';
+        } else if (absence.status === 'Abgelehnt') {
+            cssClass = 'shift-badge shift-U-rejected';
+        }
+        // 'Genehmigt' uses default shift-U (blue)
+    }
+    
+    const title = `${absence.type}: ${absence.notes || ''}`;
+    return `<span class="${cssClass}" title="${title}">${absenceCode}</span>`;
 }
 
 /**

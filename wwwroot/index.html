@@ -21,6 +21,7 @@
                         <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
                         <button onclick="showView('teams')" class="nav-btn">Teams</button>
                         <button onclick="showView('absences')" class="nav-btn" id="nav-absences" style="display:none;">Abwesenheiten</button>
+                        <button onclick="showView('vacationyearplan')" class="nav-btn" id="nav-vacationyearplan">Urlaubsjahresplan</button>
                         <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">Diensttausch</button>
                         <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
@@ -206,6 +207,35 @@
                 </div>
             </div>
 
+            <!-- Vacation Year Plan View -->
+            <div id="vacationyearplan-view" class="view">
+                <h2>📅 Urlaubsjahresplan</h2>
+                <p class="info">Übersicht aller Urlaube für ein Jahr. Die Anzeige muss vom Administrator freigegeben werden.</p>
+                
+                <div class="controls">
+                    <label>Jahr auswählen:</label>
+                    <select id="vacationYearSelect" onchange="loadVacationYearPlan()">
+                        <!-- Years will be populated dynamically -->
+                    </select>
+                    <button onclick="loadVacationYearPlan()" class="btn-primary">Laden</button>
+                </div>
+                
+                <div id="vacation-year-plan-status" style="margin: 20px 0;">
+                    <!-- Status message will be shown here -->
+                </div>
+                
+                <div id="vacation-year-plan-legend" style="display: none; margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+                    <strong>Legende:</strong>
+                    <span class="shift-badge shift-U" style="margin-left: 15px;">U</span> = Genehmigter Urlaub (Blau)
+                    <span class="shift-badge shift-U-pending" style="margin-left: 15px;">U</span> = Urlaub in Genehmigung (Orange)
+                    <span class="shift-badge shift-U-rejected" style="margin-left: 15px;">U</span> = Abgelehnter Urlaub (Grau)
+                </div>
+                
+                <div id="vacation-year-plan-content">
+                    <p class="loading">Bitte wählen Sie ein Jahr aus...</p>
+                </div>
+            </div>
+
             <!-- Admin View -->
             <div id="admin-view" class="view">
                 <h2>⚙️ Administration</h2>
@@ -215,6 +245,7 @@
                     <button class="admin-tab active" onclick="showAdminTab('users', this)">👥 Benutzerverwaltung</button>
                     <button class="admin-tab" onclick="showAdminTab('shift-management', this)">🔄 Schichtverwaltung</button>
                     <button class="admin-tab" onclick="showAdminTab('vacation-periods', this)">📅 Ferienzeiten</button>
+                    <button class="admin-tab" onclick="showAdminTab('vacation-year-approvals', this)">📅 Urlaubsjahresplan Freigabe</button>
                     <button class="admin-tab" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" onclick="showAdminTab('email', this)">📧 E-Mail-Einstellungen</button>
                     <button class="admin-tab" onclick="showAdminTab('settings', this)">🔧 Globale Einstellungen</button>
@@ -262,6 +293,20 @@
                             </div>
                             <div id="vacation-periods-content">
                                 <p class="loading">Lade Ferienzeiten...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vacation Year Approvals Tab -->
+                    <div id="admin-tab-vacation-year-approvals" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📅 Urlaubsjahresplan Freigabe</h3>
+                            <p>Geben Sie die Anzeige von Urlaubsdaten für einzelne Jahre frei. Nur freigegebene Jahre sind für alle Benutzer im Urlaubsjahresplan sichtbar.</p>
+                            <div class="controls">
+                                <button onclick="loadVacationYearApprovals()" class="btn-primary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="vacation-year-approvals-content">
+                                <p class="loading">Lade Freigaben...</p>
                             </div>
                         </div>
                     </div>

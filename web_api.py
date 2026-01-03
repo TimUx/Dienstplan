@@ -2133,8 +2133,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor = conn.cursor()
             
             # Check if user is admin (can see unapproved plans)
-            user_data = session.get('user')
-            is_admin = user_data and 'Admin' in user_data.get('roles', [])
+            user_roles = session.get('user_roles', [])
+            is_admin = 'Admin' in user_roles
             
             # Get approved months if user is not admin
             approved_months = set()
@@ -2488,12 +2488,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             notes = data.get('notes', '')
             
             # Get current user info
-            user_data = session.get('user')
-            if not user_data:
-                return jsonify({'error': 'User not authenticated'}), 401
+            user_id = session.get('user_id')
+            user_name = session.get('user_fullname', 'Unknown Admin')
             
-            user_id = user_data.get('id')
-            user_name = user_data.get('fullName', 'Unknown Admin')
+            if not user_id:
+                return jsonify({'error': 'User not authenticated'}), 401
             
             conn = db.get_connection()
             cursor = conn.cursor()

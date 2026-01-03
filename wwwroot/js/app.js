@@ -261,6 +261,9 @@ function showView(viewName) {
         return;
     } else if (viewName === 'shiftexchange') {
         loadShiftExchanges('available');
+    } else if (viewName === 'vacationyearplan') {
+        initVacationYearPlan();
+        loadVacationYearPlan();
     } else if (viewName === 'statistics') {
         loadStatistics();
     } else if (viewName === 'admin') {
@@ -4067,6 +4070,9 @@ function showAdminTab(tabName, clickedElement) {
     } else if (tabName === 'vacation-periods') {
         stopAuditLogAutoRefresh();
         loadVacationPeriods();
+    } else if (tabName === 'vacation-year-approvals') {
+        stopAuditLogAutoRefresh();
+        loadVacationYearApprovals();
     } else if (tabName === 'audit-logs') {
         loadAuditLogs(1, 50);
         startAuditLogAutoRefresh(AUDIT_LOG_DEFAULT_REFRESH_INTERVAL); // Start auto-refresh with default interval
@@ -4736,5 +4742,279 @@ function stopNotificationPolling() {
     if (notificationPollInterval) {
         clearInterval(notificationPollInterval);
         notificationPollInterval = null;
+    }
+}
+
+// ============================================================================
+// VACATION YEAR PLAN FUNCTIONS
+// ============================================================================
+
+/**
+ * Initialize the vacation year plan view
+ */
+function initVacationYearPlan() {
+    const yearSelect = document.getElementById('vacationYearSelect');
+    if (!yearSelect) return;
+    
+    // Populate years (current year +/- 5 years)
+    const currentYear = new Date().getFullYear();
+    yearSelect.innerHTML = '';
+    for (let year = currentYear - 2; year <= currentYear + 5; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (year === currentYear) {
+            option.selected = true;
+        }
+        yearSelect.appendChild(option);
+    }
+}
+
+/**
+ * Load vacation year plan for selected year
+ */
+async function loadVacationYearPlan() {
+    const yearSelect = document.getElementById('vacationYearSelect');
+    const year = yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear();
+    
+    const statusDiv = document.getElementById('vacation-year-plan-status');
+    const contentDiv = document.getElementById('vacation-year-plan-content');
+    const legendDiv = document.getElementById('vacation-year-plan-legend');
+    
+    if (!contentDiv) return;
+    
+    contentDiv.innerHTML = '<p class="loading">Lade Urlaubsjahresplan...</p>';
+    statusDiv.innerHTML = '';
+    legendDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacationyearplan/${year}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (!data.isApproved) {
+                statusDiv.innerHTML = '<div class="warning-box"><strong>⚠️ Jahr nicht freigegeben</strong><p>Die Urlaubsdaten für dieses Jahr wurden noch nicht vom Administrator freigegeben.</p></div>';
+                contentDiv.innerHTML = '<p>Keine Daten verfügbar.</p>';
+                return;
+            }
+            
+            // Show legend
+            legendDiv.style.display = 'block';
+            
+            // Display vacation data
+            displayVacationYearPlan(data, year);
+            
+        } else {
+            contentDiv.innerHTML = '<p class="error">Fehler beim Laden des Urlaubsjahresplans.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading vacation year plan:', error);
+        contentDiv.innerHTML = '<p class="error">Fehler beim Laden des Urlaubsjahresplans.</p>';
+    }
+}
+
+/**
+ * Display vacation year plan data
+ */
+function displayVacationYearPlan(data, year) {
+    const contentDiv = document.getElementById('vacation-year-plan-content');
+    
+    // Combine all vacations
+    const allVacations = [];
+    
+    // Add vacation requests
+    if (data.vacationRequests && data.vacationRequests.length > 0) {
+        allVacations.push(...data.vacationRequests);
+    }
+    
+    // Add absences
+    if (data.absences && data.absences.length > 0) {
+        allVacations.push(...data.absences);
+    }
+    
+    if (allVacations.length === 0) {
+        contentDiv.innerHTML = `<p>Keine Urlaube für ${year} vorhanden.</p>`;
+        return;
+    }
+    
+    // Sort by start date
+    allVacations.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    
+    // Group by employee
+    const employeeVacations = {};
+    allVacations.forEach(vac => {
+        if (!employeeVacations[vac.employeeId]) {
+            employeeVacations[vac.employeeId] = {
+                name: vac.employeeName,
+                teamName: vac.teamName,
+                vacations: []
+            };
+        }
+        employeeVacations[vac.employeeId].vacations.push(vac);
+    });
+    
+    // Create HTML table
+    let html = '<table class="data-table">';
+    html += '<thead><tr>';
+    html += '<th>Mitarbeiter</th>';
+    html += '<th>Team</th>';
+    html += '<th>Von</th>';
+    html += '<th>Bis</th>';
+    html += '<th>Tage</th>';
+    html += '<th>Status</th>';
+    html += '<th>Notizen</th>';
+    html += '</tr></thead><tbody>';
+    
+    Object.values(employeeVacations).forEach(empData => {
+        empData.vacations.forEach((vac, idx) => {
+            const startDate = new Date(vac.startDate);
+            const endDate = new Date(vac.endDate);
+            const days = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            
+            // Determine status badge
+            let statusBadge = '';
+            if (vac.status === 'Genehmigt') {
+                statusBadge = '<span class="shift-badge shift-U">Genehmigt</span>';
+            } else if (vac.status === 'InBearbeitung') {
+                statusBadge = '<span class="shift-badge shift-U-pending">In Genehmigung</span>';
+            } else if (vac.status === 'Abgelehnt') {
+                statusBadge = '<span class="shift-badge shift-U-rejected">Abgelehnt</span>';
+            }
+            
+            html += '<tr>';
+            if (idx === 0) {
+                html += `<td rowspan="${empData.vacations.length}">${escapeHtml(empData.name)}</td>`;
+                html += `<td rowspan="${empData.vacations.length}">${escapeHtml(empData.teamName || '-')}</td>`;
+            }
+            html += `<td>${startDate.toLocaleDateString('de-DE')}</td>`;
+            html += `<td>${endDate.toLocaleDateString('de-DE')}</td>`;
+            html += `<td>${days}</td>`;
+            html += `<td>${statusBadge}</td>`;
+            html += `<td>${escapeHtml(vac.notes || '-')}</td>`;
+            html += '</tr>';
+        });
+    });
+    
+    html += '</tbody></table>';
+    contentDiv.innerHTML = html;
+}
+
+// ============================================================================
+// VACATION YEAR APPROVAL ADMIN FUNCTIONS
+// ============================================================================
+
+/**
+ * Load vacation year approvals (admin only)
+ */
+async function loadVacationYearApprovals() {
+    const contentDiv = document.getElementById('vacation-year-approvals-content');
+    if (!contentDiv) return;
+    
+    contentDiv.innerHTML = '<p class="loading">Lade Freigaben...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacationyearapprovals`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const approvals = await response.json();
+            displayVacationYearApprovals(approvals);
+        } else {
+            contentDiv.innerHTML = '<p class="error">Fehler beim Laden der Freigaben.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading vacation year approvals:', error);
+        contentDiv.innerHTML = '<p class="error">Fehler beim Laden der Freigaben.</p>';
+    }
+}
+
+/**
+ * Display vacation year approvals table
+ */
+function displayVacationYearApprovals(approvals) {
+    const contentDiv = document.getElementById('vacation-year-approvals-content');
+    
+    // Generate list of years (current year +/- 5 years)
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear - 2; year <= currentYear + 5; year++) {
+        const approval = approvals.find(a => a.year === year);
+        years.push({
+            year: year,
+            isApproved: approval ? approval.isApproved : false,
+            approvedBy: approval ? approval.approvedBy : null,
+            approvedAt: approval ? approval.approvedAt : null,
+            notes: approval ? approval.notes : null
+        });
+    }
+    
+    let html = '<table class="data-table">';
+    html += '<thead><tr>';
+    html += '<th>Jahr</th>';
+    html += '<th>Status</th>';
+    html += '<th>Freigegeben von</th>';
+    html += '<th>Freigegeben am</th>';
+    html += '<th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    years.forEach(yearData => {
+        html += '<tr>';
+        html += `<td><strong>${yearData.year}</strong></td>`;
+        
+        if (yearData.isApproved) {
+            html += '<td><span class="shift-badge shift-U">✓ Freigegeben</span></td>';
+            html += `<td>${escapeHtml(yearData.approvedBy || '-')}</td>`;
+            html += `<td>${yearData.approvedAt ? new Date(yearData.approvedAt).toLocaleDateString('de-DE') : '-'}</td>`;
+            html += `<td><button onclick="toggleYearApproval(${yearData.year}, false)" class="btn-small btn-danger">Freigabe zurückziehen</button></td>`;
+        } else {
+            html += '<td><span class="shift-badge shift-U-rejected">✗ Nicht freigegeben</span></td>';
+            html += '<td>-</td>';
+            html += '<td>-</td>';
+            html += `<td><button onclick="toggleYearApproval(${yearData.year}, true)" class="btn-small btn-primary">Freigeben</button></td>`;
+        }
+        
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    contentDiv.innerHTML = html;
+}
+
+/**
+ * Toggle year approval status
+ */
+async function toggleYearApproval(year, approve) {
+    const action = approve ? 'freigeben' : 'zurückziehen';
+    
+    if (!confirm(`Möchten Sie die Anzeige der Urlaubsdaten für das Jahr ${year} wirklich ${action}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacationyearapprovals`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                year: year,
+                isApproved: approve
+            })
+        });
+        
+        if (response.ok) {
+            alert(`Jahr ${year} wurde erfolgreich ${approve ? 'freigegeben' : 'gesperrt'}.`);
+            loadVacationYearApprovals();
+        } else {
+            alert(`Fehler beim ${action} des Jahres.`);
+        }
+    } catch (error) {
+        console.error(`Error toggling year approval:`, error);
+        alert(`Fehler beim ${action} des Jahres.`);
     }
 }

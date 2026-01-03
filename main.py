@@ -81,7 +81,7 @@ def run_cli_planning(
     print("\nValidating solution...")
     validation_result = validate_shift_plan(
         assignments, employees, absences, start_date, end_date, teams,
-        special_functions, complete_schedule
+        special_functions, complete_schedule, None, None, None, shift_types
     )
     validation_result.print_report()
     

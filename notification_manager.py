@@ -19,18 +19,38 @@ VIRTUAL_TEAM_FERIENJOBBER_ID = 98      # Ferienjobber virtual team
 # Date format for German locale
 DATE_FORMAT_DE = '%d.%m.%Y'
 
-# Staffing requirements from constraints.py
-WEEKDAY_STAFFING = {
-    "F": {"min": 4, "max": 5},  # Früh
-    "S": {"min": 3, "max": 4},  # Spät
-    "N": {"min": 3, "max": 3},  # Nacht
-}
 
-WEEKEND_STAFFING = {
-    "F": {"min": 2, "max": 3},
-    "S": {"min": 2, "max": 3},
-    "N": {"min": 2, "max": 3},
-}
+def get_staffing_requirements(conn: sqlite3.Connection) -> Dict[str, Dict[str, Dict[str, int]]]:
+    """
+    Load staffing requirements from database.
+    
+    Returns:
+        Dict with structure: {shift_code: {"weekday": {"min": x, "max": y}, "weekend": {"min": a, "max": b}}}
+    """
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT Code, MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend
+        FROM ShiftTypes
+        WHERE IsActive = 1 AND Code IN ('F', 'S', 'N')
+    """)
+    
+    staffing_reqs = {}
+    for row in cursor.fetchall():
+        code = row[0]
+        staffing_reqs[code] = {
+            "weekday": {"min": row[1], "max": row[2]},
+            "weekend": {"min": row[3], "max": row[4]}
+        }
+    
+    # Fallback to hardcoded values if database doesn't have the columns yet
+    if not staffing_reqs:
+        staffing_reqs = {
+            "F": {"weekday": {"min": 4, "max": 5}, "weekend": {"min": 2, "max": 3}},
+            "S": {"weekday": {"min": 3, "max": 4}, "weekend": {"min": 2, "max": 3}},
+            "N": {"weekday": {"min": 3, "max": 3}, "weekend": {"min": 2, "max": 3}},
+        }
+    
+    return staffing_reqs
 
 
 def check_staffing_for_date(
@@ -51,14 +71,16 @@ def check_staffing_for_date(
     """
     cursor = conn.cursor()
     
-    # Determine staffing requirements based on day of week
-    is_weekend = check_date.weekday() >= 5
-    staffing_reqs = WEEKEND_STAFFING if is_weekend else WEEKDAY_STAFFING
+    # Get staffing requirements from database
+    staffing_reqs = get_staffing_requirements(conn)
     
     if shift_code not in staffing_reqs:
         return (0, 0, False)
     
-    required_staff = staffing_reqs[shift_code]["min"]
+    # Determine requirements based on day of week
+    is_weekend = check_date.weekday() >= 5
+    day_type = "weekend" if is_weekend else "weekday"
+    required_staff = staffing_reqs[shift_code][day_type]["min"]
     
     # Count actual staff assigned for this date and shift
     # Exclude employees who are absent on this date

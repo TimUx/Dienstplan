@@ -1632,8 +1632,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor.execute("""
                 INSERT INTO ShiftTypes (Code, Name, StartTime, EndTime, DurationHours, ColorCode, IsActive,
                                       WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
-                                      WorksSaturday, WorksSunday, WeeklyWorkingHours, CreatedBy)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      WorksSaturday, WorksSunday, WeeklyWorkingHours, 
+                                      MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('code'),
                 data.get('name'),
@@ -1649,6 +1650,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('worksSaturday', False) else 0,
                 1 if data.get('worksSunday', False) else 0,
                 data.get('weeklyWorkingHours', 40.0),
+                data.get('minStaffWeekday', 3),
+                data.get('maxStaffWeekday', 5),
+                data.get('minStaffWeekend', 2),
+                data.get('maxStaffWeekend', 3),
                 session.get('user_email', 'system')
             ))
             
@@ -1696,7 +1701,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'worksFriday': bool(row['WorksFriday']),
             'worksSaturday': bool(row['WorksSaturday']),
             'worksSunday': bool(row['WorksSunday']),
-            'weeklyWorkingHours': row['WeeklyWorkingHours']
+            'weeklyWorkingHours': row['WeeklyWorkingHours'],
+            'minStaffWeekday': row['MinStaffWeekday'],
+            'maxStaffWeekday': row['MaxStaffWeekday'],
+            'minStaffWeekend': row['MinStaffWeekend'],
+            'maxStaffWeekend': row['MaxStaffWeekend']
         }
         
         conn.close()
@@ -1734,6 +1743,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     DurationHours = ?, ColorCode = ?, IsActive = ?,
                     WorksMonday = ?, WorksTuesday = ?, WorksWednesday = ?, WorksThursday = ?, WorksFriday = ?,
                     WorksSaturday = ?, WorksSunday = ?, WeeklyWorkingHours = ?,
+                    MinStaffWeekday = ?, MaxStaffWeekday = ?, MinStaffWeekend = ?, MaxStaffWeekend = ?,
                     ModifiedAt = ?, ModifiedBy = ?
                 WHERE Id = ?
             """, (
@@ -1752,6 +1762,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('worksSaturday', old_row.get('WorksSaturday', False)) else 0,
                 1 if data.get('worksSunday', old_row.get('WorksSunday', False)) else 0,
                 data.get('weeklyWorkingHours', old_row.get('WeeklyWorkingHours', 40.0)),
+                data.get('minStaffWeekday', old_row.get('MinStaffWeekday', 3)),
+                data.get('maxStaffWeekday', old_row.get('MaxStaffWeekday', 5)),
+                data.get('minStaffWeekend', old_row.get('MinStaffWeekend', 2)),
+                data.get('maxStaffWeekend', old_row.get('MaxStaffWeekend', 3)),
                 datetime.utcnow().isoformat(),
                 session.get('user_email', 'system'),
                 id

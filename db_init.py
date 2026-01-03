@@ -79,6 +79,10 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             WorksSaturday INTEGER NOT NULL DEFAULT 0,
             WorksSunday INTEGER NOT NULL DEFAULT 0,
             WeeklyWorkingHours REAL NOT NULL DEFAULT 40.0,
+            MinStaffWeekday INTEGER NOT NULL DEFAULT 3,
+            MaxStaffWeekday INTEGER NOT NULL DEFAULT 5,
+            MinStaffWeekend INTEGER NOT NULL DEFAULT 2,
+            MaxStaffWeekend INTEGER NOT NULL DEFAULT 3,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             ModifiedAt TEXT,
             CreatedBy TEXT,
@@ -454,22 +458,25 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
     shift_types = [
-        (1, "F", "Früh", "05:45", "13:45", 8.0, "#4CAF50"),
-        (2, "S", "Spät", "13:45", "21:45", 8.0, "#FF9800"),
-        (3, "N", "Nacht", "21:45", "05:45", 8.0, "#2196F3"),
-        (4, "Z", "Zwischendienst", "08:00", "16:00", 8.0, "#9C27B0"),
-        (5, "BMT", "Brandmeldetechniker", "06:00", "14:00", 8.0, "#F44336"),
-        (6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", 9.5, "#E91E63"),
-        (7, "TD", "Tagdienst", "06:00", "16:30", 10.5, "#673AB7"),
+        (1, "F", "Früh", "05:45", "13:45", 8.0, "#4CAF50", 4, 5, 2, 3),
+        (2, "S", "Spät", "13:45", "21:45", 8.0, "#FF9800", 3, 4, 2, 3),
+        (3, "N", "Nacht", "21:45", "05:45", 8.0, "#2196F3", 3, 3, 2, 3),
+        (4, "Z", "Zwischendienst", "08:00", "16:00", 8.0, "#9C27B0", 3, 5, 2, 3),
+        (5, "BMT", "Brandmeldetechniker", "06:00", "14:00", 8.0, "#F44336", 3, 5, 2, 3),
+        (6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", 9.5, "#E91E63", 3, 5, 2, 3),
+        (7, "TD", "Tagdienst", "06:00", "16:30", 10.5, "#673AB7", 3, 5, 2, 3),
         # REMOVED: "K" (Krank) and old "U" (Urlaub) shift types
         # Absences are now handled exclusively through Absences table with codes: U, AU, L
     ]
     
     for shift_type in shift_types:
         cursor.execute("""
-            INSERT OR IGNORE INTO ShiftTypes (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO ShiftTypes 
+            (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, 
+             MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, shift_type)
     
     conn.commit()

@@ -71,6 +71,11 @@ function updateUIForAuthenticatedUser(user) {
         document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
     }
+    
+    // Start notification polling for admins and dispatchers
+    if (isAdmin || isDisponent) {
+        startNotificationPolling();
+    }
 }
 
 function updateUIForAnonymousUser() {
@@ -82,6 +87,9 @@ function updateUIForAnonymousUser() {
     document.getElementById('nav-admin').style.display = 'none';
     document.getElementById('nav-absences').style.display = 'none';
     document.getElementById('nav-shiftexchange').style.display = 'none';
+    
+    // Stop notification polling
+    stopNotificationPolling();
 }
 
 function showLoginModal() {
@@ -4458,3 +4466,227 @@ async function saveBulkEdit(event) {
     }
 }
 
+
+// ============================================================================
+// NOTIFICATION SYSTEM
+// ============================================================================
+
+let currentNotificationFilter = 'unread';
+
+/**
+ * Load notification count and update badge
+ */
+async function loadNotificationCount() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/count`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const badge = document.getElementById('notification-badge');
+            
+            if (data.count > 0) {
+                badge.textContent = data.count > 99 ? '99+' : data.count;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading notification count:', error);
+    }
+}
+
+/**
+ * Show notification modal
+ */
+function showNotificationModal() {
+    document.getElementById('notificationModal').style.display = 'block';
+    currentNotificationFilter = 'unread';
+    loadNotifications('unread');
+}
+
+/**
+ * Close notification modal
+ */
+function closeNotificationModal() {
+    document.getElementById('notificationModal').style.display = 'none';
+}
+
+/**
+ * Filter notifications
+ */
+function filterNotifications(filter) {
+    currentNotificationFilter = filter;
+    
+    // Update button states
+    document.getElementById('filter-all').classList.toggle('active', filter === 'all');
+    document.getElementById('filter-unread').classList.toggle('active', filter === 'unread');
+    
+    loadNotifications(filter);
+}
+
+/**
+ * Load notifications
+ */
+async function loadNotifications(filter = 'unread') {
+    const listContainer = document.getElementById('notification-list');
+    listContainer.innerHTML = '<p class="loading">Lade Benachrichtigungen...</p>';
+    
+    try {
+        const unreadOnly = filter === 'unread';
+        const response = await fetch(`${API_BASE}/notifications?unreadOnly=${unreadOnly}&limit=50`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const notifications = await response.json();
+            displayNotifications(notifications);
+        } else if (response.status === 401) {
+            listContainer.innerHTML = '<p class="notification-empty">Bitte melden Sie sich an.</p>';
+        } else if (response.status === 403) {
+            listContainer.innerHTML = '<p class="notification-empty">Keine Berechtigung.</p>';
+        } else {
+            listContainer.innerHTML = '<p class="notification-empty">Fehler beim Laden der Benachrichtigungen.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading notifications:', error);
+        listContainer.innerHTML = '<p class="notification-empty">Fehler beim Laden der Benachrichtigungen.</p>';
+    }
+}
+
+/**
+ * Display notifications in the list
+ */
+function displayNotifications(notifications) {
+    const listContainer = document.getElementById('notification-list');
+    
+    if (notifications.length === 0) {
+        listContainer.innerHTML = `
+            <div class="notification-empty">
+                <div class="notification-empty-icon">✅</div>
+                <p>Keine Benachrichtigungen vorhanden.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    notifications.forEach(notification => {
+        const unreadClass = notification.isRead ? '' : 'unread';
+        const severityClass = `severity-${notification.severity}`;
+        const date = new Date(notification.createdAt).toLocaleString('de-DE');
+        
+        html += `
+            <div class="notification-item ${unreadClass} ${severityClass}">
+                <div class="notification-item-header">
+                    <h3 class="notification-item-title">${escapeHtml(notification.title)}</h3>
+                    <span class="notification-severity ${notification.severity}">${notification.severity}</span>
+                </div>
+                <div class="notification-item-message">${escapeHtml(notification.message)}</div>
+                <div class="notification-item-meta">
+                    <span class="notification-item-date">${date}</span>
+                    <div class="notification-item-actions">
+                        ${!notification.isRead ? `
+                            <button class="btn-mark-read" onclick="markNotificationRead(${notification.id})">
+                                ✓ Als gelesen markieren
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    listContainer.innerHTML = html;
+}
+
+/**
+ * Mark single notification as read
+ */
+async function markNotificationRead(notificationId) {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            // Reload notifications with current filter
+            loadNotifications(currentNotificationFilter);
+            // Update notification count
+            loadNotificationCount();
+        } else {
+            alert('Fehler beim Markieren der Benachrichtigung.');
+        }
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+        alert('Fehler beim Markieren der Benachrichtigung.');
+    }
+}
+
+/**
+ * Mark all notifications as read
+ */
+async function markAllNotificationsRead() {
+    if (!confirm('Möchten Sie wirklich alle Benachrichtigungen als gelesen markieren?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/notifications/mark-all-read`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`${result.count} Benachrichtigung${result.count !== 1 ? 'en' : ''} als gelesen markiert.`);
+            // Reload notifications
+            loadNotifications(currentNotificationFilter);
+            // Update notification count
+            loadNotificationCount();
+        } else {
+            alert('Fehler beim Markieren der Benachrichtigungen.');
+        }
+    } catch (error) {
+        console.error('Error marking all notifications as read:', error);
+        alert('Fehler beim Markieren der Benachrichtigungen.');
+    }
+}
+
+/**
+ * Helper function to escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Poll for new notifications every 60 seconds when user is logged in
+const NOTIFICATION_POLL_INTERVAL_MS = 60000; // 60 seconds
+let notificationPollInterval = null;
+
+function startNotificationPolling() {
+    // Clear any existing interval
+    if (notificationPollInterval) {
+        clearInterval(notificationPollInterval);
+    }
+    
+    // Load initial count
+    loadNotificationCount();
+    
+    // Poll every NOTIFICATION_POLL_INTERVAL_MS
+    notificationPollInterval = setInterval(() => {
+        loadNotificationCount();
+    }, NOTIFICATION_POLL_INTERVAL_MS);
+}
+
+function stopNotificationPolling() {
+    if (notificationPollInterval) {
+        clearInterval(notificationPollInterval);
+        notificationPollInterval = null;
+    }
+}

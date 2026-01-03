@@ -257,6 +257,31 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # AdminNotifications table (for minimum shift strength alerts)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AdminNotifications (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Type TEXT NOT NULL,
+            Severity TEXT NOT NULL DEFAULT 'WARNING',
+            Title TEXT NOT NULL,
+            Message TEXT NOT NULL,
+            ShiftDate TEXT,
+            ShiftCode TEXT,
+            TeamId INTEGER,
+            EmployeeId INTEGER,
+            AbsenceId INTEGER,
+            RequiredStaff INTEGER,
+            ActualStaff INTEGER,
+            IsRead INTEGER NOT NULL DEFAULT 0,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            ReadAt TEXT,
+            ReadBy TEXT,
+            FOREIGN KEY (TeamId) REFERENCES Teams(Id),
+            FOREIGN KEY (EmployeeId) REFERENCES Employees(Id),
+            FOREIGN KEY (AbsenceId) REFERENCES Absences(Id)
+        )
+    """)
+    
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 
@@ -296,6 +321,21 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_aspnetusers_employeeid 
         ON AspNetUsers(EmployeeId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_notifications_created 
+        ON AdminNotifications(CreatedAt DESC)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_notifications_unread 
+        ON AdminNotifications(IsRead, CreatedAt DESC)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_admin_notifications_date 
+        ON AdminNotifications(ShiftDate)
     """)
     
     cursor.execute("""

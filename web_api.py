@@ -1619,6 +1619,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 if not data.get(field):
                     return jsonify({'error': f'{field} ist Pflichtfeld'}), 400
             
+            # Validate staffing requirements
+            min_staff_weekday = data.get('minStaffWeekday', 3)
+            max_staff_weekday = data.get('maxStaffWeekday', 5)
+            min_staff_weekend = data.get('minStaffWeekend', 2)
+            max_staff_weekend = data.get('maxStaffWeekend', 3)
+            
+            if min_staff_weekday > max_staff_weekday:
+                return jsonify({'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}), 400
+            if min_staff_weekend > max_staff_weekend:
+                return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
+            
             conn = db.get_connection()
             cursor = conn.cursor()
             
@@ -1650,10 +1661,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('worksSaturday', False) else 0,
                 1 if data.get('worksSunday', False) else 0,
                 data.get('weeklyWorkingHours', 40.0),
-                data.get('minStaffWeekday', 3),
-                data.get('maxStaffWeekday', 5),
-                data.get('minStaffWeekend', 2),
-                data.get('maxStaffWeekend', 3),
+                min_staff_weekday,
+                max_staff_weekday,
+                min_staff_weekend,
+                max_staff_weekend,
                 session.get('user_email', 'system')
             ))
             
@@ -1736,6 +1747,19 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     conn.close()
                     return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
             
+            # Validate staffing requirements
+            min_staff_weekday = data.get('minStaffWeekday', old_row.get('MinStaffWeekday', 3))
+            max_staff_weekday = data.get('maxStaffWeekday', old_row.get('MaxStaffWeekday', 5))
+            min_staff_weekend = data.get('minStaffWeekend', old_row.get('MinStaffWeekend', 2))
+            max_staff_weekend = data.get('maxStaffWeekend', old_row.get('MaxStaffWeekend', 3))
+            
+            if min_staff_weekday > max_staff_weekday:
+                conn.close()
+                return jsonify({'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}), 400
+            if min_staff_weekend > max_staff_weekend:
+                conn.close()
+                return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
+            
             # Update shift type
             cursor.execute("""
                 UPDATE ShiftTypes 
@@ -1762,10 +1786,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 1 if data.get('worksSaturday', old_row.get('WorksSaturday', False)) else 0,
                 1 if data.get('worksSunday', old_row.get('WorksSunday', False)) else 0,
                 data.get('weeklyWorkingHours', old_row.get('WeeklyWorkingHours', 40.0)),
-                data.get('minStaffWeekday', old_row.get('MinStaffWeekday', 3)),
-                data.get('maxStaffWeekday', old_row.get('MaxStaffWeekday', 5)),
-                data.get('minStaffWeekend', old_row.get('MinStaffWeekend', 2)),
-                data.get('maxStaffWeekend', old_row.get('MaxStaffWeekend', 3)),
+                min_staff_weekday,
+                max_staff_weekday,
+                min_staff_weekend,
+                max_staff_weekend,
                 datetime.utcnow().isoformat(),
                 session.get('user_email', 'system'),
                 id

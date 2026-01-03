@@ -3310,6 +3310,21 @@ async function saveShiftType(event) {
     event.preventDefault();
     
     const shiftTypeId = document.getElementById('shiftTypeId').value;
+    const minStaffWeekday = parseInt(document.getElementById('shiftTypeMinStaffWeekday').value);
+    const maxStaffWeekday = parseInt(document.getElementById('shiftTypeMaxStaffWeekday').value);
+    const minStaffWeekend = parseInt(document.getElementById('shiftTypeMinStaffWeekend').value);
+    const maxStaffWeekend = parseInt(document.getElementById('shiftTypeMaxStaffWeekend').value);
+    
+    // Validate staffing requirements
+    if (minStaffWeekday > maxStaffWeekday) {
+        alert('Fehler: Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke.');
+        return;
+    }
+    if (minStaffWeekend > maxStaffWeekend) {
+        alert('Fehler: Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke.');
+        return;
+    }
+    
     const data = {
         code: document.getElementById('shiftTypeCode').value.trim().toUpperCase(),
         name: document.getElementById('shiftTypeName').value.trim(),
@@ -3325,10 +3340,10 @@ async function saveShiftType(event) {
         worksSaturday: document.getElementById('shiftTypeSaturday').checked,
         worksSunday: document.getElementById('shiftTypeSunday').checked,
         weeklyWorkingHours: parseFloat(document.getElementById('shiftTypeWeeklyHours').value),
-        minStaffWeekday: parseInt(document.getElementById('shiftTypeMinStaffWeekday').value),
-        maxStaffWeekday: parseInt(document.getElementById('shiftTypeMaxStaffWeekday').value),
-        minStaffWeekend: parseInt(document.getElementById('shiftTypeMinStaffWeekend').value),
-        maxStaffWeekend: parseInt(document.getElementById('shiftTypeMaxStaffWeekend').value),
+        minStaffWeekday: minStaffWeekday,
+        maxStaffWeekday: maxStaffWeekday,
+        minStaffWeekend: minStaffWeekend,
+        maxStaffWeekend: maxStaffWeekend,
         isActive: document.getElementById('shiftTypeIsActive').checked
     };
     

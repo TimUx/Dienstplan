@@ -2132,6 +2132,20 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn = db.get_connection()
             cursor = conn.cursor()
             
+            # Check if user is admin (can see unapproved plans)
+            user_data = session.get('user')
+            is_admin = user_data and 'Admin' in user_data.get('roles', [])
+            
+            # Get approved months if user is not admin
+            approved_months = set()
+            if not is_admin:
+                cursor.execute("""
+                    SELECT Year, Month FROM ShiftPlanApprovals
+                    WHERE IsApproved = 1
+                """)
+                for row in cursor.fetchall():
+                    approved_months.add((row['Year'], row['Month']))
+            
             # Get assignments
             cursor.execute("""
                 SELECT sa.*, e.Vorname, e.Name, e.TeamId, e.IsSpringer,
@@ -2145,6 +2159,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             assignments = []
             for row in cursor.fetchall():
+                assignment_date = date.fromisoformat(row['Date'])
+                year_month = (assignment_date.year, assignment_date.month)
+                
+                # Filter based on approval status for non-admin users
+                if not is_admin and year_month not in approved_months:
+                    # Skip unapproved plans for regular users
+                    continue
+                
                 assignments.append({
                     'id': row['Id'],
                     'employeeId': row['EmployeeId'],
@@ -2260,7 +2282,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/shifts/plan', methods=['POST'])
     @require_role('Admin')
     def plan_shifts():
-        """Automatic shift planning using OR-Tools (Admin only)"""
+        """Automatic shift planning using OR-Tools (Admin only) - Monthly planning only"""
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
         force = request.args.get('force', 'false').lower() == 'true'
@@ -2271,6 +2293,26 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         try:
             start_date = date.fromisoformat(start_date_str)
             end_date = date.fromisoformat(end_date_str)
+            
+            # Validate that the date range is within a single month
+            if start_date.year != end_date.year or start_date.month != end_date.month:
+                return jsonify({
+                    'error': 'Shift planning is only allowed for a single month. Year-based planning has been removed.'
+                }), 400
+            
+            # Validate that the date range covers the entire month
+            # First day of month
+            first_day = date(start_date.year, start_date.month, 1)
+            # Last day of month
+            if start_date.month == 12:
+                last_day = date(start_date.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                last_day = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
+            
+            if start_date != first_day or end_date != last_day:
+                return jsonify({
+                    'error': f'Planning must cover the entire month. Expected: {first_day.isoformat()} to {last_day.isoformat()}'
+                }), 400
             
             # Load data
             employees, teams, absences, shift_types = load_from_database(db.db_path)
@@ -2338,14 +2380,157 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                             "Python-OR-Tools"
                         ))
             
+            # Create or update approval record for this month (not approved by default)
+            cursor.execute("""
+                INSERT INTO ShiftPlanApprovals (Year, Month, IsApproved, CreatedAt)
+                VALUES (?, ?, 0, ?)
+                ON CONFLICT(Year, Month) DO UPDATE SET
+                    IsApproved = 0,
+                    ApprovedAt = NULL,
+                    ApprovedBy = NULL,
+                    ApprovedByName = NULL
+            """, (start_date.year, start_date.month, datetime.utcnow().isoformat()))
+            
             conn.commit()
             conn.close()
             
             return jsonify({
                 'success': True,
-                'message': f'Successfully planned {len(assignments)} shifts',
+                'message': f'Successfully planned {len(assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
                 'assignmentsCount': len(assignments),
-                'specialFunctionsCount': len(special_functions)
+                'specialFunctionsCount': len(special_functions),
+                'year': start_date.year,
+                'month': start_date.month
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/shifts/plan/approvals', methods=['GET'])
+    @require_role('Admin')
+    def get_plan_approvals():
+        """Get all shift plan approvals (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT * FROM ShiftPlanApprovals
+                ORDER BY Year DESC, Month DESC
+            """)
+            
+            approvals = []
+            for row in cursor.fetchall():
+                approvals.append({
+                    'id': row['Id'],
+                    'year': row['Year'],
+                    'month': row['Month'],
+                    'isApproved': bool(row['IsApproved']),
+                    'approvedAt': row['ApprovedAt'],
+                    'approvedBy': row['ApprovedBy'],
+                    'approvedByName': row['ApprovedByName'],
+                    'notes': row['Notes'],
+                    'createdAt': row['CreatedAt']
+                })
+            
+            conn.close()
+            return jsonify(approvals)
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/shifts/plan/approvals/<int:year>/<int:month>', methods=['GET'])
+    def get_plan_approval_status(year, month):
+        """Get approval status for a specific month"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT * FROM ShiftPlanApprovals
+                WHERE Year = ? AND Month = ?
+            """, (year, month))
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return jsonify({
+                    'year': year,
+                    'month': month,
+                    'isApproved': False,
+                    'exists': False
+                })
+            
+            return jsonify({
+                'id': row['Id'],
+                'year': row['Year'],
+                'month': row['Month'],
+                'isApproved': bool(row['IsApproved']),
+                'approvedAt': row['ApprovedAt'],
+                'approvedBy': row['ApprovedBy'],
+                'approvedByName': row['ApprovedByName'],
+                'notes': row['Notes'],
+                'createdAt': row['CreatedAt'],
+                'exists': True
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/shifts/plan/approvals/<int:year>/<int:month>', methods=['PUT'])
+    @require_role('Admin')
+    def approve_plan(year, month):
+        """Approve or unapprove a shift plan for a specific month (Admin only)"""
+        try:
+            data = request.get_json()
+            is_approved = data.get('isApproved', True)
+            notes = data.get('notes', '')
+            
+            # Get current user info
+            user_data = session.get('user')
+            if not user_data:
+                return jsonify({'error': 'User not authenticated'}), 401
+            
+            user_id = user_data.get('id')
+            user_name = user_data.get('fullName', 'Unknown Admin')
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Update or insert approval record
+            if is_approved:
+                cursor.execute("""
+                    INSERT INTO ShiftPlanApprovals (Year, Month, IsApproved, ApprovedAt, ApprovedBy, ApprovedByName, Notes, CreatedAt)
+                    VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+                    ON CONFLICT(Year, Month) DO UPDATE SET
+                        IsApproved = 1,
+                        ApprovedAt = ?,
+                        ApprovedBy = ?,
+                        ApprovedByName = ?,
+                        Notes = ?
+                """, (year, month, datetime.utcnow().isoformat(), user_id, user_name, notes,
+                      datetime.utcnow().isoformat(),
+                      datetime.utcnow().isoformat(), user_id, user_name, notes))
+            else:
+                cursor.execute("""
+                    INSERT INTO ShiftPlanApprovals (Year, Month, IsApproved, CreatedAt)
+                    VALUES (?, ?, 0, ?)
+                    ON CONFLICT(Year, Month) DO UPDATE SET
+                        IsApproved = 0,
+                        ApprovedAt = NULL,
+                        ApprovedBy = NULL,
+                        ApprovedByName = NULL,
+                        Notes = ?
+                """, (year, month, datetime.utcnow().isoformat(), notes))
+            
+            conn.commit()
+            conn.close()
+            
+            action = 'freigegeben' if is_approved else 'Freigabe aufgehoben'
+            return jsonify({
+                'success': True,
+                'message': f'Dienstplan für {month:02d}/{year} wurde {action}.'
             })
             
         except Exception as e:

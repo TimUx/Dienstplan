@@ -79,6 +79,8 @@
                         </select>
                         <select id="monthYearSelect" onchange="loadSchedule()"></select>
                         <button onclick="changeMonth(1)">Nächster Monat ▶</button>
+                        <span id="approvalStatus" style="margin-left: 15px; padding: 5px 10px; border-radius: 4px; font-weight: bold;"></span>
+                        <button id="approvalButton" onclick="togglePlanApproval()" class="btn-primary admin-only" style="display: none; margin-left: 10px;">Dienstplan freigeben</button>
                     </div>
                     
                     <!-- Year View Controls -->
@@ -1435,45 +1437,25 @@
             <h2>Schichten automatisch planen</h2>
             <form id="planShiftsForm" onsubmit="executePlanShifts(event)">
                 <div class="form-group">
-                    <label>Planungszeitraum*</label>
-                    <select id="planPeriodType" onchange="updatePlanPeriodFields()" required>
-                        <option value="">Bitte wählen...</option>
-                        <option value="month">Monat</option>
-                        <option value="year">Jahr</option>
+                    <label>Monat*</label>
+                    <select id="planMonth">
+                        <option value="1">Januar</option>
+                        <option value="2">Februar</option>
+                        <option value="3">März</option>
+                        <option value="4">April</option>
+                        <option value="5">Mai</option>
+                        <option value="6">Juni</option>
+                        <option value="7">Juli</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">Oktober</option>
+                        <option value="11">November</option>
+                        <option value="12">Dezember</option>
                     </select>
                 </div>
-                
-                <!-- Month Planning Fields -->
-                <div id="monthPlanFields" style="display: none;">
-                    <div class="form-group">
-                        <label>Monat*</label>
-                        <select id="planMonth">
-                            <option value="1">Januar</option>
-                            <option value="2">Februar</option>
-                            <option value="3">März</option>
-                            <option value="4">April</option>
-                            <option value="5">Mai</option>
-                            <option value="6">Juni</option>
-                            <option value="7">Juli</option>
-                            <option value="8">August</option>
-                            <option value="9">September</option>
-                            <option value="10">Oktober</option>
-                            <option value="11">November</option>
-                            <option value="12">Dezember</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Jahr*</label>
-                        <select id="planMonthYear"></select>
-                    </div>
-                </div>
-                
-                <!-- Year Planning Fields -->
-                <div id="yearPlanFields" style="display: none;">
-                    <div class="form-group">
-                        <label>Jahr*</label>
-                        <select id="planYear"></select>
-                    </div>
+                <div class="form-group">
+                    <label>Jahr*</label>
+                    <select id="planMonthYear"></select>
                 </div>
                 
                 <div class="form-group">
@@ -1485,8 +1467,9 @@
                 
                 <div class="info-box">
                     <p><strong>ℹ️ Hinweis:</strong></p>
-                    <p>Das System plant automatisch Schichten für alle Teams unter Berücksichtigung aller Regeln und bestehender Abwesenheiten.</p>
+                    <p>Das System plant automatisch Schichten für den ausgewählten Monat unter Berücksichtigung aller Regeln und bestehender Abwesenheiten.</p>
                     <p>Feste Schichten werden niemals überschrieben.</p>
+                    <p><strong>⚠️ Der geplante Dienstplan muss freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.</strong></p>
                 </div>
                 
                 <div class="form-actions">

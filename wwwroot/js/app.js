@@ -380,6 +380,11 @@ async function loadSchedule() {
         const employees = await employeesResponse.json();
         
         displaySchedule(data, employees);
+        
+        // Update approval status for month view
+        if (currentView === 'month') {
+            await updateApprovalStatus();
+        }
     } catch (error) {
         content.innerHTML = `<p class="error">Fehler beim Laden: ${error.message}</p>`;
     }
@@ -1331,15 +1336,6 @@ function showPlanShiftsModal() {
 function closePlanShiftsModal() {
     document.getElementById('planShiftsModal').style.display = 'none';
     document.getElementById('planShiftsForm').reset();
-    document.getElementById('monthPlanFields').style.display = 'none';
-    document.getElementById('yearPlanFields').style.display = 'none';
-}
-
-function updatePlanPeriodFields() {
-    const periodType = document.getElementById('planPeriodType').value;
-    
-    document.getElementById('monthPlanFields').style.display = periodType === 'month' ? 'block' : 'none';
-    document.getElementById('yearPlanFields').style.display = periodType === 'year' ? 'block' : 'none';
 }
 
 async function executePlanShifts(event) {
@@ -1350,34 +1346,23 @@ async function executePlanShifts(event) {
         return;
     }
     
-    const periodType = document.getElementById('planPeriodType').value;
+    const month = document.getElementById('planMonth').value;
+    const year = document.getElementById('planMonthYear').value;
     const force = document.getElementById('planForceOverwrite').checked;
     
-    let startDate, endDate;
-    
-    if (periodType === 'month') {
-        const month = document.getElementById('planMonth').value;
-        const year = document.getElementById('planMonthYear').value;
-        
-        startDate = new Date(year, month - 1, 1);
-        endDate = new Date(year, month, 0); // Last day of month
-    } else if (periodType === 'year') {
-        const year = document.getElementById('planYear').value;
-        
-        startDate = new Date(year, 0, 1);
-        endDate = new Date(year, 11, 31);
-    } else {
-        alert('Bitte wählen Sie einen Planungszeitraum aus.');
+    if (!month || !year) {
+        alert('Bitte wählen Sie Monat und Jahr aus.');
         return;
     }
+    
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0); // Last day of month
     
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
     
     // Show confirmation
-    const periodText = periodType === 'month' 
-        ? `${startDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}`
-        : `Jahr ${startDate.getFullYear()}`;
+    const periodText = startDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
     
     const confirmText = force 
         ? `Möchten Sie wirklich alle Schichten für ${periodText} neu planen? Bestehende Schichten werden überschrieben (außer feste Schichten).`
@@ -1398,7 +1383,7 @@ async function executePlanShifts(event) {
         
         if (response.ok) {
             const data = await response.json();
-            alert(`Erfolgreich! ${data.assignmentsCount || 0} Schichten wurden geplant.`);
+            alert(`Erfolgreich! ${data.assignmentsCount || 0} Schichten wurden für ${periodText} geplant.\n\nHinweis: Der Dienstplan muss noch freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.`);
             closePlanShiftsModal();
             loadSchedule();
         } else if (response.status === 401) {
@@ -5016,5 +5001,137 @@ async function toggleYearApproval(year, approve) {
     } catch (error) {
         console.error(`Error toggling year approval:`, error);
         alert(`Fehler beim ${action} des Jahres.`);
+    }
+}
+
+/**
+ * Update approval status UI for current month
+ */
+async function updateApprovalStatus() {
+    const month = document.getElementById('monthSelect').value;
+    const year = document.getElementById('monthYearSelect').value;
+    
+    const statusElement = document.getElementById('approvalStatus');
+    const buttonElement = document.getElementById('approvalButton');
+    
+    if (!statusElement || !buttonElement) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/shifts/plan/approvals/${year}/${month}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.isApproved) {
+                statusElement.textContent = '✓ Freigegeben';
+                statusElement.style.backgroundColor = '#4CAF50';
+                statusElement.style.color = 'white';
+                statusElement.style.display = 'inline-block';
+                
+                if (isAdmin()) {
+                    buttonElement.textContent = 'Freigabe zurückziehen';
+                    buttonElement.style.display = 'inline-block';
+                }
+            } else if (data.exists) {
+                statusElement.textContent = '⚠ Nicht freigegeben';
+                statusElement.style.backgroundColor = '#FF9800';
+                statusElement.style.color = 'white';
+                statusElement.style.display = 'inline-block';
+                
+                if (isAdmin()) {
+                    buttonElement.textContent = 'Dienstplan freigeben';
+                    buttonElement.style.display = 'inline-block';
+                }
+            } else {
+                // No plan exists for this month
+                statusElement.style.display = 'none';
+                buttonElement.style.display = 'none';
+            }
+        } else {
+            statusElement.style.display = 'none';
+            buttonElement.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error checking approval status:', error);
+        statusElement.style.display = 'none';
+        buttonElement.style.display = 'none';
+    }
+}
+
+/**
+ * Toggle plan approval for current month
+ */
+async function togglePlanApproval() {
+    const month = document.getElementById('monthSelect').value;
+    const year = document.getElementById('monthYearSelect').value;
+    
+    try {
+        // Check current status
+        const statusResponse = await fetch(`${API_BASE}/shifts/plan/approvals/${year}/${month}`, {
+            credentials: 'include'
+        });
+        
+        if (!statusResponse.ok) {
+            alert('Fehler beim Abrufen des aktuellen Status.');
+            return;
+        }
+        
+        const statusData = await statusResponse.json();
+        const currentlyApproved = statusData.isApproved;
+        const newApprovalState = !currentlyApproved;
+        
+        const monthName = new Date(year, month - 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+        const action = newApprovalState ? 'freigeben' : 'zurückziehen';
+        
+        if (!confirm(`Möchten Sie den Dienstplan für ${monthName} wirklich ${action}?`)) {
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE}/shifts/plan/approvals/${year}/${month}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                isApproved: newApprovalState
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            alert(data.message || `Dienstplan wurde ${action}.`);
+            await updateApprovalStatus();
+            await loadSchedule();
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung, Dienstpläne freizugeben.');
+        } else {
+            const error = await response.json();
+            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error toggling approval:', error);
+        alert(`Fehler beim ${action} des Dienstplans.`);
+    }
+}
+
+/**
+ * Check if current user is admin
+ */
+function isAdmin() {
+    const currentUser = sessionStorage.getItem('currentUser');
+    if (!currentUser) return false;
+    
+    try {
+        const user = JSON.parse(currentUser);
+        return user.roles && user.roles.includes('Admin');
+    } catch {
+        return false;
     }
 }

@@ -286,6 +286,23 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # ShiftPlanApprovals table (for monthly shift plan approval)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ShiftPlanApprovals (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Year INTEGER NOT NULL,
+            Month INTEGER NOT NULL,
+            IsApproved INTEGER NOT NULL DEFAULT 0,
+            ApprovedAt TEXT,
+            ApprovedBy INTEGER,
+            ApprovedByName TEXT,
+            Notes TEXT,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(Year, Month),
+            FOREIGN KEY (ApprovedBy) REFERENCES Employees(Id)
+        )
+    """)
+    
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 
@@ -330,6 +347,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_admin_notifications_created 
         ON AdminNotifications(CreatedAt DESC)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_shiftplanapprovals_year_month 
+        ON ShiftPlanApprovals(Year, Month)
     """)
     
     cursor.execute("""

@@ -61,6 +61,7 @@ function updateUIForAuthenticatedUser(user) {
         document.body.classList.add('admin');
         document.getElementById('nav-admin').style.display = 'inline-block';
         document.getElementById('nav-management').style.display = 'inline-block';
+        document.getElementById('nav-statistics').style.display = 'inline-block';
         document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
         // Show admin-only tab in absences view

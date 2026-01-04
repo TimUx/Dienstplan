@@ -248,7 +248,7 @@ The production database is stored in the `data/` directory:
 ### Default Database Contents
 The pre-initialized database includes:
 - ✅ All database tables and indexes
-- ✅ Default roles (Admin, Disponent, Mitarbeiter)
+- ✅ Default roles (Admin, Mitarbeiter)
 - ✅ Admin user (`admin@fritzwinter.de` / `Admin123!`)
 - ✅ Standard shift types (F, S, N, Z, BMT, BSB, K, U, L)
 - ❌ No teams (empty by default)

@@ -28,7 +28,7 @@ python main.py init-db --with-sample-data
 
 This command will:
 - ✅ Create all necessary database tables
-- ✅ Initialize default roles (Admin, Disponent, Mitarbeiter)
+- ✅ Initialize default roles (Admin, Mitarbeiter)
 - ✅ Create default admin user
 - ✅ Add standard shift types (F, S, N, Z, BMT, BSB, K, U, L)
 - ✅ Add sample teams (Team Alpha, Beta, Gamma)
@@ -131,7 +131,6 @@ As an admin, you can create more users:
 3. Enter email, password, and assign role
 4. Roles available:
    - **Admin**: Full access to all features
-   - **Disponent**: Can plan shifts and manage employees
    - **Mitarbeiter**: Read-only access
 
 ## CLI Commands Reference

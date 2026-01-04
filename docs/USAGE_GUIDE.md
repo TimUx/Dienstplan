@@ -121,7 +121,7 @@ python main.py plan \
    - Start- und Enddatum
 4. Optional: Notizen hinzufügen
 
-#### Urlaubsanträge bearbeiten (Admin/Disponent)
+#### Urlaubsanträge bearbeiten (Admin)
 1. Navigieren Sie zu **Urlaubsanträge**
 2. Sehen Sie alle offenen Anträge
 3. Genehmigen oder ablehnen Sie Anträge
@@ -140,7 +140,7 @@ python main.py plan \
 2. Wählen Sie einen Dienst aus
 3. Stellen Sie eine Anfrage
 
-#### Als Disponent/Admin: Tausch genehmigen
+#### Als Admin: Tausch genehmigen
 1. Navigieren Sie zu **Diensttausch**
 2. Sehen Sie offene Anfragen
 3. Genehmigen oder ablehnen Sie den Tausch
@@ -232,7 +232,7 @@ GET /api/employees
 ```http
 POST /api/employees
 Content-Type: application/json
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 
 {
   "vorname": "Max",
@@ -258,7 +258,7 @@ Parameter:
 #### Automatisch planen
 ```http
 POST /api/shifts/plan?startDate=2025-01-01&endDate=2025-01-31&force=false
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 Parameter:
@@ -276,7 +276,7 @@ GET /api/statistics/dashboard?startDate=2025-01-01&endDate=2025-01-31
 #### Wochenend-Statistiken
 ```http
 GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31
-Authorization: Required (Admin oder Disponent)
+Authorization: Required (Admin only)
 ```
 
 ## Tipps & Best Practices

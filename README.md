@@ -409,7 +409,7 @@ graph TD
 **Ablaufdiagramm der Initialisierung:**
 
 ```mermaid
-flowchart LR
+flowchart TD
     Start([Start]) --> InitDB[1. Datenbank initialisieren]
     InitDB --> AutoCreate[Automatisch erstellt:<br/>- Rollen<br/>- Admin-Benutzer<br/>- Schichttypen]
     AutoCreate --> CreateTeams[2. Teams erstellen]
@@ -437,44 +437,46 @@ flowchart LR
 Dieses Diagramm zeigt die Struktur der Webanwendung ausgehend vom Hauptmenü im Header:
 
 ```mermaid
-graph TB
-    Header[📋 Header-Menü] --> Dienstplan[📅 Dienstplan]
-    Header --> Verwaltung[👥 Verwaltung<br/><i>nur Admin</i>]
-    Header --> Abwesenheiten[🏖️ Abwesenheiten]
-    Header --> Urlaubsjahresplan[📆 Urlaubsjahresplan]
-    Header --> Diensttausch[🔄 Diensttausch]
-    Header --> Statistiken[📊 Statistiken<br/><i>nur Admin</i>]
-    Header --> Hilfe[📖 Hilfe]
-    Header --> Admin[⚙️ Admin<br/><i>nur Admin</i>]
+graph TD
+    Header[📋 Header-Menü]
     
+    Header --> Dienstplan[📅 Dienstplan]
     Dienstplan --> DP_Woche[Wochenansicht]
     Dienstplan --> DP_Monat[Monatsansicht]
     Dienstplan --> DP_Jahr[Jahresansicht]
     Dienstplan --> DP_Planen[Schichten planen]
     Dienstplan --> DP_Export[Export: CSV/PDF/Excel]
     
+    Header --> Verwaltung[👥 Verwaltung<br/><i>nur Admin</i>]
     Verwaltung --> V_Mitarbeiter[Tab: Mitarbeiter]
     Verwaltung --> V_Teams[Tab: Teams]
     Verwaltung --> V_Schichten[Tab: Schichtverwaltung]
     
+    Header --> Abwesenheiten[🏖️ Abwesenheiten]
     Abwesenheiten --> A_Urlaub[Tab: Urlaub]
     Abwesenheiten --> A_AU[Tab: Arbeitsunfähigkeit]
     Abwesenheiten --> A_Lehrgang[Tab: Lehrgang/Schulung]
     Abwesenheiten --> A_Ferien[Tab: Ferienzeiten]
     Abwesenheiten --> A_Freigabe[Tab: Urlaubsjahresplan Freigabe<br/><i>nur Admin</i>]
     
+    Header --> Urlaubsjahresplan[📆 Urlaubsjahresplan]
     Urlaubsjahresplan --> UJP_Jahr[Jahresauswahl]
     Urlaubsjahresplan --> UJP_Ansicht[Urlaubsübersicht]
     
+    Header --> Diensttausch[🔄 Diensttausch]
     Diensttausch --> DT_Verfuegbar[Verfügbare Dienste]
     Diensttausch --> DT_Offen[Offene Anfragen<br/><i>nur Admin</i>]
     Diensttausch --> DT_Meine[Meine Tauschangebote]
     
+    Header --> Statistiken[📊 Statistiken<br/><i>nur Admin</i>]
     Statistiken --> S_Arbeitsstunden[Arbeitsstunden]
     Statistiken --> S_Schichtverteilung[Schichtverteilung]
     Statistiken --> S_Fehltage[Fehltageübersicht]
     Statistiken --> S_Workload[Team-Workload]
     
+    Header --> Hilfe[📖 Hilfe]
+    
+    Header --> Admin[⚙️ Admin<br/><i>nur Admin</i>]
     Admin --> AD_Protokoll[Tab: Änderungsprotokoll]
     Admin --> AD_Email[Tab: E-Mail-Einstellungen]
     Admin --> AD_Settings[Tab: Globale Einstellungen]

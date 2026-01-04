@@ -60,8 +60,14 @@ function updateUIForAuthenticatedUser(user) {
     if (isAdmin) {
         document.body.classList.add('admin');
         document.getElementById('nav-admin').style.display = 'inline-block';
+        document.getElementById('nav-management').style.display = 'inline-block';
         document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
+        // Show admin-only tab in absences view
+        const vacationYearApprovalsTab = document.getElementById('tab-vacation-year-approvals');
+        if (vacationYearApprovalsTab) {
+            vacationYearApprovalsTab.style.display = '';
+        }
     } else if (isDisponent) {
         document.body.classList.add('disponent');
         document.getElementById('nav-absences').style.display = 'inline-block';
@@ -248,10 +254,18 @@ function showView(viewName) {
     // Load content based on view
     if (viewName === 'schedule') {
         loadSchedule();
+    } else if (viewName === 'management') {
+        // Load employees tab by default in management view
+        switchManagementTab('employees');
     } else if (viewName === 'employees') {
-        loadEmployees();
+        // Redirect old 'employees' view to new 'management' view
+        showView('management');
+        return;
     } else if (viewName === 'teams') {
-        loadTeams();
+        // Redirect old 'teams' view to new 'management' view
+        showView('management');
+        switchManagementTab('teams');
+        return;
     } else if (viewName === 'absences') {
         // Load vacation tab by default
         switchAbsenceTab('vacation');
@@ -274,8 +288,9 @@ function showView(viewName) {
 }
 
 function loadAdminView() {
-    // Load users tab by default (it will be active)
-    loadUsers();
+    // Load audit logs tab by default (it will be active)
+    loadAuditLogs(1, 50);
+    startAuditLogAutoRefresh(AUDIT_LOG_DEFAULT_REFRESH_INTERVAL);
 }
 
 // Initialize smooth scrolling for manual anchors
@@ -2209,12 +2224,12 @@ async function processVacationRequest(id, status) {
 // Absence Management Tab Switching
 function switchAbsenceTab(tabName) {
     // Hide all tab contents
-    document.querySelectorAll('.tab-content').forEach(tab => {
+    document.querySelectorAll('#absences-view .tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
     
     // Remove active class from all tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('#absences-view .tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     
@@ -2225,11 +2240,10 @@ function switchAbsenceTab(tabName) {
     }
     
     // Activate corresponding button
-    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabButtons = document.querySelectorAll('#absences-view .tab-btn');
     tabButtons.forEach((btn, index) => {
-        if ((tabName === 'vacation' && index === 0) ||
-            (tabName === 'sick' && index === 1) ||
-            (tabName === 'training' && index === 2)) {
+        const btnOnclick = btn.getAttribute('onclick');
+        if (btnOnclick && btnOnclick.includes(`'${tabName}'`)) {
             btn.classList.add('active');
         }
     });
@@ -2241,6 +2255,47 @@ function switchAbsenceTab(tabName) {
         loadAbsences('AU');
     } else if (tabName === 'training') {
         loadAbsences('L');
+    } else if (tabName === 'vacation-periods') {
+        loadVacationPeriods();
+    } else if (tabName === 'vacation-year-approvals') {
+        loadVacationYearApprovalsAbsence();
+    }
+}
+
+// Switch Management Tab (for Verwaltung view)
+function switchManagementTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('#management-view .tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all tab buttons
+    document.querySelectorAll('#management-view .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    const selectedTab = document.getElementById(`management-${tabName}-tab`);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+    
+    // Activate corresponding button
+    const tabButtons = document.querySelectorAll('#management-view .tab-btn');
+    tabButtons.forEach(btn => {
+        const btnOnclick = btn.getAttribute('onclick');
+        if (btnOnclick && btnOnclick.includes(`'${tabName}'`)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Load content for the selected tab
+    if (tabName === 'employees') {
+        loadEmployees();
+    } else if (tabName === 'teams') {
+        loadTeams();
+    } else if (tabName === 'shift-types') {
+        loadShiftTypesManagement();
     }
 }
 
@@ -4073,19 +4128,7 @@ function showAdminTab(tabName, clickedElement) {
     }
     
     // Load data for the selected tab if needed
-    if (tabName === 'users') {
-        stopAuditLogAutoRefresh(); // Stop auto-refresh when switching away from audit logs
-        loadUsers();
-    } else if (tabName === 'shift-management') {
-        stopAuditLogAutoRefresh();
-        loadShiftTypesAdmin();
-    } else if (tabName === 'vacation-periods') {
-        stopAuditLogAutoRefresh();
-        loadVacationPeriods();
-    } else if (tabName === 'vacation-year-approvals') {
-        stopAuditLogAutoRefresh();
-        loadVacationYearApprovals();
-    } else if (tabName === 'audit-logs') {
+    if (tabName === 'audit-logs') {
         loadAuditLogs(1, 50);
         startAuditLogAutoRefresh(AUDIT_LOG_DEFAULT_REFRESH_INTERVAL); // Start auto-refresh with default interval
     } else if (tabName === 'email') {
@@ -5160,5 +5203,196 @@ function isAdmin() {
         return user.roles && user.roles.includes('Admin');
     } catch {
         return false;
+    }
+}
+
+/**
+ * Load shift types for management view
+ */
+async function loadShiftTypesManagement() {
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load shift types');
+        }
+        
+        const shiftTypes = await response.json();
+        displayShiftTypesManagement(shiftTypes);
+    } catch (error) {
+        console.error('Error loading shift types:', error);
+        document.getElementById('shift-types-management-content').innerHTML = '<p class="error">Fehler beim Laden der Schichttypen.</p>';
+    }
+}
+
+/**
+ * Display shift types in management view
+ */
+function displayShiftTypesManagement(shiftTypes) {
+    const container = document.getElementById('shift-types-management-content');
+    
+    if (shiftTypes.length === 0) {
+        container.innerHTML = '<p class="info">Keine Schichttypen vorhanden. Klicken Sie auf "+ Schichttyp hinzufügen" um einen neuen Schichttyp anzulegen.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Kürzel</th><th>Name</th><th>Zeiten</th><th>Tagesstunden</th><th>Wochenstunden</th><th>Arbeitstage</th><th>Farbe</th><th>Status</th><th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    shiftTypes.forEach(shift => {
+        const isActive = shift.isActive !== false;
+        const statusBadge = isActive ? '<span class="badge badge-success">Aktiv</span>' : '<span class="badge badge-secondary">Inaktiv</span>';
+        
+        // Build working days display
+        const days = [];
+        if (shift.worksMonday) days.push('Mo');
+        if (shift.worksTuesday) days.push('Di');
+        if (shift.worksWednesday) days.push('Mi');
+        if (shift.worksThursday) days.push('Do');
+        if (shift.worksFriday) days.push('Fr');
+        if (shift.worksSaturday) days.push('Sa');
+        if (shift.worksSunday) days.push('So');
+        const workDays = days.length > 0 ? days.join(', ') : 'Keine';
+        
+        html += '<tr>';
+        html += `<td><span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span></td>`;
+        html += `<td>${escapeHtml(shift.name)}</td>`;
+        html += `<td>${shift.startTime} - ${shift.endTime}</td>`;
+        html += `<td>${shift.durationHours}h</td>`;
+        html += `<td>${shift.weeklyWorkingHours || 40.0}h</td>`;
+        html += `<td><small>${workDays}</small></td>`;
+        html += `<td><div class="color-preview" style="background-color: ${shift.colorCode}"></div></td>`;
+        html += `<td>${statusBadge}</td>`;
+        html += '<td class="actions">';
+        html += `<button onclick="editShiftType(${shift.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
+        html += `<button onclick="showShiftTypeTeamsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">👥 Teams</button> `;
+        html += `<button onclick="showShiftTypeRelationshipsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">🔗 Reihenfolge</button> `;
+        html += `<button onclick="deleteShiftType(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
+        html += '</td>';
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+/**
+ * Load vacation year approvals for absences view
+ */
+async function loadVacationYearApprovalsAbsence() {
+    const contentDiv = document.getElementById('vacation-year-approvals-absence-content');
+    if (!contentDiv) return;
+    
+    contentDiv.innerHTML = '<p class="loading">Lade Freigaben...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacationyearapprovals`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const approvals = await response.json();
+            displayVacationYearApprovalsAbsence(approvals);
+        } else {
+            contentDiv.innerHTML = '<p class="error">Fehler beim Laden der Freigaben.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading vacation year approvals:', error);
+        contentDiv.innerHTML = '<p class="error">Fehler beim Laden der Freigaben.</p>';
+    }
+}
+
+/**
+ * Display vacation year approvals in absences view
+ */
+function displayVacationYearApprovalsAbsence(approvals) {
+    const contentDiv = document.getElementById('vacation-year-approvals-absence-content');
+    
+    // Generate list of years (current year +/- 5 years)
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear - 2; year <= currentYear + 5; year++) {
+        const approval = approvals.find(a => a.year === year);
+        years.push({
+            year: year,
+            isApproved: approval ? approval.isApproved : false,
+            approvedBy: approval ? approval.approvedBy : null,
+            approvedAt: approval ? approval.approvedAt : null,
+            notes: approval ? approval.notes : null
+        });
+    }
+    
+    let html = '<table class="data-table">';
+    html += '<thead><tr>';
+    html += '<th>Jahr</th>';
+    html += '<th>Status</th>';
+    html += '<th>Freigegeben von</th>';
+    html += '<th>Freigegeben am</th>';
+    html += '<th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    years.forEach(item => {
+        html += '<tr>';
+        html += `<td>${item.year}</td>`;
+        
+        if (item.isApproved) {
+            html += '<td><span class="badge badge-success">✓ Freigegeben</span></td>';
+        } else {
+            html += '<td><span class="badge badge-warning">⊗ Nicht freigegeben</span></td>';
+        }
+        
+        html += `<td>${item.approvedBy || '-'}</td>`;
+        html += `<td>${item.approvedAt ? new Date(item.approvedAt).toLocaleDateString('de-DE') : '-'}</td>`;
+        html += '<td class="actions">';
+        
+        if (item.isApproved) {
+            html += `<button onclick="toggleYearApprovalAbsence(${item.year}, false)" class="btn-small btn-danger">🔒 Sperren</button>`;
+        } else {
+            html += `<button onclick="toggleYearApprovalAbsence(${item.year}, true)" class="btn-small btn-success">✓ Freigeben</button>`;
+        }
+        
+        html += '</td>';
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    contentDiv.innerHTML = html;
+}
+
+/**
+ * Toggle year approval status in absences view
+ */
+async function toggleYearApprovalAbsence(year, approve) {
+    const action = approve ? 'Freigabe' : 'Sperrung';
+    
+    if (!confirm(`Möchten Sie das Jahr ${year} wirklich ${approve ? 'freigeben' : 'sperren'}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/vacationyearapprovals`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                year: year,
+                isApproved: approve
+            })
+        });
+        
+        if (response.ok) {
+            alert(`Jahr ${year} wurde erfolgreich ${approve ? 'freigegeben' : 'gesperrt'}.`);
+            loadVacationYearApprovalsAbsence();
+        } else {
+            alert(`Fehler beim ${action} des Jahres.`);
+        }
+    } catch (error) {
+        console.error(`Error toggling year approval:`, error);
+        alert(`Fehler beim ${action} des Jahres.`);
     }
 }

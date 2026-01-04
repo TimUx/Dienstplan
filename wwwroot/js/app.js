@@ -885,6 +885,24 @@ function formatEmployeeDisplayName(employeeName, personalnummer) {
     return personalnummer ? `${employeeName} (${personalnummer})` : employeeName;
 }
 
+/**
+ * Determines if an employee should be excluded from the unassigned team listing.
+ * Employees with special functions (BMT, BSB, Ferienjobber) but no regular team
+ * belong only to virtual teams and should not appear in "Ohne Team".
+ * @param {Object} emp - The employee object
+ * @returns {boolean} True if employee should be excluded from unassigned team
+ */
+function shouldExcludeFromUnassigned(emp) {
+    // If employee has a team, they should not be excluded
+    if (emp.teamId && emp.teamId > 0) {
+        return false;
+    }
+    
+    // Exclude if employee has special functions and no team
+    // These employees belong to virtual teams only
+    return emp.isBrandmeldetechniker || emp.isBrandschutzbeauftragter || emp.isFerienjobber;
+}
+
 function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
     const teams = {};
     

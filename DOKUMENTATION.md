@@ -85,7 +85,6 @@ Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
 - **Urlaubsverwaltung**: `07-vacation-requests.png`
 - **Diensttausch**: `08-shift-exchange.png`
 - **Statistiken**: `09-statistics.png`
-- **Hilfe-System**: `10-help-manual.png`
 - **Administration**: `11-admin-panel.png`
 - **Schichtverwaltung**: `12-shift-management.png` - Dynamische Schichttypen-Verwaltung ✅
 - **Schichttyp bearbeiten**: `13-shift-type-edit.png` - Bearbeitungsformular ✅

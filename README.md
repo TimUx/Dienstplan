@@ -153,9 +153,33 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 ![Statistiken](docs/screenshots/09-statistics.png)
 *Umfassende Statistiken über Arbeitsstunden, Schichtverteilung, Fehltage und Team-Auslastung*
 
-### Hilfe & Handbuch
-![Handbuch](docs/screenshots/10-help-manual.png)
-*Integriertes Benutzerhandbuch mit ausführlichen Anleitungen zu allen Funktionen*
+### Schichtverwaltung
+![Schichtverwaltung](docs/screenshots/12-shift-management.png)
+*Zentrale Verwaltung aller Schichttypen mit Zeitkonfiguration und Wochenarbeitsstunden*
+
+### Schichttyp bearbeiten
+![Schichttyp bearbeiten](docs/screenshots/13-shift-type-edit.png)
+*Detailansicht zum Bearbeiten von Schichttypen mit Arbeitszeiten, Farben und Wochentagen*
+
+### Schicht-Team-Zuordnung
+![Schicht-Team-Zuordnung](docs/screenshots/14-shift-team-assignment.png)
+*Zuordnung von Schichttypen zu Teams mit Mindest- und Maximalbesetzung*
+
+### Mehrfachauswahl
+![Mehrfachauswahl aktiv](docs/screenshots/15-multi-select-active.png)
+*Aktivierte Mehrfachauswahl zur gleichzeitigen Bearbeitung mehrerer Tage*
+
+### Mehrfachauswahl Dialog
+![Mehrfachauswahl Dialog](docs/screenshots/16-multi-select-edit-dialog.png)
+*Bearbeitungsdialog für mehrere Tage gleichzeitig*
+
+### Urlaubsjahresplan
+![Urlaubsjahresplan](docs/screenshots/17-vacation-year-plan.png)
+*Jahresübersicht aller Urlaubsanträge und genehmigten Urlaube*
+
+### Team-Verwaltung
+![Team-Verwaltung](docs/screenshots/18-team-management.png)
+*Verwaltung aller Teams mit Mitarbeiterzuordnung*
 
 ### Administration
 ![Admin-Panel](docs/screenshots/11-admin-panel.png)

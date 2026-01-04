@@ -3990,12 +3990,13 @@ function displayAuditLogs(logs) {
     logs.forEach(log => {
         const timestamp = new Date(log.timestamp).toLocaleString('de-DE');
         const actionBadge = getActionBadge(log.action);
+        const entityNameTranslated = getEntityNameTranslation(log.entityName);
         
         html += '<tr>';
         html += `<td>${timestamp}</td>`;
         html += `<td>${escapeHtml(log.userName)}</td>`;
         html += `<td>${actionBadge}</td>`;
-        html += `<td>${escapeHtml(log.entityName)} (ID: ${escapeHtml(log.entityId)})</td>`;
+        html += `<td>${escapeHtml(entityNameTranslated)} (ID: ${escapeHtml(log.entityId)})</td>`;
         html += `<td><small>${log.changes ? escapeHtml(log.changes.substring(0, 100)) + '...' : '-'}</small></td>`;
         html += '</tr>';
     });
@@ -4012,9 +4013,33 @@ function getActionBadge(action) {
             return '<span class="badge badge-warning">Aktualisiert</span>';
         case 'Deleted':
             return '<span class="badge badge-error">Gelöscht</span>';
+        case 'BulkUpdate':
+            return '<span class="badge badge-info">Mehrfach-Änderung</span>';
         default:
             return `<span class="badge">${escapeHtml(action)}</span>`;
     }
+}
+
+function getEntityNameTranslation(entityName) {
+    const translations = {
+        'Employee': 'Mitarbeiter',
+        'Team': 'Team',
+        'ShiftType': 'Schichttyp',
+        'ShiftAssignment': 'Schichtzuweisung',
+        'Absence': 'Abwesenheit',
+        'VacationPeriod': 'Ferienzeit',
+        'VacationRequest': 'Urlaubsantrag',
+        'VacationYearApproval': 'Jahresurlaubsgenehmigung',
+        'ShiftExchange': 'Diensttausch',
+        'TeamShiftAssignment': 'Team-Schicht-Zuweisung',
+        'ShiftTypeRelationship': 'Schichttyp-Beziehung'
+    };
+    
+    if (!translations[entityName]) {
+        console.warn(`Missing translation for entity: ${entityName}`);
+    }
+    
+    return translations[entityName] || entityName;
 }
 
 // ===========================
@@ -4157,7 +4182,7 @@ function displayAuditLogsPaginated(result) {
         html += '<tr>';
         html += `<td>${new Date(log.timestamp).toLocaleString('de-DE')}</td>`;
         html += `<td>${escapeHtml(log.userName)}</td>`;
-        html += `<td>${escapeHtml(log.entityName)}</td>`;
+        html += `<td>${escapeHtml(getEntityNameTranslation(log.entityName))}</td>`;
         html += `<td>${escapeHtml(log.entityId)}</td>`;
         html += `<td>${getActionBadge(log.action)}</td>`;
         html += `<td><pre class="changes-preview">${escapeHtml(log.changes?.substring(0, 100) || '')}${log.changes?.length > 100 ? '...' : ''}</pre></td>`;

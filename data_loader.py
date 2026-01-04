@@ -31,14 +31,9 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     team_beta = Team(id=2, name="Team Beta", description="Second team")
     team_gamma = Team(id=3, name="Team Gamma", description="Third team")
     
-    # Create virtual team for Fire Alarm System (TD-qualified without regular team)
-    team_fire_alarm = Team(id=99, name="Brandmeldeanlage", 
-                          description="Virtuelles Team für Mitarbeiter mit Sonderfunktion (BMT/BSB) ohne reguläre Teamzuweisung",
-                          is_virtual=True)  # Mark as virtual team
+    teams = [team_alpha, team_beta, team_gamma]
     
-    teams = [team_alpha, team_beta, team_gamma, team_fire_alarm]
-    
-    # Create employees (15 in teams + 2 additional = 17 total)
+    # Create employees (17 total in teams)
     employees = []
     
     # Team Alpha (5 members)
@@ -50,30 +45,24 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
         Employee(5, "Tom", "Wagner", "1005", team_id=1),
     ])
     
-    # Team Beta (5 members)
+    # Team Beta (6 members)
     employees.extend([
         Employee(6, "Julia", "Becker", "2001", team_id=2),
         Employee(7, "Michael", "Schulz", "2002", team_id=2),
         Employee(8, "Sarah", "Hoffmann", "2003", team_id=2),
         Employee(9, "Daniel", "Koch", "2004", team_id=2),
         Employee(10, "Laura", "Bauer", "2005", team_id=2),
+        Employee(17, "Thomas", "Zimmermann", "2006", team_id=2),
     ])
     
-    # Team Gamma (5 members)
+    # Team Gamma (6 members)
     employees.extend([
         Employee(11, "Markus", "Richter", "3001", team_id=3),
         Employee(12, "Stefanie", "Klein", "3002", team_id=3),
         Employee(13, "Andreas", "Wolf", "3003", team_id=3),
         Employee(14, "Nicole", "Schröder", "3004", team_id=3),
         Employee(15, "Christian", "Neumann", "3005", team_id=3),
-    ])
-    
-    # Additional employees - assigned to teams as regular members
-    # One is TD-qualified and assigned to virtual "Fire Alarm System" team
-    # The other is a regular team member
-    employees.extend([
-        Employee(16, "Robert", "Franke", "1006", team_id=99, is_td_qualified=True),
-        Employee(17, "Thomas", "Zimmermann", "2006", team_id=2),  # Added to Team Beta
+        Employee(16, "Robert", "Franke", "1006", team_id=3, is_td_qualified=True),
     ])
     
     # Assign employees to teams
@@ -84,8 +73,6 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
             team_beta.employees.append(emp)
         elif emp.team_id == 3:
             team_gamma.employees.append(emp)
-        elif emp.team_id == 99:
-            team_fire_alarm.employees.append(emp)
     
     # Create sample absences using official codes: U, AU, L
     absences = []
@@ -204,10 +191,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
         # TD qualification: employee is qualified if they have either BMT or BSB qualification
         is_td = bool(row[COL_IS_BMT]) or bool(row[COL_IS_BSB])
         
-        # Auto-assign Ferienjobbers to virtual Ferienjobber team (ID 98)
         team_id = row[COL_TEAM_ID]
-        if bool(row[COL_IS_FERIENJOBBER]) and not team_id:
-            team_id = 98  # Ferienjobber virtual team
         
         emp = Employee(
             id=row[COL_ID],

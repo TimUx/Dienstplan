@@ -13,10 +13,6 @@ from datetime import date, timedelta
 from typing import Dict, List, Tuple, Set
 from entities import Employee, Absence, ShiftType, STANDARD_SHIFT_TYPES, Team
 
-# Virtual team IDs
-VIRTUAL_TEAM_ID = 99  # "Fire Alarm System" virtual team (for TD-qualified employees)
-FERIENJOBBER_TEAM_ID = 98  # "Ferienjobber" virtual team (for temporary holiday workers)
-
 
 class ShiftPlanningModel:
     """
@@ -88,7 +84,6 @@ class ShiftPlanningModel:
         self.employee_active = {}  # employee_active[employee_id, date] = 0 or 1 (derived from team shift)
         self.employee_weekend_shift = {}  # employee_weekend_shift[emp_id, date] = 0 or 1 (WEEKEND ONLY - shift type from team)
         self.td_vars = {}  # td[employee_id, week_idx] = 0 or 1 (Tagdienst assignment)
-        self.ferienjobber_cross_team = {}  # ferienjobber_cross_team[ferienjobber_id, team_id, week_idx] = 0 or 1 (Ferienjobber helping team)
         
         # Build the model
         self._create_decision_variables()
@@ -159,17 +154,11 @@ class ShiftPlanningModel:
         Important: 
         - Weekday shifts (Mon-Fri) are determined by team's shift
         - Weekend shifts (Sat-Sun): PRESENCE is individually assigned, but shift TYPE matches team's weekly shift
-        - Virtual team "Fire Alarm System" (ID 99) does NOT participate in regular shift rotation
         """
         
         # CORE VARIABLE: Team shift assignment per week (WEEKDAYS ONLY)
         # team_shift[team_id, week_idx, shift_code] ∈ {0, 1}
-        # EXCLUDE virtual team "Fire Alarm System" (ID 99) from shift rotation
         for team in self.teams:
-            # Skip virtual team for TD-qualified employees
-            if team.id == VIRTUAL_TEAM_ID:  # Fire Alarm System virtual team
-                continue
-                
             for week_idx in range(len(self.weeks)):
                 for shift_code in self.shift_codes:
                     var_name = f"team_{team.id}_week{week_idx}_shift{shift_code}"
@@ -194,10 +183,6 @@ class ShiftPlanningModel:
         # shifts. If weekend springer coverage is needed, extend the model to support
         # flexible weekend shift types for springers.
         for emp in self.employees:
-            # Exclude temporary workers (Ferienjobber) from weekend rotation
-            if emp.is_ferienjobber:
-                continue
-            
             # Only for employees with a team
             if not emp.team_id:
                 continue
@@ -219,20 +204,6 @@ class ShiftPlanningModel:
                 if has_weekdays:
                     var_name = f"td_emp{emp.id}_week{week_idx}"
                     self.td_vars[(emp.id, week_idx)] = self.model.NewBoolVar(var_name)
-        
-        # FERIENJOBBER CROSS-TEAM VARIABLES (NEW)
-        # ferienjobber_cross_team[ferienjobber_id, team_id, week_idx] ∈ {0, 1}
-        # Allows Ferienjobbers to help any team (they don't have an own team)
-        ferienjobbers = [emp for emp in self.employees if emp.is_ferienjobber]
-        for ferienjobber in ferienjobbers:
-            for team in self.teams:
-                # Skip virtual teams
-                if team.id == VIRTUAL_TEAM_ID or team.id == FERIENJOBBER_TEAM_ID:
-                    continue
-                
-                for week_idx in range(len(self.weeks)):
-                    var_name = f"ferienjobber{ferienjobber.id}_helps_team{team.id}_week{week_idx}"
-                    self.ferienjobber_cross_team[(ferienjobber.id, team.id, week_idx)] = self.model.NewBoolVar(var_name)
     
     
     def get_model(self) -> cp_model.CpModel:
@@ -300,7 +271,6 @@ class ShiftPlanningModel:
         print(f"Number of employees: {len(self.employees)}")
         print(f"  - In teams: {len([e for e in self.employees if e.team_id])}")
         print(f"  - TD qualified: {len([e for e in self.employees if e.can_do_td])}")
-        print(f"  - Ferienjobbers: {len([e for e in self.employees if e.is_ferienjobber])}")
         print(f"Number of shift types: {len(self.shift_codes)}")
         print(f"Shift types: {', '.join(self.shift_codes)}")
         print(f"Number of absences: {len(self.absences)}")

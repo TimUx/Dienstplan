@@ -68,8 +68,14 @@ Neue Sektion in `BENUTZERHANDBUCH.md` (Abschnitt 9.3):
 - 07-vacation-requests.png
 - 08-shift-exchange.png
 - 09-statistics.png
-- 10-help-manual.png
 - 11-admin-panel.png
+- 12-shift-management.png ✅
+- 13-shift-type-edit.png ✅
+- 14-shift-team-assignment.png ✅
+- 15-multi-select-active.png ✅
+- 16-multi-select-edit-dialog.png ✅
+- 17-vacation-year-plan.png ✅
+- 18-team-management.png ✅
 
 #### Benötigte neue Screenshots dokumentiert:
 In `BENUTZERHANDBUCH.md` wurde eine neue Sektion "Benötigte Screenshots" hinzugefügt mit:
@@ -103,61 +109,21 @@ In `BENUTZERHANDBUCH.md` wurde eine neue Sektion "Benötigte Screenshots" hinzug
 
 ## 📋 Noch zu erledigende Aufgaben
 
-### Screenshots erstellen
+### ✅ Screenshots erstellt (ERLEDIGT)
 
-Die 7 neuen Screenshots müssen noch erstellt werden. Dazu wird benötigt:
+Die 7 neuen Screenshots wurden bereits erstellt und sind verfügbar in `docs/screenshots/`:
 
-**Voraussetzungen:**
-- Laufende Anwendung (Development- oder Production-Modus)
-- Admin-Zugang
-- Screenshot-Tool (z.B. Snipping Tool, Greenshot)
-- Testdaten in der Datenbank
+**Erstellte Screenshots:**
 
-**Checkliste:**
+- ✅ **12-shift-management.png** - Schichtverwaltung Übersicht mit allen Schichttypen
+- ✅ **13-shift-type-edit.png** - Schichttyp-Bearbeitungsformular mit allen Feldern
+- ✅ **14-shift-team-assignment.png** - Team-Schicht-Zuordnung Dialog
+- ✅ **15-multi-select-active.png** - Dienstplan mit aktivierter Mehrfachauswahl
+- ✅ **16-multi-select-edit-dialog.png** - Massenbearbeitungs-Dialog
+- ✅ **17-vacation-year-plan.png** - Jahresübersicht Urlaubsplan
+- ✅ **18-team-management.png** - Teamverwaltungs-Übersicht
 
-- [ ] **12-shift-management.png**
-  - Navigation: Administration → Schichtverwaltung
-  - Zeigt: Tabelle mit allen Schichttypen
-  - Wichtig: Action-Buttons sichtbar
-
-- [ ] **13-shift-type-edit.png**
-  - Aktion: Schichttyp bearbeiten klicken
-  - Zeigt: Bearbeitungsformular mit allen Feldern
-  - Wichtig: Arbeitstage-Checkboxen, Color Picker
-
-- [ ] **14-shift-team-assignment.png**
-  - Aktion: "Teams" Button bei einem Schichttyp
-  - Zeigt: Dialog mit Team-Checkboxen
-  - Wichtig: Mehrere Teams sichtbar
-
-- [ ] **15-multi-select-active.png**
-  - Aktion: Mehrfachauswahl aktivieren
-  - Zeigt: Dienstplan mit ausgewählten Schichten
-  - Wichtig: Blauer Button, Zähler, markierte Schichten
-
-- [ ] **16-multi-select-edit-dialog.png**
-  - Aktion: "Auswahl bearbeiten" klicken
-  - Zeigt: Dialog mit Bearbeitungsoptionen
-  - Wichtig: Liste der Schichten, alle Optionen
-
-- [ ] **17-vacation-year-plan.png**
-  - Navigation: Urlaubsanträge (Jahresansicht wenn vorhanden)
-  - Zeigt: Jahresübersicht mit Urlaubszeiträumen
-  - Wichtig: Verschiedene Status sichtbar
-
-- [ ] **18-team-management.png**
-  - Navigation: Teams
-  - Zeigt: Übersicht aller Teams
-  - Wichtig: Team-Details, Aktionsbuttons
-
-**Nach Erstellung:**
-1. Screenshots in `docs/screenshots/` speichern
-2. PNG-Format, mind. 1920x1080
-3. Referenzen in Dokumentation hinzufügen:
-   ```markdown
-   ![Beschreibung](docs/screenshots/XX-name.png)
-   ```
-4. Commit mit "Add screenshots for new features"
+**Status:** Alle Screenshots wurden in der Dokumentation eingefügt und referenziert.
 
 ---
 

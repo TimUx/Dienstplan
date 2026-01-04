@@ -45,34 +45,19 @@ def test_absence_codes():
 
 
 def test_virtual_teams():
-    """Test that virtual teams are correctly configured"""
+    """Test that no virtual teams exist"""
     print("\n" + "="*60)
     print("TEST: Virtual Teams")
     print("="*60)
     
     employees, teams, absences = generate_sample_data()
     
-    # Check for Fire Alarm System
-    fire_alarm = None
-    springer_team = None
-    
+    # Check that no virtual teams exist
     for team in teams:
-        if team.name == "Fire Alarm System":
-            fire_alarm = team
-        if team.name == "Springer":
-            springer_team = team
+        assert not team.is_virtual, f"Virtual team '{team.name}' should not exist"
     
-    assert fire_alarm is not None, "Virtual team 'Fire Alarm System' must exist"
-    assert fire_alarm.id == 99, "Fire Alarm System must have ID 99"
-    assert fire_alarm.is_virtual, "Fire Alarm System must be marked as virtual"
-    print(f"✓ Virtual team 'Fire Alarm System' (ID {fire_alarm.id}) exists")
-    
-    assert springer_team is None, "Virtual 'Springer' team must NOT exist"
+    print("✓ No virtual teams exist (as expected)")
     print("✓ No virtual 'Springer' team (springers are employee attributes)")
-    
-    # Check that TD-qualified employees are in Fire Alarm System
-    td_in_fire_alarm = [e for e in fire_alarm.employees if e.can_do_td]
-    print(f"✓ Fire Alarm System has {len(td_in_fire_alarm)} TD-qualified members")
     
     return True
 
@@ -168,7 +153,7 @@ def test_all_employees_visible():
     print(f"✓ All {len(employees)} employees visible for all {len(dates)} days")
     
     # Check that all regular team members are included
-    regular_members = [e for e in employees if e.team_id and e.team_id != 99 and not e.is_ferienjobber]
+    regular_members = [e for e in employees if e.team_id]
     print(f"✓ {len(regular_members)} regular team members included in schedule")
     
     return True

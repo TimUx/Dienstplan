@@ -859,9 +859,6 @@ function createShiftBadge(shift) {
     return `<span class="shift-badge shift-${shiftCode} ${badgeClass} ${selectedClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
 }
 
-// Constants for team IDs
-const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99; // Virtual team ID for fire alarm system (must match database ID)
-
 /**
  * Formats employee display name with personnel number in parentheses
  * @param {string} employeeName - The employee's name
@@ -870,30 +867,6 @@ const VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99; // Virtual team ID for fire alarm s
  */
 function formatEmployeeDisplayName(employeeName, personalnummer) {
     return personalnummer ? `${employeeName} (${personalnummer})` : employeeName;
-}
-
-/**
- * Ensures the virtual Brandmeldeanlage team exists in the teams object
- * @param {Object} teams - The teams object to check and update
- */
-function ensureVirtualTeam(teams) {
-    if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]) {
-        teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
-            teamId: VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,
-            teamName: 'Brandmeldeanlage',
-            employees: {}
-        };
-    }
-}
-
-/**
- * Check if employee should be excluded from "Ohne Team" because they belong to virtual team
- * @param {Object} emp - Employee object
- * @returns {boolean} True if employee should be excluded from "Ohne Team"
- */
-function shouldExcludeFromUnassigned(emp) {
-    // Employees with special functions (BMT/BSB) should only appear in virtual team, not "Ohne Team"
-    return !emp.teamId && (emp.isBrandmeldetechniker || emp.isBrandschutzbeauftragter);
 }
 
 function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
@@ -939,26 +912,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                 absences: [] // Store absences for this employee
             };
         }
-        
-        // Also add BSB/MBT employees to virtual "Brandmeldeanlage" team
-        if (emp.isBrandmeldetechniker || emp.isBrandschutzbeauftragter) {
-            ensureVirtualTeam(teams);
-            
-            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[emp.id]) {
-                const displayName = formatEmployeeDisplayName(
-                    emp.fullName || `${emp.vorname} ${emp.name}`,
-                    emp.personalnummer
-                );
-                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[emp.id] = {
-                    id: emp.id,
-                    name: displayName,
-                    personalnummer: emp.personalnummer,
-                    isTeamLeader: emp.isTeamLeader || false,
-                    shifts: {},
-                    absences: []
-                };
-            }
-        }
     });
     
     // Then, add shift assignments to the employees
@@ -966,30 +919,27 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         // Find employee to check for special functions
         const employee = employeeMap.get(a.employeeId);
         
-        // If employee has special functions but no team, skip adding to regular team
-        // They will be added to virtual team below
-        if (!employee || !shouldExcludeFromUnassigned(employee)) {
-            const teamId = a.teamId || UNASSIGNED_TEAM_ID;
+        const teamId = a.teamId || UNASSIGNED_TEAM_ID;
+        
+        // Ensure team exists (in case assignment has a team not in allEmployees)
+        if (!teams[teamId]) {
+            const teamName = 'Ohne Team'; // Will be updated if we find the employee
+            teams[teamId] = {
+                teamId: teamId,
+                teamName: teamName,
+                employees: {}
+            };
+        }
+        
+        // Ensure employee exists in the team
+        if (!teams[teamId].employees[a.employeeId]) {
+            const correctTeamName = employee?.teamName || 'Ohne Team';
+            teams[teamId].teamName = correctTeamName;
             
-            // Ensure team exists (in case assignment has a team not in allEmployees)
-            if (!teams[teamId]) {
-                const teamName = 'Ohne Team'; // Will be updated if we find the employee
-                teams[teamId] = {
-                    teamId: teamId,
-                    teamName: teamName,
-                    employees: {}
-                };
-            }
-            
-            // Ensure employee exists in the team
-            if (!teams[teamId].employees[a.employeeId]) {
-                const correctTeamName = employee?.teamName || 'Ohne Team';
-                teams[teamId].teamName = correctTeamName;
-                
-                const displayName = formatEmployeeDisplayName(
-                    a.employeeName,
-                    employee?.personalnummer || ''
-                );
+            const displayName = formatEmployeeDisplayName(
+                a.employeeName,
+                employee?.personalnummer || ''
+            );
                 
                 teams[teamId].employees[a.employeeId] = {
                     id: a.employeeId,
@@ -1006,35 +956,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
                 teams[teamId].employees[a.employeeId].shifts[dateKey] = [];
             }
             teams[teamId].employees[a.employeeId].shifts[dateKey].push(a);
-        }
-        
-        // If this is a BSB or MBT shift, OR if employee has special functions but no team,
-        // also add to virtual "Brandmeldeanlage" team
-        if (a.shiftCode === 'BSB' || a.shiftCode === 'BMT' || (employee && shouldExcludeFromUnassigned(employee))) {
-            ensureVirtualTeam(teams);
-            
-            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId]) {
-                const displayName = formatEmployeeDisplayName(
-                    a.employeeName,
-                    employee?.personalnummer || ''
-                );
-                
-                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId] = {
-                    id: a.employeeId,
-                    name: displayName,
-                    personalnummer: employee?.personalnummer || '',
-                    isTeamLeader: employee?.isTeamLeader || false,
-                    shifts: {},
-                    absences: []
-                };
-            }
-            
-            const dateKey = a.date.split('T')[0];
-            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey]) {
-                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey] = [];
-            }
-            teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[a.employeeId].shifts[dateKey].push(a);
-        }
     });
     
     // Add absences to the employees
@@ -1042,10 +963,7 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
         // Find employee to check for special functions
         const employee = employeeMap.get(absence.employeeId);
         
-        // If employee has special functions but no team, skip adding to regular team
-        // They will be added to virtual team below
-        if (!employee || !shouldExcludeFromUnassigned(employee)) {
-            const teamId = absence.teamId || UNASSIGNED_TEAM_ID;
+        const teamId = absence.teamId || UNASSIGNED_TEAM_ID;
             
             // Ensure team exists for absence
             if (!teams[teamId]) {
@@ -1075,30 +993,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
             }
             
             teams[teamId].employees[absence.employeeId].absences.push(absence);
-        }
-        
-        // If employee has BSB/MBT qualification, also add to virtual "Brandmeldeanlage" team
-        if (employee && (employee.isBrandmeldetechniker || employee.isBrandschutzbeauftragter)) {
-            ensureVirtualTeam(teams);
-            
-            if (!teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[absence.employeeId]) {
-                const displayName = formatEmployeeDisplayName(
-                    absence.employeeName,
-                    employee.personalnummer || ''
-                );
-                
-                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[absence.employeeId] = {
-                    id: absence.employeeId,
-                    name: displayName,
-                    personalnummer: employee.personalnummer || '',
-                    isTeamLeader: employee.isTeamLeader || false,
-                    shifts: {},
-                    absences: []
-                };
-            }
-            
-            teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID].employees[absence.employeeId].absences.push(absence);
-        }
     });
     
     // Convert to array and sort
@@ -1113,9 +1007,6 @@ function groupByTeamAndEmployee(assignments, allEmployees, absences = []) {
             return a.name.localeCompare(b.name);
         })
     })).sort((a, b) => {
-        // Put "Brandmeldeanlage" near the top (after regular teams, before "Ohne Team")
-        if (a.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && b.teamId !== UNASSIGNED_TEAM_ID) return 1;
-        if (b.teamId === VIRTUAL_TEAM_BRANDMELDEANLAGE_ID && a.teamId !== UNASSIGNED_TEAM_ID) return -1;
         // Put "Ohne Team" at the end
         if (a.teamId === UNASSIGNED_TEAM_ID) return 1;
         if (b.teamId === UNASSIGNED_TEAM_ID) return -1;
@@ -1620,7 +1511,6 @@ function displayEmployees(employees) {
                     <span><strong>Team:</strong> ${e.teamName || 'Kein Team'}</span>
                     <div class="badge-row">
                         ${e.isSpringer ? '<span class="badge badge-springer">Springer</span>' : ''}
-                        ${e.isFerienjobber ? '<span class="badge badge-ferienjobber">Ferienjobber</span>' : ''}
                         ${e.isBrandmeldetechniker ? '<span class="badge badge-bmt">BMT</span>' : ''}
                         ${e.isBrandschutzbeauftragter ? '<span class="badge badge-bsb">BSB</span>' : ''}
                     </div>
@@ -1684,7 +1574,6 @@ async function editEmployee(id) {
         document.getElementById('teamId').value = employee.teamId || '';
         document.getElementById('isSpringer').checked = employee.isSpringer;
         document.getElementById('isTeamLeader').checked = employee.isTeamLeader || false;
-        document.getElementById('isFerienjobber').checked = employee.isFerienjobber;
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
         // TD qualification is now automatic based on BMT or BSB
@@ -1760,7 +1649,6 @@ async function saveEmployee(event) {
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
         isSpringer: document.getElementById('isSpringer').checked,
         isTeamLeader: document.getElementById('isTeamLeader').checked,
-        isFerienjobber: document.getElementById('isFerienjobber').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
         isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
         // isTdQualified is calculated automatically on the server based on BMT or BSB

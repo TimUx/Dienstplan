@@ -363,7 +363,7 @@ def validate_staffing_requirements(
             if shift_code in ["F", "S", "N"]:
                 # Only count regular team members
                 emp = emp_dict[assignment.employee_id]
-                if emp.team_id and emp.team_id != 99:  # Not virtual team
+                if emp.team_id:
                     if shift_code not in shift_counts:
                         shift_counts[shift_code] = 0
                     shift_counts[shift_code] += 1
@@ -443,10 +443,8 @@ def validate_springer_availability(
     employees: List[Employee]
 ):
     """Validate that at least one employee is available (not working) each week"""
-    VIRTUAL_TEAM_ID = 99
     regular_team_members = [emp for emp in employees 
-                           if emp.team_id and emp.team_id != VIRTUAL_TEAM_ID 
-                           and not emp.is_ferienjobber]
+                           if emp.team_id]
     
     if not regular_team_members:
         result.add_warning("No regular team members defined in the system")
@@ -531,7 +529,7 @@ def validate_weekend_team_consistency(
         emp = next((e for e in employees if e.id == emp_id), None)
         
         # Only check regular team members
-        if not emp or not emp.team_id or emp.team_id == 99:  # Skip virtual team
+        if not emp or not emp.team_id:
             continue
         
         shift_type = get_shift_type_by_id(assignment.shift_type_id)

@@ -67,10 +67,8 @@ def test_weekly_availability_constraint():
     print(f"  Total assignments: {len(assignments)}")
     
     # Verify at least one employee is completely free
-    VIRTUAL_TEAM_ID = 99
     regular_team_members = [e for e in employees 
-                           if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
-                           and not e.is_ferienjobber]
+                           if e.team_id]
     
     working_employees = set(a.employee_id for a in assignments)
     free_employees = [e for e in regular_team_members if e.id not in working_employees]
@@ -135,10 +133,8 @@ def test_weekly_availability_with_minimal_absences():
     print(f"  Total assignments: {len(assignments)}")
     
     # Verify at least one employee is completely free
-    VIRTUAL_TEAM_ID = 99
     regular_team_members = [e for e in employees 
-                           if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
-                           and not e.is_ferienjobber]
+                           if e.team_id]
     
     working_employees = set(a.employee_id for a in assignments)
     free_employees = [e for e in regular_team_members if e.id not in working_employees]

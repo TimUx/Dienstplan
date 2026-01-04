@@ -241,35 +241,6 @@ def test_team_rotation():
         return False
 
 
-def test_ferienjobber_exclusion():
-    """
-    Requirement 5: Temporary Workers (Ferienjobber)
-    - NOT part of teams
-    - Excluded from weekly rotation
-    - May be assigned on weekends (optional)
-    """
-    print("\n" + "=" * 70)
-    print("TEST 4: Ferienjobber (Temporary Workers) Exclusion")
-    print("=" * 70)
-    
-    # For this test, we need to check that the model excludes ferienjobbers
-    # The sample data doesn't have ferienjobbers, so we check the model structure
-    
-    employees, teams, absences = generate_sample_data()
-    
-    # Check if any ferienjobbers exist
-    ferienjobbers = [e for e in employees if e.is_ferienjobber]
-    
-    if not ferienjobbers:
-        print("ℹ️ INFO: No Ferienjobbers in sample data")
-        print("✅ PASS: Model structure excludes ferienjobbers from weekend rotation (by design)")
-        return True
-    else:
-        print(f"Found {len(ferienjobbers)} Ferienjobbers")
-        # Would test their exclusion here
-        return True
-
-
 def test_td_assignment():
     """
     Requirement 4.2: TD = Day Duty
@@ -380,7 +351,6 @@ def run_all_tests():
         ("Weekday Consistency", test_weekday_consistency),
         ("Weekend Team Consistency", test_weekend_team_consistency),
         ("Team Rotation", test_team_rotation),
-        ("Ferienjobber Exclusion", test_ferienjobber_exclusion),
         ("TD Assignment", test_td_assignment),
         ("Staffing Requirements", test_staffing_requirements),
     ]

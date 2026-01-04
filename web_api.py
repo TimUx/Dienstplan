@@ -32,10 +32,6 @@ from notification_manager import (
     get_notification_count
 )
 
-# Virtual team IDs (must match database and frontend)
-VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Fire Alarm System virtual team
-VIRTUAL_TEAM_FERIENJOBBER_ID = 98      # Ferienjobber virtual team
-
 
 class Database:
     """Database connection helper"""
@@ -181,25 +177,8 @@ def get_virtual_team_employee_count(cursor, team_id: int) -> int:
     Returns:
         Number of employees with the qualifications for this virtual team
     """
-    if team_id == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID:
-        # Count employees with BMT or BSB qualification
-        cursor.execute("""
-            SELECT COUNT(*) as Count
-            FROM Employees
-            WHERE IsBrandmeldetechniker = 1 OR IsBrandschutzbeauftragter = 1
-        """)
-        return cursor.fetchone()['Count']
-    elif team_id == VIRTUAL_TEAM_FERIENJOBBER_ID:
-        # Count employees with IsFerienjobber flag
-        cursor.execute("""
-            SELECT COUNT(*) as Count
-            FROM Employees
-            WHERE IsFerienjobber = 1
-        """)
-        return cursor.fetchone()['Count']
-    else:
-        # For other virtual teams, return 0 (no special counting logic)
-        return 0
+    # For virtual teams, return 0 (no special counting logic needed now)
+    return 0
 
 
 def validate_monthly_date_range(start_date: date, end_date: date) -> tuple[bool, str]:
@@ -3050,7 +3029,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             assignments_by_emp_date[key].append(assignment)
         
         # Group by team
-        VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Must match database ID
         UNASSIGNED_TEAM_ID = -1
         
         teams = {}
@@ -3060,42 +3038,22 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if emp['Personalnummer']:
                 emp_name = f"{emp_name} ({emp['Personalnummer']})"
             
-            # Check if employee has special functions
-            has_special_function = emp['IsBrandmeldetechniker'] or emp['IsBrandschutzbeauftragter']
+            # Add to regular team
+            team_id = emp['TeamId'] if emp['TeamId'] else UNASSIGNED_TEAM_ID
+            team_name = emp['TeamName'] if emp['TeamName'] else 'Ohne Team'
             
-            # Add to regular team if they have a team OR don't have special functions
-            # (employees with special functions but no team should only appear in virtual team)
-            if emp['TeamId'] or not has_special_function:
-                # Add to regular team
-                team_id = emp['TeamId'] if emp['TeamId'] else UNASSIGNED_TEAM_ID
-                team_name = emp['TeamName'] if emp['TeamName'] else 'Ohne Team'
-                
-                if team_id not in teams:
-                    teams[team_id] = {
-                        'teamId': team_id,
-                        'teamName': team_name,
-                        'employees': {}
-                    }
-                
-                teams[team_id]['employees'][emp['Id']] = {
-                    'id': emp['Id'],
-                    'name': emp_name,
-                    'shifts': {}
+            if team_id not in teams:
+                teams[team_id] = {
+                    'teamId': team_id,
+                    'teamName': team_name,
+                    'employees': {}
                 }
             
-            # Add to virtual Brandmeldeanlage team if qualified
-            if has_special_function:
-                if VIRTUAL_TEAM_BRANDMELDEANLAGE_ID not in teams:
-                    teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID] = {
-                        'teamId': VIRTUAL_TEAM_BRANDMELDEANLAGE_ID,
-                        'teamName': 'Brandmeldeanlage',
-                        'employees': {}
-                    }
-                teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID]['employees'][emp['Id']] = {
-                    'id': emp['Id'],
-                    'name': emp_name,
-                    'shifts': {}
-                }
+            teams[team_id]['employees'][emp['Id']] = {
+                'id': emp['Id'],
+                'name': emp_name,
+                'shifts': {}
+            }
         
         # Populate shifts for each employee
         for team in teams.values():
@@ -3105,15 +3063,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     shifts = assignments_by_emp_date.get(key, [])
                     emp_data['shifts'][date_str] = shifts
         
-        # Sort teams (regular -> Brandmeldeanlage -> Ohne Team)
+        # Sort teams (regular -> Ohne Team)
         sorted_teams = []
         for team_id in sorted(teams.keys()):
-            if team_id == VIRTUAL_TEAM_BRANDMELDEANLAGE_ID or team_id == UNASSIGNED_TEAM_ID:
+            if team_id == UNASSIGNED_TEAM_ID:
                 continue
             sorted_teams.append(teams[team_id])
         
-        if VIRTUAL_TEAM_BRANDMELDEANLAGE_ID in teams:
-            sorted_teams.append(teams[VIRTUAL_TEAM_BRANDMELDEANLAGE_ID])
         if UNASSIGNED_TEAM_ID in teams:
             sorted_teams.append(teams[UNASSIGNED_TEAM_ID])
         

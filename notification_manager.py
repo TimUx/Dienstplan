@@ -12,10 +12,6 @@ from typing import List, Dict, Tuple, Optional
 import sqlite3
 
 
-# Virtual team IDs (must match web_api.py and database)
-VIRTUAL_TEAM_BRANDMELDEANLAGE_ID = 99  # Fire Alarm System virtual team
-VIRTUAL_TEAM_FERIENJOBBER_ID = 98      # Ferienjobber virtual team
-
 # Date format for German locale
 DATE_FORMAT_DE = '%d.%m.%Y'
 
@@ -84,7 +80,7 @@ def check_staffing_for_date(
     
     # Count actual staff assigned for this date and shift
     # Exclude employees who are absent on this date
-    # Only count regular team members (not virtual teams)
+    # Only count regular team members
     cursor.execute("""
         SELECT COUNT(DISTINCT sa.EmployeeId) as StaffCount
         FROM ShiftAssignments sa
@@ -94,11 +90,8 @@ def check_staffing_for_date(
             AND ? BETWEEN a.StartDate AND a.EndDate
         WHERE sa.Date = ?
           AND st.Code = ?
-          AND (e.TeamId IS NULL OR e.TeamId NOT IN (?, ?))
-          AND e.IsFerienjobber = 0
           AND a.Id IS NULL
-    """, (check_date.isoformat(), check_date.isoformat(), shift_code, 
-          VIRTUAL_TEAM_BRANDMELDEANLAGE_ID, VIRTUAL_TEAM_FERIENJOBBER_ID))
+    """, (check_date.isoformat(), check_date.isoformat(), shift_code))
     
     row = cursor.fetchone()
     actual_staff = row[0] if row else 0

@@ -18,12 +18,11 @@
                 <div class="header-right">
                     <nav>
                         <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
-                        <button onclick="showView('employees')" class="nav-btn">Mitarbeiter</button>
-                        <button onclick="showView('teams')" class="nav-btn">Teams</button>
+                        <button onclick="showView('management')" class="nav-btn admin-only" id="nav-management" style="display:none;">👥 Verwaltung</button>
                         <button onclick="showView('absences')" class="nav-btn" id="nav-absences" style="display:none;">Abwesenheiten</button>
                         <button onclick="showView('vacationyearplan')" class="nav-btn" id="nav-vacationyearplan">Urlaubsjahresplan</button>
                         <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">Diensttausch</button>
-                        <button onclick="showView('statistics')" class="nav-btn">Statistiken</button>
+                        <button onclick="showView('statistics')" class="nav-btn admin-only" id="nav-statistics" style="display:none;">Statistiken</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
                         <button onclick="showView('admin')" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
                     </nav>
@@ -108,13 +107,53 @@
                 </div>
             </div>
 
-            <!-- Employees View -->
-            <div id="employees-view" class="view">
-                <div class="controls">
-                    <button onclick="showAddEmployeeModal()" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
+            <!-- Management View (Employees, Teams, Shift Management) -->
+            <div id="management-view" class="view">
+                <h2>👥 Verwaltung</h2>
+                
+                <!-- Management Navigation Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchManagementTab('employees')">Mitarbeiter</button>
+                    <button class="tab-btn" onclick="switchManagementTab('teams')">Teams</button>
+                    <button class="tab-btn" onclick="switchManagementTab('shift-types')">Schichtverwaltung</button>
                 </div>
-                <div id="employees-content">
-                    <p class="loading">Lade Mitarbeiter...</p>
+
+                <!-- Tab Contents -->
+                <div class="tab-contents">
+                    <!-- Employees Tab -->
+                    <div id="management-employees-tab" class="tab-content active">
+                        <h3>Mitarbeiterverwaltung</h3>
+                        <div class="controls">
+                            <button onclick="showAddEmployeeModal()" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
+                        </div>
+                        <div id="employees-content">
+                            <p class="loading">Lade Mitarbeiter...</p>
+                        </div>
+                    </div>
+
+                    <!-- Teams Tab -->
+                    <div id="management-teams-tab" class="tab-content">
+                        <h3>Teamverwaltung</h3>
+                        <div class="controls">
+                            <button onclick="showAddTeamModal()" class="btn-primary admin-only">+ Team hinzufügen</button>
+                        </div>
+                        <div id="teams-content">
+                            <p class="loading">Lade Teams...</p>
+                        </div>
+                    </div>
+
+                    <!-- Shift Types Tab -->
+                    <div id="management-shift-types-tab" class="tab-content">
+                        <h3>🔄 Schichtverwaltung</h3>
+                        <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
+                        <div class="controls">
+                            <button onclick="showShiftTypeModal()" class="btn-primary">+ Schichttyp hinzufügen</button>
+                            <button onclick="loadShiftTypesManagement()" class="btn-secondary">🔄 Aktualisieren</button>
+                        </div>
+                        <div id="shift-types-management-content">
+                            <p class="loading">Lade Schichttypen...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -132,16 +171,6 @@
                 </div>
             </div>
 
-            <!-- Teams View -->
-            <div id="teams-view" class="view">
-                <div class="controls">
-                    <button onclick="showAddTeamModal()" class="btn-primary admin-only">+ Team hinzufügen</button>
-                </div>
-                <div id="teams-content">
-                    <p class="loading">Lade Teams...</p>
-                </div>
-            </div>
-
             <!-- Vacations View -->
             <div id="absences-view" class="view">
                 <h2>Abwesenheitsverwaltung</h2>
@@ -151,6 +180,8 @@
                     <button class="tab-btn active" onclick="switchAbsenceTab('vacation')">Urlaub</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('sick')">Arbeitsunfähigkeit (AU)</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('training')">Lehrgang / Schulung</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('vacation-periods')">📅 Ferienzeiten</button>
+                    <button class="tab-btn admin-only" onclick="switchAbsenceTab('vacation-year-approvals')" id="tab-vacation-year-approvals" style="display:none;">📅 Urlaubsjahresplan Freigabe</button>
                 </div>
                 
                 <!-- Vacation Tab -->
@@ -191,6 +222,30 @@
                     </div>
                     <div id="training-absences-content">
                         <p class="loading">Lade Lehrgänge...</p>
+                    </div>
+                </div>
+
+                <!-- Vacation Periods Tab -->
+                <div id="vacation-periods-tab" class="tab-content">
+                    <h3>📅 Ferienzeiten verwalten</h3>
+                    <p class="info">Definieren Sie Ferienzeiträume (Sommer, Herbst, Weihnachten, Ostern usw.). Diese werden in den Kalenderansichten als oberste Zeile angezeigt.</p>
+                    <div class="controls">
+                        <button onclick="showVacationPeriodModal()" class="btn-primary admin-only">+ Ferienzeit hinzufügen</button>
+                    </div>
+                    <div id="vacation-periods-content">
+                        <p class="loading">Lade Ferienzeiten...</p>
+                    </div>
+                </div>
+
+                <!-- Vacation Year Approvals Tab -->
+                <div id="vacation-year-approvals-tab" class="tab-content">
+                    <h3>📅 Urlaubsjahresplan Freigabe</h3>
+                    <p class="info">Geben Sie die Anzeige von Urlaubsdaten für einzelne Jahre frei. Nur freigegebene Jahre sind für alle Benutzer im Urlaubsjahresplan sichtbar.</p>
+                    <div class="controls">
+                        <button onclick="loadVacationYearApprovalsAbsence()" class="btn-primary">🔄 Aktualisieren</button>
+                    </div>
+                    <div id="vacation-year-approvals-absence-content">
+                        <p class="loading">Lade Freigaben...</p>
                     </div>
                 </div>
             </div>
@@ -244,11 +299,7 @@
                 
                 <!-- Admin Navigation Tabs -->
                 <div class="admin-tabs">
-                    <button class="admin-tab active" onclick="showAdminTab('users', this)">👥 Benutzerverwaltung</button>
-                    <button class="admin-tab" onclick="showAdminTab('shift-management', this)">🔄 Schichtverwaltung</button>
-                    <button class="admin-tab" onclick="showAdminTab('vacation-periods', this)">📅 Ferienzeiten</button>
-                    <button class="admin-tab" onclick="showAdminTab('vacation-year-approvals', this)">📅 Urlaubsjahresplan Freigabe</button>
-                    <button class="admin-tab" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
+                    <button class="admin-tab active" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" onclick="showAdminTab('email', this)">📧 E-Mail-Einstellungen</button>
                     <button class="admin-tab" onclick="showAdminTab('settings', this)">🔧 Globale Einstellungen</button>
                     <button class="admin-tab" onclick="showAdminTab('system', this)">📊 System-Information</button>
@@ -256,65 +307,8 @@
 
                 <!-- Tab Contents -->
                 <div class="admin-tab-contents">
-                    <!-- Users Tab -->
-                    <div id="admin-tab-users" class="admin-tab-content active">
-                        <div class="admin-section">
-                            <h3>👥 Benutzerverwaltung</h3>
-                            <p>Verwaltung von Benutzerkonten, Passwörtern und Rollen.</p>
-                            <div class="controls">
-                                <button onclick="showAddUserModal()" class="btn-primary">+ Benutzer hinzufügen</button>
-                            </div>
-                            <div id="users-content">
-                                <p class="loading">Lade Benutzer...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Shift Management Tab -->
-                    <div id="admin-tab-shift-management" class="admin-tab-content">
-                        <div class="admin-section">
-                            <h3>🔄 Schichtverwaltung</h3>
-                            <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
-                            <div class="controls">
-                                <button onclick="showShiftTypeModal()" class="btn-primary">+ Schichttyp hinzufügen</button>
-                                <button onclick="loadShiftTypes()" class="btn-secondary">🔄 Aktualisieren</button>
-                            </div>
-                            <div id="shift-types-content">
-                                <p class="loading">Lade Schichttypen...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Vacation Periods Tab -->
-                    <div id="admin-tab-vacation-periods" class="admin-tab-content">
-                        <div class="admin-section">
-                            <h3>📅 Ferienzeiten verwalten</h3>
-                            <p>Definieren Sie Ferienzeiträume (Sommer, Herbst, Weihnachten, Ostern usw.). Diese werden in den Kalenderansichten als oberste Zeile angezeigt.</p>
-                            <div class="controls">
-                                <button onclick="showVacationPeriodModal()" class="btn-primary">+ Ferienzeit hinzufügen</button>
-                            </div>
-                            <div id="vacation-periods-content">
-                                <p class="loading">Lade Ferienzeiten...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Vacation Year Approvals Tab -->
-                    <div id="admin-tab-vacation-year-approvals" class="admin-tab-content">
-                        <div class="admin-section">
-                            <h3>📅 Urlaubsjahresplan Freigabe</h3>
-                            <p>Geben Sie die Anzeige von Urlaubsdaten für einzelne Jahre frei. Nur freigegebene Jahre sind für alle Benutzer im Urlaubsjahresplan sichtbar.</p>
-                            <div class="controls">
-                                <button onclick="loadVacationYearApprovals()" class="btn-primary">🔄 Aktualisieren</button>
-                            </div>
-                            <div id="vacation-year-approvals-content">
-                                <p class="loading">Lade Freigaben...</p>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Audit Logs Tab -->
-                    <div id="admin-tab-audit-logs" class="admin-tab-content">
+                    <div id="admin-tab-audit-logs" class="admin-tab-content active">
                         <div class="admin-section">
                             <h3>📋 Änderungsprotokoll (Audit Log)</h3>
                             <p>Protokoll aller Systemänderungen für Nachverfolgbarkeit und Compliance.</p>
@@ -806,7 +800,7 @@
                     </section>
 
                     <div class="manual-footer">
-                        <p><strong>Version:</strong> 1.2</p>
+                        <p><strong>Version:</strong> 2.1</p>
                         <p><strong>Entwickelt von:</strong> Timo Braun</p>
                         <p><strong>Letzte Aktualisierung:</strong> Dezember 2025</p>
                         <p>© Fritz Winter Eisengießerei GmbH & Co. KG</p>
@@ -1499,7 +1493,7 @@
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-left">
-                <p><strong>Dienstplan-System v1.2</strong></p>
+                <p><strong>Dienstplan-System v2.1</strong></p>
                 <p>© 2025 Fritz Winter Eisengießerei GmbH & Co. KG</p>
             </div>
             <div class="footer-right">

@@ -93,10 +93,8 @@ def test_january_2026_with_absences():
     # Track available employees (those not working)
     available_employees_days = {}
     
-    VIRTUAL_TEAM_ID = 99
     regular_team_members = [e for e in employees 
-                           if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
-                           and not e.is_ferienjobber]
+                           if e.team_id]
     
     working_employees = set(a.employee_id for a in assignments)
     
@@ -187,10 +185,8 @@ def test_single_absence_per_team():
         assignments, _, _ = result
         
         # Count available employees (not working)
-        VIRTUAL_TEAM_ID = 99
         regular_members = [e for e in employees 
-                          if e.team_id and e.team_id != VIRTUAL_TEAM_ID 
-                          and not e.is_ferienjobber]
+                          if e.team_id]
         working = set(a.employee_id for a in assignments)
         available_count = len([e for e in regular_members if e.id not in working])
         

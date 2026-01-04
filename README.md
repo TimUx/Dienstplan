@@ -360,25 +360,115 @@ Dies erstellt automatisch:
 
 Das Dienstplan-System basiert auf einer hierarchischen Datenstruktur, bei der bestimmte Daten vor anderen erstellt werden müssen. Diese Abhängigkeiten sind entscheidend für eine erfolgreiche Inbetriebnahme.
 
-### Abhängigkeitsdiagramm
+### Abhängigkeitsdiagramm (Topologie)
 
+```mermaid
+graph TD
+    A[Rollen: Admin, Mitarbeiter] --> B[Benutzer: AspNetUsers mit Rollen]
+    B --> C[Teams: Alpha, Beta, Gamma, etc.]
+    C --> D[Schichttypen: F, S, N, Z, BMT, BSB, TD]
+    D --> E[Mitarbeiter: verknüpft mit Teams und Benutzern]
+    E --> F[Abwesenheiten: verknüpft mit Mitarbeitern]
+    F --> G[Schichtplanung: verknüpft mit Mitarbeitern, Schichttypen, Abwesenheiten]
+    G --> H[Urlaubsanträge & Diensttausch: verknüpft mit Mitarbeitern und Schichten]
+    
+    style A fill:#4CAF50,stroke:#333,stroke-width:2px
+    style B fill:#2196F3,stroke:#333,stroke-width:2px
+    style C fill:#FF9800,stroke:#333,stroke-width:2px
+    style D fill:#9C27B0,stroke:#333,stroke-width:2px
+    style E fill:#F44336,stroke:#333,stroke-width:2px
+    style F fill:#00BCD4,stroke:#333,stroke-width:2px
+    style G fill:#FFEB3B,stroke:#333,stroke-width:2px
+    style H fill:#E91E63,stroke:#333,stroke-width:2px
 ```
-1. Rollen (Admin, Mitarbeiter)
-   ↓
-2. Benutzer (AspNetUsers mit Rollen)
-   ↓
-3. Teams (Alpha, Beta, Gamma, etc.)
-   ↓
-4. Schichttypen (F, S, N, Z, BMT, BSB, TD)
-   ↓
-5. Mitarbeiter (verknüpft mit Teams und Benutzern)
-   ↓
-6. Abwesenheiten (verknüpft mit Mitarbeitern)
-   ↓
-7. Schichtplanung (verknüpft mit Mitarbeitern, Schichttypen, Abwesenheiten)
-   ↓
-8. Urlaubsanträge & Diensttausch (verknüpft mit Mitarbeitern und Schichten)
+
+**Ablaufdiagramm der Initialisierung:**
+
+```mermaid
+flowchart LR
+    Start([Start]) --> InitDB[1. Datenbank initialisieren]
+    InitDB --> AutoCreate[Automatisch erstellt:<br/>- Rollen<br/>- Admin-Benutzer<br/>- Schichttypen]
+    AutoCreate --> CreateTeams[2. Teams erstellen]
+    CreateTeams --> CreateEmployees[3. Mitarbeiter anlegen]
+    CreateEmployees --> OptionalUsers{Benötigen<br/>Mitarbeiter<br/>Login?}
+    OptionalUsers -->|Ja| CreateUsers[4a. Benutzerkonten<br/>erstellen]
+    OptionalUsers -->|Nein| SkipUsers[4b. Überspringen]
+    CreateUsers --> AddAbsences[5. Abwesenheiten<br/>erfassen]
+    SkipUsers --> AddAbsences
+    AddAbsences --> PlanShifts[6. Schichtplanung<br/>durchführen]
+    PlanShifts --> OptionalFeatures{Erweiterte<br/>Funktionen<br/>aktivieren?}
+    OptionalFeatures -->|Ja| EnableVacReq[7a. Urlaubsanträge<br/>aktivieren]
+    OptionalFeatures -->|Nein| Complete
+    EnableVacReq --> EnableExchange[7b. Diensttausch<br/>aktivieren]
+    EnableExchange --> Complete([Fertig])
+    
+    style Start fill:#4CAF50,stroke:#333,stroke-width:2px
+    style Complete fill:#4CAF50,stroke:#333,stroke-width:2px
+    style InitDB fill:#2196F3,stroke:#333,stroke-width:2px
+    style PlanShifts fill:#FF9800,stroke:#333,stroke-width:2px
 ```
+
+### Seitenstruktur-Topologie (Navigation)
+
+Dieses Diagramm zeigt die Struktur der Webanwendung ausgehend vom Hauptmenü im Header:
+
+```mermaid
+graph TB
+    Header[📋 Header-Menü] --> Dienstplan[📅 Dienstplan]
+    Header --> Verwaltung[👥 Verwaltung<br/><i>nur Admin</i>]
+    Header --> Abwesenheiten[🏖️ Abwesenheiten]
+    Header --> Urlaubsjahresplan[📆 Urlaubsjahresplan]
+    Header --> Diensttausch[🔄 Diensttausch]
+    Header --> Statistiken[📊 Statistiken<br/><i>nur Admin</i>]
+    Header --> Hilfe[📖 Hilfe]
+    Header --> Admin[⚙️ Admin<br/><i>nur Admin</i>]
+    
+    Dienstplan --> DP_Woche[Wochenansicht]
+    Dienstplan --> DP_Monat[Monatsansicht]
+    Dienstplan --> DP_Jahr[Jahresansicht]
+    Dienstplan --> DP_Planen[Schichten planen]
+    Dienstplan --> DP_Export[Export: CSV/PDF/Excel]
+    
+    Verwaltung --> V_Mitarbeiter[Tab: Mitarbeiter]
+    Verwaltung --> V_Teams[Tab: Teams]
+    Verwaltung --> V_Schichten[Tab: Schichtverwaltung]
+    
+    Abwesenheiten --> A_Urlaub[Tab: Urlaub]
+    Abwesenheiten --> A_AU[Tab: Arbeitsunfähigkeit]
+    Abwesenheiten --> A_Lehrgang[Tab: Lehrgang/Schulung]
+    Abwesenheiten --> A_Ferien[Tab: Ferienzeiten]
+    Abwesenheiten --> A_Freigabe[Tab: Urlaubsjahresplan Freigabe<br/><i>nur Admin</i>]
+    
+    Urlaubsjahresplan --> UJP_Jahr[Jahresauswahl]
+    Urlaubsjahresplan --> UJP_Ansicht[Urlaubsübersicht]
+    
+    Diensttausch --> DT_Verfuegbar[Verfügbare Dienste]
+    Diensttausch --> DT_Offen[Offene Anfragen<br/><i>nur Admin</i>]
+    Diensttausch --> DT_Meine[Meine Tauschangebote]
+    
+    Statistiken --> S_Arbeitsstunden[Arbeitsstunden]
+    Statistiken --> S_Schichtverteilung[Schichtverteilung]
+    Statistiken --> S_Fehltage[Fehltageübersicht]
+    Statistiken --> S_Workload[Team-Workload]
+    
+    Admin --> AD_Protokoll[Tab: Änderungsprotokoll]
+    Admin --> AD_Email[Tab: E-Mail-Einstellungen]
+    Admin --> AD_Settings[Tab: Globale Einstellungen]
+    Admin --> AD_System[Tab: System-Information]
+    
+    style Header fill:#1976D2,stroke:#333,stroke-width:3px,color:#fff
+    style Verwaltung fill:#FF9800,stroke:#333,stroke-width:2px
+    style Admin fill:#F44336,stroke:#333,stroke-width:2px
+    style Statistiken fill:#9C27B0,stroke:#333,stroke-width:2px
+    style Dienstplan fill:#4CAF50,stroke:#333,stroke-width:2px
+    style Abwesenheiten fill:#00BCD4,stroke:#333,stroke-width:2px
+```
+
+**Legende:**
+- 🔵 **Blaue Boxen**: Hauptnavigation
+- 🟠 **Orange Boxen**: Admin-only Bereiche
+- 🟢 **Grüne Boxen**: Öffentlich zugängliche Bereiche
+- *kursiv*: Nur für Administratoren sichtbar
 
 ### Schritt-für-Schritt-Anleitung: Erstinbetriebnahme
 

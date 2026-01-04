@@ -269,8 +269,8 @@ def add_staffing_constraints(
                     
                     # Count members of this team working on this weekend day
                     for emp in employees:
-                        if emp.team_id != team.id or emp.is_ferienjobber:
-                            continue  # Only count regular team members
+                        if emp.team_id != team.id:
+                            continue  # Only count team members
                         
                         if (emp.id, d) not in employee_weekend_shift:
                             continue
@@ -430,7 +430,7 @@ def add_working_hours_constraints(
     # Pre-calculate maximum weekly hours per team per week to avoid repeated computation
     team_week_max_hours = {}
     for emp in employees:
-        if not emp.team_id or emp.is_ferienjobber:
+        if not emp.team_id:
             continue
         for week_idx in range(len(weeks)):
             key = (emp.team_id, week_idx)
@@ -443,8 +443,8 @@ def add_working_hours_constraints(
     
     # Calculate working hours per week and enforce limits
     for emp in employees:
-        if not emp.team_id or emp.is_ferienjobber:
-            continue  # Only check regular team members
+        if not emp.team_id:
+            continue  # Only check team members
         
         for week_idx, week_dates in enumerate(weeks):
             # Calculate hours for this week
@@ -712,7 +712,7 @@ def add_fairness_objectives(
     # 2. Fair distribution of weekend work per employee WITHIN EACH TEAM
     # This ensures that weekend work is balanced among team members
     for team in teams:
-        team_members = [emp for emp in employees if emp.team_id == team.id and not emp.is_ferienjobber]
+        team_members = [emp for emp in employees if emp.team_id == team.id]
         if len(team_members) < 2:
             continue  # Need at least 2 members to balance
         

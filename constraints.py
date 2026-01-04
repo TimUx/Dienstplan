@@ -65,10 +65,6 @@ def add_team_shift_assignment_constraints(
     EXCLUDES virtual team "Fire Alarm System" (ID 99) which doesn't participate in rotation.
     """
     for team in teams:
-        # Skip virtual team for TD-qualified employees
-        if team.id == VIRTUAL_TEAM_ID:  # Fire Alarm System virtual team
-            continue
-            
         for week_idx in range(len(weeks)):
             shift_vars = []
             for shift_code in shift_codes:
@@ -678,7 +674,7 @@ def add_fairness_objectives(
     # 1. Fair distribution of total shifts per employee (including weekends)
     shift_counts = []
     for emp in employees:
-        if not emp.team_id or emp.team_id == VIRTUAL_TEAM_ID:
+        if not emp.team_id:
             continue  # Only include regular team members in fairness
         
         # Count weekday active days
@@ -716,9 +712,6 @@ def add_fairness_objectives(
     # 2. Fair distribution of weekend work per employee WITHIN EACH TEAM
     # This ensures that weekend work is balanced among team members
     for team in teams:
-        if team.id == VIRTUAL_TEAM_ID or team.id == FERIENJOBBER_TEAM_ID:
-            continue  # Skip virtual teams
-        
         team_members = [emp for emp in employees if emp.team_id == team.id and not emp.is_ferienjobber]
         if len(team_members) < 2:
             continue  # Need at least 2 members to balance

@@ -214,19 +214,17 @@ class ShiftPlanningModel:
         Dict[Tuple[int, int, str], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
-        Dict[Tuple[int, int], cp_model.IntVar],
-        Dict[Tuple[int, int, int], cp_model.IntVar]
+        Dict[Tuple[int, int], cp_model.IntVar]
     ]:
         """
         Get all decision variables.
         
         Returns:
-            Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars, ferienjobber_cross_team)
+            Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars)
             where:
             - employee_weekend_shift is keyed by (emp_id, date) only
-            - ferienjobber_cross_team is keyed by (ferienjobber_id, team_id, week_idx)
         """
-        return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars, self.ferienjobber_cross_team
+        return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars
     
     def get_team_by_id(self, team_id: int) -> Team:
         """Get team by ID"""

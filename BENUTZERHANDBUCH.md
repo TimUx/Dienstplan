@@ -915,8 +915,6 @@ Die Mehrfachauswahl-Funktion ermöglicht es, mehrere Schichten gleichzeitig zu b
 ![Mehrfachauswahl aktiv](docs/screenshots/15-multi-select-active.png)
 *Mehrfachauswahl-Modus mit ausgewählten Schichten im Dienstplan*
 
-**Hinweis:** Siehe auch die separate Anleitung in MEHRFACHAUSWAHL_ANLEITUNG.md.
-
 #### Mehrfachauswahl aktivieren
 
 1. Navigieren Sie zur **Dienstplan**-Ansicht

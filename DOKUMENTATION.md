@@ -33,7 +33,6 @@ Neu im System? Starten Sie hier:
 | **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** | CLI-Befehle und API-Nutzung | Admins |
 | **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** | Details zum OR-Tools Solver | Admins |
 | **[Beispieldaten](docs/SAMPLE_DATA.md)** | Testdaten und API-Beispiele | Admins, Entwickler |
-| **[Mehrfachauswahl-Anleitung](MEHRFACHAUSWAHL_ANLEITUNG.md)** | Multi-Select Schichtbearbeitung | Admins |
 
 ### Für Entwickler
 

@@ -522,12 +522,6 @@ python main.py init-db
 - Team Beta (Beschreibung: "Hauptteam Spätschicht")
 - Team Gamma (Beschreibung: "Hauptteam Nachtschicht")
 
-**Virtuelle Teams (automatisch):**
-- Brandmeldeanlage Virtuell (ID: 99) - für BMT/BSB-qualifizierte Mitarbeiter
-- Ferienjobber Virtuell (ID: 98) - für temporäre Mitarbeiter
-
-**Hinweis:** Diese virtuellen Teams werden automatisch vom System erstellt und verwaltet.
-
 #### Schritt 3: Mitarbeiter anlegen (erforderlich)
 
 **Abhängigkeit:** Teams müssen existieren.
@@ -541,11 +535,11 @@ python main.py init-db
 
 **Wichtige optionale Felder:**
 - **E-Mail**: Erforderlich, wenn Mitarbeiter sich anmelden soll
-- **Team**: Verknüpfung zum Team (wichtig für Planung). Wählen Sie "Ferienjobber Virtuell" für temporäre Mitarbeiter
+- **Team**: Verknüpfung zum Team (wichtig für Planung). Erstellen Sie bei Bedarf ein Team für Ferienjobber
 - **Qualifikationen**: BMT, BSB, TD (für Sonderschichten)
 - **Springer**: Checkbox für flexible Vertretung
 
-**Hinweis:** Der Ferienjobber-Status wird über die Teamzuweisung gesteuert. Mitarbeiter, die dem Team "Ferienjobber Virtuell" (ID: 98) zugeordnet sind, werden als temporäre Mitarbeiter behandelt.
+**Hinweis:** Der Ferienjobber-Status kann über die Teamzuweisung gesteuert werden. Erstellen Sie bei Bedarf ein spezielles Team für temporäre Mitarbeiter in der Teamverwaltung.
 
 **Best Practice:**
 - Mindestens 10-15 Mitarbeiter für realistische Planung

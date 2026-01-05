@@ -225,11 +225,7 @@ Bei der ersten Initialisierung (`python main.py init-db`) werden automatisch ers
 - **Team Alpha** - Hauptteam 1
 - **Team Beta** - Hauptteam 2
 - **Team Gamma** - Hauptteam 3
-- *(Optional)* Weitere Teams nach Bedarf
-
-**Virtuelle Teams (automatisch vorhanden):**
-- **Brandmeldeanlage Virtuell** (ID: 99) - für BMT-Mitarbeiter
-- **Ferienjobber Virtuell** (ID: 98) - für temporäre Mitarbeiter
+- *(Optional)* Weitere Teams nach Bedarf (z.B. für BMT-Mitarbeiter oder Ferienjobber)
 
 **Screenshot:** Siehe [Teamverwaltung](#7-teamverwaltung)
 
@@ -266,7 +262,7 @@ Bei der ersten Initialisierung (`python main.py init-db`) werden automatisch ers
 - ☑ **Brandmeldetechniker (BMT):** Qualifiziert für BMT-Schichten
 - ☑ **Brandschutzbeauftragter (BSB):** Qualifiziert für BSB-Schichten
 
-**Hinweis:** Der Ferienjobber-Status wird über die Teamzuweisung gesteuert. Weisen Sie Mitarbeiter dem Team "Ferienjobber Virtuell" zu, um sie als temporäre Mitarbeiter zu markieren.
+**Hinweis:** Der Ferienjobber-Status wird über die Teamzuweisung gesteuert. Erstellen Sie bei Bedarf ein Team für Ferienjobber in der Teamverwaltung und weisen Sie diesem Team die temporären Mitarbeiter zu.
 
 **Best Practices:**
 - **Mindestens 10-15 Mitarbeiter** für erfolgreiche Planung
@@ -685,7 +681,7 @@ Klicken Sie auf die Buttons oben:
 - **E-Mail** - Für zukünftige Benachrichtigungen
 - **Geburtsdatum** - Format: TT.MM.JJJJ
 - **Funktion** - Freitext (z.B. "Schichtleiter")
-- **Team** - Dropdown-Auswahl (wählen Sie "Ferienjobber Virtuell" für temporäre Mitarbeiter)
+- **Team** - Dropdown-Auswahl (optional: erstellen Sie ein Team für Ferienjobber)
 - **Springer** - Checkbox (Backup-Mitarbeiter)
 - **Brandmeldetechniker (BMT)** - Checkbox
 - **Brandschutzbeauftragter (BSB)** - Checkbox
@@ -694,7 +690,7 @@ Klicken Sie auf die Buttons oben:
 
 **Hinweis:** 
 - Mitarbeiter mit BMT oder BSB-Qualifikation erhalten automatisch auch die TD-Qualifikation.
-- Der Ferienjobber-Status wird über die Teamzuweisung gesteuert (Team "Ferienjobber Virtuell").
+- Der Ferienjobber-Status kann über die Teamzuweisung gesteuert werden (erstellen Sie bei Bedarf ein entsprechendes Team).
 
 ### Mitarbeiter bearbeiten
 
@@ -738,16 +734,16 @@ Springer sind Backup-Mitarbeiter, die flexibel einsetzbar sind und bei Personala
 Ferienjobber sind temporäre Mitarbeiter, die typischerweise in den Sommerferien eingestellt werden.
 
 **Besonderheiten:**
-- Eigenes virtuelles Team "Ferienjobber Virtuell" (ID: 98)
 - Können normal eingeplant werden
 - Werden separat in Statistiken ausgewiesen
 
 **Ferienjobber markieren:**
-1. Mitarbeiter bearbeiten
-2. Team-Zuordnung auf **"Ferienjobber Virtuell"** setzen
-3. Speichern
+1. Erstellen Sie ein Team für Ferienjobber in der Teamverwaltung (z.B. "Ferienjobber")
+2. Mitarbeiter bearbeiten
+3. Team-Zuordnung auf das Ferienjobber-Team setzen
+4. Speichern
 
-**Hinweis:** Der Ferienjobber-Status wird automatisch über die Teamzuweisung gesteuert. Mitarbeiter, die dem Team "Ferienjobber Virtuell" (ID: 98) zugeordnet sind, werden als Ferienjobber behandelt.
+**Hinweis:** Der Ferienjobber-Status kann über die Teamzuweisung gesteuert werden. Erstellen Sie bei Bedarf ein spezielles Team für temporäre Mitarbeiter.
 
 ### Qualifikationen (BMT/BSB/TD)
 
@@ -794,10 +790,6 @@ Ferienjobber sind temporäre Mitarbeiter, die typischerweise in den Sommerferien
 - Team Alpha
 - Team Beta
 - Team Gamma
-- Virtuelle Teams (automatisch):
-  - Brandmeldetechniker (BMT)
-  - Brandschutzbeauftragte (BSB)
-  - Ferienjobber
 
 ### Team bearbeiten
 
@@ -813,25 +805,6 @@ Ferienjobber sind temporäre Mitarbeiter, die typischerweise in den Sommerferien
 2. Bestätigen Sie die Sicherheitsabfrage
 
 ⚠️ **WICHTIG**: Mitarbeiter im Team werden nicht gelöscht, sondern nur ihre Team-Zuordnung wird entfernt.
-
-### Virtuelle Teams
-
-Das System erstellt automatisch virtuelle Teams für Sonderfunktionen:
-
-**Team "Brandmeldetechniker (BMT)":**
-- Enthält alle Mitarbeiter mit BMT-Qualifikation
-- ID: 99 (fest)
-- Nicht löschbar
-
-**Team "Brandschutzbeauftragte (BSB)":**
-- Enthält alle Mitarbeiter mit BSB-Qualifikation
-- ID: 97 (fest)
-- Nicht löschbar
-
-**Team "Ferienjobber":**
-- Enthält alle als Ferienjobber markierten Mitarbeiter
-- ID: 98 (fest)
-- Nicht löschbar
 
 ---
 
@@ -1751,7 +1724,7 @@ A: Zwingend erforderliche Reihenfolge:
 Optional aber empfohlen: Abwesenheiten vor der Planung erfassen.
 
 **F: Warum kann ich keine Mitarbeiter ohne Team anlegen?**
-A: Mitarbeiter benötigen eine Team-Zuordnung für die Schichtplanung. Erstellen Sie zuerst mindestens ein Team. Ausnahme: Springer und Ferienjobber können auch ohne explizites Team sein, werden dann virtuellen Teams zugeordnet.
+A: Mitarbeiter benötigen eine Team-Zuordnung für die Schichtplanung. Erstellen Sie zuerst mindestens ein Team.
 
 **F: Wie viele Mitarbeiter brauche ich mindestens für die Planung?**
 A: Minimum: 5-7 Mitarbeiter, empfohlen: 10-15 Mitarbeiter. Mit zu wenigen Mitarbeitern findet der Algorithmus möglicherweise keine Lösung, die alle Constraints erfüllt.
@@ -1771,14 +1744,7 @@ A: Das System verhindert fehlerhafte Eingaben:
 - Benutzer ohne Mitarbeiter-E-Mail → Keine automatische Verknüpfung
 
 **F: Wie viele Teams soll ich erstellen?**
-A: Empfohlen: 3 Teams (Alpha, Beta, Gamma) für klassische Schichtrotation. Sie können mehr oder weniger Teams erstellen, je nach Ihrer Organisationsstruktur. Virtuelle Teams (BMT, BSB, Ferienjobber) werden automatisch erstellt.
-
-**F: Was sind virtuelle Teams?**
-A: Virtuelle Teams sind automatisch erstellte Teams für Sonderfunktionen:
-- **Brandmeldeanlage Virtuell** (ID 99): Alle BMT-qualifizierten Mitarbeiter
-- **Ferienjobber Virtuell** (ID 98): Alle als Ferienjobber markierten Mitarbeiter
-
-Diese Teams können nicht gelöscht werden und dienen nur der Verwaltung.
+A: Empfohlen: 3 Teams (Alpha, Beta, Gamma) für klassische Schichtrotation. Sie können mehr oder weniger Teams erstellen, je nach Ihrer Organisationsstruktur.
 
 **F: Muss ich Schichttypen manuell erstellen?**
 A: Nein, bei der Datenbankinitialisierung werden automatisch die Standard-Schichttypen erstellt (F, S, N, Z, BMT, BSB, TD). Sie können diese bei Bedarf anpassen oder neue hinzufügen.
@@ -1804,7 +1770,7 @@ A: Wunschschichten sind für Version 3.x geplant. Aktuell können Sie manuelle S
 ### Schichten & Personal
 
 **F: Kann ein Mitarbeiter in mehreren Teams sein?**
-A: Nein, jeder Mitarbeiter kann nur einem regulären Team zugeordnet werden. Virtuelle Teams (BMT/BSB/Ferienjobber) sind zusätzlich.
+A: Nein, jeder Mitarbeiter kann nur einem Team zugeordnet werden.
 
 **F: Was passiert, wenn ein Springer krank wird?**
 A: Der Algorithmus plant automatisch einen anderen verfügbaren Mitarbeiter ein. Für Notfälle können Sie manuell umplanen.

@@ -510,12 +510,9 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
     """
-    Initialize sample teams including virtual teams.
+    Initialize sample teams.
     
     Note: Team IDs are explicitly set.
-    Virtual teams:
-    - ID 98: Ferienjobber Virtuell (for temporary workers)
-    - ID 99: Brandmeldeanlage Virtuell (for BMT/BSB qualified employees)
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -526,8 +523,6 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
         (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
         (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
         (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
-        (98, "Ferienjobber Virtuell", "Virtuelles Team für temporäre Mitarbeiter", None, 1),
-        (99, "Brandmeldeanlage Virtuell", "Virtuelles Team für BMT/BSB-qualifizierte Mitarbeiter", None, 1),
     ]
     
     for team_id, name, description, email, is_virtual in teams:
@@ -538,7 +533,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Sample teams initialized (including virtual teams)")
+    print("✅ Sample teams initialized")
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):

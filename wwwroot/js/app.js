@@ -887,7 +887,7 @@ function formatEmployeeDisplayName(employeeName, personalnummer) {
 
 /**
  * Determines if an employee should be excluded from the unassigned team listing.
- * Employees with special functions (BMT, BSB, Ferienjobber) but no regular team
+ * Employees with special functions (BMT, BSB) or Ferienjobber (team ID 98) but no regular team
  * belong only to virtual teams and should not appear in "Ohne Team".
  * @param {Object} emp - The employee object
  * @returns {boolean} True if employee should be excluded from unassigned team
@@ -900,6 +900,7 @@ function shouldExcludeFromUnassigned(emp) {
     
     // Exclude if employee has special functions and no team
     // These employees belong to virtual teams only
+    // Note: isFerienjobber is now derived from teamId == 98 on the backend
     return emp.isBrandmeldetechniker || emp.isBrandschutzbeauftragter || emp.isFerienjobber;
 }
 

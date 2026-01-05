@@ -541,10 +541,11 @@ python main.py init-db
 
 **Wichtige optionale Felder:**
 - **E-Mail**: Erforderlich, wenn Mitarbeiter sich anmelden soll
-- **Team**: Verknüpfung zum Team (wichtig für Planung)
+- **Team**: Verknüpfung zum Team (wichtig für Planung). Wählen Sie "Ferienjobber Virtuell" für temporäre Mitarbeiter
 - **Qualifikationen**: BMT, BSB, TD (für Sonderschichten)
 - **Springer**: Checkbox für flexible Vertretung
-- **Ferienjobber**: Checkbox für temporäre Mitarbeiter
+
+**Hinweis:** Der Ferienjobber-Status wird über die Teamzuweisung gesteuert. Mitarbeiter, die dem Team "Ferienjobber Virtuell" (ID: 98) zugeordnet sind, werden als temporäre Mitarbeiter behandelt.
 
 **Best Practice:**
 - Mindestens 10-15 Mitarbeiter für realistische Planung

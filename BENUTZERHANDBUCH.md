@@ -263,9 +263,10 @@ Bei der ersten Initialisierung (`python main.py init-db`) werden automatisch ers
 
 **Qualifikationen (Checkboxen):**
 - ☑ **Springer:** Flexible Vertretung bei Ausfällen
-- ☑ **Ferienjobber:** Temporärer Mitarbeiter
 - ☑ **Brandmeldetechniker (BMT):** Qualifiziert für BMT-Schichten
 - ☑ **Brandschutzbeauftragter (BSB):** Qualifiziert für BSB-Schichten
+
+**Hinweis:** Der Ferienjobber-Status wird über die Teamzuweisung gesteuert. Weisen Sie Mitarbeiter dem Team "Ferienjobber Virtuell" zu, um sie als temporäre Mitarbeiter zu markieren.
 
 **Best Practices:**
 - **Mindestens 10-15 Mitarbeiter** für erfolgreiche Planung
@@ -684,15 +685,16 @@ Klicken Sie auf die Buttons oben:
 - **E-Mail** - Für zukünftige Benachrichtigungen
 - **Geburtsdatum** - Format: TT.MM.JJJJ
 - **Funktion** - Freitext (z.B. "Schichtleiter")
-- **Team** - Dropdown-Auswahl
+- **Team** - Dropdown-Auswahl (wählen Sie "Ferienjobber Virtuell" für temporäre Mitarbeiter)
 - **Springer** - Checkbox (Backup-Mitarbeiter)
-- **Ferienjobber** - Checkbox (temporärer Mitarbeiter)
 - **Brandmeldetechniker (BMT)** - Checkbox
 - **Brandschutzbeauftragter (BSB)** - Checkbox
 
 3. Klicken Sie auf **Speichern**
 
-**Hinweis:** Mitarbeiter mit BMT oder BSB-Qualifikation erhalten automatisch auch die TD-Qualifikation.
+**Hinweis:** 
+- Mitarbeiter mit BMT oder BSB-Qualifikation erhalten automatisch auch die TD-Qualifikation.
+- Der Ferienjobber-Status wird über die Teamzuweisung gesteuert (Team "Ferienjobber Virtuell").
 
 ### Mitarbeiter bearbeiten
 
@@ -702,10 +704,9 @@ Klicken Sie auf die Buttons oben:
 
 **Änderbare Felder:**
 - Alle Personalinformationen
-- Team-Zuordnung
+- Team-Zuordnung (inkl. Ferienjobber-Status über Teamzuweisung)
 - Qualifikationen (BMT/BSB/TD)
 - Springer-Status
-- Ferienjobber-Status
 
 ### Mitarbeiter löschen
 
@@ -737,15 +738,16 @@ Springer sind Backup-Mitarbeiter, die flexibel einsetzbar sind und bei Personala
 Ferienjobber sind temporäre Mitarbeiter, die typischerweise in den Sommerferien eingestellt werden.
 
 **Besonderheiten:**
-- Eigenes virtuelles Team "Ferienjobber"
+- Eigenes virtuelles Team "Ferienjobber Virtuell" (ID: 98)
 - Können normal eingeplant werden
 - Werden separat in Statistiken ausgewiesen
 
 **Ferienjobber markieren:**
 1. Mitarbeiter bearbeiten
-2. Checkbox **Ferienjobber** aktivieren
-3. Optional: Team zuordnen (falls gewünscht)
-4. Speichern
+2. Team-Zuordnung auf **"Ferienjobber Virtuell"** setzen
+3. Speichern
+
+**Hinweis:** Der Ferienjobber-Status wird automatisch über die Teamzuweisung gesteuert. Mitarbeiter, die dem Team "Ferienjobber Virtuell" (ID: 98) zugeordnet sind, werden als Ferienjobber behandelt.
 
 ### Qualifikationen (BMT/BSB/TD)
 

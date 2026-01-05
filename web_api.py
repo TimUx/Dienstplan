@@ -378,7 +378,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'hasPassword': bool(row['Email']),  # Has auth if email is set
                 'roles': row['roles'].split(',') if row['roles'] else [],
                 # Employee data
-                'isFerienjobber': bool(row['IsFerienjobber']),
+                'isFerienjobber': row['TeamId'] == 98,  # Derived from team assignment (Ferienjobber Virtuell)
                 'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                 'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
                 'isTdQualified': bool(row['IsTdQualified']),
@@ -427,7 +427,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'isActive': bool(row['IsActive']),
             'roles': row['roles'].split(',') if row['roles'] else [],
             # Employee data
-            'isFerienjobber': bool(row['IsFerienjobber']),
+            'isFerienjobber': row['TeamId'] == 98,  # Derived from team assignment (Ferienjobber Virtuell)
             'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
             'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
             'isTdQualified': bool(row['IsTdQualified']),
@@ -455,7 +455,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             geburtsdatum = data.get('geburtsdatum')
             
             # Qualifications
-            is_ferienjobber = data.get('isFerienjobber', False)
+            # is_ferienjobber is now derived from team assignment (TeamId == 98)
+            is_ferienjobber = (team_id == 98)
             is_bmt = data.get('isBrandmeldetechniker', False)
             is_bsb = data.get('isBrandschutzbeauftragter', False)
             is_td_qualified = data.get('isTdQualified', is_bmt or is_bsb)  # Auto-set if BMT or BSB
@@ -566,7 +567,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             roles = data.get('roles', [])
             
             # Qualifications
-            is_ferienjobber = data.get('isFerienjobber', False)
+            # is_ferienjobber is now derived from team assignment (TeamId == 98)
+            is_ferienjobber = (team_id == 98)
             is_bmt = data.get('isBrandmeldetechniker', False)
             is_bsb = data.get('isBrandschutzbeauftragter', False)
             is_td_qualified = data.get('isTdQualified', is_bmt or is_bsb)
@@ -811,7 +813,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'email': row['Email'],
                     'geburtsdatum': row['Geburtsdatum'],
                     'funktion': row['Funktion'],
-                    'isFerienjobber': bool(row['IsFerienjobber']),
+                    'isFerienjobber': row['TeamId'] == 98,  # Derived from team assignment (Ferienjobber Virtuell)
                     'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
                     'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
                     'isTdQualified': is_td_qualified,
@@ -871,7 +873,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'geburtsdatum': row['Geburtsdatum'],
             'funktion': row['Funktion'],
             'isSpringer': bool(row['IsSpringer']),
-            'isFerienjobber': bool(row['IsFerienjobber']),
+            'isFerienjobber': row['TeamId'] == 98,  # Derived from team assignment (Ferienjobber Virtuell)
             'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
             'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
             'isTdQualified': is_td_qualified,
@@ -934,6 +936,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # TD qualification is automatically set if BMT or BSB is true
             is_td = 1 if (is_bmt or is_bsb) else 0
             is_team_leader = 1 if data.get('isTeamLeader') else 0
+            # Ferienjobber status is derived from team assignment (TeamId == 98)
+            team_id = data.get('teamId')
+            is_ferienjobber = 1 if team_id == 98 else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -957,12 +962,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 data.get('geburtsdatum'),
                 funktion,
                 1 if data.get('isSpringer') else 0,
-                1 if data.get('isFerienjobber') else 0,
+                is_ferienjobber,
                 is_bmt,
                 is_bsb,
                 is_td,
                 is_team_leader,
-                data.get('teamId')
+                team_id
             ))
             
             employee_id = cursor.lastrowid
@@ -1009,6 +1014,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # TD qualification is automatically set if BMT or BSB is true
             is_td = 1 if (is_bmt or is_bsb) else 0
             is_team_leader = 1 if data.get('isTeamLeader') else 0
+            # Ferienjobber status is derived from team assignment (TeamId == 98)
+            team_id = data.get('teamId')
+            is_ferienjobber = 1 if team_id == 98 else 0
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -1046,12 +1054,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 data.get('geburtsdatum'),
                 funktion,
                 1 if data.get('isSpringer') else 0,
-                1 if data.get('isFerienjobber') else 0,
+                is_ferienjobber,
                 is_bmt,
                 is_bsb,
                 is_td,
                 is_team_leader,
-                data.get('teamId'),
+                team_id,
                 id
             ))
             

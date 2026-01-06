@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from data_loader import generate_sample_data, load_from_database
+from db_init import initialize_database
 from model import create_shift_planning_model
 from solver import solve_shift_planning
 from validation import validate_shift_plan
@@ -162,7 +163,6 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         db_path: Path to SQLite database
         debug: Enable debug mode (WARNING: Only use in development!)
     """
-    from db_init import initialize_database
     from web_api import create_app
     
     print("=" * 60)
@@ -279,7 +279,6 @@ def main():
     args = parser.parse_args()
     
     if args.command == "init-db":
-        from db_init import initialize_database
         initialize_database(args.db, with_sample_data=args.with_sample_data)
         return 0
     

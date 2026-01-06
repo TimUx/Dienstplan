@@ -1852,7 +1852,7 @@ async function showAddTeamModal() {
     }
     
     document.getElementById('teamForm').reset();
-    document.getElementById('teamId').value = '';
+    document.getElementById('teamEditId').value = '';
     document.getElementById('teamModalTitle').textContent = 'Team hinzufügen';
     document.getElementById('teamModal').style.display = 'block';
 }
@@ -1874,7 +1874,7 @@ async function editTeam(id) {
         
         const team = await response.json();
         
-        document.getElementById('teamId').value = team.id;
+        document.getElementById('teamEditId').value = team.id;
         document.getElementById('teamName').value = team.name;
         document.getElementById('teamDescription').value = team.description || '';
         document.getElementById('teamEmail').value = team.email || '';
@@ -1930,7 +1930,7 @@ function closeTeamModal() {
 async function saveTeam(event) {
     event.preventDefault();
     
-    const idValue = document.getElementById('teamId').value;
+    const idValue = document.getElementById('teamEditId').value;
     const id = idValue ? parseInt(idValue) : null;
     const team = {
         name: document.getElementById('teamName').value,

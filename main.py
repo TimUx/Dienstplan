@@ -4,6 +4,7 @@ Provides both CLI and web server interfaces.
 """
 
 import argparse
+import os
 import sys
 from datetime import date, timedelta
 from typing import Optional
@@ -161,7 +162,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         db_path: Path to SQLite database
         debug: Enable debug mode (WARNING: Only use in development!)
     """
-    import os
+    from db_init import initialize_database
     from web_api import create_app
     
     print("=" * 60)
@@ -179,7 +180,6 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         print("   Initializing new database with default structure...")
         print()
         try:
-            from db_init import initialize_database
             # Initialize without sample data for production use
             initialize_database(db_path, with_sample_data=False)
             print()

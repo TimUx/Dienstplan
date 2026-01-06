@@ -1330,7 +1330,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn.close()
                 return jsonify({'error': f'Team hat {employee_count} Mitarbeiter und kann nicht gelöscht werden'}), 400
             
-            # Delete team
+            # Clear TeamId from AdminNotifications to avoid foreign key constraint violations
+            # (AdminNotifications don't have CASCADE delete)
+            cursor.execute("UPDATE AdminNotifications SET TeamId = NULL WHERE TeamId = ?", (id,))
+            
+            # Delete team (TeamShiftAssignments will be automatically deleted due to CASCADE)
             cursor.execute("DELETE FROM Teams WHERE Id = ?", (id,))
             
             # Log audit entry
@@ -1771,10 +1775,28 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
             
             # Validate staffing requirements
-            min_staff_weekday = data.get('minStaffWeekday', old_row.get('MinStaffWeekday', 3))
-            max_staff_weekday = data.get('maxStaffWeekday', old_row.get('MaxStaffWeekday', 5))
-            min_staff_weekend = data.get('minStaffWeekend', old_row.get('MinStaffWeekend', 2))
-            max_staff_weekend = data.get('maxStaffWeekend', old_row.get('MaxStaffWeekend', 3))
+            # Note: old_row is sqlite3.Row which doesn't support .get(), use try/except or default value handling
+            try:
+                default_min_weekday = old_row['MinStaffWeekday'] if old_row['MinStaffWeekday'] is not None else 3
+            except (KeyError, IndexError):
+                default_min_weekday = 3
+            try:
+                default_max_weekday = old_row['MaxStaffWeekday'] if old_row['MaxStaffWeekday'] is not None else 5
+            except (KeyError, IndexError):
+                default_max_weekday = 5
+            try:
+                default_min_weekend = old_row['MinStaffWeekend'] if old_row['MinStaffWeekend'] is not None else 2
+            except (KeyError, IndexError):
+                default_min_weekend = 2
+            try:
+                default_max_weekend = old_row['MaxStaffWeekend'] if old_row['MaxStaffWeekend'] is not None else 3
+            except (KeyError, IndexError):
+                default_max_weekend = 3
+            
+            min_staff_weekday = data.get('minStaffWeekday', default_min_weekday)
+            max_staff_weekday = data.get('maxStaffWeekday', default_max_weekday)
+            min_staff_weekend = data.get('minStaffWeekend', default_min_weekend)
+            max_staff_weekend = data.get('maxStaffWeekend', default_max_weekend)
             
             if min_staff_weekday > max_staff_weekday:
                 conn.close()
@@ -1784,6 +1806,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
             
             # Update shift type
+            # Note: old_row is sqlite3.Row which doesn't support .get(), use helper function or direct access with defaults
+            def get_row_value(row, key, default):
+                """Helper to get value from sqlite3.Row with default"""
+                try:
+                    val = row[key]
+                    return val if val is not None else default
+                except (KeyError, IndexError):
+                    return default
+            
             cursor.execute("""
                 UPDATE ShiftTypes 
                 SET Code = ?, Name = ?, StartTime = ?, EndTime = ?, 
@@ -1801,14 +1832,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 data.get('durationHours', old_row['DurationHours']),
                 data.get('colorCode', old_row['ColorCode']),
                 1 if data.get('isActive', True) else 0,
-                1 if data.get('worksMonday', old_row.get('WorksMonday', True)) else 0,
-                1 if data.get('worksTuesday', old_row.get('WorksTuesday', True)) else 0,
-                1 if data.get('worksWednesday', old_row.get('WorksWednesday', True)) else 0,
-                1 if data.get('worksThursday', old_row.get('WorksThursday', True)) else 0,
-                1 if data.get('worksFriday', old_row.get('WorksFriday', True)) else 0,
-                1 if data.get('worksSaturday', old_row.get('WorksSaturday', False)) else 0,
-                1 if data.get('worksSunday', old_row.get('WorksSunday', False)) else 0,
-                data.get('weeklyWorkingHours', old_row.get('WeeklyWorkingHours', 40.0)),
+                1 if data.get('worksMonday', get_row_value(old_row, 'WorksMonday', True)) else 0,
+                1 if data.get('worksTuesday', get_row_value(old_row, 'WorksTuesday', True)) else 0,
+                1 if data.get('worksWednesday', get_row_value(old_row, 'WorksWednesday', True)) else 0,
+                1 if data.get('worksThursday', get_row_value(old_row, 'WorksThursday', True)) else 0,
+                1 if data.get('worksFriday', get_row_value(old_row, 'WorksFriday', True)) else 0,
+                1 if data.get('worksSaturday', get_row_value(old_row, 'WorksSaturday', False)) else 0,
+                1 if data.get('worksSunday', get_row_value(old_row, 'WorksSunday', False)) else 0,
+                data.get('weeklyWorkingHours', get_row_value(old_row, 'WeeklyWorkingHours', 40.0)),
                 min_staff_weekday,
                 max_staff_weekday,
                 min_staff_weekend,

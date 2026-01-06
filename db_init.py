@@ -508,7 +508,7 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     """
     Initialize standard shift types.
     
-    Only the three main shifts (Früh, Nacht, Spät) are created initially.
+    The three main shifts are created in rotation order: Früh → Nacht → Spät.
     Additional shifts can be created manually as needed.
     
     Official absence codes (U, AU, L) are stored in Absences table,
@@ -522,7 +522,7 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours, 
     #          MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
     #          WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday)
-    # All three shifts work Monday-Sunday (all 7 days)
+    # All three shifts work Monday-Sunday (all 7 days) - represented by 1 for each day
     shift_types = [
         # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, Sa–So mind. 2 Personen)
         # Works all 7 days: Monday-Sunday
@@ -571,7 +571,8 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     shifts = {row['Code']: row['Id'] for row in cursor.fetchall()}
     
     if len(shifts) < 3:
-        print("⚠️  Not all shift types found, skipping relationship initialization")
+        missing = set(['F', 'N', 'S']) - set(shifts.keys())
+        print(f"⚠️  Not all shift types found, skipping relationship initialization. Missing: {', '.join(missing)}")
         conn.close()
         return
     

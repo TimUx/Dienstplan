@@ -17,12 +17,12 @@
                 </div>
                 <div class="header-right">
                     <nav>
-                        <button onclick="showView('schedule')" class="nav-btn active">Dienstplan</button>
+                        <button onclick="showView('schedule')" class="nav-btn active">📅 Dienstplan</button>
                         <button onclick="showView('management')" class="nav-btn admin-only" id="nav-management" style="display:none;">👥 Verwaltung</button>
-                        <button onclick="showView('absences')" class="nav-btn" id="nav-absences" style="display:none;">Abwesenheiten</button>
-                        <button onclick="showView('vacationyearplan')" class="nav-btn" id="nav-vacationyearplan">Urlaubsjahresplan</button>
-                        <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">Diensttausch</button>
-                        <button onclick="showView('statistics')" class="nav-btn admin-only" id="nav-statistics" style="display:none;">Statistiken</button>
+                        <button onclick="showView('absences')" class="nav-btn" id="nav-absences" style="display:none;">🏖️ Abwesenheiten</button>
+                        <button onclick="showView('vacationyearplan')" class="nav-btn" id="nav-vacationyearplan">📆 Urlaubsjahresplan</button>
+                        <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">🔄 Diensttausch</button>
+                        <button onclick="showView('statistics')" class="nav-btn admin-only" id="nav-statistics" style="display:none;">📊 Statistiken</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
                         <button onclick="showView('admin')" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
                     </nav>
@@ -113,9 +113,9 @@
                 
                 <!-- Management Navigation Tabs -->
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchManagementTab('employees')">Mitarbeiter</button>
-                    <button class="tab-btn" onclick="switchManagementTab('teams')">Teams</button>
-                    <button class="tab-btn" onclick="switchManagementTab('shift-types')">Schichtverwaltung</button>
+                    <button class="tab-btn active" onclick="switchManagementTab('employees')">👤 Mitarbeiter</button>
+                    <button class="tab-btn" onclick="switchManagementTab('teams')">👥 Teams</button>
+                    <button class="tab-btn" onclick="switchManagementTab('shift-types')">🕒 Schichtverwaltung</button>
                 </div>
 
                 <!-- Tab Contents -->
@@ -159,11 +159,12 @@
 
             <!-- Statistics View -->
             <div id="statistics-view" class="view">
+                <h2>📊 Statistiken</h2>
                 <div class="controls">
                     <div class="date-range">
                         <label>Von: <input type="date" id="statsStartDate"></label>
                         <label>Bis: <input type="date" id="statsEndDate"></label>
-                        <button onclick="loadStatistics()" class="btn-primary">Aktualisieren</button>
+                        <button onclick="loadStatistics()" class="btn-primary">🔄 Aktualisieren</button>
                     </div>
                 </div>
                 <div id="statistics-content">
@@ -173,15 +174,15 @@
 
             <!-- Vacations View -->
             <div id="absences-view" class="view">
-                <h2>Abwesenheitsverwaltung</h2>
+                <h2>🏖️ Abwesenheitsverwaltung</h2>
                 
                 <!-- Tab Navigation -->
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchAbsenceTab('vacation')">Urlaub</button>
-                    <button class="tab-btn" onclick="switchAbsenceTab('sick')">Arbeitsunfähigkeit (AU)</button>
-                    <button class="tab-btn" onclick="switchAbsenceTab('training')">Lehrgang / Schulung</button>
+                    <button class="tab-btn active" onclick="switchAbsenceTab('vacation')">🏖️ Urlaub</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('sick')">🏥 Arbeitsunfähigkeit (AU)</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('training')">🎓 Lehrgang / Schulung</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('vacation-periods')">📅 Ferienzeiten</button>
-                    <button class="tab-btn admin-only" onclick="switchAbsenceTab('vacation-year-approvals')" id="tab-vacation-year-approvals" style="display:none;">📅 Urlaubsjahresplan Freigabe</button>
+                    <button class="tab-btn admin-only" onclick="switchAbsenceTab('vacation-year-approvals')" id="tab-vacation-year-approvals" style="display:none;">✅ Urlaubsjahresplan Freigabe</button>
                 </div>
                 
                 <!-- Vacation Tab -->
@@ -252,12 +253,12 @@
 
             <!-- Shift Exchange View (separate from vacation) -->
             <div id="shiftexchange-view" class="view">
-                <h2>Diensttausch</h2>
+                <h2>🔄 Diensttausch</h2>
                 <div class="controls">
-                    <button onclick="showOfferShiftExchangeModal()" class="btn-primary">+ Dienst zum Tausch anbieten</button>
-                    <button onclick="loadShiftExchanges('available')" class="btn-secondary">Verfügbare Dienste</button>
-                    <button onclick="loadShiftExchanges('pending')" class="btn-secondary admin-only">Offene Anfragen</button>
-                    <button onclick="loadShiftExchanges('my')" class="btn-secondary">Meine Tauschangebote</button>
+                    <button onclick="showOfferShiftExchangeModal()" class="btn-primary">➕ Dienst zum Tausch anbieten</button>
+                    <button onclick="loadShiftExchanges('available')" class="btn-secondary">📋 Verfügbare Dienste</button>
+                    <button onclick="loadShiftExchanges('pending')" class="btn-secondary admin-only">⏳ Offene Anfragen</button>
+                    <button onclick="loadShiftExchanges('my')" class="btn-secondary">👤 Meine Tauschangebote</button>
                 </div>
                 <div id="shift-exchanges-content">
                     <p class="loading">Lade Diensttausch-Angebote...</p>
@@ -845,12 +846,6 @@
                 </div>
                 <div class="form-group">
                     <label>
-                        <input type="checkbox" id="isSpringer">
-                        Springer (Vertretungspool)
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>
                         <input type="checkbox" id="isTeamLeader">
                         Team-Leiter
                     </label>
@@ -917,7 +912,7 @@
             <span class="close" onclick="closeTeamModal()">&times;</span>
             <h2 id="teamModalTitle">Team hinzufügen</h2>
             <form id="teamForm" onsubmit="saveTeam(event)">
-                <input type="hidden" id="teamId">
+                <input type="hidden" id="teamEditId">
                 <div class="form-group">
                     <label>Team-Name*</label>
                     <input type="text" id="teamName" required placeholder="z.B. Team A">
@@ -929,12 +924,6 @@
                 <div class="form-group">
                     <label>E-Mail</label>
                     <input type="email" id="teamEmail" placeholder="team@fritzwinter.de">
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="teamIsVirtual">
-                        Virtuelles Team (Mitarbeiter erscheinen nicht in der regulären Schichtplanung)
-                    </label>
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeTeamModal()" class="btn-secondary">Abbrechen</button>

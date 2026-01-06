@@ -219,6 +219,20 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # VacationYearApprovals table (for year-level vacation plan approval)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS VacationYearApprovals (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Year INTEGER NOT NULL UNIQUE,
+            IsApproved INTEGER NOT NULL DEFAULT 0,
+            ApprovedAt TEXT,
+            ApprovedBy TEXT,
+            Notes TEXT,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            ModifiedAt TEXT
+        )
+    """)
+    
     # TeamShiftAssignments table (many-to-many: which teams can work which shifts)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS TeamShiftAssignments (

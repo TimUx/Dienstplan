@@ -161,6 +161,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         db_path: Path to SQLite database
         debug: Enable debug mode (WARNING: Only use in development!)
     """
+    import os
     from web_api import create_app
     
     print("=" * 60)
@@ -171,6 +172,22 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     if debug:
         print("⚠️  WARNING: Debug mode enabled - DO NOT use in production!")
     print()
+    
+    # Check if database exists, if not initialize it
+    if not os.path.exists(db_path):
+        print(f"ℹ️  No database found at {db_path}")
+        print("   Initializing new database with default structure...")
+        print()
+        try:
+            from db_init import initialize_database
+            # Initialize without sample data for production use
+            initialize_database(db_path, with_sample_data=False)
+            print()
+        except Exception as e:
+            print(f"⚠️  Error initializing database: {e}")
+            print("   The application may not work correctly.")
+            print()
+    
     print("The existing Web UI from .NET version is compatible with this backend.")
     print("=" * 60)
     print()

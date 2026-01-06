@@ -523,6 +523,8 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     #          MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
     #          WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday)
     # All three shifts work Monday-Sunday (all 7 days) - represented by 1 for each day
+    # Note: IDs are assigned based on legacy system compatibility (F=1, S=2, N=3), not rotation order
+    # The rotation order F→N→S is defined separately in initialize_shift_type_relationships()
     shift_types = [
         # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, Sa–So mind. 2 Personen)
         # Works all 7 days: Monday-Sunday

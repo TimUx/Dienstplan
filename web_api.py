@@ -2123,6 +2123,99 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
     
     # ============================================================================
+    # GLOBAL SETTINGS ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/settings/global', methods=['GET'])
+    def get_global_settings():
+        """Get global shift planning settings"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM GlobalSettings WHERE Id = 1")
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                # Return defaults if not found
+                return jsonify({
+                    'maxConsecutiveShifts': 6,
+                    'maxConsecutiveNightShifts': 3,
+                    'minRestHoursBetweenShifts': 11
+                })
+            
+            return jsonify({
+                'maxConsecutiveShifts': row['MaxConsecutiveShifts'],
+                'maxConsecutiveNightShifts': row['MaxConsecutiveNightShifts'],
+                'minRestHoursBetweenShifts': row['MinRestHoursBetweenShifts'],
+                'modifiedAt': row['ModifiedAt'],
+                'modifiedBy': row['ModifiedBy']
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Get global settings error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+    
+    @app.route('/api/settings/global', methods=['PUT'])
+    @require_role('Admin')
+    def update_global_settings():
+        """Update global shift planning settings (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            max_consecutive_shifts = data.get('maxConsecutiveShifts', 6)
+            max_consecutive_night_shifts = data.get('maxConsecutiveNightShifts', 3)
+            min_rest_hours = data.get('minRestHoursBetweenShifts', 11)
+            
+            # Validation
+            if max_consecutive_shifts < 1 or max_consecutive_shifts > 10:
+                return jsonify({'error': 'Maximale aufeinanderfolgende Schichten muss zwischen 1 und 10 liegen'}), 400
+            if max_consecutive_night_shifts < 1 or max_consecutive_night_shifts > max_consecutive_shifts:
+                return jsonify({'error': 'Maximale Nachtschichten darf nicht größer sein als maximale Schichten'}), 400
+            if min_rest_hours < 8 or min_rest_hours > 24:
+                return jsonify({'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Update or insert settings
+            cursor.execute("""
+                INSERT INTO GlobalSettings 
+                (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts, ModifiedAt, ModifiedBy)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(Id) DO UPDATE SET
+                    MaxConsecutiveShifts = excluded.MaxConsecutiveShifts,
+                    MaxConsecutiveNightShifts = excluded.MaxConsecutiveNightShifts,
+                    MinRestHoursBetweenShifts = excluded.MinRestHoursBetweenShifts,
+                    ModifiedAt = excluded.ModifiedAt,
+                    ModifiedBy = excluded.ModifiedBy
+            """, (
+                max_consecutive_shifts,
+                max_consecutive_night_shifts,
+                min_rest_hours,
+                datetime.utcnow().isoformat(),
+                session.get('user_email', 'system')
+            ))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'maxConsecutiveShifts': max_consecutive_shifts,
+                'maxConsecutiveNightShifts': max_consecutive_night_shifts,
+                'minRestHoursBetweenShifts': min_rest_hours
+            }, ensure_ascii=False)
+            log_audit(conn, 'GlobalSettings', 1, 'Updated', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update global settings error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    # ============================================================================
     # SHIFT PLANNING ENDPOINTS
     # ============================================================================
     

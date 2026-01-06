@@ -2181,7 +2181,7 @@ function switchManagementTab(tabName) {
     });
     
     // Remove active class from all tab buttons
-    document.querySelectorAll('#management-view .tab-btn').forEach(btn => {
+    document.querySelectorAll('#management-view .tabs:not(.sub-tabs) .tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     
@@ -2192,7 +2192,7 @@ function switchManagementTab(tabName) {
     }
     
     // Activate corresponding button
-    const tabButtons = document.querySelectorAll('#management-view .tab-btn');
+    const tabButtons = document.querySelectorAll('#management-view .tabs:not(.sub-tabs) .tab-btn');
     tabButtons.forEach(btn => {
         const btnOnclick = btn.getAttribute('onclick');
         if (btnOnclick && btnOnclick.includes(`'${tabName}'`)) {
@@ -2206,9 +2206,39 @@ function switchManagementTab(tabName) {
     } else if (tabName === 'teams') {
         loadTeams();
     } else if (tabName === 'shift-types') {
-        loadShiftTypesManagement();
+        switchShiftManagementTab('types'); // Default to types sub-tab
     }
 }
+
+function switchShiftManagementTab(subTabName) {
+    // Hide all sub-tab contents in shift management
+    document.querySelectorAll('#management-shift-types-tab > .tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all sub-tab buttons
+    document.querySelectorAll('.sub-tabs .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected sub-tab content
+    if (subTabName === 'types') {
+        document.getElementById('shift-types-content-tab').classList.add('active');
+        loadShiftTypesManagement();
+    } else if (subTabName === 'settings') {
+        document.getElementById('shift-settings-content-tab').classList.add('active');
+        loadGlobalSettings();
+    }
+    
+    // Activate corresponding button
+    document.querySelectorAll('.sub-tabs .tab-btn').forEach(btn => {
+        const btnOnclick = btn.getAttribute('onclick');
+        if (btnOnclick && btnOnclick.includes(`'${subTabName}'`)) {
+            btn.classList.add('active');
+        }
+    });
+}
+
 
 // Load Absences (AU or L)
 async function loadAbsences(type) {
@@ -5188,6 +5218,127 @@ function displayShiftTypesManagement(shiftTypes) {
     
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+// Global Settings Management Functions
+async function loadGlobalSettings() {
+    const container = document.getElementById('global-settings-content');
+    container.innerHTML = '<p class="loading">Lade Einstellungen...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/settings/global`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const settings = await response.json();
+            displayGlobalSettings(settings);
+        } else {
+            container.innerHTML = '<p class="error">Fehler beim Laden der Einstellungen.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading global settings:', error);
+        container.innerHTML = '<p class="error">Fehler beim Laden der Einstellungen.</p>';
+    }
+}
+
+function displayGlobalSettings(settings) {
+    const container = document.getElementById('global-settings-content');
+    
+    const isAdmin = hasRole('Admin');
+    const readonly = !isAdmin ? 'readonly' : '';
+    const disabledClass = !isAdmin ? 'disabled' : '';
+    
+    let html = '<div class="settings-form">';
+    html += '<div class="info-box info">';
+    html += '<p>ℹ️ Diese Einstellungen gelten für die automatische Schichtplanung und Validierung.</p>';
+    html += '</div>';
+    
+    html += '<form id="global-settings-form" onsubmit="saveGlobalSettings(event)">';
+    
+    html += '<div class="form-group">';
+    html += '<label for="maxConsecutiveShifts">Maximale aufeinanderfolgende Schichten:</label>';
+    html += `<input type="number" id="maxConsecutiveShifts" name="maxConsecutiveShifts" 
+             value="${settings.maxConsecutiveShifts || 6}" min="1" max="10" ${readonly} required>`;
+    html += '<small>Standard: 6 Schichten (inkl. Wochenenden)</small>';
+    html += '</div>';
+    
+    html += '<div class="form-group">';
+    html += '<label for="maxConsecutiveNightShifts">Maximale aufeinanderfolgende Nachtschichten:</label>';
+    html += `<input type="number" id="maxConsecutiveNightShifts" name="maxConsecutiveNightShifts" 
+             value="${settings.maxConsecutiveNightShifts || 3}" min="1" max="10" ${readonly} required>`;
+    html += '<small>Standard: 3 Nachtschichten</small>';
+    html += '</div>';
+    
+    html += '<div class="form-group">';
+    html += '<label for="minRestHoursBetweenShifts">Gesetzliche Ruhezeit zwischen Schichten (Stunden):</label>';
+    html += `<input type="number" id="minRestHoursBetweenShifts" name="minRestHoursBetweenShifts" 
+             value="${settings.minRestHoursBetweenShifts || 11}" min="8" max="24" ${readonly} required>`;
+    html += '<small>Standard: 11 Stunden (gesetzlich vorgeschrieben)</small>';
+    html += '</div>';
+    
+    if (settings.modifiedAt) {
+        html += '<div class="form-group">';
+        html += '<small class="text-muted">Zuletzt geändert: ' + new Date(settings.modifiedAt).toLocaleString('de-DE');
+        if (settings.modifiedBy) {
+            html += ' von ' + escapeHtml(settings.modifiedBy);
+        }
+        html += '</small>';
+        html += '</div>';
+    }
+    
+    if (isAdmin) {
+        html += '<div class="form-actions">';
+        html += '<button type="submit" class="btn-primary">💾 Einstellungen speichern</button>';
+        html += '</div>';
+    }
+    
+    html += '</form>';
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+async function saveGlobalSettings(event) {
+    event.preventDefault();
+    
+    if (!hasRole('Admin')) {
+        alert('Nur Administratoren können Einstellungen ändern.');
+        return;
+    }
+    
+    const form = document.getElementById('global-settings-form');
+    const formData = new FormData(form);
+    
+    const settings = {
+        maxConsecutiveShifts: parseInt(formData.get('maxConsecutiveShifts')),
+        maxConsecutiveNightShifts: parseInt(formData.get('maxConsecutiveNightShifts')),
+        minRestHoursBetweenShifts: parseInt(formData.get('minRestHoursBetweenShifts'))
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/settings/global`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(settings)
+        });
+        
+        if (response.ok) {
+            alert('Einstellungen erfolgreich gespeichert!');
+            loadGlobalSettings(); // Reload to show updated values
+        } else if (response.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (response.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Speichern: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error saving global settings:', error);
+        alert(`Fehler: ${error.message}`);
+    }
 }
 
 /**

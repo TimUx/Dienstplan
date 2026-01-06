@@ -145,13 +145,35 @@
                     <!-- Shift Types Tab -->
                     <div id="management-shift-types-tab" class="tab-content">
                         <h3>🔄 Schichtverwaltung</h3>
-                        <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
-                        <div class="controls">
-                            <button onclick="showShiftTypeModal()" class="btn-primary">+ Schichttyp hinzufügen</button>
-                            <button onclick="loadShiftTypesManagement()" class="btn-secondary">🔄 Aktualisieren</button>
+                        
+                        <!-- Sub-tabs for Shift Management -->
+                        <div class="tabs sub-tabs">
+                            <button class="tab-btn active" onclick="switchShiftManagementTab('types')">📋 Schichttypen</button>
+                            <button class="tab-btn" onclick="switchShiftManagementTab('settings')">⚙️ Einstellungen</button>
                         </div>
-                        <div id="shift-types-management-content">
-                            <p class="loading">Lade Schichttypen...</p>
+                        
+                        <!-- Shift Types Sub-tab -->
+                        <div id="shift-types-content-tab" class="tab-content active">
+                            <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
+                            <div class="controls">
+                                <button onclick="showShiftTypeModal()" class="btn-primary">+ Schichttyp hinzufügen</button>
+                                <button onclick="loadShiftTypesManagement()" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="shift-types-management-content">
+                                <p class="loading">Lade Schichttypen...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Settings Sub-tab -->
+                        <div id="shift-settings-content-tab" class="tab-content">
+                            <h4>Allgemeine Schichtplanungseinstellungen</h4>
+                            <p>Konfigurieren Sie die globalen Parameter für die Schichtplanung.</p>
+                            <div class="controls">
+                                <button onclick="loadGlobalSettings()" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="global-settings-content">
+                                <p class="loading">Lade Einstellungen...</p>
+                            </div>
                         </div>
                     </div>
                 </div>

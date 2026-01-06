@@ -324,7 +324,6 @@
                 <div class="admin-tabs">
                     <button class="admin-tab active" onclick="showAdminTab('audit-logs', this)">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" onclick="showAdminTab('email', this)">📧 E-Mail-Einstellungen</button>
-                    <button class="admin-tab" onclick="showAdminTab('settings', this)">🔧 Globale Einstellungen</button>
                     <button class="admin-tab" onclick="showAdminTab('system', this)">📊 System-Information</button>
                 </div>
 
@@ -412,32 +411,6 @@
                                     <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
                                     <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Global Settings Tab -->
-                    <div id="admin-tab-settings" class="admin-tab-content">
-                        <div class="admin-section">
-                            <h3>🔧 Systemeinstellungen</h3>
-                            <p>Allgemeine Schichtplanungseinstellungen.</p>
-                            <div class="settings-grid">
-                                <div class="setting-item">
-                                    <label>Maximale aufeinanderfolgende Schichten:</label>
-                                    <input type="number" id="setting-max-consecutive-shifts" value="6" min="1" max="10">
-                                </div>
-                                <div class="setting-item">
-                                    <label>Maximale aufeinanderfolgende Nachtschichten:</label>
-                                    <input type="number" id="setting-max-consecutive-nights" value="3" min="1" max="7">
-                                </div>
-                            </div>
-                            <button onclick="saveGlobalSettings()" class="btn-primary">Einstellungen speichern</button>
-                            
-                            <div class="info-box" style="margin-top: 20px;">
-                                <p><strong>Hinweis zu Arbeitszeitgrenzen:</strong></p>
-                                <p>Die maximalen Arbeitszeiten (Stunden pro Woche und Monat) werden jetzt dynamisch aus der <strong>Schichtverwaltung</strong> berechnet.</p>
-                                <p>Jede Schicht hat eine konfigurierbare <strong>Wochenarbeitszeit</strong>, die als Grundlage für die monatlichen Sollstunden dient.</p>
-                                <p>Diese Einstellungen können in der Schichtverwaltung (Admin → Schichtarten) angepasst werden.</p>
                             </div>
                         </div>
                     </div>

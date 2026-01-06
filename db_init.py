@@ -508,25 +508,31 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     """
     Initialize standard shift types.
     
-    Only the three main shifts (Früh, Spät, Nacht) are created initially.
+    Only the three main shifts (Früh, Nacht, Spät) are created initially.
     Additional shifts can be created manually as needed.
     
     Official absence codes (U, AU, L) are stored in Absences table,
     NOT as shift types. Shift types are only for actual work shifts.
+    
+    All three shifts are configured to work Monday-Sunday (all 7 days).
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours, MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
-    # Only create the three main shifts: Früh, Spät, Nacht
-    # Rotation order: Früh → Nacht → Spät
+    # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours, 
+    #          MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
+    #          WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday)
+    # All three shifts work Monday-Sunday (all 7 days)
     shift_types = [
         # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, Sa–So mind. 2 Personen)
-        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 5, 2, 3),
-        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
-        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 4, 2, 3),
+        # Works all 7 days: Monday-Sunday
+        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 5, 2, 3, 1, 1, 1, 1, 1, 1, 1),
         # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
-        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 3, 2, 3),
+        # Works all 7 days: Monday-Sunday
+        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1),
+        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
+        # Works all 7 days: Monday-Sunday
+        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 4, 2, 3, 1, 1, 1, 1, 1, 1, 1),
         # Additional shifts (Z, BMT, BSB, TD) can be created manually in the UI as needed
     ]
     
@@ -534,13 +540,67 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
         cursor.execute("""
             INSERT OR IGNORE INTO ShiftTypes 
             (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
-             MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
+             WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, shift_type)
     
     conn.commit()
     conn.close()
-    print("✅ Standard shift types initialized: Früh, Spät, Nacht (48h/week)")
+    print("✅ Standard shift types initialized: Früh, Nacht, Spät (48h/week, all working Monday-Sunday)")
+
+
+def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
+    """
+    Initialize shift type relationships to define the shift rotation order.
+    
+    Defines the shift sequence for the three main shifts:
+    Frühschicht (F) → Nachtschicht (N) → Spätschicht (S)
+    
+    This means:
+    - After Frühschicht (F), the next shift should be Nachtschicht (N)
+    - After Nachtschicht (N), the next shift should be Spätschicht (S)
+    - After Spätschicht (S), the next shift should be Frühschicht (F)
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row  # Enable dictionary-style access
+    cursor = conn.cursor()
+    
+    # Check if shift types exist
+    cursor.execute("SELECT Id, Code FROM ShiftTypes WHERE Code IN ('F', 'N', 'S')")
+    shifts = {row['Code']: row['Id'] for row in cursor.fetchall()}
+    
+    if len(shifts) < 3:
+        print("⚠️  Not all shift types found, skipping relationship initialization")
+        conn.close()
+        return
+    
+    # Define relationships: ShiftTypeId → RelatedShiftTypeId with DisplayOrder
+    # For Frühschicht (F): next shifts are Nachtschicht (1st priority), Spätschicht (2nd priority)
+    # For Nachtschicht (N): next shift is Spätschicht (1st priority), Frühschicht (2nd priority)
+    # For Spätschicht (S): next shift is Frühschicht (1st priority), Nachtschicht (2nd priority)
+    relationships = [
+        # Frühschicht → Nachtschicht (1st), Spätschicht (2nd)
+        (shifts['F'], shifts['N'], 1),  # F → N (highest priority)
+        (shifts['F'], shifts['S'], 2),  # F → S (second priority)
+        # Nachtschicht → Spätschicht (1st), Frühschicht (2nd)
+        (shifts['N'], shifts['S'], 1),  # N → S (highest priority)
+        (shifts['N'], shifts['F'], 2),  # N → F (second priority)
+        # Spätschicht → Frühschicht (1st), Nachtschicht (2nd)
+        (shifts['S'], shifts['F'], 1),  # S → F (highest priority)
+        (shifts['S'], shifts['N'], 2),  # S → N (second priority)
+    ]
+    
+    for shift_id, related_shift_id, display_order in relationships:
+        cursor.execute("""
+            INSERT OR IGNORE INTO ShiftTypeRelationships 
+            (ShiftTypeId, RelatedShiftTypeId, DisplayOrder, CreatedBy)
+            VALUES (?, ?, ?, ?)
+        """, (shift_id, related_shift_id, display_order, 'system'))
+    
+    conn.commit()
+    conn.close()
+    print("✅ Shift type relationships initialized: F → N → S rotation")
 
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
@@ -651,6 +711,9 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
     
     # Initialize shift types
     initialize_shift_types(db_path)
+    
+    # Initialize shift type relationships (rotation order: F → N → S)
+    initialize_shift_type_relationships(db_path)
     
     if with_sample_data:
         # Initialize sample teams

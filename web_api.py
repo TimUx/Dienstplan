@@ -33,6 +33,28 @@ from notification_manager import (
 )
 
 
+def get_row_value(row: sqlite3.Row, key: str, default):
+    """
+    Helper to safely get value from sqlite3.Row with default.
+    
+    sqlite3.Row objects don't have a .get() method like dictionaries.
+    This helper provides similar functionality with proper error handling.
+    
+    Args:
+        row: sqlite3.Row object
+        key: Column name
+        default: Default value if key doesn't exist or value is None
+        
+    Returns:
+        Value from row or default
+    """
+    try:
+        val = row[key]
+        return val if val is not None else default
+    except (KeyError, IndexError):
+        return default
+
+
 class Database:
     """Database connection helper"""
     
@@ -1774,29 +1796,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     conn.close()
                     return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
             
-            # Validate staffing requirements
-            # Note: old_row is sqlite3.Row which doesn't support .get(), use try/except or default value handling
-            try:
-                default_min_weekday = old_row['MinStaffWeekday'] if old_row['MinStaffWeekday'] is not None else 3
-            except (KeyError, IndexError):
-                default_min_weekday = 3
-            try:
-                default_max_weekday = old_row['MaxStaffWeekday'] if old_row['MaxStaffWeekday'] is not None else 5
-            except (KeyError, IndexError):
-                default_max_weekday = 5
-            try:
-                default_min_weekend = old_row['MinStaffWeekend'] if old_row['MinStaffWeekend'] is not None else 2
-            except (KeyError, IndexError):
-                default_min_weekend = 2
-            try:
-                default_max_weekend = old_row['MaxStaffWeekend'] if old_row['MaxStaffWeekend'] is not None else 3
-            except (KeyError, IndexError):
-                default_max_weekend = 3
-            
-            min_staff_weekday = data.get('minStaffWeekday', default_min_weekday)
-            max_staff_weekday = data.get('maxStaffWeekday', default_max_weekday)
-            min_staff_weekend = data.get('minStaffWeekend', default_min_weekend)
-            max_staff_weekend = data.get('maxStaffWeekend', default_max_weekend)
+            # Validate staffing requirements using the helper function
+            min_staff_weekday = data.get('minStaffWeekday', get_row_value(old_row, 'MinStaffWeekday', 3))
+            max_staff_weekday = data.get('maxStaffWeekday', get_row_value(old_row, 'MaxStaffWeekday', 5))
+            min_staff_weekend = data.get('minStaffWeekend', get_row_value(old_row, 'MinStaffWeekend', 2))
+            max_staff_weekend = data.get('maxStaffWeekend', get_row_value(old_row, 'MaxStaffWeekend', 3))
             
             if min_staff_weekday > max_staff_weekday:
                 conn.close()
@@ -1806,15 +1810,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
             
             # Update shift type
-            # Note: old_row is sqlite3.Row which doesn't support .get(), use helper function or direct access with defaults
-            def get_row_value(row, key, default):
-                """Helper to get value from sqlite3.Row with default"""
-                try:
-                    val = row[key]
-                    return val if val is not None else default
-                except (KeyError, IndexError):
-                    return default
-            
             cursor.execute("""
                 UPDATE ShiftTypes 
                 SET Code = ?, Name = ?, StartTime = ?, EndTime = ?, 

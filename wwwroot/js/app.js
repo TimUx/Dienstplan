@@ -1606,7 +1606,6 @@ async function editEmployee(id) {
         document.getElementById('email').value = employee.email || '';
         document.getElementById('geburtsdatum').value = employee.geburtsdatum ? employee.geburtsdatum.split('T')[0] : '';
         document.getElementById('teamId').value = employee.teamId || '';
-        document.getElementById('isSpringer').checked = employee.isSpringer;
         document.getElementById('isTeamLeader').checked = employee.isTeamLeader || false;
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
@@ -1681,7 +1680,7 @@ async function saveEmployee(event) {
         email: document.getElementById('email').value || null,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
-        isSpringer: document.getElementById('isSpringer').checked,
+        isSpringer: false,  // Always false since checkbox was removed
         isTeamLeader: document.getElementById('isTeamLeader').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
         isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
@@ -1879,7 +1878,6 @@ async function editTeam(id) {
         document.getElementById('teamName').value = team.name;
         document.getElementById('teamDescription').value = team.description || '';
         document.getElementById('teamEmail').value = team.email || '';
-        document.getElementById('teamIsVirtual').checked = team.isVirtual || false;
         
         document.getElementById('teamModalTitle').textContent = 'Team bearbeiten';
         document.getElementById('teamModal').style.display = 'block';
@@ -1911,10 +1909,15 @@ async function deleteTeam(id, name) {
             alert('Bitte melden Sie sich an.');
         } else if (response.status === 403) {
             alert('Sie haben keine Berechtigung zum Löschen.');
+        } else if (response.status === 400) {
+            const errorData = await response.json();
+            alert(errorData.error || 'Fehler beim Löschen');
         } else {
-            alert('Fehler beim Löschen');
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.error || 'Fehler beim Löschen');
         }
     } catch (error) {
+        console.error('Error deleting team:', error);
         alert(`Fehler: ${error.message}`);
     }
 }
@@ -1927,12 +1930,13 @@ function closeTeamModal() {
 async function saveTeam(event) {
     event.preventDefault();
     
-    const id = document.getElementById('teamId').value;
+    const idValue = document.getElementById('teamId').value;
+    const id = idValue ? parseInt(idValue) : null;
     const team = {
         name: document.getElementById('teamName').value,
         description: document.getElementById('teamDescription').value || null,
         email: document.getElementById('teamEmail').value || null,
-        isVirtual: document.getElementById('teamIsVirtual').checked
+        isVirtual: false  // Always false since checkbox was removed
     };
     
     try {
@@ -3864,9 +3868,9 @@ async function deleteShiftAssignment() {
         });
 
         if (response.ok || response.status === 204) {
-            alert('Schicht erfolgreich gelöscht!');
             closeEditShiftModal();
-            loadSchedule();
+            await loadSchedule();
+            alert('Schicht erfolgreich gelöscht!');
         } else if (response.status === 401) {
             alert('Bitte melden Sie sich an.');
         } else if (response.status === 403) {

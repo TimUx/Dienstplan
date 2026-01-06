@@ -319,6 +319,24 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # GlobalSettings table (for shift planning configuration)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS GlobalSettings (
+            Id INTEGER PRIMARY KEY CHECK (Id = 1),
+            MaxConsecutiveShifts INTEGER NOT NULL DEFAULT 6,
+            MaxConsecutiveNightShifts INTEGER NOT NULL DEFAULT 3,
+            MinRestHoursBetweenShifts INTEGER NOT NULL DEFAULT 11,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+    
+    # Initialize default global settings if not exists
+    cursor.execute("""
+        INSERT OR IGNORE INTO GlobalSettings (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts)
+        VALUES (1, 6, 3, 11)
+    """)
+    
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 
@@ -490,36 +508,39 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     """
     Initialize standard shift types.
     
+    Only the three main shifts (Früh, Spät, Nacht) are created initially.
+    Additional shifts can be created manually as needed.
+    
     Official absence codes (U, AU, L) are stored in Absences table,
     NOT as shift types. Shift types are only for actual work shifts.
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
+    # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours, MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
+    # Only create the three main shifts: Früh, Spät, Nacht
+    # Rotation order: Früh → Nacht → Spät
     shift_types = [
-        (1, "F", "Früh", "05:45", "13:45", 8.0, "#4CAF50", 4, 5, 2, 3),
-        (2, "S", "Spät", "13:45", "21:45", 8.0, "#FF9800", 3, 4, 2, 3),
-        (3, "N", "Nacht", "21:45", "05:45", 8.0, "#2196F3", 3, 3, 2, 3),
-        (4, "Z", "Zwischendienst", "08:00", "16:00", 8.0, "#9C27B0", 3, 5, 2, 3),
-        (5, "BMT", "Brandmeldetechniker", "06:00", "14:00", 8.0, "#F44336", 3, 5, 2, 3),
-        (6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", 9.5, "#E91E63", 3, 5, 2, 3),
-        (7, "TD", "Tagdienst", "06:00", "16:30", 10.5, "#673AB7", 3, 5, 2, 3),
-        # REMOVED: "K" (Krank) and old "U" (Urlaub) shift types
-        # Absences are now handled exclusively through Absences table with codes: U, AU, L
+        # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, Sa–So mind. 2 Personen)
+        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 5, 2, 3),
+        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
+        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 4, 2, 3),
+        # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
+        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 3, 2, 3),
+        # Additional shifts (Z, BMT, BSB, TD) can be created manually in the UI as needed
     ]
     
     for shift_type in shift_types:
         cursor.execute("""
             INSERT OR IGNORE INTO ShiftTypes 
-            (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, 
+            (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
              MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, shift_type)
     
     conn.commit()
     conn.close()
-    print("✅ Standard shift types initialized (absences use separate codes: U, AU, L)")
+    print("✅ Standard shift types initialized: Früh, Spät, Nacht (48h/week)")
 
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):

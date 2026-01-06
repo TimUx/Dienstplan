@@ -33,6 +33,28 @@ from notification_manager import (
 )
 
 
+def get_row_value(row: sqlite3.Row, key: str, default):
+    """
+    Helper to safely get value from sqlite3.Row with default.
+    
+    sqlite3.Row objects don't have a .get() method like dictionaries.
+    This helper provides similar functionality with proper error handling.
+    
+    Args:
+        row: sqlite3.Row object
+        key: Column name
+        default: Default value if key doesn't exist or value is None
+        
+    Returns:
+        Value from row or default
+    """
+    try:
+        val = row[key]
+        return val if val is not None else default
+    except (KeyError, IndexError):
+        return default
+
+
 class Database:
     """Database connection helper"""
     
@@ -1330,7 +1352,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn.close()
                 return jsonify({'error': f'Team hat {employee_count} Mitarbeiter und kann nicht gelöscht werden'}), 400
             
-            # Delete team
+            # Clear TeamId from AdminNotifications to avoid foreign key constraint violations
+            # (AdminNotifications don't have CASCADE delete)
+            cursor.execute("UPDATE AdminNotifications SET TeamId = NULL WHERE TeamId = ?", (id,))
+            
+            # Delete team (TeamShiftAssignments will be automatically deleted due to CASCADE)
             cursor.execute("DELETE FROM Teams WHERE Id = ?", (id,))
             
             # Log audit entry
@@ -1770,11 +1796,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     conn.close()
                     return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
             
-            # Validate staffing requirements
-            min_staff_weekday = data.get('minStaffWeekday', old_row.get('MinStaffWeekday', 3))
-            max_staff_weekday = data.get('maxStaffWeekday', old_row.get('MaxStaffWeekday', 5))
-            min_staff_weekend = data.get('minStaffWeekend', old_row.get('MinStaffWeekend', 2))
-            max_staff_weekend = data.get('maxStaffWeekend', old_row.get('MaxStaffWeekend', 3))
+            # Validate staffing requirements using the helper function
+            min_staff_weekday = data.get('minStaffWeekday', get_row_value(old_row, 'MinStaffWeekday', 3))
+            max_staff_weekday = data.get('maxStaffWeekday', get_row_value(old_row, 'MaxStaffWeekday', 5))
+            min_staff_weekend = data.get('minStaffWeekend', get_row_value(old_row, 'MinStaffWeekend', 2))
+            max_staff_weekend = data.get('maxStaffWeekend', get_row_value(old_row, 'MaxStaffWeekend', 3))
             
             if min_staff_weekday > max_staff_weekday:
                 conn.close()
@@ -1801,14 +1827,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 data.get('durationHours', old_row['DurationHours']),
                 data.get('colorCode', old_row['ColorCode']),
                 1 if data.get('isActive', True) else 0,
-                1 if data.get('worksMonday', old_row.get('WorksMonday', True)) else 0,
-                1 if data.get('worksTuesday', old_row.get('WorksTuesday', True)) else 0,
-                1 if data.get('worksWednesday', old_row.get('WorksWednesday', True)) else 0,
-                1 if data.get('worksThursday', old_row.get('WorksThursday', True)) else 0,
-                1 if data.get('worksFriday', old_row.get('WorksFriday', True)) else 0,
-                1 if data.get('worksSaturday', old_row.get('WorksSaturday', False)) else 0,
-                1 if data.get('worksSunday', old_row.get('WorksSunday', False)) else 0,
-                data.get('weeklyWorkingHours', old_row.get('WeeklyWorkingHours', 40.0)),
+                1 if data.get('worksMonday', get_row_value(old_row, 'WorksMonday', True)) else 0,
+                1 if data.get('worksTuesday', get_row_value(old_row, 'WorksTuesday', True)) else 0,
+                1 if data.get('worksWednesday', get_row_value(old_row, 'WorksWednesday', True)) else 0,
+                1 if data.get('worksThursday', get_row_value(old_row, 'WorksThursday', True)) else 0,
+                1 if data.get('worksFriday', get_row_value(old_row, 'WorksFriday', True)) else 0,
+                1 if data.get('worksSaturday', get_row_value(old_row, 'WorksSaturday', False)) else 0,
+                1 if data.get('worksSunday', get_row_value(old_row, 'WorksSunday', False)) else 0,
+                data.get('weeklyWorkingHours', get_row_value(old_row, 'WeeklyWorkingHours', 40.0)),
                 min_staff_weekday,
                 max_staff_weekday,
                 min_staff_weekend,
@@ -2094,6 +2120,99 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
         except Exception as e:
             app.logger.error(f"Update shift type relationships error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    # ============================================================================
+    # GLOBAL SETTINGS ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/settings/global', methods=['GET'])
+    def get_global_settings():
+        """Get global shift planning settings"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM GlobalSettings WHERE Id = 1")
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                # Return defaults if not found
+                return jsonify({
+                    'maxConsecutiveShifts': 6,
+                    'maxConsecutiveNightShifts': 3,
+                    'minRestHoursBetweenShifts': 11
+                })
+            
+            return jsonify({
+                'maxConsecutiveShifts': row['MaxConsecutiveShifts'],
+                'maxConsecutiveNightShifts': row['MaxConsecutiveNightShifts'],
+                'minRestHoursBetweenShifts': row['MinRestHoursBetweenShifts'],
+                'modifiedAt': row['ModifiedAt'],
+                'modifiedBy': row['ModifiedBy']
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Get global settings error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+    
+    @app.route('/api/settings/global', methods=['PUT'])
+    @require_role('Admin')
+    def update_global_settings():
+        """Update global shift planning settings (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            max_consecutive_shifts = data.get('maxConsecutiveShifts', 6)
+            max_consecutive_night_shifts = data.get('maxConsecutiveNightShifts', 3)
+            min_rest_hours = data.get('minRestHoursBetweenShifts', 11)
+            
+            # Validation
+            if max_consecutive_shifts < 1 or max_consecutive_shifts > 10:
+                return jsonify({'error': 'Maximale aufeinanderfolgende Schichten muss zwischen 1 und 10 liegen'}), 400
+            if max_consecutive_night_shifts < 1 or max_consecutive_night_shifts > max_consecutive_shifts:
+                return jsonify({'error': 'Maximale Nachtschichten darf nicht größer sein als maximale Schichten'}), 400
+            if min_rest_hours < 8 or min_rest_hours > 24:
+                return jsonify({'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Update or insert settings
+            cursor.execute("""
+                INSERT INTO GlobalSettings 
+                (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts, ModifiedAt, ModifiedBy)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(Id) DO UPDATE SET
+                    MaxConsecutiveShifts = excluded.MaxConsecutiveShifts,
+                    MaxConsecutiveNightShifts = excluded.MaxConsecutiveNightShifts,
+                    MinRestHoursBetweenShifts = excluded.MinRestHoursBetweenShifts,
+                    ModifiedAt = excluded.ModifiedAt,
+                    ModifiedBy = excluded.ModifiedBy
+            """, (
+                max_consecutive_shifts,
+                max_consecutive_night_shifts,
+                min_rest_hours,
+                datetime.utcnow().isoformat(),
+                session.get('user_email', 'system')
+            ))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'maxConsecutiveShifts': max_consecutive_shifts,
+                'maxConsecutiveNightShifts': max_consecutive_night_shifts,
+                'minRestHoursBetweenShifts': min_rest_hours
+            }, ensure_ascii=False)
+            log_audit(conn, 'GlobalSettings', 1, 'Updated', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update global settings error: {str(e)}")
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
     
     # ============================================================================

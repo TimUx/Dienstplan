@@ -394,6 +394,49 @@ select {
     margin-top: 20px;
 }
 
+/* Settings Form Styles */
+.settings-form {
+    max-width: 700px;
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+.settings-form .form-group small {
+    display: block;
+    color: var(--secondary-color);
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+
+.settings-form input[type="number"] {
+    width: 100%;
+    max-width: 200px;
+    padding: 8px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.settings-form input[readonly] {
+    background-color: var(--bg-color);
+    cursor: not-allowed;
+}
+
+.info-box.info {
+    background-color: #e0f2fe;
+    border-left: 4px solid #0284c7;
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.info-box p {
+    margin: 0;
+    color: #075985;
+}
+
 /* Manual/Help View Styles */
 .manual-content {
     width: 100%;
@@ -994,6 +1037,18 @@ select {
 
 .tab-content.active {
     display: block;
+}
+
+/* Sub-tabs (nested tabs) */
+.sub-tabs {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sub-tabs .tab-btn {
+    font-size: 0.9rem;
+    padding: 8px 16px;
 }
 
 /* Admin-only elements */

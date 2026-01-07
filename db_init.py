@@ -416,7 +416,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     conn.commit()
     conn.close()
     
-    print(f"✅ Database schema created successfully: {db_path}")
+    print(f"[OK] Database schema created successfully: {db_path}")
 
 
 def initialize_default_roles(db_path: str = "dienstplan.db"):
@@ -437,7 +437,7 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Default roles initialized (Admin, Mitarbeiter)")
+    print("[OK] Default roles initialized (Admin, Mitarbeiter)")
 
 
 def hash_password(password: str) -> str:
@@ -463,7 +463,7 @@ def create_default_admin(db_path: str = "dienstplan.db"):
     existing_admin = cursor.fetchone()
     
     if existing_admin:
-        print("⚠️  Admin employee already exists")
+        print("[!] Admin employee already exists")
         admin_id = existing_admin[0]
     else:
         # Create admin employee with authentication credentials
@@ -488,7 +488,7 @@ def create_default_admin(db_path: str = "dienstplan.db"):
         ))
         
         admin_id = cursor.lastrowid
-        print(f"✅ Default admin employee created (ID: {admin_id})")
+        print(f"[OK] Default admin employee created (ID: {admin_id})")
     
     # Assign Admin role (UserId in AspNetUserRoles now refers to Employee Id)
     cursor.execute("""
@@ -501,7 +501,7 @@ def create_default_admin(db_path: str = "dienstplan.db"):
     
     print(f"   Email: {admin_email}")
     print(f"   Password: {admin_password}")
-    print(f"   ⚠️  CHANGE THIS PASSWORD AFTER FIRST LOGIN!")
+    print(f"   [!] CHANGE THIS PASSWORD AFTER FIRST LOGIN!")
 
 
 def initialize_shift_types(db_path: str = "dienstplan.db"):
@@ -549,7 +549,7 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Standard shift types initialized: Früh, Nacht, Spät (48h/week, all working Monday-Sunday)")
+    print("[OK] Standard shift types initialized: Früh, Nacht, Spät (48h/week, all working Monday-Sunday)")
 
 
 def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
@@ -574,7 +574,7 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     
     if len(shifts) < 3:
         missing = set(['F', 'N', 'S']) - set(shifts.keys())
-        print(f"⚠️  Not all shift types found, skipping relationship initialization. Missing: {', '.join(missing)}")
+        print(f"[!] Not all shift types found, skipping relationship initialization. Missing: {', '.join(missing)}")
         conn.close()
         return
     
@@ -603,7 +603,7 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Shift type relationships initialized: F → N → S rotation")
+    print("[OK] Shift type relationships initialized: F -> N -> S rotation")
 
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
@@ -631,7 +631,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Sample teams initialized")
+    print("[OK] Sample teams initialized")
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):
@@ -689,7 +689,7 @@ def initialize_sample_employees(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("✅ Sample employees initialized: 17 total (3 teams × 5 + 2 with special functions)")
+    print("[OK] Sample employees initialized: 17 total (3 teams × 5 + 2 with special functions)")
 
 
 def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool = True):
@@ -700,7 +700,7 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
         db_path: Path to SQLite database file
         with_sample_data: Whether to include sample data
     """
-    print(f"🔧 Initializing database: {db_path}")
+    print(f"[*] Initializing database: {db_path}")
     print("=" * 60)
     
     # Create schema
@@ -725,7 +725,7 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
         initialize_sample_employees(db_path)
     
     print("=" * 60)
-    print("✅ Database initialization complete!")
+    print("[OK] Database initialization complete!")
     print()
     print("You can now start the server with:")
     print(f"  python main.py serve --db {db_path}")

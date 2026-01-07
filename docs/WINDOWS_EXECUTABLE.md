@@ -13,7 +13,7 @@ Dienstplan ist nun als standalone Windows-Executable verfügbar! Das bedeutet:
 ## 📥 Download
 
 Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter:
-- **Dienstplan-Windows-v2.0.x.zip**
+- **Dienstplan-Windows-v2.1.x.zip**
 
 ## 🚀 Installation & Start
 
@@ -67,7 +67,7 @@ Die Anwendung speichert alle Daten in einer SQLite-Datenbank:
 **Ursache:** OR-Tools native Bibliotheken fehlen in der Executable
 
 **Lösung:**
-- Dies wurde in neueren Versionen behoben (ab v2.0.x)
+- Dies wurde in neueren Versionen behoben (ab v2.1.x)
 - Laden Sie die neueste Version von GitHub herunter
 - Falls das Problem weiterhin besteht, melden Sie es auf GitHub Issues
 

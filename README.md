@@ -227,7 +227,7 @@ Dienstplan/
 
 #### Download
 Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter:
-- **Dienstplan-Windows-v2.0.x.zip**
+- **Dienstplan-Windows-v2.1.x.zip**
 
 #### Installation & Start
 1. ZIP-Datei entpacken

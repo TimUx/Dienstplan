@@ -351,12 +351,12 @@ copy README.md release\
 copy LICENSE release\
 
 REM Create version file
-echo Dienstplan v2.0.1 > release\VERSION.txt
+echo Dienstplan v2.1.1 > release\VERSION.txt
 echo No Python installation required! >> release\VERSION.txt
 echo Database location: data\dienstplan.db >> release\VERSION.txt
 
 REM Create ZIP
-powershell Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v2.0.1.zip
+powershell Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v2.1.1.zip
 ```
 
 ## File Size Optimization

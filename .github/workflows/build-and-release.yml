@@ -80,20 +80,6 @@ jobs:
       with:
         name: windows-executable
         path: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
-    
-    - name: Generate changelog
-      id: changelog
-      run: |
-        echo "CHANGELOG<<EOF" >> $env:GITHUB_OUTPUT
-        echo "## Changes in this release" >> $env:GITHUB_OUTPUT
-        echo "" >> $env:GITHUB_OUTPUT
-        try {
-          git log --pretty=format:"- %s (%h)" -10 >> $env:GITHUB_OUTPUT
-        } catch {
-          echo "- Initial release" >> $env:GITHUB_OUTPUT
-        }
-        echo "" >> $env:GITHUB_OUTPUT
-        echo "EOF" >> $env:GITHUB_OUTPUT
 
   build-python-linux:
     runs-on: ubuntu-latest
@@ -243,7 +229,7 @@ jobs:
           1. Download und entpacken Sie die tar.gz-Datei:
              ```bash
              mkdir Dienstplan-Linux
-             tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz -C Dienstplan-Linux
+             tar -xzf Dienstplan-Linux-v*.tar.gz -C Dienstplan-Linux
              cd Dienstplan-Linux
              ```
           2. Starten Sie das Programm:

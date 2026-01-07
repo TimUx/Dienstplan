@@ -39,7 +39,7 @@ jobs:
       id: version
       run: |
         # Extract version from main project file or use date-based version
-        $VERSION = "2.0.${{ github.run_number }}"
+        $VERSION = "2.1.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Building version $VERSION"
     
@@ -97,7 +97,7 @@ jobs:
         body: |
           # Dienstplan Release v${{ steps.version.outputs.VERSION }}
           
-          **Version 2.0 - Python Edition mit standalone Windows executable**
+          **Version 2.1 - Python Edition mit standalone Windows executable**
           
           ## 📦 Downloads
           - **Windows**: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip (keine Python-Installation erforderlich!)

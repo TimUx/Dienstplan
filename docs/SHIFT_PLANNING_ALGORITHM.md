@@ -310,6 +310,6 @@ def validate_my_new_constraint(assignments, employees, dates):
 
 ---
 
-**Version 2.0 - Python Edition mit Google OR-Tools**
+**Version 2.1 - Python Edition mit Google OR-Tools**
 
 © 2025 Fritz Winter Eisengießerei GmbH & Co. KG

@@ -1,6 +1,6 @@
 # Dienstplan - Automatisches Schichtverwaltungssystem
 
-**Version 2.0 - Python Edition** | Entwickelt von Timo Braun
+**Version 2.1 - Python Edition** | Entwickelt von Timo Braun
 
 Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdiensten für Unternehmen jeder Größe. Powered by **Google OR-Tools** Constraint-Solver für optimale Schichtverteilung.
 
@@ -1190,7 +1190,7 @@ Siehe [docs/SAMPLE_DATA.md](docs/SAMPLE_DATA.md) für Details zu Beispieldaten u
 
 ## 📊 Migration von .NET zu Python
 
-Diese Version 2.0 ist eine vollständige Neuimplementierung des Schichtplanungssystems in Python mit Google OR-Tools. Die vorherige .NET-Version wurde vollständig durch diese Python-Implementierung ersetzt.
+Diese Version 2.1 ist eine vollständige Neuimplementierung des Schichtplanungssystems in Python mit Google OR-Tools. Die vorherige .NET-Version wurde vollständig durch diese Python-Implementierung ersetzt.
 
 ### Hauptunterschiede
 - **Solver**: Custom-Algorithmus → Google OR-Tools CP-SAT
@@ -1241,7 +1241,7 @@ Bei Fragen oder Problemen:
 
 ---
 
-**Version 2.0 - Python Edition** | Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
+**Version 2.1 - Python Edition** | Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
 
 Powered by **Google OR-Tools**
 

@@ -494,7 +494,7 @@ Empfohlene Tools:
 
 ## 15. Feature-Übersicht
 
-### Implementierte Features in Version 2.0
+### Implementierte Features in Version 2.1
 
 #### Kern-Features
 - ✅ **Automatische Schichtplanung** mit Google OR-Tools CP-SAT Solver
@@ -723,7 +723,7 @@ CREATE TABLE AuditLogs (
 
 ---
 
-**Version 2.0 - Python Edition**
+**Version 2.1 - Python Edition**
 
 Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
 

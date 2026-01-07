@@ -51,7 +51,7 @@ def main():
     
     print("=" * 60)
     print("DIENSTPLAN - Schichtverwaltungssystem")
-    print("Version 2.0 - Python Edition")
+    print("Version 2.1 - Python Edition")
     print("=" * 60)
     print()
     print("[*] Starting web server...")

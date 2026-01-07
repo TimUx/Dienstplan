@@ -1,6 +1,6 @@
 # Dienstplan - Windows Standalone Executable
 
-**Version 2.0 - Python Edition**
+**Version 2.1 - Python Edition**
 
 ## 🎯 Übersicht
 
@@ -198,7 +198,7 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe LICENSE-Datei für De
 
 ---
 
-**Version 2.0 - Python Edition** | Entwickelt von Timo Braun
+**Version 2.1 - Python Edition** | Entwickelt von Timo Braun
 
 Powered by **Google OR-Tools** und **PyInstaller**
 

@@ -75,6 +75,12 @@ jobs:
       run: |
         Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
     
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-executable
+        path: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+    
     - name: Generate changelog
       id: changelog
       run: |
@@ -88,6 +94,126 @@ jobs:
         }
         echo "" >> $env:GITHUB_OUTPUT
         echo "EOF" >> $env:GITHUB_OUTPUT
+
+  build-python-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create production database
+      run: |
+        mkdir -p data
+        python db_init.py data/dienstplan.db
+    
+    - name: Test Python modules
+      run: |
+        python -c "import ortools; print('OR-Tools:', ortools.__version__)"
+        python -c "import flask; print('Flask:', flask.__version__)"
+    
+    - name: Get version
+      id: version
+      run: |
+        # Extract version from main project file or use date-based version
+        VERSION="2.0.${{ github.run_number }}"
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version $VERSION"
+    
+    - name: Build Linux executable with PyInstaller
+      run: |
+        python -m PyInstaller Dienstplan.spec
+    
+    - name: Prepare Linux release
+      run: |
+        mkdir -p release
+        cp dist/Dienstplan release/
+        cp -r data release/
+        cp README.md release/
+        cp LICENSE release/
+        cat > release/VERSION.txt << EOF
+        Dienstplan v${{ steps.version.outputs.VERSION }}
+        
+        To start the application:
+        1. Open a terminal in this directory
+        2. Run: ./Dienstplan
+        3. The web browser will open automatically
+        4. Default URL: http://localhost:5000
+        
+        Database Location: data/dienstplan.db
+        The database is persistent and will retain all your data.
+        
+        Default Login:
+          Email: admin@fritzwinter.de
+          Password: Admin123!
+          IMPORTANT: Change the password after first login!
+        
+        No Python installation required!
+        EOF
+        chmod +x release/Dienstplan
+    
+    - name: Create Linux tar.gz
+      run: |
+        tar -czf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz -C release .
+    
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: linux-executable
+        path: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+
+  create-release:
+    needs: [build-python-windows, build-python-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Get version
+      id: version
+      run: |
+        VERSION="2.0.${{ github.run_number }}"
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version $VERSION"
+    
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: windows-executable
+    
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: linux-executable
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "## Changes in this release" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        git log --pretty=format:"- %s (%h)" -10 >> $GITHUB_OUTPUT || echo "- Initial release" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -97,16 +223,32 @@ jobs:
         body: |
           # Dienstplan Release v${{ steps.version.outputs.VERSION }}
           
-          **Version 2.0 - Python Edition mit standalone Windows executable**
+          **Version 2.0 - Python Edition mit standalone executables für Windows und Linux**
           
           ## 📦 Downloads
           - **Windows**: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip (keine Python-Installation erforderlich!)
+          - **Linux**: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz (keine Python-Installation erforderlich!)
           
           ## 🚀 Installation & Verwendung
           
           ### Windows (Standalone Executable - Empfohlen!)
           1. Download und entpacken Sie die ZIP-Datei
           2. Doppelklicken Sie auf `Dienstplan.exe`
+          3. Das Programm startet automatisch den Webserver und öffnet Ihren Browser
+          4. Standard-URL: `http://localhost:5000`
+          
+          **Keine Installation von Python oder anderen Abhängigkeiten erforderlich!**
+          
+          ### Linux (Standalone Executable - Empfohlen!)
+          1. Download und entpacken Sie die tar.gz-Datei:
+             ```bash
+             tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+             cd Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
+             ```
+          2. Starten Sie das Programm:
+             ```bash
+             ./Dienstplan
+             ```
           3. Das Programm startet automatisch den Webserver und öffnet Ihren Browser
           4. Standard-URL: `http://localhost:5000`
           
@@ -130,6 +272,7 @@ jobs:
           
           ## ✨ Features
           - ✅ Standalone Windows Executable (keine Abhängigkeiten)
+          - ✅ Standalone Linux Executable (keine Abhängigkeiten)
           - ✅ Produktionsfähige, persistente SQLite-Datenbank
           - ✅ Automatischer Start des Webservers
           - ✅ Automatisches Öffnen des Browsers
@@ -140,6 +283,7 @@ jobs:
           ${{ steps.changelog.outputs.CHANGELOG }}
         files: |
           Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+          Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
         draft: false
         prerelease: false
       env:

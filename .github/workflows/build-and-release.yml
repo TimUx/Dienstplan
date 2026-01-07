@@ -49,7 +49,7 @@ jobs:
     
     - name: Prepare Windows release
       run: |
-        mkdir release
+        New-Item -ItemType Directory -Force -Path release
         Copy-Item dist\Dienstplan.exe release\
         Copy-Item -Recurse data release\
         Copy-Item README.md release\

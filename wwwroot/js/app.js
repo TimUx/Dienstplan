@@ -1835,7 +1835,7 @@ function displayTeams(teams) {
                 ${canEdit ? `
                     <div class="card-actions">
                         <button onclick="editTeam(${team.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
-                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, ${JSON.stringify(team.name)})" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${escapeHtml(team.name)}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
                     </div>
                 ` : ''}
             </div>

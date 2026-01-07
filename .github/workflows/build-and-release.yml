@@ -1,10 +1,7 @@
 name: Build, Test and Release
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-python-windows:
@@ -47,12 +44,10 @@ jobs:
         echo "Building version $VERSION"
     
     - name: Build Windows executable with PyInstaller
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         python -m PyInstaller Dienstplan.spec
     
     - name: Prepare Windows release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         mkdir release
         Copy-Item dist\Dienstplan.exe release\
@@ -77,12 +72,10 @@ jobs:
         echo "No Python installation required!" >> release\VERSION.txt
     
     - name: Create Windows ZIP
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
     
     - name: Generate changelog
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       id: changelog
       run: |
         echo "CHANGELOG<<EOF" >> $env:GITHUB_OUTPUT
@@ -97,7 +90,6 @@ jobs:
         echo "EOF" >> $env:GITHUB_OUTPUT
     
     - name: Create Release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.version.outputs.VERSION }}

@@ -74,7 +74,7 @@ def run_cli_planning(
         return 1
     
     assignments, special_functions, complete_schedule = result
-    print(f"\n✓ Solution found!")
+    print(f"\n[OK] Solution found!")
     print(f"  - Total assignments: {len(assignments)}")
     print(f"  - Special functions: {len(special_functions)}")
     print(f"  - Complete schedule entries: {len(complete_schedule)}")
@@ -108,7 +108,7 @@ def run_cli_planning(
         print("\nSaving results to database...")
         try:
             save_assignments_to_database(assignments, db_path)
-            print("✓ Results saved successfully!")
+            print("[OK] Results saved successfully!")
         except Exception as e:
             print(f"✗ Error saving results: {e}")
     
@@ -171,12 +171,12 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     print(f"Starting web server on http://{host}:{port}")
     print(f"Database: {db_path}")
     if debug:
-        print("⚠️  WARNING: Debug mode enabled - DO NOT use in production!")
+        print("[!] WARNING: Debug mode enabled - DO NOT use in production!")
     print()
     
     # Check if database exists, if not initialize it
     if not os.path.exists(db_path):
-        print(f"ℹ️  No database found at {db_path}")
+        print(f"[i] No database found at {db_path}")
         print("   Initializing new database with default structure...")
         print()
         try:
@@ -184,7 +184,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
             initialize_database(db_path, with_sample_data=False)
             print()
         except Exception as e:
-            print(f"⚠️  Error initializing database: {e}")
+            print(f"[!] Error initializing database: {e}")
             print("   The application may not work correctly.")
             print()
     

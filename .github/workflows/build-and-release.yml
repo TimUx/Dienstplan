@@ -242,8 +242,9 @@ jobs:
           ### Linux (Standalone Executable - Empfohlen!)
           1. Download und entpacken Sie die tar.gz-Datei:
              ```bash
-             tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
-             cd Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
+             mkdir Dienstplan-Linux
+             tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz -C Dienstplan-Linux
+             cd Dienstplan-Linux
              ```
           2. Starten Sie das Programm:
              ```bash

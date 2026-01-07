@@ -70,7 +70,7 @@ def run_cli_planning(
     result = solve_shift_planning(planning_model, time_limit_seconds=time_limit)
     
     if not result:
-        print("\n✗ No solution found!")
+        print("\n[X] No solution found!")
         return 1
     
     assignments, special_functions, complete_schedule = result
@@ -110,7 +110,7 @@ def run_cli_planning(
             save_assignments_to_database(assignments, db_path)
             print("[OK] Results saved successfully!")
         except Exception as e:
-            print(f"✗ Error saving results: {e}")
+            print(f"[X] Error saving results: {e}")
     
     return 0
 

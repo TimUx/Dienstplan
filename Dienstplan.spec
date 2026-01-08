@@ -11,7 +11,6 @@ from pathlib import Path
 # Get the application directory
 app_dir = Path(SPECPATH)
 wwwroot_dir = app_dir / 'wwwroot'
-data_dir = app_dir / 'data'
 
 # Collect all wwwroot files
 wwwroot_files = []
@@ -22,14 +21,9 @@ if wwwroot_dir.exists():
             rel_path = file_path.relative_to(app_dir)
             wwwroot_files.append((str(file_path), str(rel_path.parent)))
 
-# Collect data directory files (database)
-data_files = []
-if data_dir.exists():
-    for root, dirs, files in os.walk(data_dir):
-        for file in files:
-            file_path = Path(root) / file
-            rel_path = file_path.relative_to(app_dir)
-            data_files.append((str(file_path), str(rel_path.parent)))
+# DO NOT bundle the data directory or database
+# The database will be created dynamically at runtime next to the executable
+# This ensures a clean, empty production database for each installation
 
 # Collect OR-Tools binary files
 # This is critical for Windows builds where PyInstaller doesn't automatically
@@ -52,8 +46,8 @@ try:
 except ImportError:
     print("Warning: OR-Tools not found. Binary collection skipped.")
 
-# Combine all data files
-all_data_files = wwwroot_files + data_files
+# Only include wwwroot files, not data directory
+all_data_files = wwwroot_files
 
 block_cipher = None
 
@@ -65,6 +59,7 @@ a = Analysis(
     hiddenimports=[
         'flask',
         'flask_cors',
+        'waitress',
         'ortools',
         'ortools.sat',
         'ortools.sat.python',

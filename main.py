@@ -15,6 +15,11 @@ from model import create_shift_planning_model
 from solver import solve_shift_planning
 from validation import validate_shift_plan
 
+try:
+    from waitress import serve as waitress_serve
+except ImportError:
+    waitress_serve = None
+
 
 def run_cli_planning(
     start_date: date,
@@ -154,14 +159,14 @@ def save_assignments_to_database(assignments, db_path: str):
 
 def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "dienstplan.db", debug: bool = False):
     """
-    Start Flask web server with REST API.
+    Start web server with REST API using Waitress production WSGI server.
     This provides the backend for the existing .NET Web UI.
     
     Args:
         host: Host to bind to
         port: Port to bind to
         db_path: Path to SQLite database
-        debug: Enable debug mode (WARNING: Only use in development!)
+        debug: Enable debug mode (uses Flask dev server, WARNING: Only use in development!)
     """
     from web_api import create_app
     
@@ -171,7 +176,10 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     print(f"Starting web server on http://{host}:{port}")
     print(f"Database: {db_path}")
     if debug:
-        print("[!] WARNING: Debug mode enabled - DO NOT use in production!")
+        print("[!] WARNING: Debug mode enabled - Using Flask development server!")
+        print("[!] DO NOT use in production!")
+    else:
+        print("[i] Using Waitress production WSGI server")
     print()
     
     # Check if database exists, if not initialize it
@@ -193,7 +201,18 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     print()
     
     app = create_app(db_path)
-    app.run(host=host, port=port, debug=debug)
+    
+    if debug:
+        # Use Flask development server only in debug mode
+        app.run(host=host, port=port, debug=debug)
+    else:
+        # Use Waitress production WSGI server
+        if waitress_serve is None:
+            print("[!] WARNING: Waitress not available, falling back to Flask development server")
+            print("[!] This is not recommended for production use!")
+            app.run(host=host, port=port, debug=False)
+        else:
+            waitress_serve(app, host=host, port=port, threads=4)
 
 
 def main():

@@ -1,6 +1,6 @@
 # 📚 Dienstplan - Zentrale Dokumentationsübersicht
 
-**Version 2.0 - Python Edition** | Entwickelt von Timo Braun
+**Version 2.1 - Python Edition** | Entwickelt von Timo Braun
 
 Willkommen zur zentralen Dokumentation des Dienstplan-Systems. Diese Seite bietet einen strukturierten Überblick über alle verfügbaren Dokumentationen.
 
@@ -196,7 +196,7 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) f�
 
 ---
 
-**Version 2.0 - Python Edition**
+**Version 2.1 - Python Edition**
 
 Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
 

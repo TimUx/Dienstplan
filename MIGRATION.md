@@ -434,6 +434,6 @@ Alle 10 Schritte aus der Anforderung sind vollständig implementiert:
 
 ---
 
-**Version 2.0 - Python OR-Tools Migration**  
+**Version 2.1 - Python OR-Tools Migration**  
 Entwickelt von Timo Braun (Original .NET) + Migration
 © 2025 Fritz Winter Eisengießerei GmbH & Co. KG

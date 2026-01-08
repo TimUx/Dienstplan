@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 2.1 - Python Edition (January 2026)
+
+### Updates
+- Version bump to 2.1
+- Updated build and release workflows to use v2.1.x versioning scheme
+- Updated documentation and UI to reflect version 2.1
+
 ## Version 2.0 - Python Edition (December 2025)
 
 ### Major Changes

@@ -259,6 +259,6 @@ For more information:
 
 ---
 
-**Version 2.0 - Python Edition**
+**Version 2.1 - Python Edition**
 
 © 2025 Fritz Winter Eisengießerei GmbH & Co. KG

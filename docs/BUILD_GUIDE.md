@@ -1,17 +1,25 @@
-# Building the Windows Standalone Executable
+# Building the Dienstplan Standalone Executables
 
-This guide explains how to build the Dienstplan Windows standalone executable from source.
+This guide explains how to build the Dienstplan standalone executables from source.
 
 ## Prerequisites
 
-- **Windows OS** (or cross-compilation setup)
 - **Python 3.11 or higher** recommended (minimum 3.9)
 - **Git** (optional, for cloning the repository)
 - **Internet connection** (for downloading dependencies)
 
+## Available Build Options
+
+The build system supports creating **two different versions**:
+
+1. **Empty Database Version** (Production) - Contains only admin user and shift types
+2. **Sample Data Version** (Demo) - Contains 3 teams, 17 employees, and sample absences
+
+You can build either version individually or both at once.
+
 ## Quick Build (Windows)
 
-### Option 1: Using the Build Script (Recommended)
+### Option 1: Build Single Version
 
 1. Open Command Prompt or PowerShell in the Dienstplan directory
 2. Run the build script:
@@ -30,7 +38,22 @@ This guide explains how to build the Dienstplan Windows standalone executable fr
 - `Dienstplan.exe` - The standalone executable
 - `data/dienstplan.db` - Pre-initialized, persistent database
 
-### Option 2: Manual Build
+### Option 2: Build Both Versions at Once (Recommended for Distribution)
+
+1. Open Command Prompt or PowerShell in the Dienstplan directory
+2. Run the dual build script:
+   ```cmd
+   build_windows_both.bat
+   ```
+3. Wait for both builds to complete (~5-10 minutes)
+
+**Output:**
+- `Dienstplan-Windows-Empty.zip` - Production version with empty database
+- `Dienstplan-Windows-SampleData.zip` - Demo version with sample data
+- `release-empty/` - Folder containing empty database build
+- `release-sample/` - Folder containing sample data build
+
+### Option 3: Manual Build
 
 ```cmd
 REM Install dependencies
@@ -57,7 +80,7 @@ move dist\Dienstplan.exe .
 
 ## Quick Build (Linux/macOS)
 
-While primarily for Windows, you can build a Linux/macOS executable:
+### Option 1: Build Single Version
 
 ```bash
 chmod +x build_executable.sh
@@ -70,8 +93,21 @@ chmod +x build_executable.sh
 ```
 
 **Output:**
-- `Dienstplan` (or `Dienstplan.exe` on Windows with WSL)
+- `Dienstplan` - The standalone executable
 - `data/dienstplan.db` - Pre-initialized, persistent database
+
+### Option 2: Build Both Versions at Once (Recommended for Distribution)
+
+```bash
+chmod +x build_executable_both.sh
+./build_executable_both.sh
+```
+
+**Output:**
+- `Dienstplan-Linux-Empty.tar.gz` - Production version with empty database
+- `Dienstplan-Linux-SampleData.tar.gz` - Demo version with sample data
+- `release-empty/` - Folder containing empty database build
+- `release-sample/` - Folder containing sample data build
 
 ## Understanding the Build Process
 
@@ -239,38 +275,57 @@ pip install --upgrade -r requirements.txt
 
 ## Production Database
 
-### Database Location
+### Database Versions
+
+Two database versions are available:
+
+#### Empty Database (Production Version)
 The production database is stored in the `data/` directory:
 - **Path**: `data/dienstplan.db`
 - **Persistence**: The database persists between runs
 - **Bundled**: The database is included in the PyInstaller bundle
 
-### Default Database Contents
-The pre-initialized database includes:
+**Contents:**
 - ✅ All database tables and indexes
 - ✅ Default roles (Admin, Mitarbeiter)
 - ✅ Admin user (`admin@fritzwinter.de` / `Admin123!`)
-- ✅ Standard shift types (F, S, N, Z, BMT, BSB, K, U, L)
-- ❌ No teams (empty by default)
-- ❌ No employees (empty by default)
+- ✅ Standard shift types (F, S, N)
+- ❌ No teams (empty)
+- ❌ No employees (empty)
+- ❌ No virtual teams (removed from system)
 
-### Building with Sample Data
-To include sample data for testing/demo purposes:
+**Use case:** Ready for production deployment with your own data.
 
-**Windows:**
-```cmd
-build_windows.bat --sample-data
-```
-
-**Linux/macOS:**
-```bash
-./build_executable.sh --sample-data
-```
-
-This adds:
+#### Sample Data Database (Demo Version)
+Contains the same base as empty database, plus:
 - ✅ 3 sample teams (Alpha, Beta, Gamma)
-- ✅ 19 sample employees (15 regular + 4 springers)
-- ✅ Various roles and qualifications
+- ✅ 17 sample employees with various qualifications
+- ✅ Sample absences
+- ❌ No virtual Ferienjobber team (removed from sample data generation)
+
+**Use case:** Testing, demonstrations, and evaluating the system.
+
+### Building Different Versions
+
+**Single version:**
+```bash
+# Empty database (production)
+python db_init.py data/dienstplan.db
+
+# With sample data (demo)
+python db_init.py data/dienstplan.db --with-sample-data
+```
+
+**Both versions at once:**
+```bash
+# Windows
+build_windows_both.bat
+
+# Linux
+./build_executable_both.sh
+```
+
+These scripts automatically create both versions as separate ZIP/tar.gz archives.
 
 ### Customizing the Database
 To create a custom database before building:

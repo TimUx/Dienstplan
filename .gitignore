@@ -40,6 +40,8 @@ launcher
 # Build artifacts
 publish/
 release/
+release-empty/
+release-sample/
 *.zip
 *.tar.gz
 

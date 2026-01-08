@@ -17,10 +17,9 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     
     According to requirements:
     - 17 employees total
-    - 3 teams with 5 members each (15 employees)
-    - 2 additional regular team members (not fixed as Springers)
+    - 3 teams with 5-6 members each
     - TD-qualified employees (combining BMT/BSB roles)
-    - Virtual team "Fire Alarm System" for TD-qualified employees without regular teams
+    - No virtual teams (removed from system)
     
     Returns:
         Tuple of (employees, teams, absences)

@@ -32,6 +32,7 @@
                     </div>
                     <div id="user-info" class="user-info" style="display: none;">
                         <span id="user-name"></span>
+                        <button onclick="showChangePasswordModal()" class="btn-secondary" style="margin-right: 10px;">🔒 Passwort ändern</button>
                         <button onclick="logout()" class="btn-logout">Abmelden</button>
                     </div>
                     <div id="login-prompt" class="login-prompt">
@@ -887,6 +888,9 @@
                         Angemeldet bleiben
                     </label>
                 </div>
+                <div class="form-group">
+                    <a href="#" onclick="showForgotPasswordModal(); return false;" style="color: #1976D2; text-decoration: underline;">Passwort vergessen?</a>
+                </div>
                 <div id="loginError" class="error-message" style="display: none;"></div>
                 <div class="form-actions">
                     <button type="button" onclick="closeLoginModal()" class="btn-secondary">Abbrechen</button>
@@ -898,6 +902,82 @@
                 <p>E-Mail: admin@fritzwinter.de</p>
                 <p>Passwort: Admin123!</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeForgotPasswordModal()">&times;</span>
+            <h2>Passwort vergessen</h2>
+            <p>Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten eine E-Mail mit einem Link zum Zurücksetzen Ihres Passworts.</p>
+            <form id="forgotPasswordForm" onsubmit="submitForgotPassword(event)">
+                <div class="form-group">
+                    <label>E-Mail*</label>
+                    <input type="email" id="forgotPasswordEmail" required>
+                </div>
+                <div id="forgotPasswordError" class="error-message" style="display: none;"></div>
+                <div id="forgotPasswordSuccess" class="success-message" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeForgotPasswordModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Zurücksetzen anfordern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeResetPasswordModal()">&times;</span>
+            <h2>Neues Passwort setzen</h2>
+            <form id="resetPasswordForm" onsubmit="submitResetPassword(event)">
+                <input type="hidden" id="resetToken">
+                <div class="form-group">
+                    <label>Neues Passwort*</label>
+                    <input type="password" id="newPassword" required minlength="8" placeholder="Mindestens 8 Zeichen">
+                    <small class="field-note">Mindestens 8 Zeichen</small>
+                </div>
+                <div class="form-group">
+                    <label>Passwort bestätigen*</label>
+                    <input type="password" id="confirmPassword" required minlength="8" placeholder="Passwort wiederholen">
+                </div>
+                <div id="resetPasswordError" class="error-message" style="display: none;"></div>
+                <div id="resetPasswordSuccess" class="success-message" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeResetPasswordModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Passwort ändern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeChangePasswordModal()">&times;</span>
+            <h2>Passwort ändern</h2>
+            <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
+                <div class="form-group">
+                    <label>Aktuelles Passwort*</label>
+                    <input type="password" id="currentPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Neues Passwort*</label>
+                    <input type="password" id="changeNewPassword" required minlength="8" placeholder="Mindestens 8 Zeichen">
+                    <small class="field-note">Mindestens 8 Zeichen</small>
+                </div>
+                <div class="form-group">
+                    <label>Neues Passwort bestätigen*</label>
+                    <input type="password" id="changeConfirmPassword" required minlength="8" placeholder="Passwort wiederholen">
+                </div>
+                <div id="changePasswordError" class="error-message" style="display: none;"></div>
+                <div id="changePasswordSuccess" class="success-message" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeChangePasswordModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Passwort ändern</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1308,9 +1388,9 @@
                     <input type="email" id="userEmail" required placeholder="benutzer@fritzwinter.de">
                 </div>
                 <div class="form-group" id="passwordGroup">
-                    <label>Passwort*</label>
+                    <label id="passwordLabel">Passwort*</label>
                     <input type="password" id="userPassword" placeholder="Mindestens 8 Zeichen">
-                    <small>Muss mindestens 8 Zeichen, einen Großbuchstaben, einen Kleinbuchstaben und eine Ziffer enthalten.</small>
+                    <small id="passwordNote">Muss mindestens 8 Zeichen lang sein. Beim Bearbeiten: Leer lassen, um Passwort nicht zu ändern.</small>
                 </div>
                 <div class="form-group">
                     <label>Rolle*</label>

@@ -2733,8 +2733,11 @@ async function editUser(userId) {
             document.getElementById('userEmail').value = user.email;
             document.getElementById('userRole').value = user.roles[0] || 'Mitarbeiter';
             document.getElementById('userModalTitle').textContent = 'Benutzer bearbeiten';
-            document.getElementById('passwordGroup').style.display = 'none';
+            // Show password field but make it optional for editing
+            document.getElementById('passwordGroup').style.display = 'block';
             document.getElementById('userPassword').required = false;
+            document.getElementById('userPassword').value = '';
+            document.getElementById('passwordLabel').textContent = 'Neues Passwort (optional)';
             document.getElementById('userModal').style.display = 'block';
         } else {
             alert('Fehler beim Laden des Benutzers.');
@@ -2780,6 +2783,7 @@ async function showAddUserModal() {
     document.getElementById('userModalTitle').textContent = 'Benutzer hinzufügen';
     document.getElementById('passwordGroup').style.display = 'block';
     document.getElementById('userPassword').required = true;
+    document.getElementById('passwordLabel').textContent = 'Passwort*';
     document.getElementById('userModal').style.display = 'block';
 }
 
@@ -2800,9 +2804,10 @@ async function saveUser(event) {
         role: document.getElementById('userRole').value
     };
     
-    // Only include password for new users
-    if (!isEdit) {
-        userData.password = document.getElementById('userPassword').value;
+    // Include password for new users or if provided when editing
+    const password = document.getElementById('userPassword').value;
+    if (!isEdit || (isEdit && password)) {
+        userData.password = password;
     }
     
     try {
@@ -2837,7 +2842,7 @@ async function loadEmailSettings() {
     const content = document.getElementById('email-settings-content');
     
     try {
-        const response = await fetch(`${API_BASE}/emailsettings/active`, {
+        const response = await fetch(`${API_BASE}/email-settings`, {
             credentials: 'include'
         });
         
@@ -2874,13 +2879,12 @@ function displayEmailSettings(settings) {
     const content = document.getElementById('email-settings-content');
     content.innerHTML = `
         <div class="info-box">
-            <p><strong>SMTP Server:</strong> ${settings.smtpServer}:${settings.smtpPort}</p>
-            <p><strong>Protokoll:</strong> ${settings.protocol}</p>
-            <p><strong>Sicherheit:</strong> ${settings.securityProtocol}</p>
-            <p><strong>Absender:</strong> ${settings.senderEmail} (${settings.senderName || 'Kein Name'})</p>
+            <p><strong>SMTP Server:</strong> ${settings.smtpHost || 'Nicht konfiguriert'}:${settings.smtpPort || 587}</p>
+            <p><strong>SSL/TLS:</strong> ${settings.useSsl ? 'Ja' : 'Nein'}</p>
+            <p><strong>Absender:</strong> ${settings.senderEmail || 'Nicht konfiguriert'} ${settings.senderName ? `(${settings.senderName})` : ''}</p>
             <p><strong>Authentifizierung:</strong> ${settings.requiresAuthentication ? 'Ja' : 'Nein'}</p>
-            ${settings.requiresAuthentication ? `<p><strong>Benutzername:</strong> ${settings.username}</p>` : ''}
-            <p><strong>Status:</strong> <span class="badge badge-success">Aktiv</span></p>
+            ${settings.requiresAuthentication && settings.username ? `<p><strong>Benutzername:</strong> ${settings.username}</p>` : ''}
+            <p><strong>Status:</strong> <span class="badge ${settings.isEnabled ? 'badge-success' : 'badge-warning'}">${settings.isEnabled ? 'Aktiviert' : 'Deaktiviert'}</span></p>
         </div>
     `;
 }
@@ -2893,26 +2897,28 @@ async function showEmailSettingsModal() {
     
     // Try to load existing settings
     try {
-        const response = await fetch(`${API_BASE}/emailsettings/active`, {
+        const response = await fetch(`${API_BASE}/email-settings`, {
             credentials: 'include'
         });
         
         if (response.ok) {
             const settings = await response.json();
             // Fill form with existing settings
-            document.getElementById('smtpServer').value = settings.smtpServer || '';
+            document.getElementById('smtpServer').value = settings.smtpHost || '';
             document.getElementById('smtpPort').value = settings.smtpPort || 587;
-            document.getElementById('smtpProtocol').value = settings.protocol || 'SMTP';
-            document.getElementById('smtpSecurity').value = settings.securityProtocol || 'STARTTLS';
+            document.getElementById('smtpSecurity').value = settings.useSsl ? 'SSL' : 'NONE';
             document.getElementById('requiresAuth').checked = settings.requiresAuthentication !== false;
             document.getElementById('smtpUsername').value = settings.username || '';
             document.getElementById('senderEmail').value = settings.senderEmail || '';
             document.getElementById('senderName').value = settings.senderName || '';
             document.getElementById('replyToEmail').value = settings.replyToEmail || '';
+            document.getElementById('emailEnabled').checked = settings.isEnabled !== false;
             // Don't fill password for security
         } else {
             // New settings, use defaults
             document.getElementById('emailSettingsForm').reset();
+            document.getElementById('smtpPort').value = 587;
+            document.getElementById('emailEnabled').checked = false;
         }
     } catch (error) {
         console.error('Error loading email settings:', error);
@@ -2937,12 +2943,63 @@ async function saveEmailSettings(event) {
     event.preventDefault();
     
     const settings = {
-        smtpServer: document.getElementById('smtpServer').value,
+        smtpHost: document.getElementById('smtpServer').value,
         smtpPort: parseInt(document.getElementById('smtpPort').value),
-        protocol: document.getElementById('smtpProtocol').value,
-        securityProtocol: document.getElementById('smtpSecurity').value,
+        useSsl: document.getElementById('smtpSecurity').value === 'SSL',
         requiresAuthentication: document.getElementById('requiresAuth').checked,
         username: document.getElementById('smtpUsername').value || null,
+        password: document.getElementById('smtpPassword').value || null,
+        senderEmail: document.getElementById('senderEmail').value,
+        senderName: document.getElementById('senderName').value,
+        replyToEmail: document.getElementById('replyToEmail').value || null,
+        isEnabled: document.getElementById('emailEnabled') ? document.getElementById('emailEnabled').checked : true
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/email-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(settings)
+        });
+        
+        if (response.ok) {
+            alert('E-Mail-Einstellungen erfolgreich gespeichert!');
+            closeEmailSettingsModal();
+            loadEmailSettings();
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Speichern: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error saving email settings:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function testEmailSettings() {
+    const testEmail = prompt('Bitte geben Sie eine E-Mail-Adresse für den Test ein:');
+    if (!testEmail) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/email-settings/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ testEmail: testEmail })
+        });
+        
+        if (response.ok) {
+            alert(`Test-E-Mail wurde erfolgreich an ${testEmail} gesendet!`);
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Senden der Test-E-Mail: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Error testing email settings:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
         password: document.getElementById('smtpPassword').value || null,
         senderEmail: document.getElementById('senderEmail').value,
         senderName: document.getElementById('senderName').value,
@@ -5458,3 +5515,244 @@ async function toggleYearApprovalAbsence(year, approve) {
         alert(`Fehler beim ${action} des Jahres.`);
     }
 }
+
+// ============================================================================
+// PASSWORD MANAGEMENT FUNCTIONS
+// ============================================================================
+
+// Change Password Modal
+function showChangePasswordModal() {
+    document.getElementById('changePasswordForm').reset();
+    document.getElementById('changePasswordError').style.display = 'none';
+    document.getElementById('changePasswordSuccess').style.display = 'none';
+    document.getElementById('changePasswordModal').style.display = 'block';
+}
+
+function closeChangePasswordModal() {
+    document.getElementById('changePasswordModal').style.display = 'none';
+    document.getElementById('changePasswordForm').reset();
+}
+
+async function submitChangePassword(event) {
+    event.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('changeNewPassword').value;
+    const confirmPassword = document.getElementById('changeConfirmPassword').value;
+    
+    const errorDiv = document.getElementById('changePasswordError');
+    const successDiv = document.getElementById('changePasswordSuccess');
+    
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'Die neuen Passwörter stimmen nicht überein.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    // Validate password length
+    if (newPassword.length < 8) {
+        errorDiv.textContent = 'Das neue Passwort muss mindestens 8 Zeichen lang sein.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/change-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                currentPassword: currentPassword,
+                newPassword: newPassword
+            })
+        });
+        
+        if (response.ok) {
+            successDiv.textContent = 'Passwort erfolgreich geändert!';
+            successDiv.style.display = 'block';
+            document.getElementById('changePasswordForm').reset();
+            setTimeout(() => {
+                closeChangePasswordModal();
+            }, 2000);
+        } else {
+            const error = await response.json();
+            errorDiv.textContent = error.error || 'Fehler beim Ändern des Passworts';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error changing password:', error);
+        errorDiv.textContent = 'Fehler beim Ändern des Passworts';
+        errorDiv.style.display = 'block';
+    }
+}
+
+// Forgot Password Modal
+function showForgotPasswordModal() {
+    closeLoginModal();
+    document.getElementById('forgotPasswordForm').reset();
+    document.getElementById('forgotPasswordError').style.display = 'none';
+    document.getElementById('forgotPasswordSuccess').style.display = 'none';
+    document.getElementById('forgotPasswordModal').style.display = 'block';
+}
+
+function closeForgotPasswordModal() {
+    document.getElementById('forgotPasswordModal').style.display = 'none';
+    document.getElementById('forgotPasswordForm').reset();
+}
+
+async function submitForgotPassword(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('forgotPasswordEmail').value;
+    
+    const errorDiv = document.getElementById('forgotPasswordError');
+    const successDiv = document.getElementById('forgotPasswordSuccess');
+    
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ email: email })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            successDiv.textContent = data.message || 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zurücksetzen des Passworts gesendet.';
+            successDiv.style.display = 'block';
+            document.getElementById('forgotPasswordForm').reset();
+        } else {
+            const error = await response.json();
+            errorDiv.textContent = error.error || 'Fehler beim Anfordern des Passwort-Resets';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error requesting password reset:', error);
+        errorDiv.textContent = 'Fehler beim Anfordern des Passwort-Resets';
+        errorDiv.style.display = 'block';
+    }
+}
+
+// Reset Password Modal (from URL hash)
+function checkPasswordResetToken() {
+    // Check if URL contains reset token
+    const hash = window.location.hash;
+    if (hash.startsWith('#/reset-password?token=')) {
+        const token = hash.split('token=')[1];
+        showResetPasswordModal(token);
+    }
+}
+
+function showResetPasswordModal(token) {
+    document.getElementById('resetToken').value = token;
+    document.getElementById('resetPasswordForm').reset();
+    document.getElementById('resetPasswordError').style.display = 'none';
+    document.getElementById('resetPasswordSuccess').style.display = 'none';
+    document.getElementById('resetPasswordModal').style.display = 'block';
+    
+    // Validate token
+    validateResetToken(token);
+}
+
+function closeResetPasswordModal() {
+    document.getElementById('resetPasswordModal').style.display = 'none';
+    document.getElementById('resetPasswordForm').reset();
+    // Clear the hash
+    window.location.hash = '';
+}
+
+async function validateResetToken(token) {
+    try {
+        const response = await fetch(`${API_BASE}/auth/validate-reset-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ token: token })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (!data.valid) {
+                const errorDiv = document.getElementById('resetPasswordError');
+                errorDiv.textContent = 'Der Reset-Link ist ungültig oder abgelaufen.';
+                errorDiv.style.display = 'block';
+                // Disable the form
+                document.getElementById('resetPasswordForm').querySelectorAll('input, button[type="submit"]').forEach(el => {
+                    el.disabled = true;
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error validating reset token:', error);
+    }
+}
+
+async function submitResetPassword(event) {
+    event.preventDefault();
+    
+    const token = document.getElementById('resetToken').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    const errorDiv = document.getElementById('resetPasswordError');
+    const successDiv = document.getElementById('resetPasswordSuccess');
+    
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'Die Passwörter stimmen nicht überein.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    // Validate password length
+    if (newPassword.length < 8) {
+        errorDiv.textContent = 'Das Passwort muss mindestens 8 Zeichen lang sein.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                token: token,
+                newPassword: newPassword
+            })
+        });
+        
+        if (response.ok) {
+            successDiv.textContent = 'Passwort erfolgreich zurückgesetzt! Sie können sich jetzt anmelden.';
+            successDiv.style.display = 'block';
+            document.getElementById('resetPasswordForm').reset();
+            setTimeout(() => {
+                closeResetPasswordModal();
+                showLoginModal();
+            }, 2000);
+        } else {
+            const error = await response.json();
+            errorDiv.textContent = error.error || 'Fehler beim Zurücksetzen des Passworts';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        errorDiv.textContent = 'Fehler beim Zurücksetzen des Passworts';
+        errorDiv.style.display = 'block';
+    }
+}
+
+// Check for password reset token on page load
+document.addEventListener('DOMContentLoaded', () => {
+    checkPasswordResetToken();
+});

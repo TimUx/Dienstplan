@@ -59,6 +59,7 @@ a = Analysis(
     hiddenimports=[
         'flask',
         'flask_cors',
+        'waitress',
         'ortools',
         'ortools.sat',
         'ortools.sat.python',

@@ -27,9 +27,9 @@ jobs:
     
     - name: Test Python modules
       run: |
-        python -c "import ortools; print('OR-Tools:', ortools.__version__)"
-        python -c "import flask; print('Flask:', flask.__version__)"
-        python -c "import waitress; print('Waitress:', waitress.__version__)"
+        python -c "import importlib.metadata; print('OR-Tools:', importlib.metadata.version('ortools'))"
+        python -c "import importlib.metadata; print('Flask:', importlib.metadata.version('flask'))"
+        python -c "import importlib.metadata; print('Waitress:', importlib.metadata.version('waitress'))"
     
     - name: Get version
       id: version
@@ -75,9 +75,9 @@ jobs:
     
     - name: Test Python modules
       run: |
-        python -c "import ortools; print('OR-Tools:', ortools.__version__)"
-        python -c "import flask; print('Flask:', flask.__version__)"
-        python -c "import waitress; print('Waitress:', waitress.__version__)"
+        python -c "import importlib.metadata; print('OR-Tools:', importlib.metadata.version('ortools'))"
+        python -c "import importlib.metadata; print('Flask:', importlib.metadata.version('flask'))"
+        python -c "import importlib.metadata; print('Waitress:', importlib.metadata.version('waitress'))"
     
     - name: Get version
       id: version

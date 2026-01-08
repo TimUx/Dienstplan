@@ -227,7 +227,23 @@ Dienstplan/
 
 #### Download
 Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter:
-- **Dienstplan-Windows-v2.1.x.zip**
+
+**Zwei Versionen verfügbar:**
+- **Dienstplan-Windows-Empty-v2.1.x.zip** - Produktionsversion (leere Datenbank)
+- **Dienstplan-Windows-SampleData-v2.1.x.zip** - Demo-Version (mit Beispieldaten)
+
+#### Welche Version soll ich wählen?
+
+**Produktionsversion (Empty)** - Für den produktiven Einsatz:
+- ✅ Leere Datenbank - bereit für Ihre eigenen Daten
+- ✅ Nur Admin-Benutzer und Standard-Schichttypen
+- ✅ Ideal für den ersten Produktiveinsatz
+
+**Demo-Version (SampleData)** - Für Tests und Demonstrationen:
+- ✅ 3 vorkonfigurierte Teams (Alpha, Beta, Gamma)
+- ✅ 17 Mitarbeiter mit verschiedenen Qualifikationen
+- ✅ Beispiel-Abwesenheiten
+- ✅ Ideal zum Testen der Funktionen
 
 #### Installation & Start
 1. ZIP-Datei entpacken
@@ -253,22 +269,31 @@ Falls Sie die Executable selbst bauen möchten:
 
 **Windows:**
 ```cmd
+REM Einzelne Version bauen:
 REM Mit leerer Datenbank (Standard, produktionsfertig)
 build_windows.bat
 
 REM Mit Beispieldaten (für Tests)
 build_windows.bat --sample-data
+
+REM ODER: Beide Versionen auf einmal bauen
+build_windows_both.bat
 ```
 
 **Linux/macOS:**
 ```bash
 chmod +x build_executable.sh
 
+# Einzelne Version bauen:
 # Mit leerer Datenbank (Standard, produktionsfertig)
 ./build_executable.sh
 
 # Mit Beispieldaten (für Tests)
 ./build_executable.sh --sample-data
+
+# ODER: Beide Versionen auf einmal bauen
+chmod +x build_executable_both.sh
+./build_executable_both.sh
 ```
 
 Die Executable enthält:

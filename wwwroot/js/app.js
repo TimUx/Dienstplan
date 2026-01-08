@@ -1283,8 +1283,9 @@ async function executePlanShifts(event) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0); // Last day of month
     
-    const startDateStr = startDate.toISOString().split('T')[0];
-    const endDateStr = endDate.toISOString().split('T')[0];
+    // Format dates in local timezone to avoid timezone conversion issues
+    const startDateStr = `${year}-${month.padStart(2, '0')}-01`;
+    const endDateStr = `${year}-${month.padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
     
     // Show confirmation
     const periodText = startDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
@@ -1353,7 +1354,7 @@ async function exportScheduleToPdf() {
         
         startDate = `${year}-${month.padStart(2, '0')}-01`;
         const end = new Date(year, month, 0); // Last day of month
-        endDate = end.toISOString().split('T')[0];
+        endDate = `${year}-${month.padStart(2, '0')}-${end.getDate().toString().padStart(2, '0')}`;
     } else if (currentView === 'year') {
         const year = document.getElementById('yearSelect').value;
         
@@ -1412,7 +1413,7 @@ async function exportScheduleToExcel() {
         
         startDate = `${year}-${month.padStart(2, '0')}-01`;
         const end = new Date(year, month, 0); // Last day of month
-        endDate = end.toISOString().split('T')[0];
+        endDate = `${year}-${month.padStart(2, '0')}-${end.getDate().toString().padStart(2, '0')}`;
     } else if (currentView === 'year') {
         const year = document.getElementById('yearSelect').value;
         
@@ -1471,7 +1472,7 @@ async function exportScheduleToCsv() {
         
         startDate = `${year}-${month.padStart(2, '0')}-01`;
         const end = new Date(year, month, 0); // Last day of month
-        endDate = end.toISOString().split('T')[0];
+        endDate = `${year}-${month.padStart(2, '0')}-${end.getDate().toString().padStart(2, '0')}`;
     } else if (currentView === 'year') {
         const year = document.getElementById('yearSelect').value;
         

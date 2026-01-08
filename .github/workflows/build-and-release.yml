@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-python-windows:
+  build-python-windows-empty:
     runs-on: windows-latest
     permissions:
       contents: write
@@ -25,7 +25,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create production database
+    - name: Create empty production database
       run: |
         New-Item -ItemType Directory -Force -Path data
         python db_init.py data/dienstplan.db
@@ -41,20 +41,22 @@ jobs:
         # Extract version from main project file or use date-based version
         $VERSION = "2.1.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
-        echo "Building version $VERSION"
+        echo "Building version $VERSION (Empty Database)"
     
     - name: Build Windows executable with PyInstaller
       run: |
         python -m PyInstaller Dienstplan.spec
     
-    - name: Prepare Windows release
+    - name: Prepare Windows release (Empty)
       run: |
         New-Item -ItemType Directory -Force -Path release
         Copy-Item dist\Dienstplan.exe release\
         Copy-Item -Recurse data release\
         Copy-Item README.md release\
         Copy-Item LICENSE release\
-        echo "Dienstplan v${{ steps.version.outputs.VERSION }}" > release\VERSION.txt
+        echo "Dienstplan v${{ steps.version.outputs.VERSION }} - Production Version (Empty Database)" > release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "This version contains an EMPTY database - ready for production use." >> release\VERSION.txt
         echo "" >> release\VERSION.txt
         echo "To start the application:" >> release\VERSION.txt
         echo "1. Double-click Dienstplan.exe" >> release\VERSION.txt
@@ -71,17 +73,97 @@ jobs:
         echo "" >> release\VERSION.txt
         echo "No Python installation required!" >> release\VERSION.txt
     
-    - name: Create Windows ZIP
+    - name: Create Windows ZIP (Empty)
       run: |
-        Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+        Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-Empty-v${{ steps.version.outputs.VERSION }}.zip
     
-    - name: Upload Windows artifact
+    - name: Upload Windows artifact (Empty)
       uses: actions/upload-artifact@v4
       with:
-        name: windows-executable
-        path: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+        name: windows-executable-empty
+        path: Dienstplan-Windows-Empty-v${{ steps.version.outputs.VERSION }}.zip
 
-  build-python-linux:
+  build-python-windows-sample:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create database with sample data
+      run: |
+        New-Item -ItemType Directory -Force -Path data
+        python db_init.py data/dienstplan.db --with-sample-data
+    
+    - name: Test Python modules
+      run: |
+        python -c "import ortools; print('OR-Tools:', ortools.__version__)"
+        python -c "import flask; print('Flask:', flask.__version__)"
+    
+    - name: Get version
+      id: version
+      run: |
+        # Extract version from main project file or use date-based version
+        $VERSION = "2.1.${{ github.run_number }}"
+        echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
+        echo "Building version $VERSION (With Sample Data)"
+    
+    - name: Build Windows executable with PyInstaller
+      run: |
+        python -m PyInstaller Dienstplan.spec
+    
+    - name: Prepare Windows release (Sample Data)
+      run: |
+        New-Item -ItemType Directory -Force -Path release
+        Copy-Item dist\Dienstplan.exe release\
+        Copy-Item -Recurse data release\
+        Copy-Item README.md release\
+        Copy-Item LICENSE release\
+        echo "Dienstplan v${{ steps.version.outputs.VERSION }} - Demo Version (With Sample Data)" > release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "This version contains SAMPLE DATA for testing and demonstration purposes." >> release\VERSION.txt
+        echo "Includes: 3 teams, 17 employees, sample absences" >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "To start the application:" >> release\VERSION.txt
+        echo "1. Double-click Dienstplan.exe" >> release\VERSION.txt
+        echo "2. The web browser will open automatically" >> release\VERSION.txt
+        echo "3. Default URL: http://localhost:5000" >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "Database Location: data\dienstplan.db" >> release\VERSION.txt
+        echo "The database is persistent and will retain all your data." >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "Default Login:" >> release\VERSION.txt
+        echo "  Email: admin@fritzwinter.de" >> release\VERSION.txt
+        echo "  Password: Admin123!" >> release\VERSION.txt
+        echo "  IMPORTANT: Change the password after first login!" >> release\VERSION.txt
+        echo "" >> release\VERSION.txt
+        echo "No Python installation required!" >> release\VERSION.txt
+    
+    - name: Create Windows ZIP (Sample Data)
+      run: |
+        Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-SampleData-v${{ steps.version.outputs.VERSION }}.zip
+    
+    - name: Upload Windows artifact (Sample Data)
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-executable-sample
+        path: Dienstplan-Windows-SampleData-v${{ steps.version.outputs.VERSION }}.zip
+
+  build-python-linux-empty:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,7 +184,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create production database
+    - name: Create empty production database
       run: |
         mkdir -p data
         python db_init.py data/dienstplan.db
@@ -118,13 +200,13 @@ jobs:
         # Extract version from main project file or use date-based version
         VERSION="2.1.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version $VERSION"
+        echo "Building version $VERSION (Empty Database)"
     
     - name: Build Linux executable with PyInstaller
       run: |
         python -m PyInstaller Dienstplan.spec
     
-    - name: Prepare Linux release
+    - name: Prepare Linux release (Empty)
       run: |
         mkdir -p release
         cp dist/Dienstplan release/
@@ -132,7 +214,9 @@ jobs:
         cp README.md release/
         cp LICENSE release/
         cat > release/VERSION.txt << EOF
-        Dienstplan v${{ steps.version.outputs.VERSION }}
+        Dienstplan v${{ steps.version.outputs.VERSION }} - Production Version (Empty Database)
+        
+        This version contains an EMPTY database - ready for production use.
         
         To start the application:
         1. Open a terminal in this directory
@@ -152,18 +236,102 @@ jobs:
         EOF
         chmod +x release/Dienstplan
     
-    - name: Create Linux tar.gz
+    - name: Create Linux tar.gz (Empty)
       run: |
-        tar -czf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz -C release .
+        tar -czf Dienstplan-Linux-Empty-v${{ steps.version.outputs.VERSION }}.tar.gz -C release .
     
-    - name: Upload Linux artifact
+    - name: Upload Linux artifact (Empty)
       uses: actions/upload-artifact@v4
       with:
-        name: linux-executable
-        path: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+        name: linux-executable-empty
+        path: Dienstplan-Linux-Empty-v${{ steps.version.outputs.VERSION }}.tar.gz
+
+  build-python-linux-sample:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create database with sample data
+      run: |
+        mkdir -p data
+        python db_init.py data/dienstplan.db --with-sample-data
+    
+    - name: Test Python modules
+      run: |
+        python -c "import ortools; print('OR-Tools:', ortools.__version__)"
+        python -c "import flask; print('Flask:', flask.__version__)"
+    
+    - name: Get version
+      id: version
+      run: |
+        # Extract version from main project file or use date-based version
+        VERSION="2.1.${{ github.run_number }}"
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version $VERSION (With Sample Data)"
+    
+    - name: Build Linux executable with PyInstaller
+      run: |
+        python -m PyInstaller Dienstplan.spec
+    
+    - name: Prepare Linux release (Sample Data)
+      run: |
+        mkdir -p release
+        cp dist/Dienstplan release/
+        cp -r data release/
+        cp README.md release/
+        cp LICENSE release/
+        cat > release/VERSION.txt << EOF
+        Dienstplan v${{ steps.version.outputs.VERSION }} - Demo Version (With Sample Data)
+        
+        This version contains SAMPLE DATA for testing and demonstration purposes.
+        Includes: 3 teams, 17 employees, sample absences
+        
+        To start the application:
+        1. Open a terminal in this directory
+        2. Run: ./Dienstplan
+        3. The web browser will open automatically
+        4. Default URL: http://localhost:5000
+        
+        Database Location: data/dienstplan.db
+        The database is persistent and will retain all your data.
+        
+        Default Login:
+          Email: admin@fritzwinter.de
+          Password: Admin123!
+          IMPORTANT: Change the password after first login!
+        
+        No Python installation required!
+        EOF
+        chmod +x release/Dienstplan
+    
+    - name: Create Linux tar.gz (Sample Data)
+      run: |
+        tar -czf Dienstplan-Linux-SampleData-v${{ steps.version.outputs.VERSION }}.tar.gz -C release .
+    
+    - name: Upload Linux artifact (Sample Data)
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-executable-sample
+        path: Dienstplan-Linux-SampleData-v${{ steps.version.outputs.VERSION }}.tar.gz
 
   create-release:
-    needs: [build-python-windows, build-python-linux]
+    needs: [build-python-windows-empty, build-python-windows-sample, build-python-linux-empty, build-python-linux-sample]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,15 +349,25 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version $VERSION"
     
-    - name: Download Windows artifact
+    - name: Download Windows Empty artifact
       uses: actions/download-artifact@v4
       with:
-        name: windows-executable
+        name: windows-executable-empty
     
-    - name: Download Linux artifact
+    - name: Download Windows Sample artifact
       uses: actions/download-artifact@v4
       with:
-        name: linux-executable
+        name: windows-executable-sample
+    
+    - name: Download Linux Empty artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-executable-empty
+    
+    - name: Download Linux Sample artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-executable-sample
     
     - name: Generate changelog
       id: changelog
@@ -209,16 +387,32 @@ jobs:
         body: |
           # Dienstplan Release v${{ steps.version.outputs.VERSION }}
           
-          **Version 2.1 - Python Edition mit standalone Windows executable**
+          **Version 2.1 - Python Edition mit standalone executables**
           
           ## 📦 Downloads
-          - **Windows**: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip (keine Python-Installation erforderlich!)
-          - **Linux**: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz (keine Python-Installation erforderlich!)
+          
+          ### Windows
+          - **Dienstplan-Windows-Empty-v${{ steps.version.outputs.VERSION }}.zip** - Produktionsversion (leere Datenbank)
+          - **Dienstplan-Windows-SampleData-v${{ steps.version.outputs.VERSION }}.zip** - Demo-Version (mit Beispieldaten)
+          
+          ### Linux
+          - **Dienstplan-Linux-Empty-v${{ steps.version.outputs.VERSION }}.tar.gz** - Produktionsversion (leere Datenbank)
+          - **Dienstplan-Linux-SampleData-v${{ steps.version.outputs.VERSION }}.tar.gz** - Demo-Version (mit Beispieldaten)
           
           ## 🚀 Installation & Verwendung
           
           ### Windows (Standalone Executable - Empfohlen!)
-          1. Download und entpacken Sie die ZIP-Datei
+          
+          #### Produktionsversion (Leere Datenbank)
+          Für den produktiven Einsatz - enthält nur Admin-Benutzer und Schichttypen.
+          1. Download und entpacken Sie **Dienstplan-Windows-Empty-v${{ steps.version.outputs.VERSION }}.zip**
+          2. Doppelklicken Sie auf `Dienstplan.exe`
+          3. Das Programm startet automatisch den Webserver und öffnet Ihren Browser
+          4. Standard-URL: `http://localhost:5000`
+          
+          #### Demo-Version (Mit Beispieldaten)
+          Für Tests und Demonstrationen - enthält 3 Teams und 17 Mitarbeiter.
+          1. Download und entpacken Sie **Dienstplan-Windows-SampleData-v${{ steps.version.outputs.VERSION }}.zip**
           2. Doppelklicken Sie auf `Dienstplan.exe`
           3. Das Programm startet automatisch den Webserver und öffnet Ihren Browser
           4. Standard-URL: `http://localhost:5000`
@@ -226,18 +420,28 @@ jobs:
           **Keine Installation von Python oder anderen Abhängigkeiten erforderlich!**
           
           ### Linux (Standalone Executable - Empfohlen!)
-          1. Download und entpacken Sie die tar.gz-Datei:
-             ```bash
-             mkdir Dienstplan-Linux
-             tar -xzf Dienstplan-Linux-v*.tar.gz -C Dienstplan-Linux
-             cd Dienstplan-Linux
-             ```
-          2. Starten Sie das Programm:
-             ```bash
-             ./Dienstplan
-             ```
-          3. Das Programm startet automatisch den Webserver und öffnet Ihren Browser
-          4. Standard-URL: `http://localhost:5000`
+          
+          #### Produktionsversion (Leere Datenbank)
+          ```bash
+          # Download und entpacken
+          mkdir Dienstplan-Linux
+          tar -xzf Dienstplan-Linux-Empty-v${{ steps.version.outputs.VERSION }}.tar.gz -C Dienstplan-Linux
+          cd Dienstplan-Linux
+          
+          # Starten
+          ./Dienstplan
+          ```
+          
+          #### Demo-Version (Mit Beispieldaten)
+          ```bash
+          # Download und entpacken
+          mkdir Dienstplan-Linux
+          tar -xzf Dienstplan-Linux-SampleData-v${{ steps.version.outputs.VERSION }}.tar.gz -C Dienstplan-Linux
+          cd Dienstplan-Linux
+          
+          # Starten
+          ./Dienstplan
+          ```
           
           **Keine Installation von Python oder anderen Abhängigkeiten erforderlich!**
           
@@ -249,17 +453,26 @@ jobs:
             - Passwort: `Admin123!`
             - ⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
           
+          ### Beispieldaten (nur Demo-Version)
+          Die Demo-Version enthält:
+          - ✅ 3 Teams (Alpha, Beta, Gamma)
+          - ✅ 17 Mitarbeiter mit verschiedenen Qualifikationen
+          - ✅ Beispiel-Abwesenheiten
+          - ✅ Kein virtuelles Ferienjobber-Team (entfernt)
+          
           ### Alternative: Python (für alle Betriebssysteme)
           Falls Sie Python bereits installiert haben oder eine andere Plattform verwenden:
           ```bash
           pip install -r requirements.txt
-          python main.py init-db
+          python main.py init-db                    # Leere Datenbank
+          python main.py init-db --with-sample-data # Mit Beispieldaten
           python main.py serve
           ```
           
           ## ✨ Features
           - ✅ Standalone Windows Executable (keine Abhängigkeiten)
           - ✅ Standalone Linux Executable (keine Abhängigkeiten)
+          - ✅ Zwei Versionen: Produktion (leer) und Demo (mit Beispieldaten)
           - ✅ Produktionsfähige, persistente SQLite-Datenbank
           - ✅ Automatischer Start des Webservers
           - ✅ Automatisches Öffnen des Browsers
@@ -269,8 +482,10 @@ jobs:
           
           ${{ steps.changelog.outputs.CHANGELOG }}
         files: |
-          Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
-          Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+          Dienstplan-Windows-Empty-v${{ steps.version.outputs.VERSION }}.zip
+          Dienstplan-Windows-SampleData-v${{ steps.version.outputs.VERSION }}.zip
+          Dienstplan-Linux-Empty-v${{ steps.version.outputs.VERSION }}.tar.gz
+          Dienstplan-Linux-SampleData-v${{ steps.version.outputs.VERSION }}.tar.gz
         draft: false
         prerelease: false
       env:

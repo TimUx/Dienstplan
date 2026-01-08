@@ -1574,6 +1574,11 @@ async function showAddEmployeeModal() {
     document.getElementById('employeeId').value = '';
     document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter hinzufügen';
     
+    // Show password field and make it required for new employees
+    document.getElementById('employeePasswordGroup').style.display = 'block';
+    document.getElementById('employeePassword').required = true;
+    document.getElementById('employeePasswordLabel').textContent = 'Passwort*';
+    
     // Load teams for dropdown
     await loadTeamsForDropdown();
     
@@ -1610,6 +1615,12 @@ async function editEmployee(id) {
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
         // TD qualification is now automatic based on BMT or BSB
+        
+        // Show password field but make it optional for editing
+        document.getElementById('employeePasswordGroup').style.display = 'block';
+        document.getElementById('employeePassword').required = false;
+        document.getElementById('employeePassword').value = '';
+        document.getElementById('employeePasswordLabel').textContent = 'Neues Passwort (optional)';
         
         document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
         document.getElementById('employeeModal').style.display = 'block';
@@ -1673,6 +1684,7 @@ async function saveEmployee(event) {
     event.preventDefault();
     
     const id = document.getElementById('employeeId').value;
+    const isEdit = !!id;
     const employee = {
         vorname: document.getElementById('vorname').value,
         name: document.getElementById('name').value,
@@ -1686,6 +1698,12 @@ async function saveEmployee(event) {
         isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
         // isTdQualified is calculated automatically on the server based on BMT or BSB
     };
+    
+    // Include password for new employees or if provided when editing
+    const password = document.getElementById('employeePassword').value;
+    if (!isEdit || (isEdit && password)) {
+        employee.password = password;
+    }
     
     try {
         const url = id ? `${API_BASE}/employees/${id}` : `${API_BASE}/employees`;

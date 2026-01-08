@@ -953,6 +953,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not data.get('vorname') or not data.get('name') or not data.get('personalnummer'):
                 return jsonify({'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}), 400
             
+            # Validate password - required for new employees
+            password = data.get('password')
+            if not password:
+                return jsonify({'error': 'Passwort ist erforderlich'}), 400
+            
+            if len(password) < 8:
+                return jsonify({'error': 'Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            
             # Validate Funktion field - only allow specific values
             funktion = data.get('funktion')
             if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
@@ -974,16 +982,32 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn.close()
                 return jsonify({'error': 'Personalnummer bereits vorhanden'}), 400
             
+            # Check if email already exists
+            email = data.get('email')
+            if email:
+                cursor.execute("SELECT Id FROM Employees WHERE Email = ?", (email,))
+                if cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
+            
+            # Hash password
+            password_hash = hash_password(password)
+            security_stamp = secrets.token_hex(16)
+            
             cursor.execute("""
                 INSERT INTO Employees 
-                (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
+                (Vorname, Name, Personalnummer, Email, NormalizedEmail, PasswordHash, SecurityStamp,
+                 Geburtsdatum, Funktion, 
                  IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, TeamId)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('vorname'),
                 data.get('name'),
                 data.get('personalnummer'),
-                data.get('email'),
+                email,
+                email.upper() if email else None,
+                password_hash,
+                security_stamp,
                 data.get('geburtsdatum'),
                 funktion,
                 1 if data.get('isSpringer') else 0,
@@ -1028,6 +1052,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not data.get('vorname') or not data.get('name') or not data.get('personalnummer'):
                 return jsonify({'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}), 400
             
+            # Validate password if provided
+            password = data.get('password')
+            if password and len(password) < 8:
+                return jsonify({'error': 'Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            
             # Validate Funktion field
             funktion = data.get('funktion')
             if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
@@ -1062,28 +1091,68 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 conn.close()
                 return jsonify({'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}), 400
             
-            cursor.execute("""
-                UPDATE Employees 
-                SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, Geburtsdatum = ?, 
-                    Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
-                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, IsTeamLeader = ?, TeamId = ?
-                WHERE Id = ?
-            """, (
-                data.get('vorname'),
-                data.get('name'),
-                data.get('personalnummer'),
-                data.get('email'),
-                data.get('geburtsdatum'),
-                funktion,
-                1 if data.get('isSpringer') else 0,
-                1 if data.get('isFerienjobber') else 0,
-                is_bmt,
-                is_bsb,
-                is_td,
-                is_team_leader,
-                data.get('teamId'),
-                id
-            ))
+            # Check if email is taken by another employee
+            email = data.get('email')
+            if email:
+                cursor.execute("SELECT Id FROM Employees WHERE Email = ? AND Id != ?", (email, id))
+                if cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
+            
+            # Update employee with or without password
+            if password:
+                password_hash = hash_password(password)
+                security_stamp = secrets.token_hex(16)
+                cursor.execute("""
+                    UPDATE Employees 
+                    SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, NormalizedEmail = ?,
+                        PasswordHash = ?, SecurityStamp = ?, Geburtsdatum = ?, 
+                        Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
+                        IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, IsTeamLeader = ?, TeamId = ?
+                    WHERE Id = ?
+                """, (
+                    data.get('vorname'),
+                    data.get('name'),
+                    data.get('personalnummer'),
+                    email,
+                    email.upper() if email else None,
+                    password_hash,
+                    security_stamp,
+                    data.get('geburtsdatum'),
+                    funktion,
+                    1 if data.get('isSpringer') else 0,
+                    1 if data.get('isFerienjobber') else 0,
+                    is_bmt,
+                    is_bsb,
+                    is_td,
+                    is_team_leader,
+                    data.get('teamId'),
+                    id
+                ))
+            else:
+                cursor.execute("""
+                    UPDATE Employees 
+                    SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, NormalizedEmail = ?, Geburtsdatum = ?, 
+                        Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
+                        IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, IsTeamLeader = ?, TeamId = ?
+                    WHERE Id = ?
+                """, (
+                    data.get('vorname'),
+                    data.get('name'),
+                    data.get('personalnummer'),
+                    email,
+                    email.upper() if email else None,
+                    data.get('geburtsdatum'),
+                    funktion,
+                    1 if data.get('isSpringer') else 0,
+                    1 if data.get('isFerienjobber') else 0,
+                    is_bmt,
+                    is_bsb,
+                    is_td,
+                    is_team_leader,
+                    data.get('teamId'),
+                    id
+                ))
             
             # Log audit entry with changes
             changes_dict = {}
@@ -1099,6 +1168,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 changes_dict['funktion'] = {'old': old_row['Funktion'], 'new': funktion}
             if old_row['TeamId'] != data.get('teamId'):
                 changes_dict['teamId'] = {'old': old_row['TeamId'], 'new': data.get('teamId')}
+            if password:
+                changes_dict['password'] = 'changed'
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)

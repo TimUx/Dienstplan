@@ -9,6 +9,11 @@ let userRoles = [];
 let multiSelectMode = false;
 let selectedShifts = new Set(); // Set of shift IDs for multi-edit
 
+// Helper function to format date as YYYY-MM-DD in local timezone
+function formatLocalDate(year, month, day) {
+    return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     initializeDatePickers();
@@ -1283,8 +1288,9 @@ async function executePlanShifts(event) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0); // Last day of month
     
-    const startDateStr = startDate.toISOString().split('T')[0];
-    const endDateStr = endDate.toISOString().split('T')[0];
+    // Format dates in local timezone to avoid timezone conversion issues
+    const startDateStr = formatLocalDate(year, month, 1);
+    const endDateStr = formatLocalDate(year, month, endDate.getDate());
     
     // Show confirmation
     const periodText = startDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
@@ -1351,9 +1357,9 @@ async function exportScheduleToPdf() {
         const month = document.getElementById('monthSelect').value;
         const year = document.getElementById('monthYearSelect').value;
         
-        startDate = `${year}-${month.padStart(2, '0')}-01`;
+        startDate = formatLocalDate(year, month, 1);
         const end = new Date(year, month, 0); // Last day of month
-        endDate = end.toISOString().split('T')[0];
+        endDate = formatLocalDate(year, month, end.getDate());
     } else if (currentView === 'year') {
         const year = document.getElementById('yearSelect').value;
         
@@ -1410,9 +1416,9 @@ async function exportScheduleToExcel() {
         const month = document.getElementById('monthSelect').value;
         const year = document.getElementById('monthYearSelect').value;
         
-        startDate = `${year}-${month.padStart(2, '0')}-01`;
+        startDate = formatLocalDate(year, month, 1);
         const end = new Date(year, month, 0); // Last day of month
-        endDate = end.toISOString().split('T')[0];
+        endDate = formatLocalDate(year, month, end.getDate());
     } else if (currentView === 'year') {
         const year = document.getElementById('yearSelect').value;
         
@@ -1469,9 +1475,9 @@ async function exportScheduleToCsv() {
         const month = document.getElementById('monthSelect').value;
         const year = document.getElementById('monthYearSelect').value;
         
-        startDate = `${year}-${month.padStart(2, '0')}-01`;
+        startDate = formatLocalDate(year, month, 1);
         const end = new Date(year, month, 0); // Last day of month
-        endDate = end.toISOString().split('T')[0];
+        endDate = formatLocalDate(year, month, end.getDate());
     } else if (currentView === 'year') {
         const year = document.getElementById('yearSelect').value;
         

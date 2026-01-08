@@ -1,6 +1,6 @@
 # 📘 Dienstplan - Benutzerhandbuch
 
-**Version 2.0 - Python Edition** | Fritz Winter Eisengießerei GmbH & Co. KG
+**Version 2.1 - Python Edition** | Fritz Winter Eisengießerei GmbH & Co. KG
 
 Vollständiges Handbuch für die Nutzung des automatischen Schichtverwaltungssystems.
 
@@ -2044,7 +2044,7 @@ Vollständige API-Dokumentation: Siehe README.md
 
 ---
 
-**Version 2.0 - Python Edition**
+**Version 2.1 - Python Edition**
 
 Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
 

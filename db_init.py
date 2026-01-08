@@ -337,6 +337,40 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         VALUES (1, 6, 3, 11)
     """)
     
+    # EmailSettings table (for SMTP configuration)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS EmailSettings (
+            Id INTEGER PRIMARY KEY CHECK (Id = 1),
+            SmtpHost TEXT,
+            SmtpPort INTEGER DEFAULT 587,
+            UseSsl INTEGER NOT NULL DEFAULT 1,
+            RequiresAuthentication INTEGER NOT NULL DEFAULT 1,
+            Username TEXT,
+            Password TEXT,
+            SenderEmail TEXT,
+            SenderName TEXT,
+            ReplyToEmail TEXT,
+            IsEnabled INTEGER NOT NULL DEFAULT 0,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+    
+    # PasswordResetTokens table (for password reset flow)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS PasswordResetTokens (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            EmployeeId INTEGER NOT NULL,
+            Token TEXT NOT NULL UNIQUE,
+            ExpiresAt TEXT NOT NULL,
+            IsUsed INTEGER NOT NULL DEFAULT 0,
+            UsedAt TEXT,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
+        )
+    """)
+    
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 
@@ -411,6 +445,16 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_shifttyperelationships_shift 
         ON ShiftTypeRelationships(ShiftTypeId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_passwordresettokens_token 
+        ON PasswordResetTokens(Token)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_passwordresettokens_employee 
+        ON PasswordResetTokens(EmployeeId, IsUsed, ExpiresAt)
     """)
     
     conn.commit()

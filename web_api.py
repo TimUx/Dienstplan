@@ -4742,6 +4742,399 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler: {str(e)}'}), 500
     
     # ============================================================================
+    # EMAIL SETTINGS ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/email-settings', methods=['GET'])
+    @require_role('Admin')
+    def get_email_settings():
+        """Get email settings (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT SmtpHost, SmtpPort, UseSsl, RequiresAuthentication, 
+                       Username, SenderEmail, SenderName, ReplyToEmail, IsEnabled
+                FROM EmailSettings
+                WHERE Id = 1
+            """)
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                return jsonify({
+                    'smtpHost': row[0],
+                    'smtpPort': row[1],
+                    'useSsl': bool(row[2]),
+                    'requiresAuthentication': bool(row[3]),
+                    'username': row[4],
+                    # Don't send password for security
+                    'senderEmail': row[5],
+                    'senderName': row[6],
+                    'replyToEmail': row[7],
+                    'isEnabled': bool(row[8])
+                })
+            else:
+                # Return default values if not configured
+                return jsonify({
+                    'smtpHost': '',
+                    'smtpPort': 587,
+                    'useSsl': True,
+                    'requiresAuthentication': True,
+                    'username': '',
+                    'senderEmail': '',
+                    'senderName': 'Dienstplan',
+                    'replyToEmail': '',
+                    'isEnabled': False
+                })
+                
+        except Exception as e:
+            app.logger.error(f"Get email settings error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/email-settings', methods=['POST'])
+    @require_role('Admin')
+    def save_email_settings():
+        """Save email settings (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if settings exist
+            cursor.execute("SELECT Id FROM EmailSettings WHERE Id = 1")
+            exists = cursor.fetchone()
+            
+            if exists:
+                # Update existing settings
+                # Only update password if provided
+                if data.get('password'):
+                    cursor.execute("""
+                        UPDATE EmailSettings
+                        SET SmtpHost = ?, SmtpPort = ?, UseSsl = ?, RequiresAuthentication = ?,
+                            Username = ?, Password = ?, SenderEmail = ?, SenderName = ?, 
+                            ReplyToEmail = ?, IsEnabled = ?, ModifiedAt = ?, ModifiedBy = ?
+                        WHERE Id = 1
+                    """, (
+                        data.get('smtpHost'),
+                        data.get('smtpPort', 587),
+                        1 if data.get('useSsl') else 0,
+                        1 if data.get('requiresAuthentication') else 0,
+                        data.get('username'),
+                        data.get('password'),
+                        data.get('senderEmail'),
+                        data.get('senderName'),
+                        data.get('replyToEmail'),
+                        1 if data.get('isEnabled') else 0,
+                        datetime.utcnow().isoformat(),
+                        session.get('user_email')
+                    ))
+                else:
+                    cursor.execute("""
+                        UPDATE EmailSettings
+                        SET SmtpHost = ?, SmtpPort = ?, UseSsl = ?, RequiresAuthentication = ?,
+                            Username = ?, SenderEmail = ?, SenderName = ?, 
+                            ReplyToEmail = ?, IsEnabled = ?, ModifiedAt = ?, ModifiedBy = ?
+                        WHERE Id = 1
+                    """, (
+                        data.get('smtpHost'),
+                        data.get('smtpPort', 587),
+                        1 if data.get('useSsl') else 0,
+                        1 if data.get('requiresAuthentication') else 0,
+                        data.get('username'),
+                        data.get('senderEmail'),
+                        data.get('senderName'),
+                        data.get('replyToEmail'),
+                        1 if data.get('isEnabled') else 0,
+                        datetime.utcnow().isoformat(),
+                        session.get('user_email')
+                    ))
+            else:
+                # Insert new settings
+                cursor.execute("""
+                    INSERT INTO EmailSettings 
+                    (Id, SmtpHost, SmtpPort, UseSsl, RequiresAuthentication, 
+                     Username, Password, SenderEmail, SenderName, ReplyToEmail, 
+                     IsEnabled, ModifiedBy)
+                    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    data.get('smtpHost'),
+                    data.get('smtpPort', 587),
+                    1 if data.get('useSsl') else 0,
+                    1 if data.get('requiresAuthentication') else 0,
+                    data.get('username'),
+                    data.get('password'),
+                    data.get('senderEmail'),
+                    data.get('senderName'),
+                    data.get('replyToEmail'),
+                    1 if data.get('isEnabled') else 0,
+                    session.get('user_email')
+                ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Save email settings error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/email-settings/test', methods=['POST'])
+    @require_role('Admin')
+    def test_email_settings():
+        """Send test email to verify settings (Admin only)"""
+        try:
+            data = request.get_json()
+            test_email = data.get('testEmail')
+            
+            if not test_email:
+                return jsonify({'error': 'Test-E-Mail-Adresse erforderlich'}), 400
+            
+            from email_service import send_test_email
+            
+            conn = db.get_connection()
+            success, error = send_test_email(conn, test_email)
+            conn.close()
+            
+            if success:
+                return jsonify({'success': True})
+            else:
+                return jsonify({'error': error}), 500
+                
+        except Exception as e:
+            app.logger.error(f"Test email error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    # ============================================================================
+    # PASSWORD MANAGEMENT ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/auth/change-password', methods=['POST'])
+    @require_auth
+    def change_password():
+        """Change password for currently logged in user"""
+        try:
+            data = request.get_json()
+            current_password = data.get('currentPassword')
+            new_password = data.get('newPassword')
+            
+            if not current_password or not new_password:
+                return jsonify({'error': 'Aktuelles und neues Passwort sind erforderlich'}), 400
+            
+            if len(new_password) < 8:
+                return jsonify({'error': 'Neues Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            
+            user_id = session.get('user_id')
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get current password hash
+            cursor.execute("SELECT PasswordHash FROM Employees WHERE Id = ?", (user_id,))
+            row = cursor.fetchone()
+            
+            if not row or not row[0]:
+                conn.close()
+                return jsonify({'error': 'Benutzer hat kein Passwort gesetzt'}), 400
+            
+            # Verify current password
+            if not verify_password(current_password, row[0]):
+                conn.close()
+                return jsonify({'error': 'Aktuelles Passwort ist falsch'}), 401
+            
+            # Update password
+            new_password_hash = hash_password(new_password)
+            security_stamp = secrets.token_hex(16)
+            
+            cursor.execute("""
+                UPDATE Employees
+                SET PasswordHash = ?, SecurityStamp = ?
+                WHERE Id = ?
+            """, (new_password_hash, security_stamp, user_id))
+            
+            # Log audit entry
+            log_audit(conn, 'Employee', user_id, 'PasswordChanged', 
+                     json.dumps({'action': 'User changed own password'}, ensure_ascii=False))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Change password error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/auth/forgot-password', methods=['POST'])
+    def forgot_password():
+        """Request password reset link"""
+        try:
+            data = request.get_json()
+            email = data.get('email')
+            
+            if not email:
+                return jsonify({'error': 'E-Mail-Adresse ist erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Find employee by email
+            cursor.execute("""
+                SELECT Id, Vorname, Name, Email
+                FROM Employees
+                WHERE Email = ? AND PasswordHash IS NOT NULL
+            """, (email,))
+            
+            employee = cursor.fetchone()
+            
+            # Always return success to prevent email enumeration
+            if not employee:
+                conn.close()
+                return jsonify({'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zurücksetzen des Passworts gesendet.'})
+            
+            # Generate reset token
+            import secrets as sec
+            reset_token = sec.token_urlsafe(32)
+            expires_at = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+            
+            # Store reset token
+            cursor.execute("""
+                INSERT INTO PasswordResetTokens (EmployeeId, Token, ExpiresAt)
+                VALUES (?, ?, ?)
+            """, (employee[0], reset_token, expires_at))
+            
+            conn.commit()
+            
+            # Send reset email
+            from email_service import send_password_reset_email
+            employee_name = f"{employee[1]} {employee[2]}"
+            base_url = request.host_url.rstrip('/')
+            
+            success, error = send_password_reset_email(
+                conn, employee[3], reset_token, employee_name, base_url
+            )
+            
+            conn.close()
+            
+            if not success:
+                app.logger.error(f"Failed to send password reset email: {error}")
+                # Don't expose email errors to user
+            
+            return jsonify({'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zurücksetzen des Passworts gesendet.'})
+            
+        except Exception as e:
+            app.logger.error(f"Forgot password error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/auth/reset-password', methods=['POST'])
+    def reset_password():
+        """Reset password using token"""
+        try:
+            data = request.get_json()
+            token = data.get('token')
+            new_password = data.get('newPassword')
+            
+            if not token or not new_password:
+                return jsonify({'error': 'Token und neues Passwort sind erforderlich'}), 400
+            
+            if len(new_password) < 8:
+                return jsonify({'error': 'Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Find valid token
+            cursor.execute("""
+                SELECT Id, EmployeeId, ExpiresAt
+                FROM PasswordResetTokens
+                WHERE Token = ? AND IsUsed = 0
+            """, (token,))
+            
+            token_row = cursor.fetchone()
+            
+            if not token_row:
+                conn.close()
+                return jsonify({'error': 'Ungültiger oder bereits verwendeter Token'}), 400
+            
+            token_id = token_row[0]
+            employee_id = token_row[1]
+            expires_at = datetime.fromisoformat(token_row[2])
+            
+            # Check if token is expired
+            if expires_at < datetime.utcnow():
+                conn.close()
+                return jsonify({'error': 'Token ist abgelaufen'}), 400
+            
+            # Update password
+            new_password_hash = hash_password(new_password)
+            security_stamp = secrets.token_hex(16)
+            
+            cursor.execute("""
+                UPDATE Employees
+                SET PasswordHash = ?, SecurityStamp = ?, AccessFailedCount = 0, LockoutEnd = NULL
+                WHERE Id = ?
+            """, (new_password_hash, security_stamp, employee_id))
+            
+            # Mark token as used
+            cursor.execute("""
+                UPDATE PasswordResetTokens
+                SET IsUsed = 1, UsedAt = ?
+                WHERE Id = ?
+            """, (datetime.utcnow().isoformat(), token_id))
+            
+            # Log audit entry
+            log_audit(conn, 'Employee', employee_id, 'PasswordReset', 
+                     json.dumps({'action': 'Password reset via email token'}, ensure_ascii=False))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Reset password error: {str(e)}")
+            return jsonify({'error': f'Fehler: {str(e)}'}), 500
+    
+    @app.route('/api/auth/validate-reset-token', methods=['POST'])
+    def validate_reset_token():
+        """Validate if reset token is valid"""
+        try:
+            data = request.get_json()
+            token = data.get('token')
+            
+            if not token:
+                return jsonify({'valid': False})
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT ExpiresAt
+                FROM PasswordResetTokens
+                WHERE Token = ? AND IsUsed = 0
+            """, (token,))
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return jsonify({'valid': False})
+            
+            expires_at = datetime.fromisoformat(row[0])
+            if expires_at < datetime.utcnow():
+                return jsonify({'valid': False})
+            
+            return jsonify({'valid': True})
+            
+        except Exception as e:
+            app.logger.error(f"Validate reset token error: {str(e)}")
+            return jsonify({'valid': False})
+    
+    # ============================================================================
     # STATIC FILES (Web UI)
     # ============================================================================
     

@@ -8,6 +8,9 @@ ortools>=9.8.3296
 Flask>=3.0.0
 flask-cors>=4.0.0
 
+# Waitress - Production WSGI server
+waitress>=2.1.2
+
 # Standard library enhancements
 python-dateutil>=2.8.2
 

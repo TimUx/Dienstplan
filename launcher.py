@@ -26,35 +26,23 @@ def main():
     # Determine application and data paths
     if getattr(sys, 'frozen', False):
         # Running in a bundle (PyInstaller)
-        bundle_dir = Path(sys._MEIPASS)
         # Data directory should be next to the executable for persistence
         exe_dir = Path(sys.executable).parent
         data_dir = exe_dir / "data"
-        
-        # If data directory doesn't exist next to executable, create it
-        if not data_dir.exists():
-            data_dir.mkdir(exist_ok=True)
-            
-        # Check if we need to copy the bundled database template
-        db_path = data_dir / "dienstplan.db"
-        bundled_db = bundle_dir / "data" / "dienstplan.db"
-        
-        if not db_path.exists() and bundled_db.exists():
-            # Copy bundled database template to persistent location
-            print(f"[+] Copying database template to: {data_dir}")
-            shutil.copy2(bundled_db, db_path)
     else:
         # Running in normal Python environment
         application_path = Path(__file__).parent
         data_dir = application_path / "data"
-        data_dir.mkdir(exist_ok=True)
+    
+    # Ensure data directory exists
+    data_dir.mkdir(exist_ok=True)
     
     print("=" * 60)
     print("DIENSTPLAN - Schichtverwaltungssystem")
     print("Version 2.1 - Python Edition")
     print("=" * 60)
     print()
-    print("[*] Starting web server...")
+    print("[*] Starting production web server...")
     print()
     
     # Configuration
@@ -85,18 +73,21 @@ def main():
     browser_thread = threading.Thread(target=open_browser, args=(url,), daemon=True)
     browser_thread.start()
     
-    # Import and start Flask app
+    # Import and start Flask app with waitress (production WSGI server)
     try:
         from web_api import create_app
+        from waitress import serve
         
         print(f"[OK] Server will be available at: {url}")
+        print("[i] Using Waitress production WSGI server")
         print()
         print("[i] Tip: Close this window or press Ctrl+C to stop the server")
         print("=" * 60)
         print()
         
         app = create_app(db_path)
-        app.run(host=host, port=port, debug=False)
+        # Use waitress production server instead of Flask development server
+        serve(app, host=host, port=port, threads=4)
         
     except KeyboardInterrupt:
         print("\n\n[*] Shutting down server...")

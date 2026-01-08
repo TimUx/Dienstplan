@@ -80,6 +80,7 @@ To enable password reset functionality, administrators must configure email sett
 ## Security Features
 
 - **Password Hashing**: All passwords are hashed using SHA256
+  - **Note**: For production deployments, consider upgrading to bcrypt, scrypt, or Argon2 with proper salting for enhanced security against rainbow table attacks
 - **Token Expiry**: Password reset tokens expire after 24 hours
 - **One-Time Use**: Reset tokens can only be used once
 - **Email Enumeration Protection**: System doesn't reveal if an email exists
@@ -154,12 +155,29 @@ This tests:
 ## Future Enhancements
 
 Potential improvements for future versions:
+- **Upgrade password hashing to bcrypt/Argon2** with proper salting (recommended for production)
 - Password complexity requirements (uppercase, lowercase, numbers, symbols)
 - Password history (prevent reusing recent passwords)
 - Multi-factor authentication (2FA)
 - Password expiration policies
 - Account lockout after failed attempts
-- Upgrade to bcrypt/Argon2 for password hashing
+
+### Recommended: Upgrade to bcrypt
+
+For production deployments, it's recommended to upgrade from SHA256 to bcrypt:
+
+1. Install bcrypt: `pip install bcrypt`
+2. Update `web_api.py`:
+```python
+import bcrypt
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return bcrypt.checkpw(password.encode(), password_hash.encode())
+```
+3. Existing passwords will need to be reset or migrated
 
 ## Support
 

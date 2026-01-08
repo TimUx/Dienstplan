@@ -74,6 +74,14 @@ def hash_password(password: str) -> str:
     
     Note: This is a simple implementation for development/migration from .NET.
     For production, consider using bcrypt, scrypt, or Argon2 for better security.
+    
+    TODO: Upgrade to bcrypt/Argon2 with proper salting for production use.
+    SHA256 alone is vulnerable to rainbow table attacks without salting.
+    
+    Recommended migration path:
+    1. Install bcrypt: pip install bcrypt
+    2. Replace with: bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    3. Update verify_password to use bcrypt.checkpw()
     """
     return hashlib.sha256(password.encode()).hexdigest()
 

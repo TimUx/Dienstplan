@@ -6,7 +6,7 @@ import smtplib
 import sqlite3
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from datetime import datetime
 
 
@@ -52,7 +52,7 @@ def send_email(
     subject: str,
     body_html: str,
     body_text: Optional[str] = None
-) -> tuple[bool, str]:
+) -> Tuple[bool, str]:
     """
     Send an email using configured SMTP settings.
     
@@ -127,7 +127,7 @@ def send_password_reset_email(
     reset_token: str,
     employee_name: str,
     base_url: str = "http://localhost:5000"
-) -> tuple[bool, str]:
+) -> Tuple[bool, str]:
     """
     Send password reset email to user.
     
@@ -210,7 +210,7 @@ Diese E-Mail wurde automatisch generiert. Bitte antworten Sie nicht auf diese E-
 def send_test_email(
     conn: sqlite3.Connection,
     to_email: str
-) -> tuple[bool, str]:
+) -> Tuple[bool, str]:
     """
     Send a test email to verify SMTP settings.
     

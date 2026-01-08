@@ -3000,39 +3000,6 @@ async function testEmailSettings() {
         alert(`Fehler: ${error.message}`);
     }
 }
-        password: document.getElementById('smtpPassword').value || null,
-        senderEmail: document.getElementById('senderEmail').value,
-        senderName: document.getElementById('senderName').value,
-        replyToEmail: document.getElementById('replyToEmail').value || null
-    };
-    
-    try {
-        const response = await fetch(`${API_BASE}/emailsettings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(settings)
-        });
-        
-        if (response.ok) {
-            alert('E-Mail-Einstellungen erfolgreich gespeichert!');
-            closeEmailSettingsModal();
-            loadEmailSettings();
-        } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
-        } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
-        } else {
-            alert('Fehler beim Speichern der E-Mail-Einstellungen.');
-        }
-    } catch (error) {
-        alert(`Fehler: ${error.message}`);
-    }
-}
-
-async function testEmailSettings() {
-    alert('Test-E-Mail Funktion ist vorbereitet.\n\nIn der Produktion würde hier eine Test-E-Mail an die konfigurierte Adresse gesendet.');
-}
 
 function saveGlobalSettings() {
     const maxConsecutiveShifts = document.getElementById('setting-max-consecutive-shifts').value;

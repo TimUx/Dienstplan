@@ -15,6 +15,11 @@ from model import create_shift_planning_model
 from solver import solve_shift_planning
 from validation import validate_shift_plan
 
+try:
+    from waitress import serve as waitress_serve
+except ImportError:
+    waitress_serve = None
+
 
 def run_cli_planning(
     start_date: date,
@@ -202,8 +207,12 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         app.run(host=host, port=port, debug=debug)
     else:
         # Use Waitress production WSGI server
-        from waitress import serve
-        serve(app, host=host, port=port, threads=4)
+        if waitress_serve is None:
+            print("[!] WARNING: Waitress not available, falling back to Flask development server")
+            print("[!] This is not recommended for production use!")
+            app.run(host=host, port=port, debug=False)
+        else:
+            waitress_serve(app, host=host, port=port, threads=4)
 
 
 def main():

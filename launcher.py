@@ -5,11 +5,15 @@ Starts the web server and automatically opens the browser.
 
 import sys
 import os
-import shutil
 import webbrowser
 import threading
 import time
 from pathlib import Path
+
+try:
+    from waitress import serve
+except ImportError:
+    serve = None
 
 def open_browser(url, delay=2):
     """Open browser after a short delay to let server start"""
@@ -76,7 +80,9 @@ def main():
     # Import and start Flask app with waitress (production WSGI server)
     try:
         from web_api import create_app
-        from waitress import serve
+        
+        if serve is None:
+            raise ImportError("waitress module not found")
         
         print(f"[OK] Server will be available at: {url}")
         print("[i] Using Waitress production WSGI server")

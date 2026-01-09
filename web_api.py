@@ -868,10 +868,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT e.*, t.Name as TeamName
+            SELECT e.*, t.Name as TeamName,
+                   GROUP_CONCAT(r.Name) as roles
             FROM Employees e
             LEFT JOIN Teams t ON e.TeamId = t.Id
+            LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
+            LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
             WHERE e.Id = ?
+            GROUP BY e.Id
         """, (id,))
         
         row = cursor.fetchone()
@@ -908,7 +912,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'isTeamLeader': is_team_leader,
             'teamId': row['TeamId'],
             'teamName': row['TeamName'],
-            'fullName': f"{row['Vorname']} {row['Name']}"
+            'fullName': f"{row['Vorname']} {row['Name']}",
+            'roles': row['roles'] if row['roles'] else ''
         })
     
     @app.route('/api/employees/springers', methods=['GET'])
@@ -1021,6 +1026,34 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             employee_id = cursor.lastrowid
             
+            # Assign roles: All employees get "Mitarbeiter" role by default
+            cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", ('Mitarbeiter',))
+            mitarbeiter_role = cursor.fetchone()
+            if not mitarbeiter_role:
+                conn.close()
+                app.logger.error("Mitarbeiter role not found in database")
+                return jsonify({'error': 'System-Fehler: Mitarbeiter-Rolle nicht gefunden'}), 500
+            
+            cursor.execute("""
+                INSERT INTO AspNetUserRoles (UserId, RoleId)
+                VALUES (?, ?)
+            """, (str(employee_id), mitarbeiter_role['Id']))
+            
+            # If isAdmin flag is set, also assign "Admin" role
+            is_admin = data.get('isAdmin', False)
+            if is_admin:
+                cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", ('Admin',))
+                admin_role = cursor.fetchone()
+                if not admin_role:
+                    conn.close()
+                    app.logger.error("Admin role not found in database")
+                    return jsonify({'error': 'System-Fehler: Admin-Rolle nicht gefunden'}), 500
+                
+                cursor.execute("""
+                    INSERT INTO AspNetUserRoles (UserId, RoleId)
+                    VALUES (?, ?)
+                """, (str(employee_id), admin_role['Id']))
+            
             # Log audit entry
             changes = json.dumps({
                 'vorname': data.get('vorname'),
@@ -1028,7 +1061,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'personalnummer': data.get('personalnummer'),
                 'email': data.get('email'),
                 'funktion': funktion,
-                'teamId': data.get('teamId')
+                'teamId': data.get('teamId'),
+                'roles': ['Mitarbeiter', 'Admin'] if is_admin else ['Mitarbeiter']
             }, ensure_ascii=False)
             log_audit(conn, 'Employee', employee_id, 'Created', changes)
             
@@ -1154,6 +1188,55 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     id
                 ))
             
+            # Update roles: Ensure employee always has "Mitarbeiter" role
+            cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", ('Mitarbeiter',))
+            mitarbeiter_role = cursor.fetchone()
+            if not mitarbeiter_role:
+                conn.close()
+                app.logger.error("Mitarbeiter role not found in database")
+                return jsonify({'error': 'System-Fehler: Mitarbeiter-Rolle nicht gefunden'}), 500
+            
+            # Check if Mitarbeiter role exists, add if not
+            cursor.execute("""
+                SELECT 1 FROM AspNetUserRoles 
+                WHERE UserId = ? AND RoleId = ?
+            """, (str(id), mitarbeiter_role['Id']))
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO AspNetUserRoles (UserId, RoleId)
+                    VALUES (?, ?)
+                """, (str(id), mitarbeiter_role['Id']))
+            
+            # Handle Admin role based on isAdmin flag
+            is_admin = data.get('isAdmin', False)
+            cursor.execute("SELECT Id FROM AspNetRoles WHERE Name = ?", ('Admin',))
+            admin_role = cursor.fetchone()
+            
+            if not admin_role:
+                conn.close()
+                app.logger.error("Admin role not found in database")
+                return jsonify({'error': 'System-Fehler: Admin-Rolle nicht gefunden'}), 500
+            
+            # Check if Admin role currently exists for this employee
+            cursor.execute("""
+                SELECT 1 FROM AspNetUserRoles 
+                WHERE UserId = ? AND RoleId = ?
+            """, (str(id), admin_role['Id']))
+            has_admin_role = cursor.fetchone() is not None
+            
+            if is_admin and not has_admin_role:
+                # Add Admin role
+                cursor.execute("""
+                    INSERT INTO AspNetUserRoles (UserId, RoleId)
+                    VALUES (?, ?)
+                """, (str(id), admin_role['Id']))
+            elif not is_admin and has_admin_role:
+                # Remove Admin role
+                cursor.execute("""
+                    DELETE FROM AspNetUserRoles 
+                    WHERE UserId = ? AND RoleId = ?
+                """, (str(id), admin_role['Id']))
+            
             # Log audit entry with changes
             changes_dict = {}
             if old_row['Vorname'] != data.get('vorname'):
@@ -1170,6 +1253,22 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 changes_dict['teamId'] = {'old': old_row['TeamId'], 'new': data.get('teamId')}
             if password:
                 changes_dict['password'] = 'changed'
+            
+            # Track role changes in audit log
+            if 'isAdmin' in data:
+                # Get old roles for comparison
+                cursor.execute("""
+                    SELECT r.Name FROM AspNetUserRoles ur
+                    JOIN AspNetRoles r ON ur.RoleId = r.Id
+                    WHERE ur.UserId = ?
+                """, (str(id),))
+                old_roles = [row['Name'] for row in cursor.fetchall()]
+                new_roles = ['Mitarbeiter']
+                if is_admin:
+                    new_roles.append('Admin')
+                
+                if set(old_roles) != set(new_roles):
+                    changes_dict['roles'] = {'old': old_roles, 'new': new_roles}
             
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)

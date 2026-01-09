@@ -1618,6 +1618,11 @@ async function editEmployee(id) {
         document.getElementById('geburtsdatum').value = employee.geburtsdatum ? employee.geburtsdatum.split('T')[0] : '';
         document.getElementById('teamId').value = employee.teamId || '';
         document.getElementById('isTeamLeader').checked = employee.isTeamLeader || false;
+        
+        // Set Admin checkbox based on employee's roles
+        const roles = employee.roles ? employee.roles.split(',') : [];
+        document.getElementById('isAdmin').checked = roles.includes('Admin');
+        
         document.getElementById('isBrandmeldetechniker').checked = employee.isBrandmeldetechniker || false;
         document.getElementById('isBrandschutzbeauftragter').checked = employee.isBrandschutzbeauftragter || false;
         // TD qualification is now automatic based on BMT or BSB
@@ -1700,6 +1705,7 @@ async function saveEmployee(event) {
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
         isSpringer: false,  // Always false since checkbox was removed
         isTeamLeader: document.getElementById('isTeamLeader').checked,
+        isAdmin: document.getElementById('isAdmin').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,
         isBrandschutzbeauftragter: document.getElementById('isBrandschutzbeauftragter').checked
         // isTdQualified is calculated automatically on the server based on BMT or BSB

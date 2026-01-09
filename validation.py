@@ -8,6 +8,10 @@ from typing import List, Dict, Tuple
 from collections import defaultdict
 from entities import Employee, ShiftAssignment, Absence, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 
+# Constants for validation
+MAIN_SHIFT_CODES = ["F", "S", "N"]  # Main shift types that require working hours validation
+DEFAULT_WEEKLY_HOURS = 40.0  # Default weekly working hours if not configured
+
 
 class ValidationResult:
     """Result of validation with any violations found"""
@@ -309,14 +313,14 @@ def validate_working_hours(
         shift_type_counts = {}
         for assignment in emp_assignments:
             shift_type = get_shift_type_by_id(assignment.shift_type_id)
-            if shift_type and shift_type.code in ['F', 'S', 'N']:  # Main shifts only
+            if shift_type and shift_type.code in MAIN_SHIFT_CODES:  # Main shifts only
                 shift_type_counts[shift_type.id] = shift_type_counts.get(shift_type.id, 0) + 1
         
-        # Get expected weekly hours (default to 40 if no main shifts found)
-        expected_weekly_hours = 40.0
+        # Get expected weekly hours (use default if no main shifts found)
+        expected_weekly_hours = DEFAULT_WEEKLY_HOURS
         if shift_type_counts:
             most_common_shift_id = max(shift_type_counts, key=shift_type_counts.get)
-            expected_weekly_hours = shift_weekly_hours_map.get(most_common_shift_id, 40.0)
+            expected_weekly_hours = shift_weekly_hours_map.get(most_common_shift_id, DEFAULT_WEEKLY_HOURS)
         
         expected_monthly_hours = expected_weekly_hours * 4
         

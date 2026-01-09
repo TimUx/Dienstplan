@@ -404,15 +404,19 @@ def add_working_hours_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    shift_types: List[ShiftType]
+    shift_types: List[ShiftType],
+    absences: List[Absence] = None
 ):
     """
     HARD CONSTRAINT: Working hours limits based on shift configuration.
     
     This constraint ensures that employees:
     1. Meet minimum required working hours based on their shift's WeeklyWorkingHours
+       (48h/week for main shifts F, S, N)
     2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration)
-    3. Monthly hours are calculated as WeeklyWorkingHours * 4
+    3. Monthly hours are calculated as WeeklyWorkingHours * 4 (e.g., 192h/month for 48h/week)
+    4. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
+    5. If an employee works less in one week (without absence), they must compensate in other weeks
     
     The limits are now DYNAMIC per employee based on their team's assigned shift(s),
     replacing the previous fixed limits of 192 hours/month and 48 hours/week.
@@ -420,6 +424,7 @@ def add_working_hours_constraints(
     Note: All main shifts (F, S, N) are 8 hours by default.
     Weekend hours are based on team's shift type (same as weekday).
     """
+    absences = absences or []
     # Create shift hours lookup
     shift_hours = {}
     shift_weekly_hours = {}
@@ -494,6 +499,91 @@ def add_working_hours_constraints(
                 # Use pre-calculated maximum weekly hours (scaled by 10)
                 max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), DEFAULT_WEEKLY_HOURS) * 10)
                 model.Add(sum(hours_terms) <= max_scaled_hours)
+    
+    # NEW: Add MINIMUM working hours constraint across the planning period
+    # Employees must meet their configured weekly working hours across all weeks,
+    # accounting for absences as exceptions
+    for emp in employees:
+        if not emp.team_id:
+            continue  # Only check team members
+        
+        # Calculate total expected hours across all weeks
+        total_hours_terms = []
+        total_expected_hours_scaled = 0
+        weeks_with_absences = set()
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # Check if employee has any absences this week
+            has_absence_this_week = any(
+                any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
+                for d in week_dates
+            )
+            
+            if has_absence_this_week:
+                weeks_with_absences.add(week_idx)
+                # Don't count this week in minimum hours requirement
+                continue
+            
+            # Calculate expected hours for this week based on team's shift
+            for shift_code in shift_codes:
+                if (emp.team_id, week_idx, shift_code) not in team_shift:
+                    continue
+                if shift_code not in shift_hours:
+                    continue
+                
+                # Count all active days (weekday + weekend) for this employee when team has this shift
+                active_days = []
+                
+                # WEEKDAY days
+                for d in week_dates:
+                    if d.weekday() < 5 and (emp.id, d) in employee_active:
+                        active_days.append(employee_active[(emp.id, d)])
+                
+                # WEEKEND days (same shift type as team)
+                for d in week_dates:
+                    if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                        active_days.append(employee_weekend_shift[(emp.id, d)])
+                
+                if not active_days:
+                    continue
+                
+                # Count active days this week
+                days_active = model.NewIntVar(0, len(week_dates), 
+                                              f"emp{emp.id}_week{week_idx}_days_min")
+                model.Add(days_active == sum(active_days))
+                
+                # Multiply by team_shift to get conditional active days
+                conditional_days = model.NewIntVar(0, len(week_dates), 
+                                                   f"emp{emp.id}_week{week_idx}_shift{shift_code}_days_min")
+                model.AddMultiplicationEquality(
+                    conditional_days,
+                    [team_shift[(emp.team_id, week_idx, shift_code)], days_active]
+                )
+                
+                # Multiply by hours (scaled by 10)
+                scaled_hours = int(shift_hours[shift_code] * 10)
+                total_hours_terms.append(conditional_days * scaled_hours)
+                
+                # Add expected hours for this shift type in this week (only when shift is active)
+                # We need to multiply the expected weekly hours by the team_shift variable
+                weekly_target_scaled = int(shift_weekly_hours.get(shift_code, DEFAULT_WEEKLY_HOURS) * 10)
+                expected_hours_var = model.NewIntVar(0, weekly_target_scaled,
+                                                    f"emp{emp.id}_week{week_idx}_shift{shift_code}_expected")
+                model.AddMultiplicationEquality(
+                    expected_hours_var,
+                    [team_shift[(emp.team_id, week_idx, shift_code)], weekly_target_scaled]
+                )
+                total_expected_hours_scaled += expected_hours_var
+        
+        # Apply minimum hours constraint only if employee works at least one week without absence
+        if total_hours_terms and len(weeks_with_absences) < len(weeks):
+            # Employee must work at least the expected total hours (minus weeks with absences)
+            # Using >= to ensure minimum is met
+            if isinstance(total_expected_hours_scaled, int) and total_expected_hours_scaled > 0:
+                model.Add(sum(total_hours_terms) >= total_expected_hours_scaled)
+            elif not isinstance(total_expected_hours_scaled, int):
+                # total_expected_hours_scaled is a sum of variables
+                model.Add(sum(total_hours_terms) >= total_expected_hours_scaled)
 
 
 def add_td_constraints(

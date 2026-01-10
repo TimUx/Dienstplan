@@ -63,6 +63,26 @@ class ShiftType:
     max_staff_weekday: int = 5  # Maximum staff on weekdays
     min_staff_weekend: int = 2  # Minimum staff on weekends
     max_staff_weekend: int = 3  # Maximum staff on weekends
+    works_monday: bool = True  # Works on Monday
+    works_tuesday: bool = True  # Works on Tuesday
+    works_wednesday: bool = True  # Works on Wednesday
+    works_thursday: bool = True  # Works on Thursday
+    works_friday: bool = True  # Works on Friday
+    works_saturday: bool = False  # Works on Saturday
+    works_sunday: bool = False  # Works on Sunday
+    
+    def works_on_date(self, d: date) -> bool:
+        """Check if this shift type works on the given date"""
+        weekday = d.weekday()  # Monday=0, Sunday=6
+        return [
+            self.works_monday,
+            self.works_tuesday,
+            self.works_wednesday,
+            self.works_thursday,
+            self.works_friday,
+            self.works_saturday,
+            self.works_sunday
+        ][weekday]
     
     def get_duration_hours(self) -> float:
         """Calculate duration in hours"""
@@ -126,6 +146,7 @@ class Team:
     email: Optional[str] = None
     is_virtual: bool = False  # Virtual teams (e.g., "Fire Alarm System") for display only
     employees: List[Employee] = field(default_factory=list)
+    allowed_shift_type_ids: List[int] = field(default_factory=list)  # Shift types this team can work (from TeamShiftAssignments)
 
 
 @dataclass
@@ -215,12 +236,12 @@ class VacationPeriod:
 
 # Predefined shift types for the system
 STANDARD_SHIFT_TYPES = [
-    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 40.0),
-    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 40.0),
-    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 40.0),
-    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0),
-    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0),
-    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0),
+    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 40.0, 3, 5, 2, 3, True, True, True, True, True, True, True),
+    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 40.0, 3, 5, 2, 3, True, True, True, True, True, True, True),
+    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 40.0, 3, 3, 2, 3, True, True, True, True, True, True, True),
+    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0, 3, 5, 2, 3, True, True, True, True, True, False, False),
+    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0, 1, 2, 0, 0, True, True, True, True, True, False, False),
+    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0, 1, 2, 0, 0, True, True, True, True, True, False, False),
 ]
 
 

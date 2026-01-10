@@ -68,10 +68,10 @@ class ShiftPlanningSolver:
         
         # CORE TEAM-BASED CONSTRAINTS
         print("  - Team shift assignment (exactly one shift per team per week)")
-        add_team_shift_assignment_constraints(model, team_shift, teams, weeks, shift_codes)
+        add_team_shift_assignment_constraints(model, team_shift, teams, weeks, shift_codes, shift_types)
         
         print("  - Team rotation (F → N → S pattern)")
-        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift)
+        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
         add_employee_team_linkage_constraints(model, team_shift, employee_active, {}, employees, teams, dates, weeks, shift_codes, absences)

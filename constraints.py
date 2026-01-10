@@ -54,25 +54,59 @@ def add_team_shift_assignment_constraints(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     teams: List[Team],
     weeks: List[List[date]],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    shift_types: List[ShiftType] = None
 ):
     """
     HARD CONSTRAINT: Each team must have exactly ONE shift per week.
     
     Constraint: For each team and week:
-        Sum(team_shift[team][week][shift] for all shifts) == 1
+        Sum(team_shift[team][week][shift] for all ALLOWED shifts) == 1
+    
+    IMPORTANT: Only allows shifts that are configured in TeamShiftAssignments.
+    If a team has allowed_shift_type_ids configured, only those shifts are allowed.
+    If a team has no configuration (empty list), it can work all shifts (backward compatibility).
     
     EXCLUDES virtual team "Fire Alarm System" (ID 99) which doesn't participate in rotation.
     """
+    # Build shift type ID to code mapping
+    shift_id_to_code = {}
+    if shift_types:
+        for st in shift_types:
+            shift_id_to_code[st.id] = st.code
+    
     for team in teams:
         for week_idx in range(len(weeks)):
             shift_vars = []
             for shift_code in shift_codes:
-                if (team.id, week_idx, shift_code) in team_shift:
+                if (team.id, week_idx, shift_code) not in team_shift:
+                    continue
+                
+                # Check if this team is allowed to work this shift
+                # If team has allowed_shift_type_ids configured, enforce it
+                if team.allowed_shift_type_ids:
+                    # Find shift type ID for this code
+                    shift_type_id = None
+                    for st_id, st_code in shift_id_to_code.items():
+                        if st_code == shift_code:
+                            shift_type_id = st_id
+                            break
+                    
+                    # Only add this shift if team is allowed to work it
+                    if shift_type_id and shift_type_id in team.allowed_shift_type_ids:
+                        shift_vars.append(team_shift[(team.id, week_idx, shift_code)])
+                    else:
+                        # Team is NOT allowed to work this shift - force it to 0
+                        model.Add(team_shift[(team.id, week_idx, shift_code)] == 0)
+                else:
+                    # No configuration - allow all shifts (backward compatibility)
                     shift_vars.append(team_shift[(team.id, week_idx, shift_code)])
             
+            # Team must have exactly one shift per week (from allowed shifts only)
             if shift_vars:
                 model.Add(sum(shift_vars) == 1)
+            # If no shift vars (team has no allowed shifts), this is an error in configuration
+            # but we don't fail - the team simply won't be assigned any shifts
 
 
 def add_team_rotation_constraints(
@@ -81,7 +115,8 @@ def add_team_rotation_constraints(
     teams: List[Team],
     weeks: List[List[date]],
     shift_codes: List[str],
-    locked_team_shift: Dict[Tuple[int, int], str] = None
+    locked_team_shift: Dict[Tuple[int, int], str] = None,
+    shift_types: List[ShiftType] = None
 ):
     """
     HARD CONSTRAINT: Teams follow fixed rotation pattern F → N → S.
@@ -93,11 +128,30 @@ def add_team_rotation_constraints(
     Week 3: Team 1=F, Team 2=N, Team 3=S (repeats)
     
     Manual overrides (locked assignments) take precedence over rotation.
+    
+    IMPORTANT: Only applies to teams that have F, N, and S in their allowed shifts.
+    Teams with other shift configurations (e.g., only TD/BMT/BSB) are skipped.
     """
     if "F" not in shift_codes or "N" not in shift_codes or "S" not in shift_codes:
         return  # Cannot enforce rotation if shifts are missing
     
     locked_team_shift = locked_team_shift or {}
+    
+    # Build shift type ID to code mapping
+    shift_id_to_code = {}
+    if shift_types:
+        for st in shift_types:
+            shift_id_to_code[st.id] = st.code
+    
+    # Find shift type IDs for F, N, S
+    f_id = n_id = s_id = None
+    for st_id, st_code in shift_id_to_code.items():
+        if st_code == "F":
+            f_id = st_id
+        elif st_code == "N":
+            n_id = st_id
+        elif st_code == "S":
+            s_id = st_id
     
     # Define the rotation cycle
     rotation = ["F", "N", "S"]
@@ -106,6 +160,19 @@ def add_team_rotation_constraints(
     sorted_teams = sorted(teams, key=lambda t: t.id)
     
     for team_idx, team in enumerate(sorted_teams):
+        # Check if team has all three rotation shifts (F, N, S) in allowed shifts
+        # If team has allowed_shift_type_ids configured, check them
+        if team.allowed_shift_type_ids:
+            has_f = f_id in team.allowed_shift_type_ids if f_id else False
+            has_n = n_id in team.allowed_shift_type_ids if n_id else False
+            has_s = s_id in team.allowed_shift_type_ids if s_id else False
+            
+            if not (has_f and has_n and has_s):
+                # Team doesn't have all three shifts - skip rotation constraint
+                # Team will be constrained by add_team_shift_assignment_constraints instead
+                continue
+        
+        # Team participates in F→N→S rotation
         for week_idx in range(len(weeks)):
             # Check if this assignment is locked (manual override)
             if (team.id, week_idx) in locked_team_shift:
@@ -256,6 +323,20 @@ def add_staffing_constraints(
         
         for shift in shift_codes:
             if shift not in staffing:
+                continue
+            
+            # Check if this shift works on this day (Mon-Fri vs Sat-Sun)
+            # Find the shift type for this shift code
+            shift_type = None
+            if shift_types:
+                for st in shift_types:
+                    if st.code == shift:
+                        shift_type = st
+                        break
+            
+            # Skip if shift doesn't work on this day
+            if shift_type and not shift_type.works_on_date(d):
+                # This shift doesn't work on this day - skip staffing requirements
                 continue
             
             if is_weekend:

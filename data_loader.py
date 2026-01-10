@@ -110,7 +110,9 @@ def load_from_database(db_path: str = "dienstplan.db"):
     # Load shift types from database
     cursor.execute("""
         SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
-               MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend
+               MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
+               WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
+               WorksSaturday, WorksSunday
         FROM ShiftTypes
         WHERE IsActive = 1
         ORDER BY Id
@@ -135,6 +137,19 @@ def load_from_database(db_path: str = "dienstplan.db"):
             min_staff_weekend = 2
             max_staff_weekend = 3
         
+        try:
+            works_monday = bool(row['WorksMonday'])
+            works_tuesday = bool(row['WorksTuesday'])
+            works_wednesday = bool(row['WorksWednesday'])
+            works_thursday = bool(row['WorksThursday'])
+            works_friday = bool(row['WorksFriday'])
+            works_saturday = bool(row['WorksSaturday'])
+            works_sunday = bool(row['WorksSunday'])
+        except (KeyError, IndexError):
+            # Default: works all days (backwards compatibility)
+            works_monday = works_tuesday = works_wednesday = True
+            works_thursday = works_friday = works_saturday = works_sunday = True
+        
         shift_type = ShiftType(
             id=row['Id'],
             code=row['Code'],
@@ -147,7 +162,14 @@ def load_from_database(db_path: str = "dienstplan.db"):
             min_staff_weekday=min_staff_weekday,
             max_staff_weekday=max_staff_weekday,
             min_staff_weekend=min_staff_weekend,
-            max_staff_weekend=max_staff_weekend
+            max_staff_weekend=max_staff_weekend,
+            works_monday=works_monday,
+            works_tuesday=works_tuesday,
+            works_wednesday=works_wednesday,
+            works_thursday=works_thursday,
+            works_friday=works_friday,
+            works_saturday=works_saturday,
+            works_sunday=works_sunday
         )
         shift_types.append(shift_type)
     
@@ -163,6 +185,24 @@ def load_from_database(db_path: str = "dienstplan.db"):
         team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 
                    email=row['Email'], is_virtual=is_virtual)
         teams.append(team)
+    
+    # Load TeamShiftAssignments (which shifts each team can work)
+    cursor.execute("""
+        SELECT TeamId, ShiftTypeId
+        FROM TeamShiftAssignments
+        ORDER BY TeamId
+    """)
+    team_shift_assignments = {}
+    for row in cursor.fetchall():
+        team_id = row['TeamId']
+        shift_type_id = row['ShiftTypeId']
+        if team_id not in team_shift_assignments:
+            team_shift_assignments[team_id] = []
+        team_shift_assignments[team_id].append(shift_type_id)
+    
+    # Assign allowed shift types to teams
+    for team in teams:
+        team.allowed_shift_type_ids = team_shift_assignments.get(team.id, [])
     
     # Load employees
     cursor.execute("""

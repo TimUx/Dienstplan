@@ -31,6 +31,7 @@ from notification_manager import (
     mark_notification_as_read,
     get_notification_count
 )
+from springer_replacement import process_absence_with_springer_assignment
 
 
 def get_row_value(row: sqlite3.Row, key: str, default):
@@ -3875,9 +3876,43 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 
                 if notification_ids:
                     app.logger.info(f"Created {len(notification_ids)} understaffing notifications for absence {absence_id}")
+                
+                # NEW: Automatically assign springers for affected shifts
+                springer_results = process_absence_with_springer_assignment(
+                    conn,
+                    absence_id,
+                    data.get('employeeId'),
+                    start_date_obj,
+                    end_date_obj,
+                    data.get('type'),
+                    session.get('user_email')
+                )
+                
+                if springer_results['assignmentsCreated'] > 0:
+                    app.logger.info(
+                        f"Automatically assigned {springer_results['assignmentsCreated']} springers " +
+                        f"for {springer_results['shiftsNeedingCoverage']} affected shifts " +
+                        f"(Absence ID: {absence_id})"
+                    )
+                    
+                    # Include springer results in response
+                    conn.commit()
+                    conn.close()
+                    
+                    return jsonify({
+                        'success': True,
+                        'id': absence_id,
+                        'springerAssignments': {
+                            'assignmentsCreated': springer_results['assignmentsCreated'],
+                            'notificationsSent': springer_results['notificationsSent'],
+                            'shiftsNeedingCoverage': springer_results['shiftsNeedingCoverage'],
+                            'details': springer_results['details']
+                        }
+                    }), 201
+                    
             except Exception as notif_error:
                 # Log notification error but don't fail the absence creation
-                app.logger.error(f"Error creating notifications for absence: {notif_error}")
+                app.logger.error(f"Error processing absence notifications/springers: {notif_error}")
             
             conn.commit()
             conn.close()

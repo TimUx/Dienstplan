@@ -87,14 +87,19 @@ class ShiftPlanningSolver:
         add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, td_vars, employees, dates, shift_codes)
         
         print("  - Working hours constraints (dynamic based on shift configuration)")
-        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, teams, dates, weeks, shift_codes, shift_types)
+        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
         
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")
         add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)
         
-        print("  - Weekly available employee constraint (at least 1 free per week)")
-        add_weekly_available_employee_constraint(model, employee_active, employee_weekend_shift, employees, teams, weeks)
+        # DISABLED: Weekly available employee constraint - conflicts with configured weekly_working_hours requirement
+        # The constraint forces at least 1 employee to have 0 working days per week,
+        # which prevents employees from reaching their target hours (e.g., 48h/week = 6 days)
+        # See WORKING_HOURS_FIX.md for full analysis
+        # 
+        # print("  - Weekly available employee constraint (at least 1 free per week)")
+        # add_weekly_available_employee_constraint(model, employee_active, employee_weekend_shift, employees, teams, weeks)
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
         print("  - Fairness objectives")

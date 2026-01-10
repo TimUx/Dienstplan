@@ -8,6 +8,10 @@ from typing import List, Dict, Tuple
 from collections import defaultdict
 from entities import Employee, ShiftAssignment, Absence, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 
+# Constants for validation
+MAIN_SHIFT_CODES = ["F", "S", "N"]  # Main shift types that require working hours validation
+DEFAULT_WEEKLY_HOURS = 40.0  # Default weekly working hours if not configured
+
 
 class ValidationResult:
     """Result of validation with any violations found"""
@@ -269,9 +273,30 @@ def validate_working_hours(
     assignments: List[ShiftAssignment],
     emp_dict: Dict[int, Employee],
     start_date: date,
-    end_date: date
+    end_date: date,
+    shift_types: List = None
 ):
-    """Validate working hours limits (48h/week, 192h/month)"""
+    """
+    Validate working hours limits based on configured weekly_working_hours in shift types.
+    
+    Validates that employees:
+    - Do not exceed max weekly hours (based on shift's weekly_working_hours)
+    - Meet minimum weekly hours (based on shift's weekly_working_hours)
+    - Do not exceed max monthly hours (weekly_working_hours * 4)
+    
+    Note: This is now dynamic based on shift configuration, not hardcoded to 48h/192h
+    """
+    from entities import STANDARD_SHIFT_TYPES
+    
+    # Use provided shift_types or fallback to STANDARD_SHIFT_TYPES
+    if shift_types is None:
+        shift_types = STANDARD_SHIFT_TYPES
+    
+    # Build lookup for shift weekly hours
+    shift_weekly_hours_map = {}
+    for st in shift_types:
+        shift_weekly_hours_map[st.id] = st.weekly_working_hours
+    
     # Group by employee
     assignments_by_emp = {}
     for assignment in assignments:
@@ -282,6 +307,22 @@ def validate_working_hours(
     
     for emp_id, emp_assignments in assignments_by_emp.items():
         emp_name = emp_dict[emp_id].full_name
+        
+        # Determine employee's shift type to get expected weekly hours
+        # Use the most common shift type assigned to this employee
+        shift_type_counts = {}
+        for assignment in emp_assignments:
+            shift_type = get_shift_type_by_id(assignment.shift_type_id)
+            if shift_type and shift_type.code in MAIN_SHIFT_CODES:  # Main shifts only
+                shift_type_counts[shift_type.id] = shift_type_counts.get(shift_type.id, 0) + 1
+        
+        # Get expected weekly hours (use default if no main shifts found)
+        expected_weekly_hours = DEFAULT_WEEKLY_HOURS
+        if shift_type_counts:
+            most_common_shift_id = max(shift_type_counts, key=shift_type_counts.get)
+            expected_weekly_hours = shift_weekly_hours_map.get(most_common_shift_id, DEFAULT_WEEKLY_HOURS)
+        
+        expected_monthly_hours = expected_weekly_hours * 4
         
         # Check weekly hours
         weeks = {}
@@ -295,9 +336,9 @@ def validate_working_hours(
             weeks[monday] += shift_type.hours
         
         for week_start, hours in weeks.items():
-            if hours > 48:
+            if hours > expected_weekly_hours:
                 result.add_violation(
-                    f"{emp_name} works {hours:.1f} hours in week starting {week_start} (max 48h)"
+                    f"{emp_name} works {hours:.1f} hours in week starting {week_start} (max {expected_weekly_hours}h based on shift config)"
                 )
         
         # Check monthly hours (30-day rolling window)
@@ -316,11 +357,12 @@ def validate_working_hours(
                 hours for d, hours in dates_with_hours.items()
                 if current <= d <= window_end
             )
-            if hours_in_window > 192:
+            if hours_in_window > expected_monthly_hours:
                 result.add_violation(
-                    f"{emp_name} works {hours_in_window:.1f} hours in 30-day period {current} to {window_end} (max 192h)"
+                    f"{emp_name} works {hours_in_window:.1f} hours in 30-day period {current} to {window_end} (max {expected_monthly_hours}h based on shift config)"
                 )
             current += timedelta(days=7)  # Check weekly increments
+
 
 
 def validate_staffing_requirements(

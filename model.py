@@ -73,8 +73,28 @@ class ShiftPlanningModel:
             self.dates.append(current)
             current += timedelta(days=1)
         
-        # Get main shift codes (F, S, N)
-        self.shift_codes = [st.code for st in self.shift_types if st.code in ["F", "S", "N"]]
+        # Determine which shift codes to include in the model
+        # Include F, S, N for standard rotation
+        # Also include any other shifts that teams are configured to work
+        shift_codes_set = set()
+        
+        # Always include F, S, N if they exist (standard rotation)
+        for st in self.shift_types:
+            if st.code in ["F", "S", "N"]:
+                shift_codes_set.add(st.code)
+        
+        # Add any shifts that teams are explicitly configured to work
+        for team in self.teams:
+            if team.allowed_shift_type_ids:
+                for shift_type_id in team.allowed_shift_type_ids:
+                    # Find the shift type code for this ID
+                    for st in self.shift_types:
+                        if st.id == shift_type_id:
+                            shift_codes_set.add(st.code)
+                            break
+        
+        # Convert to sorted list for consistency
+        self.shift_codes = sorted(list(shift_codes_set))
         
         # Generate weeks (Monday to Sunday)
         self.weeks = self._generate_weeks()

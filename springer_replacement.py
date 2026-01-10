@@ -221,12 +221,18 @@ def find_suitable_springer(
     Find a suitable springer (replacement employee) for a specific shift.
     
     Selection criteria:
-    1. Not already assigned on this date
-    2. Not absent on this date
-    3. Respects rest time requirements
-    4. Does not exceed consecutive days limit
-    5. Has appropriate qualifications (if needed)
-    6. Preference: from same team, then other teams
+    1. Employee's team must be assigned to the shift type (NEW REQUIREMENT)
+    2. Not already assigned on this date
+    3. Not absent on this date
+    4. Respects rest time requirements (11h minimum)
+    5. Does not exceed consecutive days limit (max 6 days)
+    6. Has appropriate qualifications (if needed)
+    7. Preference: from same team, then other teams
+    
+    Example:
+    - Employee from Team A (Early shift) is absent
+    - Candidate from Team B: Team B is assigned to F, S, N shifts → ✅ Suitable
+    - Candidate from Team F: Team F is NOT assigned to F shift → ❌ Not suitable
     
     Args:
         conn: Database connection
@@ -249,17 +255,33 @@ def find_suitable_springer(
     absent_emp_row = cursor.fetchone()
     absent_team_id = absent_emp_row[0] if absent_emp_row else None
     
-    # Get all employees with teams (potential springers)
+    # Get shift type ID for the shift code
+    cursor.execute("""
+        SELECT Id
+        FROM ShiftTypes
+        WHERE Code = ?
+    """, (shift_code,))
+    
+    shift_type_row = cursor.fetchone()
+    if not shift_type_row:
+        return None  # Shift type not found
+    
+    shift_type_id = shift_type_row[0]
+    
+    # Get all employees whose teams are assigned to this shift type
+    # This is the NEW requirement: springer must be from a team assigned to the shift
     cursor.execute("""
         SELECT e.Id, e.Vorname, e.Name, e.TeamId, e.Email,
                e.IsTdQualified, e.IsBrandmeldetechniker, e.IsBrandschutzbeauftragter
         FROM Employees e
+        INNER JOIN TeamShiftAssignments tsa ON e.TeamId = tsa.TeamId
         WHERE e.TeamId IS NOT NULL
           AND e.Id != ?
+          AND tsa.ShiftTypeId = ?
         ORDER BY 
             CASE WHEN e.TeamId = ? THEN 0 ELSE 1 END,  -- Prefer same team
             e.Id
-    """, (absent_employee_id, absent_team_id))
+    """, (absent_employee_id, shift_type_id, absent_team_id))
     
     candidates = cursor.fetchall()
     

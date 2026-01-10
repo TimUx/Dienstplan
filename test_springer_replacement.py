@@ -128,11 +128,21 @@ def create_test_database():
         )
     """)
     
+    cursor.execute("""
+        CREATE TABLE TeamShiftAssignments (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            TeamId INTEGER NOT NULL,
+            ShiftTypeId INTEGER NOT NULL,
+            CreatedBy TEXT
+        )
+    """)
+    
     # Insert test data
     # Teams
     cursor.execute("INSERT INTO Teams (Id, Name) VALUES (1, 'Team Alpha')")
     cursor.execute("INSERT INTO Teams (Id, Name) VALUES (2, 'Team Beta')")
     cursor.execute("INSERT INTO Teams (Id, Name) VALUES (3, 'Team Gamma')")
+    cursor.execute("INSERT INTO Teams (Id, Name) VALUES (4, 'Team Delta')")  # Team not assigned to shifts
     
     # Employees
     employees = [
@@ -144,6 +154,7 @@ def create_test_database():
         (6, 'Julia', 'Becker', 'julia@example.com', 2),
         (7, 'Michael', 'Schulz', 'michael@example.com', 2),
         (8, 'Sarah', 'Hoffmann', 'sarah@example.com', 2),
+        (9, 'Frank', 'Fischer', 'frank@example.com', 4),  # Team Delta - not assigned to shifts
     ]
     for emp in employees:
         cursor.execute(
@@ -155,6 +166,24 @@ def create_test_database():
     cursor.execute("INSERT INTO ShiftTypes (Id, Code, Name, StartTime, EndTime, DurationHours) VALUES (1, 'F', 'Frühdienst', '05:45', '13:45', 8.0)")
     cursor.execute("INSERT INTO ShiftTypes (Id, Code, Name, StartTime, EndTime, DurationHours) VALUES (2, 'S', 'Spätdienst', '13:45', '21:45', 8.0)")
     cursor.execute("INSERT INTO ShiftTypes (Id, Code, Name, StartTime, EndTime, DurationHours) VALUES (3, 'N', 'Nachtdienst', '21:45', '05:45', 8.0)")
+    
+    # TeamShiftAssignments - Which teams can work which shifts
+    # Team Alpha and Beta can work all shifts (F, S, N)
+    for team_id in [1, 2]:
+        for shift_id in [1, 2, 3]:
+            cursor.execute("""
+                INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId, CreatedBy)
+                VALUES (?, ?, 'test')
+            """, (team_id, shift_id))
+    
+    # Team Gamma can only work late and night shifts (S, N) - NOT early shift (F)
+    for shift_id in [2, 3]:
+        cursor.execute("""
+            INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId, CreatedBy)
+            VALUES (?, ?, 'test')
+        """, (3, shift_id))
+    
+    # Team Delta is NOT assigned to any shifts (special team)
     
     # Email settings (disabled for testing)
     cursor.execute("""
@@ -337,6 +366,76 @@ def test_automatic_springer_assignment():
         return False
 
 
+def test_team_shift_assignment_requirement():
+    """Test that springer must be from a team assigned to the shift"""
+    print("\n" + "=" * 70)
+    print("TEST 6: Team-Shift Assignment Requirement")
+    print("=" * 70)
+    
+    conn = create_test_database()
+    cursor = conn.cursor()
+    
+    # Scenario: Employee 1 (Team Alpha) is absent from early shift (F)
+    # Team Alpha: assigned to F, S, N ✓
+    # Team Beta: assigned to F, S, N ✓ 
+    # Team Gamma: assigned to S, N only (NOT F) ✗
+    # Team Delta: not assigned to any shifts ✗
+    
+    target_date = date(2026, 1, 10)
+    
+    # Assign employee 1 to early shift
+    cursor.execute("""
+        INSERT INTO ShiftAssignments (EmployeeId, ShiftTypeId, Date, CreatedAt)
+        VALUES (1, 1, ?, '2026-01-01')
+    """, (target_date.isoformat(),))
+    
+    # Make all Team Alpha and Beta employees busy except one
+    for emp_id in [2, 3, 4, 5, 6, 7]:
+        cursor.execute("""
+            INSERT INTO ShiftAssignments (EmployeeId, ShiftTypeId, Date, CreatedAt)
+            VALUES (?, 1, ?, '2026-01-01')
+        """, (emp_id, target_date.isoformat(),))
+    
+    # Employee 8 (Team Beta) is free and Team Beta IS assigned to F shift
+    # Employee 9 (Team Delta) is also free but Team Delta is NOT assigned to any shift
+    
+    conn.commit()
+    
+    # Find springer for early shift (F)
+    springer = find_suitable_springer(conn, target_date, 'F', 1)
+    
+    if springer:
+        print(f"✓ Found springer: {springer['employeeName']}")
+        print(f"  Team ID: {springer['teamId']}")
+        
+        # Verify springer is from a team assigned to F shift
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM TeamShiftAssignments tsa
+            JOIN ShiftTypes st ON tsa.ShiftTypeId = st.Id
+            WHERE tsa.TeamId = ? AND st.Code = 'F'
+        """, (springer['teamId'],))
+        
+        is_assigned = cursor.fetchone()[0] > 0
+        
+        if is_assigned:
+            print(f"  ✓ Team {springer['teamId']} is assigned to F shift")
+            
+            # Ensure it's NOT from Team Delta (ID 4) which has no shift assignments
+            if springer['teamId'] != 4:
+                print(f"  ✓ Correctly excluded Team Delta (unassigned team)")
+                return True
+            else:
+                print(f"  ❌ ERROR: Should not assign from Team Delta")
+                return False
+        else:
+            print(f"  ❌ ERROR: Team {springer['teamId']} is NOT assigned to F shift")
+            return False
+    else:
+        print("❌ No springer found")
+        return False
+
+
 def run_all_tests():
     """Run all tests"""
     print("\n" + "=" * 70)
@@ -349,6 +448,7 @@ def run_all_tests():
         ("Rest Time Violation", test_rest_time_violation),
         ("Consecutive Days Limit", test_consecutive_days_limit),
         ("Automatic Assignment", test_automatic_springer_assignment),
+        ("Team-Shift Assignment", test_team_shift_assignment_requirement),
     ]
     
     results = []

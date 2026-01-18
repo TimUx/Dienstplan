@@ -124,11 +124,13 @@ class ShiftPlanningSolver:
         absences = self.planning_model.absences
         shift_types = self.planning_model.shift_types
         shift_codes = self.planning_model.shift_codes
+        weeks = self.planning_model.weeks
         
         diagnostics = {
             'total_employees': len(employees),
             'total_teams': len(teams),
             'planning_days': len(dates),
+            'planning_weeks': len(weeks),
             'total_absences': len(absences),
             'potential_issues': []
         }
@@ -197,13 +199,32 @@ class ShiftPlanningSolver:
                     f"Shift {shift_code}: Need {min_required} employees, only {eligible_employees} eligible"
                 )
         
-        # Check team sizes
+        # Check team sizes and rotation feasibility
         diagnostics['team_analysis'] = {}
+        rotation_shifts = ['F', 'N', 'S']
+        teams_in_rotation = 0
+        
         for team in teams:
             team_size = len([e for e in employees if e.team_id == team.id])
+            
+            # Check if team participates in F-N-S rotation
+            can_rotate = True
+            if team.allowed_shift_type_ids and shift_types:
+                # Check if team has all rotation shifts
+                rotation_shift_ids = []
+                for st in shift_types:
+                    if st.code in rotation_shifts:
+                        rotation_shift_ids.append(st.id)
+                
+                can_rotate = all(sid in team.allowed_shift_type_ids for sid in rotation_shift_ids)
+            
+            if can_rotate:
+                teams_in_rotation += 1
+            
             diagnostics['team_analysis'][team.name] = {
                 'size': team_size,
-                'allowed_shifts': team.allowed_shift_type_ids if team.allowed_shift_type_ids else "all"
+                'allowed_shifts': team.allowed_shift_type_ids if team.allowed_shift_type_ids else "all",
+                'participates_in_rotation': can_rotate
             }
             
             if team_size < 3:
@@ -211,11 +232,24 @@ class ShiftPlanningSolver:
                     f"Team {team.name} has only {team_size} members (may be too small for rotation)"
                 )
         
+        # Check if rotation pattern can be satisfied
+        # Need at least 3 teams for F-N-S rotation to meet all shift requirements simultaneously
+        if teams_in_rotation < 3:
+            diagnostics['potential_issues'].append(
+                f"Only {teams_in_rotation} teams can do F-N-S rotation (3 recommended for simultaneous coverage)"
+            )
+        
         # Check for excessive absences
         absence_ratio = len(absent_employees) / len(employees) if len(employees) > 0 else 0
         if absence_ratio > 0.3:
             diagnostics['potential_issues'].append(
                 f"High absence rate: {absence_ratio*100:.1f}% of employees are absent"
+            )
+        
+        # Check planning period constraints
+        if len(weeks) < 3:
+            diagnostics['potential_issues'].append(
+                f"Planning period is only {len(weeks)} week(s). Rotation pattern (F→N→S) works best with 3+ weeks."
             )
         
         return diagnostics

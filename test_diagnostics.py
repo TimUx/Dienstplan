@@ -1,5 +1,9 @@
 """
-Test the new diagnostic features for infeasibility detection.
+Test module for diagnostic features in shift planning.
+
+This module tests the diagnostic information provided when the shift planning
+solver encounters infeasible scenarios. It verifies that users receive actionable
+feedback about why planning failed.
 """
 
 from datetime import date, timedelta

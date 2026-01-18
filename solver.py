@@ -18,7 +18,8 @@ from constraints import (
     add_working_hours_constraints,
     add_td_constraints,
     add_weekly_available_employee_constraint,
-    add_fairness_objectives
+    add_fairness_objectives,
+    WEEKDAY_STAFFING
 )
 
 
@@ -135,12 +136,16 @@ class ShiftPlanningSolver:
             'potential_issues': []
         }
         
-        # Check absence impact
-        absent_employees = set()
+        # Check absence impact - optimized to avoid O(absences × dates)
+        # Build a set of (employee_id, date) tuples for all absences
+        absent_employee_dates = set()
         for absence in absences:
             for d in dates:
                 if absence.start_date <= d <= absence.end_date:
-                    absent_employees.add(absence.employee_id)
+                    absent_employee_dates.add((absence.employee_id, d))
+        
+        # Count unique employees who are absent during the planning period
+        absent_employees = set(emp_id for emp_id, _ in absent_employee_dates)
         
         available_employees = len(employees) - len(absent_employees)
         diagnostics['available_employees'] = available_employees
@@ -156,8 +161,7 @@ class ShiftPlanningSolver:
                         "max": st.max_staff_weekday
                     }
         else:
-            # Use default values
-            from constraints import WEEKDAY_STAFFING
+            # Use default values imported at module level
             staffing_weekday = WEEKDAY_STAFFING
         
         # Check staffing feasibility per shift

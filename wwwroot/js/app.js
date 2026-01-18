@@ -1325,7 +1325,14 @@ async function executePlanShifts(event) {
             alert('Sie haben keine Berechtigung, Schichten zu planen.');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Planen der Schichten: ${error.error || 'Unbekannter Fehler'}`);
+            // Check if we have detailed diagnostic information
+            if (error.details) {
+                // Show detailed error message with diagnostics
+                alert(`Fehler beim Planen der Schichten:\n\n${error.details}`);
+            } else {
+                // Fallback to simple error message
+                alert(`Fehler beim Planen der Schichten: ${error.error || 'Unbekannter Fehler'}`);
+            }
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);

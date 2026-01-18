@@ -18,7 +18,8 @@ from constraints import (
     add_working_hours_constraints,
     add_td_constraints,
     add_weekly_available_employee_constraint,
-    add_fairness_objectives
+    add_fairness_objectives,
+    WEEKDAY_STAFFING
 )
 
 
@@ -111,6 +112,152 @@ class ShiftPlanningSolver:
         
         print("All constraints added successfully!")
     
+    def diagnose_infeasibility(self) -> Dict[str, any]:
+        """
+        Diagnose potential causes of infeasibility by analyzing the model configuration.
+        
+        Returns:
+            Dictionary with diagnostic information about potential constraint violations
+        """
+        employees = self.planning_model.employees
+        teams = self.planning_model.teams
+        dates = self.planning_model.dates
+        absences = self.planning_model.absences
+        shift_types = self.planning_model.shift_types
+        shift_codes = self.planning_model.shift_codes
+        weeks = self.planning_model.weeks
+        
+        diagnostics = {
+            'total_employees': len(employees),
+            'total_teams': len(teams),
+            'planning_days': len(dates),
+            'planning_weeks': len(weeks),
+            'total_absences': len(absences),
+            'potential_issues': []
+        }
+        
+        # Check absence impact - optimized to avoid O(absences × dates)
+        # Build a set of (employee_id, date) tuples for all absences
+        absent_employee_dates = set()
+        for absence in absences:
+            for d in dates:
+                if absence.start_date <= d <= absence.end_date:
+                    absent_employee_dates.add((absence.employee_id, d))
+        
+        # Count unique employees who are absent during the planning period
+        absent_employees = set(emp_id for emp_id, _ in absent_employee_dates)
+        
+        available_employees = len(employees) - len(absent_employees)
+        diagnostics['available_employees'] = available_employees
+        diagnostics['absent_employees'] = len(absent_employees)
+        
+        # Build staffing requirements from shift_types
+        if shift_types:
+            staffing_weekday = {}
+            for st in shift_types:
+                if st.code in shift_codes:
+                    staffing_weekday[st.code] = {
+                        "min": st.min_staff_weekday,
+                        "max": st.max_staff_weekday
+                    }
+        else:
+            # Use default values imported at module level
+            staffing_weekday = WEEKDAY_STAFFING
+        
+        # Check staffing feasibility per shift
+        diagnostics['shift_analysis'] = {}
+        for shift_code in shift_codes:
+            if shift_code not in staffing_weekday:
+                continue
+            
+            min_required = staffing_weekday[shift_code]["min"]
+            
+            # Count employees in teams that can work this shift
+            eligible_employees = 0
+            for team in teams:
+                # Check if team can work this shift
+                if team.allowed_shift_type_ids:
+                    # Team has restrictions
+                    shift_type = None
+                    if shift_types:
+                        for st in shift_types:
+                            if st.code == shift_code:
+                                shift_type = st
+                                break
+                    
+                    if shift_type and shift_type.id in team.allowed_shift_type_ids:
+                        # Team can work this shift
+                        eligible_employees += len([e for e in employees if e.team_id == team.id])
+                else:
+                    # Team can work all shifts (backward compatible)
+                    eligible_employees += len([e for e in employees if e.team_id == team.id])
+            
+            diagnostics['shift_analysis'][shift_code] = {
+                'min_required': min_required,
+                'eligible_employees': eligible_employees,
+                'is_feasible': eligible_employees >= min_required
+            }
+            
+            if eligible_employees < min_required:
+                diagnostics['potential_issues'].append(
+                    f"Shift {shift_code}: Need {min_required} employees, only {eligible_employees} eligible"
+                )
+        
+        # Check team sizes and rotation feasibility
+        diagnostics['team_analysis'] = {}
+        rotation_shifts = ['F', 'N', 'S']
+        teams_in_rotation = 0
+        
+        for team in teams:
+            team_size = len([e for e in employees if e.team_id == team.id])
+            
+            # Check if team participates in F-N-S rotation
+            can_rotate = True
+            if team.allowed_shift_type_ids and shift_types:
+                # Check if team has all rotation shifts
+                rotation_shift_ids = []
+                for st in shift_types:
+                    if st.code in rotation_shifts:
+                        rotation_shift_ids.append(st.id)
+                
+                can_rotate = all(sid in team.allowed_shift_type_ids for sid in rotation_shift_ids)
+            
+            if can_rotate:
+                teams_in_rotation += 1
+            
+            diagnostics['team_analysis'][team.name] = {
+                'size': team_size,
+                'allowed_shifts': team.allowed_shift_type_ids if team.allowed_shift_type_ids else "all",
+                'participates_in_rotation': can_rotate
+            }
+            
+            if team_size < 3:
+                diagnostics['potential_issues'].append(
+                    f"Team {team.name} has only {team_size} members (may be too small for rotation)"
+                )
+        
+        # Check if rotation pattern can be satisfied
+        # Need at least 3 teams for F-N-S rotation to meet all shift requirements simultaneously
+        if teams_in_rotation < 3:
+            diagnostics['potential_issues'].append(
+                f"Only {teams_in_rotation} teams can do F-N-S rotation (3 recommended for simultaneous coverage)"
+            )
+        
+        # Check for excessive absences
+        absence_ratio = len(absent_employees) / len(employees) if len(employees) > 0 else 0
+        if absence_ratio > 0.3:
+            diagnostics['potential_issues'].append(
+                f"High absence rate: {absence_ratio*100:.1f}% of employees are absent"
+            )
+        
+        # Check planning period constraints
+        if len(weeks) < 3:
+            diagnostics['potential_issues'].append(
+                f"Planning period is only {len(weeks)} week(s). Rotation pattern (F→N→S) works best with 3+ weeks."
+            )
+        
+        return diagnostics
+    
     def solve(self) -> bool:
         """
         Solve the shift planning problem.
@@ -148,6 +295,32 @@ class ShiftPlanningSolver:
             print("✓ FEASIBLE solution found (not proven optimal)")
         elif self.status == cp_model.INFEASIBLE:
             print("✗ INFEASIBLE - No solution exists!")
+            print("\nRunning diagnostics to identify the issue...")
+            diagnostics = self.diagnose_infeasibility()
+            
+            print(f"\nModel Statistics:")
+            print(f"  - Total employees: {diagnostics['total_employees']}")
+            print(f"  - Available employees: {diagnostics['available_employees']}")
+            print(f"  - Absent employees: {diagnostics['absent_employees']}")
+            print(f"  - Planning period: {diagnostics['planning_days']} days")
+            
+            if diagnostics['potential_issues']:
+                print(f"\n⚠️  Potential Issues Detected ({len(diagnostics['potential_issues'])}):")
+                for issue in diagnostics['potential_issues']:
+                    print(f"  • {issue}")
+            
+            print(f"\nShift Staffing Analysis:")
+            for shift_code, analysis in diagnostics['shift_analysis'].items():
+                status = "✓" if analysis['is_feasible'] else "✗"
+                print(f"  {status} {shift_code}: {analysis['eligible_employees']} eligible / {analysis['min_required']} required")
+            
+            print(f"\nTeam Configuration:")
+            for team_name, info in diagnostics['team_analysis'].items():
+                allowed = info['allowed_shifts'] if isinstance(info['allowed_shifts'], str) else f"{len(info['allowed_shifts'])} specific shifts"
+                print(f"  - {team_name}: {info['size']} members, allowed shifts: {allowed}")
+            
+            # Store diagnostics for later use
+            self.diagnostics = diagnostics
             return False
         elif self.status == cp_model.MODEL_INVALID:
             print("✗ MODEL INVALID - Check constraints!")
@@ -398,6 +571,9 @@ def solve_shift_planning(
         - special_functions: dict mapping (employee_id, date) to "TD" for day duty assignments
         - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"/"TD"
                             ensuring ALL employees appear for ALL days
+    
+    Note: When None is returned (no solution found), diagnostic information is printed to stdout.
+          To get structured diagnostic data, check solver.diagnostics attribute after calling solver.solve()
     """
     solver = ShiftPlanningSolver(planning_model, time_limit_seconds, num_workers)
     solver.add_all_constraints()
@@ -405,7 +581,26 @@ def solve_shift_planning(
     if solver.solve():
         return solver.extract_solution()
     else:
+        # Diagnostics are already printed in solver.solve() when INFEASIBLE
         return None
+
+
+def get_infeasibility_diagnostics(
+    planning_model: ShiftPlanningModel
+) -> Dict[str, any]:
+    """
+    Get diagnostic information about potential infeasibility without running the solver.
+    
+    This is useful for pre-checking if a planning configuration is likely to succeed.
+    
+    Args:
+        planning_model: The shift planning model to analyze
+        
+    Returns:
+        Dictionary with diagnostic information
+    """
+    solver = ShiftPlanningSolver(planning_model, time_limit_seconds=1, num_workers=1)
+    return solver.diagnose_infeasibility()
 
 
 if __name__ == "__main__":

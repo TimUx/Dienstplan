@@ -23,7 +23,7 @@ from reportlab.lib.units import cm
 
 from data_loader import load_from_database, get_existing_assignments
 from model import create_shift_planning_model
-from solver import solve_shift_planning
+from solver import solve_shift_planning, get_infeasibility_diagnostics
 from entities import Employee, Team, Absence, AbsenceType, ShiftAssignment, VacationPeriod
 from notification_manager import (
     process_absence_for_notifications,
@@ -2618,7 +2618,46 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             result = solve_shift_planning(planning_model, time_limit_seconds=300)
             
             if not result:
-                return jsonify({'error': 'No solution found'}), 500
+                # Get diagnostic information to help user understand the issue
+                diagnostics = get_infeasibility_diagnostics(planning_model)
+                
+                # Build helpful error message
+                error_details = []
+                error_details.append(f"Planning für {start_date.strftime('%d.%m.%Y')} bis {end_date.strftime('%d.%m.%Y')} nicht möglich.")
+                error_details.append(f"Mitarbeiter: {diagnostics['available_employees']} verfügbar / {diagnostics['total_employees']} gesamt")
+                
+                if diagnostics['absent_employees'] > 0:
+                    error_details.append(f"Abwesend: {diagnostics['absent_employees']} Mitarbeiter")
+                
+                # Add specific issues
+                if diagnostics['potential_issues']:
+                    error_details.append("")
+                    error_details.append("Mögliche Probleme:")
+                    for issue in diagnostics['potential_issues'][:3]:  # Show max 3 issues
+                        error_details.append(f"• {issue}")
+                
+                # Add staffing analysis for shifts with issues
+                problem_shifts = [shift for shift, data in diagnostics['shift_analysis'].items() 
+                                 if not data['is_feasible']]
+                if problem_shifts:
+                    error_details.append("")
+                    error_details.append("Schichtbesetzung:")
+                    for shift in problem_shifts[:3]:  # Show max 3 problematic shifts
+                        data = diagnostics['shift_analysis'][shift]
+                        error_details.append(f"• {shift}: {data['eligible_employees']} verfügbar, {data['min_required']} benötigt")
+                
+                error_message = "\n".join(error_details)
+                
+                return jsonify({
+                    'error': 'No solution found',
+                    'details': error_message,
+                    'diagnostics': {
+                        'total_employees': diagnostics['total_employees'],
+                        'available_employees': diagnostics['available_employees'],
+                        'absent_employees': diagnostics['absent_employees'],
+                        'potential_issues': diagnostics['potential_issues']
+                    }
+                }), 500
             
             assignments, special_functions, complete_schedule = result
             

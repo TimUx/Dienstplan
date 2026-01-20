@@ -667,10 +667,12 @@ def add_working_hours_constraints(
                 total_hours_terms.append(conditional_days * scaled_hours)
         
         # Apply minimum hours constraint if employee has weeks without absences
-        # Total hours must be at least: weekly_working_hours × weeks_without_absences
+        # Total hours must be at least: weekly_working_hours × 4 weeks (standard month)
+        # Note: Standard month = 4 weeks regardless of actual calendar days
         if total_hours_terms and weeks_without_absences > 0:
-            # Expected total hours = weekly_target_hours × weeks_without_absences (scaled by 10)
-            expected_total_hours_scaled = int(weekly_target_hours * weeks_without_absences * 10)
+            # Expected total hours = weekly_target_hours × 4 weeks (standard month, scaled by 10)
+            # User requirement: 48h × 4 = 192h per month, not 48h × actual weeks
+            expected_total_hours_scaled = int(weekly_target_hours * 4 * 10)
             
             # Employee must work at least the expected total hours
             # This allows flexibility: can work 56h one week (7 days × 8h), less another week

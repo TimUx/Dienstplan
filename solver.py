@@ -144,12 +144,30 @@ class ShiftPlanningSolver:
                 if absence.start_date <= d <= absence.end_date:
                     absent_employee_dates.add((absence.employee_id, d))
         
-        # Count unique employees who are absent during the planning period
-        absent_employees = set(emp_id for emp_id, _ in absent_employee_dates)
+        # Count unique employees who have ANY absence during the planning period
+        employees_with_absences = set(emp_id for emp_id, _ in absent_employee_dates)
         
-        available_employees = len(employees) - len(absent_employees)
-        diagnostics['available_employees'] = available_employees
-        diagnostics['absent_employees'] = len(absent_employees)
+        # Calculate average daily absence rate (more accurate than counting employees)
+        total_employee_days = len(employees) * len(dates)
+        absent_days = len(absent_employee_dates)
+        absence_ratio = absent_days / total_employee_days if total_employee_days > 0 else 0
+        
+        # For display: count employees who are absent for a significant portion of the period
+        # (more than 50% of days)
+        significantly_absent = 0
+        for emp in employees:
+            emp_absent_days = sum(1 for emp_id, _ in absent_employee_dates if emp_id == emp.id)
+            if emp_absent_days > len(dates) / 2:
+                significantly_absent += 1
+        
+        diagnostics['available_employees'] = len(employees)  # All employees are "available" in the system
+        diagnostics['employees_with_absences'] = len(employees_with_absences)
+        diagnostics['significantly_absent_employees'] = significantly_absent
+        diagnostics['total_absence_days'] = absent_days
+        diagnostics['absence_ratio'] = absence_ratio
+        
+        # Keep for backward compatibility
+        diagnostics['absent_employees'] = len(employees_with_absences)
         
         # Build staffing requirements from shift_types
         if shift_types:
@@ -200,7 +218,7 @@ class ShiftPlanningSolver:
             
             if eligible_employees < min_required:
                 diagnostics['potential_issues'].append(
-                    f"Shift {shift_code}: Need {min_required} employees, only {eligible_employees} eligible"
+                    f"Schicht {shift_code}: Benötigt {min_required} Mitarbeiter, nur {eligible_employees} verfügbar"
                 )
         
         # Check team sizes and rotation feasibility
@@ -233,27 +251,26 @@ class ShiftPlanningSolver:
             
             if team_size < 3:
                 diagnostics['potential_issues'].append(
-                    f"Team {team.name} has only {team_size} members (may be too small for rotation)"
+                    f"Team {team.name} hat nur {team_size} Mitglieder (möglicherweise zu klein für Rotation)"
                 )
         
         # Check if rotation pattern can be satisfied
         # Need at least 3 teams for F-N-S rotation to meet all shift requirements simultaneously
         if teams_in_rotation < 3:
             diagnostics['potential_issues'].append(
-                f"Only {teams_in_rotation} teams can do F-N-S rotation (3 recommended for simultaneous coverage)"
+                f"Nur {teams_in_rotation} Teams können F-N-S-Rotation durchführen (3 empfohlen für gleichzeitige Abdeckung)"
             )
         
         # Check for excessive absences
-        absence_ratio = len(absent_employees) / len(employees) if len(employees) > 0 else 0
         if absence_ratio > 0.3:
             diagnostics['potential_issues'].append(
-                f"High absence rate: {absence_ratio*100:.1f}% of employees are absent"
+                f"Hohe Abwesenheitsrate: {absence_ratio*100:.1f}% aller Mitarbeitertage sind durch Abwesenheiten belegt"
             )
         
         # Check planning period constraints
         if len(weeks) < 3:
             diagnostics['potential_issues'].append(
-                f"Planning period is only {len(weeks)} week(s). Rotation pattern (F→N→S) works best with 3+ weeks."
+                f"Planungszeitraum ist nur {len(weeks)} Woche(n). Rotationsmuster (F→N→S) funktioniert am besten mit 3+ Wochen."
             )
         
         return diagnostics

@@ -201,8 +201,23 @@ def load_from_database(db_path: str = "dienstplan.db"):
         team_shift_assignments[team_id].append(shift_type_id)
     
     # Assign allowed shift types to teams
+    # IMPORTANT: If a team has no TeamShiftAssignments configured, automatically assign F, S, N
+    # to enable standard rotation. This prevents INFEASIBLE issues where teams can't work
+    # any of the required shifts (F, S, N).
     for team in teams:
         team.allowed_shift_type_ids = team_shift_assignments.get(team.id, [])
+        
+        # Auto-assign F, S, N to teams with empty configuration (backward compatibility)
+        if not team.allowed_shift_type_ids and not team.is_virtual:
+            # Find F, S, N shift type IDs from loaded shift types
+            f_id = next((st.id for st in shift_types if st.code == "F"), None)
+            s_id = next((st.id for st in shift_types if st.code == "S"), None)
+            n_id = next((st.id for st in shift_types if st.code == "N"), None)
+            
+            # Only assign if all three shifts exist
+            if f_id and s_id and n_id:
+                team.allowed_shift_type_ids = [f_id, s_id, n_id]
+                print(f"  Auto-assigned F, S, N shifts to {team.name} (no TeamShiftAssignments found)")
     
     # Load employees
     cursor.execute("""

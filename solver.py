@@ -112,10 +112,15 @@ class ShiftPlanningSolver:
         # add_weekly_available_employee_constraint(model, employee_active, employee_weekend_shift, employees, teams, weeks)
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
-        print("  - Fairness objectives (per-employee, including block scheduling)")
-        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, 
-                                                  employee_cross_team_shift, employee_cross_team_weekend, 
-                                                  td_vars, employees, teams, dates, weeks, shift_codes)
+        print("  - Fairness objectives (per-employee, year-long, including block scheduling)")
+        objective_terms = add_fairness_objectives(
+            model, employee_active, employee_weekend_shift, team_shift, 
+            employee_cross_team_shift, employee_cross_team_weekend, 
+            td_vars, employees, teams, dates, weeks, shift_codes,
+            self.planning_model.ytd_weekend_counts,
+            self.planning_model.ytd_night_counts,
+            self.planning_model.ytd_holiday_counts
+        )
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

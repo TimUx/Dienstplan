@@ -30,7 +30,10 @@ class ShiftPlanningModel:
         locked_team_shift: Dict[Tuple[int, int], str] = None,
         locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
         locked_td: Dict[Tuple[int, int], bool] = None,
-        locked_absence: Dict[Tuple[int, date], str] = None
+        locked_absence: Dict[Tuple[int, date], str] = None,
+        ytd_weekend_counts: Dict[int, int] = None,
+        ytd_night_counts: Dict[int, int] = None,
+        ytd_holiday_counts: Dict[int, int] = None
     ):
         """
         Initialize the shift planning model.
@@ -46,11 +49,19 @@ class ShiftPlanningModel:
             locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
             locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
             locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
+            ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year (for fairness)
+            ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year (for fairness)
+            ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year (for fairness)
         
         Note on key structures:
         - locked_td uses week_idx because TD is a weekly assignment (Mon-Fri)
         - locked_absence uses date because absences are daily (can span partial weeks)
         - This difference reflects the granularity of the underlying business logic
+        
+        Note on YTD statistics:
+        - These should be loaded from the database for the current year
+        - Used to ensure fairness across the ENTIRE YEAR, not just the current planning period
+        - If not provided, defaults to empty dicts (assumes no prior history this year)
         """
         self.model = cp_model.CpModel()
         self.employees = employees
@@ -63,6 +74,13 @@ class ShiftPlanningModel:
         # Manual overrides (locked assignments)
         self.locked_team_shift = locked_team_shift or {}
         self.locked_employee_weekend = locked_employee_weekend or {}
+        self.locked_td = locked_td or {}
+        self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
+        
+        # Year-to-date statistics for fairness tracking
+        self.ytd_weekend_counts = ytd_weekend_counts or {}
+        self.ytd_night_counts = ytd_night_counts or {}
+        self.ytd_holiday_counts = ytd_holiday_counts or {}
         self.locked_td = locked_td or {}
         self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
         

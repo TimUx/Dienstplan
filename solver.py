@@ -131,7 +131,7 @@ class ShiftPlanningSolver:
             'total_employees': len(employees),
             'total_teams': len(teams),
             'planning_days': len(dates),
-            'planning_weeks': len(weeks),
+            'planning_weeks': len(dates) / 7.0,  # Actual weeks, not calendar weeks
             'total_absences': len(absences),
             'potential_issues': []
         }
@@ -269,9 +269,10 @@ class ShiftPlanningSolver:
             )
         
         # Check planning period constraints
-        if len(weeks) < 3:
+        actual_weeks = len(dates) / 7.0
+        if actual_weeks < 3:
             diagnostics['potential_issues'].append(
-                f"Planungszeitraum ist nur {len(weeks)} Woche(n). Rotationsmuster (F→N→S) funktioniert am besten mit 3+ Wochen."
+                f"Planungszeitraum ist nur {actual_weeks:.1f} Woche(n). Rotationsmuster (F→N→S) funktioniert am besten mit 3+ Wochen."
             )
         
         # Additional feasibility checks based on working hours and constraints

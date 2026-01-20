@@ -2628,7 +2628,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 error_details.append("GRUNDINFORMATIONEN:")
                 error_details.append(f"• Mitarbeiter gesamt: {diagnostics['total_employees']}")
                 error_details.append(f"• Teams: {diagnostics['total_teams']}")
-                error_details.append(f"• Planungszeitraum: {diagnostics['planning_days']} Tage ({diagnostics['planning_weeks']} Wochen)")
+                error_details.append(f"• Planungszeitraum: {diagnostics['planning_days']} Tage ({diagnostics['planning_weeks']:.1f} Wochen)")
                 
                 if diagnostics['employees_with_absences'] > 0:
                     error_details.append(f"• Mitarbeiter mit Abwesenheiten: {diagnostics['employees_with_absences']}")

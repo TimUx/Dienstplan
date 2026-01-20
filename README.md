@@ -76,6 +76,11 @@ Schichttypen werden flexibel durch die **Schichtverwaltung im Admin-Bereich** ko
 ### Schichtbesetzung
 Besetzungsanforderungen werden über die **Schichtverwaltung im Admin-Bereich** konfiguriert. Jede Schicht kann individuelle Mindest- und Maximalbesetzungen für verschiedene Wochentage definieren.
 
+**Aktuelle Standard-Besetzung:**
+- **Früh (F)**: Min 4, **Max 8** (erhöht für flexiblere Teamübergreifende Besetzung)
+- **Spät (S)**: Min 3, **Max 7** (erhöht für flexiblere Teamübergreifende Besetzung)
+- **Nacht (N)**: Min 3, Max 3 (unverändert)
+
 ### Automatische Schichtplanung mit OR-Tools
 Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplanung und beachtet folgende Regeln:
 
@@ -83,22 +88,29 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 - ✅ Nur 1 Schicht pro Mitarbeiter und Tag
 - ✅ Keine Arbeit während Abwesenheit
 - ✅ Mindestbesetzung für alle Schichten
-- 🚫 Verbotene Wechsel: Spät → Früh, Nacht → Früh
-- ⏰ Gesetzliche Ruhezeiten (11 Stunden Minimum)
-- 📊 Maximal 6 aufeinanderfolgende Schichten
+- ✅ **Teamübergreifende Besetzung möglich** wenn Mitarbeiter ihre Sollstunden im eigenen Team nicht erreichen können
+  - Nur Schichten erlaubt, die dem Team zugewiesen sind
+  - Keine Sonderschichten (z.B. BMT/BSB) teamübergreifend
+- 🚫 Verbotene Wechsel: Spät → Früh, Nacht → Früh (auch teamübergreifend)
+- ⏰ Gesetzliche Ruhezeiten (11 Stunden Minimum, auch teamübergreifend)
+- 📊 Maximal 6 aufeinanderfolgende Schichten (inkl. teamübergreifend)
 - 🌙 Maximal 5 aufeinanderfolgende Nachtschichten
 - ⏱️ Dynamische Arbeitszeitgrenzen basierend auf Schichtkonfiguration
   - Wöchentliche Arbeitszeit: aus Schicht-Definition (z.B. 40 oder 48h)
   - Monatliche Arbeitszeit: Wöchentliche Arbeitszeit × 4
-- 🔧 Jede Woche mindestens 1 Mitarbeiter aus Schicht-Teams komplett frei für dynamische Vertretung
+  - Teamübergreifende Stunden zählen zu den Gesamtstunden
 - 🎯 1 BMT (Brandmeldetechniker) pro Werktag
 - 🎯 1 BSB (Brandschutzbeauftragter) pro Werktag
 
 **Weiche Constraints (werden optimiert):**
-- ⚖️ Gleichmäßige Schichtverteilung über alle Mitarbeiter
+- ⚖️ **Jahresweite faire Verteilung** von Schichten, Wochenenden und Nachtdiensten
+  - Fairness wird über das gesamte Jahr verfolgt, nicht nur pro Monat
+  - Vergleich zwischen allen Mitarbeitern mit gleichen Schichtmöglichkeiten (teamübergreifend)
+- 📅 **Block-Scheduling**: Arbeitstage werden geblockt, Lücken minimiert
+- 🏢 Eigene Team-Schichten werden bevorzugt (teamübergreifend nur wenn nötig)
 - 🔄 Bevorzugter Rhythmus: Früh → Nacht → Spät
-- 📊 Faire Workload-Verteilung
-- 🏖️ Faire Wochenendverteilung innerhalb jedes Teams (hohe Priorität)
+- 📊 Faire Workload-Verteilung pro Mitarbeiter
+- 🏖️ Faire Wochenendverteilung über alle Mitarbeiter (jahresweit)
 
 ### Dashboard & Statistiken
 - 📊 Arbeitsstunden pro Mitarbeiter

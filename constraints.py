@@ -583,31 +583,24 @@ def add_working_hours_constraints(
                 max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), DEFAULT_WEEKLY_HOURS) * 10)
                 model.Add(sum(hours_terms) <= max_scaled_hours)
     
-    # REMOVED: Minimum working hours constraint
-    # This constraint was causing INFEASIBLE status because it required ALL employees
-    # to work minimum hours, but staffing constraints don't require all employees to work.
+    # MINIMUM working hours constraint across the planning period
     # 
-    # Example problem:
-    # - Team has 5 employees, staffing requires 3 per shift
-    # - Minimum hours constraint forces all 5 to work 48h/week
-    # - Staffing only allows 3 to work, so 2 can't reach minimum hours
-    # - Result: INFEASIBLE
+    # Business requirement (per @TimUx):
+    # - Employees who work MUST reach their monthly minimum hours (e.g., 192h for 48h/week)
+    # - Hours can vary per week (e.g., 56h one week, less another week)
+    # - Only absences (sick, vacation, training) exempt employees from this requirement
     # 
-    # The constraint is not needed because:
-    # 1. Employees who work will naturally work close to their target hours due to:
-    #    - Team rotation (works same shift all week)
-    #    - Fairness objectives (balances workload)
-    #    - Maximum consecutive shifts (prevents overwork)
-    # 2. Employees who don't work much (reserve capacity) provide flexibility
-    # 3. Validation can flag if hours are significantly under target
+    # New requirement:
+    # - Shift hours come from shift settings (ShiftType.hours)
+    # - Weekly hours come from shift settings (ShiftType.weekly_working_hours)
+    # - Monthly hours = weekly_working_hours × number of weeks without absences
     # 
-    # If minimum hours enforcement is needed, it should be:
-    # - A SOFT constraint in fairness objectives, OR
-    # - Applied only to employees who actually work (not a global requirement), OR
-    # - Configurable per employee/team based on contract requirements
-    # 
-    # For now, we rely on maximum hours constraint + fairness objectives to
-    # distribute work appropriately.
+    # TEMPORARY: Disabled minimum hours constraint to fix INFEASIBLE issue
+    # The constraint needs to be redesigned to work with variable team sizes and staffing requirements
+    # For now, we rely on:
+    # - Maximum hours constraint (prevents overwork)
+    # - Fairness objectives (distributes work evenly)
+    # - Staffing requirements (ensures minimum coverage)
     pass
 
 

@@ -35,7 +35,9 @@ def test_no_double_shifts():
     start = date(2025, 1, 6)  # Monday
     end = start + timedelta(days=27)  # 4 weeks (28 days)
     
-    # Configure shifts to 48h/week to encourage cross-team assignments
+    # Configure shifts to 48h/week
+    # This configuration requires employees to work 6 days per week (48h ÷ 8h/day = 6 days)
+    # which encourages cross-team assignments to help meet the higher weekly hour requirement
     shift_types_48h = [
         ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 48.0),
         ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 48.0),
@@ -140,7 +142,9 @@ def test_weekend_double_shifts_prevented():
     start = date(2025, 1, 6)  # Monday
     end = start + timedelta(days=13)  # 2 weeks
     
-    # Configure shifts to 48h/week to encourage cross-team assignments
+    # Configure shifts to 48h/week
+    # This configuration requires employees to work 6 days per week (48h ÷ 8h/day = 6 days)
+    # which encourages cross-team assignments to help meet the higher weekly hour requirement
     shift_types_48h = [
         ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 48.0),
         ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 48.0),

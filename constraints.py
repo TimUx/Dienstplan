@@ -214,9 +214,11 @@ def add_employee_team_linkage_constraints(
     - ALL rest time and transition rules apply to cross-team assignments
     """
     
-    # Set defaults if not provided
-    employee_weekend_shift = employee_weekend_shift or {}
-    employee_cross_team_weekend = employee_cross_team_weekend or {}
+    # Provide empty dicts if weekend variables not passed (backward compatibility)
+    if employee_weekend_shift is None:
+        employee_weekend_shift = {}
+    if employee_cross_team_weekend is None:
+        employee_cross_team_weekend = {}
     
     # For each employee
     for emp in employees:
@@ -277,7 +279,8 @@ def add_employee_team_linkage_constraints(
                     if len(all_shifts) > 1:
                         model.Add(sum(all_shifts) <= 1)
             
-            elif d.weekday() >= 5:  # Weekend - CRITICAL FIX: Also prevent double shifts on weekends
+            elif d.weekday() >= 5:  # Weekend - ensure single shift per day constraint
+                # Weekend employees should not be assigned both their team shift AND cross-team shift
                 if (emp.id, d) in employee_weekend_shift:
                     # Collect all possible shifts for this day
                     all_shifts = [employee_weekend_shift[(emp.id, d)]]

@@ -76,7 +76,7 @@ class ShiftPlanningSolver:
         add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
-        add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences)
+        add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences, employee_weekend_shift, employee_cross_team_weekend)
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift, including cross-team)")
@@ -685,6 +685,143 @@ class ShiftPlanningSolver:
         
         return assignments, special_functions, complete_schedule
     
+    def print_planning_summary(
+        self,
+        assignments: List[ShiftAssignment],
+        special_functions: Dict[Tuple[int, date], str],
+        complete_schedule: Dict[Tuple[int, date], str]
+    ):
+        """
+        Print a comprehensive summary of the planning results.
+        
+        Shows:
+        - Planning period details (days, weeks)
+        - Shift distribution per shift type
+        - Required monthly working hours per employee
+        - Actual hours worked per employee
+        """
+        if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            return
+        
+        from collections import defaultdict
+        from datetime import timedelta
+        
+        employees = self.planning_model.employees
+        dates = self.planning_model.dates
+        weeks = self.planning_model.weeks
+        shift_types = self.planning_model.shift_types
+        absences = self.planning_model.absences
+        
+        print("\n" + "=" * 80)
+        print("SCHICHTPLAN ZUSAMMENFASSUNG (PLANNING SUMMARY)")
+        print("=" * 80)
+        
+        # Planning period details
+        start_date = dates[0]
+        end_date = dates[-1]
+        total_days = len(dates)
+        total_weeks = len(weeks)
+        
+        # Determine month name from start date
+        month_names = ["Januar", "Februar", "März", "April", "Mai", "Juni", 
+                      "Juli", "August", "September", "Oktober", "November", "Dezember"]
+        month_name = month_names[start_date.month - 1]
+        
+        print(f"\nPlanungszeitraum:")
+        print(f"  Von: {start_date.strftime('%d.%m.%Y')} ({start_date.strftime('%A')})")
+        print(f"  Bis: {end_date.strftime('%d.%m.%Y')} ({end_date.strftime('%A')})")
+        print(f"  Tage im Planungszeitraum: {total_days}")
+        print(f"  Wochen im Planungszeitraum: {total_weeks}")
+        print(f"  Monat: {month_name} {start_date.year}")
+        
+        # Count shifts per shift type
+        shift_counts = defaultdict(int)
+        for assignment in assignments:
+            shift_type = get_shift_type_by_id(assignment.shift_type_id)
+            if shift_type:
+                shift_counts[shift_type.code] += 1
+        
+        print(f"\nAnzahl Schichten je Schichtart:")
+        for shift_code in sorted(shift_counts.keys()):
+            count = shift_counts[shift_code]
+            shift_type = next((st for st in shift_types if st.code == shift_code), None)
+            shift_name = shift_type.name if shift_type else shift_code
+            print(f"  {shift_code} ({shift_name}): {count} Schichten")
+        
+        # Count TD assignments
+        td_count = len(set(emp_id for (emp_id, d), func in special_functions.items() if func == "TD"))
+        if td_count > 0:
+            print(f"  TD (Tagdienst): {td_count} Zuweisungen über {total_weeks} Wochen")
+        
+        # Calculate required and actual hours per employee
+        print(f"\nMonatliche Arbeitsstunden je Mitarbeiter:")
+        print(f"  {'Mitarbeiter':<30} {'Soll (h)':<12} {'Ist (h)':<12} {'Differenz':<12} {'Tage':<8}")
+        print(f"  {'-' * 74}")
+        
+        emp_hours = {}
+        emp_days = {}
+        
+        for assignment in assignments:
+            emp_id = assignment.employee_id
+            shift_type = get_shift_type_by_id(assignment.shift_type_id)
+            
+            if emp_id not in emp_hours:
+                emp_hours[emp_id] = 0
+                emp_days[emp_id] = set()
+            
+            emp_hours[emp_id] += shift_type.hours
+            emp_days[emp_id].add(assignment.date)
+        
+        # Calculate required hours for each employee
+        for emp in sorted(employees, key=lambda e: e.full_name):
+            if not emp.team_id:
+                continue  # Skip employees without teams
+            
+            # Find employee's shift type to get weekly working hours
+            weekly_hours = 40.0  # Default
+            if shift_types:
+                # Use first shift type as default
+                for st in shift_types:
+                    if st.code in ['F', 'S', 'N']:
+                        weekly_hours = st.weekly_working_hours
+                        break
+            
+            # Count days without absence for this employee
+            days_without_absence = 0
+            for d in dates:
+                is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) 
+                              for abs in absences)
+                if not is_absent:
+                    days_without_absence += 1
+            
+            # Calculate required hours: (weekly_hours / 7) × days_without_absence
+            required_hours = (weekly_hours / 7.0) * days_without_absence
+            
+            # Get actual hours
+            actual_hours = emp_hours.get(emp.id, 0)
+            actual_days = len(emp_days.get(emp.id, set()))
+            
+            # Calculate difference
+            diff = actual_hours - required_hours
+            diff_str = f"+{diff:.1f}" if diff >= 0 else f"{diff:.1f}"
+            
+            # Only show employees with hours
+            if actual_hours > 0 or days_without_absence > 0:
+                print(f"  {emp.full_name:<30} {required_hours:>10.1f}h  {actual_hours:>10.1f}h  {diff_str:>10}h  {actual_days:>6}")
+        
+        # Summary statistics
+        total_assignments = len(assignments)
+        total_employees_working = len(emp_hours)
+        
+        print(f"\nGesamtstatistik:")
+        print(f"  Gesamtanzahl Schichtzuweisungen: {total_assignments}")
+        print(f"  Anzahl arbeitender Mitarbeiter: {total_employees_working}/{len([e for e in employees if e.team_id])}")
+        
+        avg_hours = sum(emp_hours.values()) / len(emp_hours) if emp_hours else 0
+        print(f"  Durchschnittliche Stunden pro Mitarbeiter: {avg_hours:.1f}h")
+        
+        print("=" * 80)
+    
     def get_statistics(self) -> Dict[str, any]:
         """
         Get solution statistics.
@@ -732,7 +869,13 @@ def solve_shift_planning(
     solver.add_all_constraints()
     
     if solver.solve():
-        return solver.extract_solution()
+        result = solver.extract_solution()
+        assignments, special_functions, complete_schedule = result
+        
+        # Print comprehensive planning summary
+        solver.print_planning_summary(assignments, special_functions, complete_schedule)
+        
+        return result
     else:
         # Diagnostics are already printed in solver.solve() when INFEASIBLE
         return None

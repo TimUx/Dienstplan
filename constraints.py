@@ -200,7 +200,9 @@ def add_employee_team_linkage_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    absences: List[Absence]
+    absences: List[Absence],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar] = None,
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar] = None
 ):
     """
     HARD CONSTRAINT: Link employee_active to team shifts and enforce cross-team rules.
@@ -211,6 +213,12 @@ def add_employee_team_linkage_constraints(
     - Cross-team workers must have at most ONE shift per day
     - ALL rest time and transition rules apply to cross-team assignments
     """
+    
+    # Provide empty dicts if weekend variables not passed (backward compatibility)
+    if employee_weekend_shift is None:
+        employee_weekend_shift = {}
+    if employee_cross_team_weekend is None:
+        employee_cross_team_weekend = {}
     
     # For each employee
     for emp in employees:
@@ -241,10 +249,19 @@ def add_employee_team_linkage_constraints(
                 if (emp.id, d) in employee_active:
                     model.Add(employee_active[(emp.id, d)] == 0)
                 
-                # Also force all cross-team variables to 0
+                # Force weekend work to 0 if absent
+                if (emp.id, d) in employee_weekend_shift:
+                    model.Add(employee_weekend_shift[(emp.id, d)] == 0)
+                
+                # Also force all cross-team variables to 0 (weekday)
                 for shift_code in shift_codes:
                     if (emp.id, d, shift_code) in employee_cross_team_shift:
                         model.Add(employee_cross_team_shift[(emp.id, d, shift_code)] == 0)
+                
+                # Also force all cross-team weekend variables to 0 (weekend)
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        model.Add(employee_cross_team_weekend[(emp.id, d, shift_code)] == 0)
             
             # CRITICAL: Employee can work at most ONE shift per day
             # Either their team's shift OR one cross-team shift, but not both
@@ -257,6 +274,21 @@ def add_employee_team_linkage_constraints(
                     for shift_code in shift_codes:
                         if (emp.id, d, shift_code) in employee_cross_team_shift:
                             all_shifts.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    
+                    # At most one shift active per day
+                    if len(all_shifts) > 1:
+                        model.Add(sum(all_shifts) <= 1)
+            
+            elif d.weekday() >= 5:  # Weekend - ensure single shift per day constraint
+                # Weekend employees should not be assigned both their team shift AND cross-team shift
+                if (emp.id, d) in employee_weekend_shift:
+                    # Collect all possible shifts for this day
+                    all_shifts = [employee_weekend_shift[(emp.id, d)]]
+                    
+                    # Add all cross-team weekend shift possibilities
+                    for shift_code in shift_codes:
+                        if (emp.id, d, shift_code) in employee_cross_team_weekend:
+                            all_shifts.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
                     
                     # At most one shift active per day
                     if len(all_shifts) > 1:
@@ -901,12 +933,21 @@ def add_working_hours_constraints(
                     total_hours_terms.append(cross_days_count * scaled_hours)
         
         # Apply minimum hours constraint if employee has weeks without absences
-        # Total hours must be at least: weekly_working_hours × 4 weeks (standard month)
-        # Note: Standard month = 4 weeks regardless of actual calendar days
+        # Total hours calculated dynamically based on actual calendar days in planning period
+        # Formula: weekly_working_hours ÷ 7 days × total_days_without_absence
+        # Example: 48h/week ÷ 7 × 31 days (January) = 212.57h ≈ 213h
+        # Example: 48h/week ÷ 7 × 28 days (February) = 192h
         if total_hours_terms and weeks_without_absences > 0:
-            # Expected total hours = weekly_target_hours × 4 weeks (standard month, scaled by 10)
-            # User requirement: 48h × 4 = 192h per month, not 48h × actual weeks
-            expected_total_hours_scaled = int(weekly_target_hours * 4 * 10)
+            # Count total days without absence for this employee
+            total_days_without_absence = sum(len(week_dates) for week_idx, week_dates in enumerate(weeks)
+                                             if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
+                                                           for abs in absences) for d in week_dates))
+            
+            # Calculate expected hours based on actual calendar days
+            # Formula: (weekly_target_hours / 7) × total_days_without_absence
+            # Scaled by 10 for precision
+            daily_target_hours = weekly_target_hours / 7.0
+            expected_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
             
             # Employee must work at least the expected total hours
             # This allows flexibility: can work 56h one week (7 days × 8h), less another week

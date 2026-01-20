@@ -310,7 +310,8 @@ def test_staffing_requirements():
             staffing_by_day[date_val][shift_type.code] += 1
     
     # Check minimum requirements
-    # Weekdays: F: 4-5, S: 3-4, N: 3
+    # NOTE: These values match STANDARD_SHIFT_TYPES in entities.py
+    # Weekdays: F: 3-5, S: 3-5, N: 3
     # Weekends: All: 2-3
     
     violations = 0
@@ -322,11 +323,12 @@ def test_staffing_requirements():
                     print(f"❌ {date_val} ({shift_code}): {count} staff (expected 2-3)")
                     violations += 1
             else:
-                if shift_code == 'F' and (count < 4 or count > 5):
-                    print(f"❌ {date_val} ({shift_code}): {count} staff (expected 4-5)")
+                # Use values from STANDARD_SHIFT_TYPES: F=3-5, S=3-5, N=3
+                if shift_code == 'F' and (count < 3 or count > 5):
+                    print(f"❌ {date_val} ({shift_code}): {count} staff (expected 3-5)")
                     violations += 1
-                elif shift_code == 'S' and (count < 3 or count > 4):
-                    print(f"❌ {date_val} ({shift_code}): {count} staff (expected 3-4)")
+                elif shift_code == 'S' and (count < 3 or count > 5):
+                    print(f"❌ {date_val} ({shift_code}): {count} staff (expected 3-5)")
                     violations += 1
                 elif shift_code == 'N' and count != 3:
                     print(f"❌ {date_val} ({shift_code}): {count} staff (expected 3)")

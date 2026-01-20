@@ -1190,15 +1190,14 @@ def add_fairness_objectives(
                     # No variables for this day - employee cannot work
                     working_vars.append(0)
             
-            if len(working_vars) == 3 and any(isinstance(v, cp_model.IntVar) for v in working_vars):
+            if len(working_vars) == 3 and all(isinstance(v, cp_model.IntVar) for v in working_vars):
                 # Detect gap: day1=1, day2=0, day3=1
                 # Penalize: working_vars[0] + working_vars[2] - working_vars[1] >= 2 means gap exists
                 gap_penalty = model.NewIntVar(0, 3, f"gap_penalty_emp{emp.id}_{i}")
-                if all(isinstance(v, cp_model.IntVar) for v in working_vars):
-                    model.Add(gap_penalty == working_vars[0] + working_vars[2] - working_vars[1])
-                    # If gap_penalty == 2, that's a gap (work-off-work)
-                    # We penalize gaps with weight 3
-                    objective_terms.append(gap_penalty * 3)
+                model.Add(gap_penalty == working_vars[0] + working_vars[2] - working_vars[1])
+                # If gap_penalty == 2, that's a gap (work-off-work)
+                # We penalize gaps with weight 3
+                objective_terms.append(gap_penalty * 3)
     
     # 2. PREFER OWN TEAM SHIFTS OVER CROSS-TEAM
     # Add small penalty for cross-team assignments

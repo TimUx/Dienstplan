@@ -81,8 +81,6 @@ class ShiftPlanningModel:
         self.ytd_weekend_counts = ytd_weekend_counts or {}
         self.ytd_night_counts = ytd_night_counts or {}
         self.ytd_holiday_counts = ytd_holiday_counts or {}
-        self.locked_td = locked_td or {}
-        self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
         
         # Generate list of dates
         self.dates = []

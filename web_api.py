@@ -2621,41 +2621,57 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 # Get diagnostic information to help user understand the issue
                 diagnostics = get_infeasibility_diagnostics(planning_model)
                 
-                # Build helpful error message
+                # Build helpful error message with root cause analysis
                 error_details = []
-                error_details.append(f"Planning für {start_date.strftime('%d.%m.%Y')} bis {end_date.strftime('%d.%m.%Y')} nicht möglich.")
-                error_details.append(f"Mitarbeiter: {diagnostics['available_employees']} verfügbar / {diagnostics['total_employees']} gesamt")
+                error_details.append(f"Planung für {start_date.strftime('%d.%m.%Y')} bis {end_date.strftime('%d.%m.%Y')} nicht möglich.")
+                error_details.append("")
+                error_details.append("GRUNDINFORMATIONEN:")
+                error_details.append(f"• Mitarbeiter gesamt: {diagnostics['total_employees']}")
+                error_details.append(f"• Teams: {diagnostics['total_teams']}")
+                error_details.append(f"• Planungszeitraum: {diagnostics['planning_days']} Tage ({diagnostics['planning_weeks']} Wochen)")
                 
-                if diagnostics['absent_employees'] > 0:
-                    error_details.append(f"Abwesend: {diagnostics['absent_employees']} Mitarbeiter")
+                if diagnostics['employees_with_absences'] > 0:
+                    error_details.append(f"• Mitarbeiter mit Abwesenheiten: {diagnostics['employees_with_absences']}")
+                    error_details.append(f"• Abwesenheitstage gesamt: {diagnostics['total_absence_days']} von {diagnostics['total_employees'] * diagnostics['planning_days']} ({diagnostics['absence_ratio']*100:.1f}%)")
                 
-                # Add specific issues
+                # Add specific issues - these are the root causes
                 if diagnostics['potential_issues']:
                     error_details.append("")
-                    error_details.append("Mögliche Probleme:")
-                    for issue in diagnostics['potential_issues'][:3]:  # Show max 3 issues
-                        error_details.append(f"• {issue}")
+                    error_details.append("URSACHEN (Warum die Planung nicht möglich ist):")
+                    for i, issue in enumerate(diagnostics['potential_issues'], 1):
+                        error_details.append(f"{i}. {issue}")
+                else:
+                    error_details.append("")
+                    error_details.append("URSACHE:")
+                    error_details.append("Die genaue Ursache konnte nicht automatisch ermittelt werden.")
+                    error_details.append("Mögliche Gründe:")
+                    error_details.append("• Zu viele Abwesenheiten im Planungszeitraum")
+                    error_details.append("• Zu wenige Mitarbeiter für die erforderliche Schichtbesetzung")
+                    error_details.append("• Konflikte zwischen Ruhezeiten und Schichtzuweisungen")
+                    error_details.append("• Teams sind zu klein für die Rotationsanforderungen")
                 
                 # Add staffing analysis for shifts with issues
                 problem_shifts = [shift for shift, data in diagnostics['shift_analysis'].items() 
                                  if not data['is_feasible']]
                 if problem_shifts:
                     error_details.append("")
-                    error_details.append("Schichtbesetzung:")
-                    for shift in problem_shifts[:3]:  # Show max 3 problematic shifts
+                    error_details.append("SCHICHTBESETZUNGSPROBLEME:")
+                    for shift in problem_shifts:
                         data = diagnostics['shift_analysis'][shift]
-                        error_details.append(f"• {shift}: {data['eligible_employees']} verfügbar, {data['min_required']} benötigt")
+                        error_details.append(f"• Schicht {shift}: Nur {data['eligible_employees']} Mitarbeiter verfügbar, aber {data['min_required']} erforderlich")
                 
                 error_message = "\n".join(error_details)
                 
                 return jsonify({
-                    'error': 'No solution found',
+                    'error': 'Planung fehlgeschlagen',
                     'details': error_message,
                     'diagnostics': {
                         'total_employees': diagnostics['total_employees'],
-                        'available_employees': diagnostics['available_employees'],
-                        'absent_employees': diagnostics['absent_employees'],
-                        'potential_issues': diagnostics['potential_issues']
+                        'available_employees': diagnostics['available_employees'],  # Deprecated: same as total_employees
+                        'employees_with_absences': diagnostics['employees_with_absences'],
+                        'absent_employees': diagnostics['absent_employees'],  # Deprecated: same as employees_with_absences (kept for backward compatibility)
+                        'potential_issues': diagnostics['potential_issues'],
+                        'shift_analysis': diagnostics.get('shift_analysis', {})
                     }
                 }), 500
             

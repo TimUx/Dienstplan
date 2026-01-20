@@ -2667,9 +2667,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'details': error_message,
                     'diagnostics': {
                         'total_employees': diagnostics['total_employees'],
-                        'available_employees': diagnostics['available_employees'],
+                        'available_employees': diagnostics['available_employees'],  # Deprecated: same as total_employees
                         'employees_with_absences': diagnostics['employees_with_absences'],
-                        'absent_employees': diagnostics['absent_employees'],
+                        'absent_employees': diagnostics['absent_employees'],  # Deprecated: same as employees_with_absences (kept for backward compatibility)
                         'potential_issues': diagnostics['potential_issues'],
                         'shift_analysis': diagnostics.get('shift_analysis', {})
                     }

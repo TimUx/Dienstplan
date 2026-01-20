@@ -153,20 +153,21 @@ class ShiftPlanningSolver:
         absence_ratio = absent_days / total_employee_days if total_employee_days > 0 else 0
         
         # For display: count employees who are absent for a significant portion of the period
-        # (more than 50% of days)
-        significantly_absent = 0
-        for emp in employees:
-            emp_absent_days = sum(1 for emp_id, _ in absent_employee_dates if emp_id == emp.id)
-            if emp_absent_days > len(dates) / 2:
-                significantly_absent += 1
+        # (more than 50% of days). Group by employee_id for better performance.
+        employee_absence_counts = {}
+        for emp_id, _ in absent_employee_dates:
+            employee_absence_counts[emp_id] = employee_absence_counts.get(emp_id, 0) + 1
         
-        diagnostics['available_employees'] = len(employees)  # All employees are "available" in the system
+        significantly_absent = sum(1 for count in employee_absence_counts.values() if count > len(dates) / 2)
+        
+        diagnostics['total_employees'] = len(employees)  # All employees in the system
         diagnostics['employees_with_absences'] = len(employees_with_absences)
         diagnostics['significantly_absent_employees'] = significantly_absent
         diagnostics['total_absence_days'] = absent_days
         diagnostics['absence_ratio'] = absence_ratio
         
-        # Keep for backward compatibility
+        # Deprecated: Keep for backward compatibility with existing code
+        diagnostics['available_employees'] = len(employees)
         diagnostics['absent_employees'] = len(employees_with_absences)
         
         # Build staffing requirements from shift_types
@@ -272,6 +273,60 @@ class ShiftPlanningSolver:
             diagnostics['potential_issues'].append(
                 f"Planungszeitraum ist nur {len(weeks)} Woche(n). Rotationsmuster (F→N→S) funktioniert am besten mit 3+ Wochen."
             )
+        
+        # Additional feasibility checks based on working hours and constraints
+        # Check if total available working capacity meets minimum requirements
+        # Note: This is a simplified capacity check based on shift minimums and max consecutive days.
+        # It doesn't account for complex constraint interactions (rest times, weekend patterns, etc.)
+        # but provides a useful upper-bound feasibility check.
+        
+        # Constants for capacity calculation
+        MIN_CAPACITY_RATIO = 1.2  # Need 20% buffer for feasibility
+        MAX_TEAM_SIZE_IMBALANCE_RATIO = 2.0  # Max ratio between largest and smallest team
+        
+        total_shifts_needed = len(dates) * len(shift_codes)  # Total shift slots
+        total_employee_capacity = len(employees) * len(dates)
+        available_capacity = total_employee_capacity - absent_days
+        
+        # Each employee can work max 6 consecutive days, so effective capacity is reduced
+        max_consecutive = 6
+        weeks_in_period = len(weeks)
+        effective_capacity_per_employee = min(
+            len(dates),  # Can't work more days than exist
+            (weeks_in_period * max_consecutive)  # Max consecutive constraint
+        )
+        total_effective_capacity = len(employees) * effective_capacity_per_employee - absent_days
+        
+        # Check if we have enough theoretical capacity
+        # Need at least min_staff per shift per day
+        min_capacity_needed = 0
+        for shift_code in shift_codes:
+            if shift_code in staffing_weekday:
+                min_staff = staffing_weekday[shift_code]["min"]
+                # Simplified: assume each shift needs min_staff for all days
+                # This doesn't distinguish weekday/weekend but provides a conservative estimate
+                min_capacity_needed += min_staff * len(dates)
+        
+        capacity_ratio = total_effective_capacity / min_capacity_needed if min_capacity_needed > 0 else 0
+        
+        if capacity_ratio < MIN_CAPACITY_RATIO:
+            diagnostics['potential_issues'].append(
+                f"Zu wenig Personalkapazität: {capacity_ratio:.1f}x der Mindestanforderung (empfohlen: ≥{MIN_CAPACITY_RATIO}x). "
+                f"Effektive Kapazität: {total_effective_capacity} Mitarbeitertage, "
+                f"Mindestbedarf: {min_capacity_needed} Mitarbeitertage"
+            )
+        
+        # Check for specific constraint violations
+        # If many employees are on the same team, rotation might be too rigid
+        team_sizes = [len([e for e in employees if e.team_id == t.id]) for t in teams]
+        if team_sizes:
+            max_team_size = max(team_sizes)
+            min_team_size = min(team_sizes)
+            if max_team_size > min_team_size * MAX_TEAM_SIZE_IMBALANCE_RATIO:
+                diagnostics['potential_issues'].append(
+                    f"Ungleiche Teamgrößen: Größtes Team hat {max_team_size} Mitglieder, "
+                    f"kleinstes nur {min_team_size}. Dies kann zu Planungsproblemen führen."
+                )
         
         return diagnostics
     

@@ -291,10 +291,12 @@ class ShiftPlanningSolver:
         
         # Each employee can work max 6 consecutive days, so effective capacity is reduced
         max_consecutive = 6
+        # Note: Using calendar weeks here (not actual weeks) to count rest periods needed.
+        # Each calendar week requires one rest day, regardless of whether it's a full week.
         weeks_in_period = len(weeks)
         effective_capacity_per_employee = min(
             len(dates),  # Can't work more days than exist
-            (weeks_in_period * max_consecutive)  # Max consecutive constraint
+            (weeks_in_period * max_consecutive)  # Max consecutive constraint (approx)
         )
         total_effective_capacity = len(employees) * effective_capacity_per_employee - absent_days
         

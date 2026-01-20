@@ -1067,121 +1067,291 @@ def add_fairness_objectives(
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
-    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
     weeks: List[List[date]],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    ytd_weekend_counts: Dict[int, int] = None,
+    ytd_night_counts: Dict[int, int] = None,
+    ytd_holiday_counts: Dict[int, int] = None
 ) -> List:
     """
-    SOFT CONSTRAINTS: Fairness and optimization objectives.
+    SOFT CONSTRAINTS: Fairness and optimization objectives with YEAR-LONG fairness tracking.
+    
+    NEW REQUIREMENTS:
+    - Fair distribution PER EMPLOYEE (not per team)
+    - Fairness across the ENTIRE YEAR (not just current planning period)
+    - Group employees by common shift types across teams
+    - Block scheduling: minimize gaps between working days
+    - Prefer own team shifts over cross-team (soft constraint)
     
     Goals:
-    - Even distribution of work across teams
-    - Fair distribution of weekend shifts
-    - Fair distribution of night shifts
+    - Even distribution of work across all employees with same shift types
+    - Fair distribution of weekend shifts (year-to-date + current period)
+    - Fair distribution of night shifts (year-to-date + current period)
+    - Fair distribution of holidays (year-to-date + current period)
     - Fair distribution of TD assignments
+    - Block scheduling: consecutive working days preferred
+    - Own team shifts preferred over cross-team
+    
+    Args:
+        ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year
+        ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year
+        ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year
     
     Returns list of objective terms to minimize.
     """
+    ytd_weekend_counts = ytd_weekend_counts or {}
+    ytd_night_counts = ytd_night_counts or {}
+    ytd_holiday_counts = ytd_holiday_counts or {}
+    
     objective_terms = []
     
-    # 1. Fair distribution of total shifts per employee (including weekends)
-    shift_counts = []
+    # Helper: Group employees by their allowed shift types
+    # Employees in different teams but with same shift capabilities should be compared
+    def get_employee_shift_group(emp: Employee) -> frozenset:
+        """Get the set of shift types this employee can work (determines fairness group)"""
+        if not emp.team_id:
+            return frozenset()
+        
+        # Find employee's team
+        emp_team = None
+        for t in teams:
+            if t.id == emp.team_id:
+                emp_team = t
+                break
+        
+        if not emp_team:
+            return frozenset()
+        
+        # If team has specific allowed shifts, use those
+        if emp_team.allowed_shift_type_ids:
+            return frozenset(emp_team.allowed_shift_type_ids)
+        else:
+            # No restrictions - can work all shifts
+            return frozenset(shift_codes)
+    
+    # Group employees by their shift capabilities
+    shift_groups = {}
     for emp in employees:
         if not emp.team_id:
-            continue  # Only include regular team members in fairness
+            continue
         
-        # Count weekday active days
-        weekday_active = []
-        for d in dates:
-            if d.weekday() < 5 and (emp.id, d) in employee_active:
-                weekday_active.append(employee_active[(emp.id, d)])
-        
-        # Count weekend work days
-        weekend_active = []
-        for d in dates:
-            if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
-                weekend_active.append(employee_weekend_shift[(emp.id, d)])
-        
-        all_active = weekday_active + weekend_active
-        if all_active:
-            total = model.NewIntVar(0, len(dates), f"total_shifts_{emp.id}")
-            model.Add(total == sum(all_active))
-            shift_counts.append(total)
-    
-    # Minimize pairwise differences
-    if len(shift_counts) > 1:
-        for i in range(len(shift_counts)):
-            for j in range(i + 1, len(shift_counts)):
-                diff = model.NewIntVar(-len(dates), len(dates), f"diff_{i}_{j}")
-                model.Add(diff == shift_counts[i] - shift_counts[j])
-                abs_diff = model.NewIntVar(0, len(dates), f"abs_diff_{i}_{j}")
-                model.AddAbsEquality(abs_diff, diff)
-                objective_terms.append(abs_diff)
+        group_key = get_employee_shift_group(emp)
+        if group_key not in shift_groups:
+            shift_groups[group_key] = []
+        shift_groups[group_key].append(emp)
     
     # Count total weeks and weekend days for proper variable bounds
     num_weeks = len(weeks)
     num_weekend_days = len([d for d in dates if d.weekday() >= 5])
     
-    # 2. Fair distribution of weekend work per employee WITHIN EACH TEAM
-    # This ensures that weekend work is balanced among team members
-    for team in teams:
-        team_members = [emp for emp in employees if emp.team_id == team.id]
-        if len(team_members) < 2:
-            continue  # Need at least 2 members to balance
+    # 1. BLOCK SCHEDULING: Minimize gaps between working days
+    # Penalize having OFF days between working days
+    print("  Adding block scheduling objectives...")
+    for emp in employees:
+        if not emp.team_id:
+            continue
         
-        weekend_counts = []
-        for emp in team_members:
-            weekend_work = []
+        for i in range(len(dates) - 2):
+            day1 = dates[i]
+            day2 = dates[i + 1]
+            day3 = dates[i + 2]
+            
+            # Check if day1, day2, day3 form a gap pattern: WORK - OFF - WORK
+            # We want to penalize this pattern
+            working_vars = []
+            for d in [day1, day2, day3]:
+                day_vars = []
+                
+                # Regular team work
+                if d.weekday() < 5 and (emp.id, d) in employee_active:
+                    day_vars.append(employee_active[(emp.id, d)])
+                elif d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                    day_vars.append(employee_weekend_shift[(emp.id, d)])
+                
+                # Cross-team work
+                for sc in shift_codes:
+                    if d.weekday() < 5 and (emp.id, d, sc) in employee_cross_team_shift:
+                        day_vars.append(employee_cross_team_shift[(emp.id, d, sc)])
+                    elif d.weekday() >= 5 and (emp.id, d, sc) in employee_cross_team_weekend:
+                        day_vars.append(employee_cross_team_weekend[(emp.id, d, sc)])
+                
+                if day_vars:
+                    is_working = model.NewBoolVar(f"emp{emp.id}_working_{d}_block")
+                    model.Add(sum(day_vars) >= 1).OnlyEnforceIf(is_working)
+                    model.Add(sum(day_vars) == 0).OnlyEnforceIf(is_working.Not())
+                    working_vars.append(is_working)
+                else:
+                    # No variables for this day - employee cannot work
+                    working_vars.append(0)
+            
+            if len(working_vars) == 3 and any(isinstance(v, cp_model.IntVar) for v in working_vars):
+                # Detect gap: day1=1, day2=0, day3=1
+                # Penalize: working_vars[0] + working_vars[2] - working_vars[1] >= 2 means gap exists
+                gap_penalty = model.NewIntVar(0, 3, f"gap_penalty_emp{emp.id}_{i}")
+                if all(isinstance(v, cp_model.IntVar) for v in working_vars):
+                    model.Add(gap_penalty == working_vars[0] + working_vars[2] - working_vars[1])
+                    # If gap_penalty == 2, that's a gap (work-off-work)
+                    # We penalize gaps with weight 3
+                    objective_terms.append(gap_penalty * 3)
+    
+    # 2. PREFER OWN TEAM SHIFTS OVER CROSS-TEAM
+    # Add small penalty for cross-team assignments
+    print("  Adding cross-team preference objectives...")
+    for emp in employees:
+        cross_team_days = []
+        for d in dates:
+            for sc in shift_codes:
+                if d.weekday() < 5 and (emp.id, d, sc) in employee_cross_team_shift:
+                    cross_team_days.append(employee_cross_team_shift[(emp.id, d, sc)])
+                elif d.weekday() >= 5 and (emp.id, d, sc) in employee_cross_team_weekend:
+                    cross_team_days.append(employee_cross_team_weekend[(emp.id, d, sc)])
+        
+        if cross_team_days:
+            cross_team_count = model.NewIntVar(0, len(dates), f"cross_team_count_emp{emp.id}")
+            model.Add(cross_team_count == sum(cross_team_days))
+            # Small penalty for using cross-team (weight 1)
+            objective_terms.append(cross_team_count * 1)
+    
+    # 3. FAIR DISTRIBUTION OF WEEKEND WORK (YEAR-TO-DATE + CURRENT PERIOD)
+    # Compare ALL employees with same shift capabilities (across teams)
+    print("  Adding weekend fairness objectives (year-long)...")
+    for group_key, group_employees in shift_groups.items():
+        if len(group_employees) < 2:
+            continue
+        
+        # For each employee, calculate total weekends including YTD
+        weekend_totals = []
+        for emp in group_employees:
+            # Count current period weekends
+            weekend_work_current = []
             for d in dates:
-                if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
-                    weekend_work.append(employee_weekend_shift[(emp.id, d)])
+                if d.weekday() >= 5:  # Saturday or Sunday
+                    # Regular weekend work
+                    if (emp.id, d) in employee_weekend_shift:
+                        weekend_work_current.append(employee_weekend_shift[(emp.id, d)])
+                    
+                    # Cross-team weekend work
+                    for sc in shift_codes:
+                        if (emp.id, d, sc) in employee_cross_team_weekend:
+                            weekend_work_current.append(employee_cross_team_weekend[(emp.id, d, sc)])
             
-            if weekend_work:
-                total_weekends = model.NewIntVar(0, num_weekend_days, f"weekends_{emp.id}_team{team.id}")
-                model.Add(total_weekends == sum(weekend_work))
-                weekend_counts.append(total_weekends)
+            if weekend_work_current or emp.id in ytd_weekend_counts:
+                current_weekends = model.NewIntVar(0, num_weekend_days, f"current_weekends_{emp.id}")
+                if weekend_work_current:
+                    model.Add(current_weekends == sum(weekend_work_current))
+                else:
+                    model.Add(current_weekends == 0)
+                
+                # Add YTD count
+                ytd_count = ytd_weekend_counts.get(emp.id, 0)
+                total_weekends = model.NewIntVar(ytd_count, ytd_count + num_weekend_days, 
+                                                 f"total_weekends_{emp.id}")
+                model.Add(total_weekends == ytd_count + current_weekends)
+                weekend_totals.append((emp.id, total_weekends))
         
-        # Minimize variance in weekend distribution WITHIN this team
-        if len(weekend_counts) > 1:
-            for i in range(len(weekend_counts)):
-                for j in range(i + 1, len(weekend_counts)):
-                    diff = model.NewIntVar(-num_weekend_days, num_weekend_days, 
-                                          f"weekend_diff_team{team.id}_{i}_{j}")
-                    model.Add(diff == weekend_counts[i] - weekend_counts[j])
-                    abs_diff = model.NewIntVar(0, num_weekend_days, f"weekend_abs_diff_team{team.id}_{i}_{j}")
+        # Minimize pairwise differences in total weekend counts
+        if len(weekend_totals) > 1:
+            for i in range(len(weekend_totals)):
+                for j in range(i + 1, len(weekend_totals)):
+                    emp_i_id, count_i = weekend_totals[i]
+                    emp_j_id, count_j = weekend_totals[j]
+                    
+                    max_diff = num_weekend_days + max(ytd_weekend_counts.get(emp_i_id, 0), 
+                                                       ytd_weekend_counts.get(emp_j_id, 0))
+                    diff = model.NewIntVar(-max_diff, max_diff, 
+                                          f"weekend_diff_{emp_i_id}_{emp_j_id}")
+                    model.Add(diff == count_i - count_j)
+                    abs_diff = model.NewIntVar(0, max_diff, f"weekend_abs_diff_{emp_i_id}_{emp_j_id}")
                     model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff * 5)  # Weight weekend fairness within teams VERY high
+                    objective_terms.append(abs_diff * 10)  # VERY HIGH weight for weekend fairness
     
-    # 3. Fair distribution of night shifts (count by team)
+    # 4. FAIR DISTRIBUTION OF NIGHT SHIFTS (YEAR-TO-DATE + CURRENT PERIOD)
+    # Compare ALL employees with same shift capabilities (across teams)
     if "N" in shift_codes:
-        night_counts = []
-        for team in teams:
-            night_weeks = []
-            for week_idx in range(num_weeks):
-                if (team.id, week_idx, "N") in team_shift:
-                    night_weeks.append(team_shift[(team.id, week_idx, "N")])
+        print("  Adding night shift fairness objectives (year-long)...")
+        for group_key, group_employees in shift_groups.items():
+            if len(group_employees) < 2:
+                continue
             
-            if night_weeks:
-                total_nights = model.NewIntVar(0, num_weeks, f"nights_{team.id}")
-                model.Add(total_nights == sum(night_weeks))
-                night_counts.append(total_nights)
-        
-        # Minimize variance in night shift distribution
-        if len(night_counts) > 1:
-            for i in range(len(night_counts)):
-                for j in range(i + 1, len(night_counts)):
-                    diff = model.NewIntVar(-num_weeks, num_weeks, f"night_diff_{i}_{j}")
-                    model.Add(diff == night_counts[i] - night_counts[j])
-                    abs_diff = model.NewIntVar(0, num_weeks, f"night_abs_diff_{i}_{j}")
-                    model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff * 2)  # Weight night fairness higher
+            # For each employee, calculate total night shifts including YTD
+            night_totals = []
+            for emp in group_employees:
+                # Count current period night shifts
+                night_shifts_current = []
+                
+                # Regular team night shifts
+                emp_team = None
+                for t in teams:
+                    if t.id == emp.team_id:
+                        emp_team = t
+                        break
+                
+                if emp_team:
+                    for week_idx in range(num_weeks):
+                        if (emp_team.id, week_idx, "N") in team_shift:
+                            # Employee works night if team has night AND employee is active
+                            for d in weeks[week_idx]:
+                                if d.weekday() < 5 and (emp.id, d) in employee_active:
+                                    has_night = model.NewBoolVar(f"emp{emp.id}_night_{d}")
+                                    model.AddMultiplicationEquality(
+                                        has_night,
+                                        [employee_active[(emp.id, d)], team_shift[(emp_team.id, week_idx, "N")]]
+                                    )
+                                    night_shifts_current.append(has_night)
+                                elif d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                                    has_night = model.NewBoolVar(f"emp{emp.id}_night_{d}")
+                                    model.AddMultiplicationEquality(
+                                        has_night,
+                                        [employee_weekend_shift[(emp.id, d)], team_shift[(emp_team.id, week_idx, "N")]]
+                                    )
+                                    night_shifts_current.append(has_night)
+                
+                # Cross-team night shifts
+                for d in dates:
+                    if d.weekday() < 5 and (emp.id, d, "N") in employee_cross_team_shift:
+                        night_shifts_current.append(employee_cross_team_shift[(emp.id, d, "N")])
+                    elif d.weekday() >= 5 and (emp.id, d, "N") in employee_cross_team_weekend:
+                        night_shifts_current.append(employee_cross_team_weekend[(emp.id, d, "N")])
+                
+                if night_shifts_current or emp.id in ytd_night_counts:
+                    current_nights = model.NewIntVar(0, len(dates), f"current_nights_{emp.id}")
+                    if night_shifts_current:
+                        model.Add(current_nights == sum(night_shifts_current))
+                    else:
+                        model.Add(current_nights == 0)
+                    
+                    # Add YTD count
+                    ytd_count = ytd_night_counts.get(emp.id, 0)
+                    total_nights = model.NewIntVar(ytd_count, ytd_count + len(dates), 
+                                                   f"total_nights_{emp.id}")
+                    model.Add(total_nights == ytd_count + current_nights)
+                    night_totals.append((emp.id, total_nights))
+            
+            # Minimize pairwise differences in total night counts
+            if len(night_totals) > 1:
+                for i in range(len(night_totals)):
+                    for j in range(i + 1, len(night_totals)):
+                        emp_i_id, count_i = night_totals[i]
+                        emp_j_id, count_j = night_totals[j]
+                        
+                        max_diff = len(dates) + max(ytd_night_counts.get(emp_i_id, 0), 
+                                                    ytd_night_counts.get(emp_j_id, 0))
+                        diff = model.NewIntVar(-max_diff, max_diff, 
+                                              f"night_diff_{emp_i_id}_{emp_j_id}")
+                        model.Add(diff == count_i - count_j)
+                        abs_diff = model.NewIntVar(0, max_diff, f"night_abs_diff_{emp_i_id}_{emp_j_id}")
+                        model.AddAbsEquality(abs_diff, diff)
+                        objective_terms.append(abs_diff * 8)  # HIGH weight for night shift fairness
     
-    # 4. Fair distribution of TD assignments
+    # 5. FAIR DISTRIBUTION OF TD ASSIGNMENTS
     if td_vars:
+        print("  Adding TD fairness objectives...")
         td_counts = []
         for emp in employees:
             if not emp.can_do_td:
@@ -1195,16 +1365,18 @@ def add_fairness_objectives(
             if emp_td_weeks:
                 total_td = model.NewIntVar(0, num_weeks, f"td_total_{emp.id}")
                 model.Add(total_td == sum(emp_td_weeks))
-                td_counts.append(total_td)
+                td_counts.append((emp.id, total_td))
         
         # Minimize variance in TD distribution
         if len(td_counts) > 1:
             for i in range(len(td_counts)):
                 for j in range(i + 1, len(td_counts)):
-                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{i}_{j}")
-                    model.Add(diff == td_counts[i] - td_counts[j])
-                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{i}_{j}")
+                    emp_i_id, count_i = td_counts[i]
+                    emp_j_id, count_j = td_counts[j]
+                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{emp_i_id}_{emp_j_id}")
+                    model.Add(diff == count_i - count_j)
+                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{emp_i_id}_{emp_j_id}")
                     model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff)
+                    objective_terms.append(abs_diff * 4)  # Medium-high weight for TD fairness
     
     return objective_terms

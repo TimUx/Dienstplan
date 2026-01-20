@@ -200,7 +200,9 @@ def add_employee_team_linkage_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    absences: List[Absence]
+    absences: List[Absence],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar] = None,
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar] = None
 ):
     """
     HARD CONSTRAINT: Link employee_active to team shifts and enforce cross-team rules.
@@ -211,6 +213,10 @@ def add_employee_team_linkage_constraints(
     - Cross-team workers must have at most ONE shift per day
     - ALL rest time and transition rules apply to cross-team assignments
     """
+    
+    # Set defaults if not provided
+    employee_weekend_shift = employee_weekend_shift or {}
+    employee_cross_team_weekend = employee_cross_team_weekend or {}
     
     # For each employee
     for emp in employees:
@@ -241,10 +247,19 @@ def add_employee_team_linkage_constraints(
                 if (emp.id, d) in employee_active:
                     model.Add(employee_active[(emp.id, d)] == 0)
                 
-                # Also force all cross-team variables to 0
+                # Force weekend work to 0 if absent
+                if (emp.id, d) in employee_weekend_shift:
+                    model.Add(employee_weekend_shift[(emp.id, d)] == 0)
+                
+                # Also force all cross-team variables to 0 (weekday)
                 for shift_code in shift_codes:
                     if (emp.id, d, shift_code) in employee_cross_team_shift:
                         model.Add(employee_cross_team_shift[(emp.id, d, shift_code)] == 0)
+                
+                # Also force all cross-team weekend variables to 0 (weekend)
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        model.Add(employee_cross_team_weekend[(emp.id, d, shift_code)] == 0)
             
             # CRITICAL: Employee can work at most ONE shift per day
             # Either their team's shift OR one cross-team shift, but not both
@@ -257,6 +272,20 @@ def add_employee_team_linkage_constraints(
                     for shift_code in shift_codes:
                         if (emp.id, d, shift_code) in employee_cross_team_shift:
                             all_shifts.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    
+                    # At most one shift active per day
+                    if len(all_shifts) > 1:
+                        model.Add(sum(all_shifts) <= 1)
+            
+            elif d.weekday() >= 5:  # Weekend - CRITICAL FIX: Also prevent double shifts on weekends
+                if (emp.id, d) in employee_weekend_shift:
+                    # Collect all possible shifts for this day
+                    all_shifts = [employee_weekend_shift[(emp.id, d)]]
+                    
+                    # Add all cross-team weekend shift possibilities
+                    for shift_code in shift_codes:
+                        if (emp.id, d, shift_code) in employee_cross_team_weekend:
+                            all_shifts.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
                     
                     # At most one shift active per day
                     if len(all_shifts) > 1:

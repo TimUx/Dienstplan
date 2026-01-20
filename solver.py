@@ -76,7 +76,7 @@ class ShiftPlanningSolver:
         add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
-        add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences)
+        add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences, employee_weekend_shift, employee_cross_team_weekend)
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min/max per shift, including cross-team)")

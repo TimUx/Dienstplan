@@ -50,10 +50,11 @@ class ShiftPlanningSolver:
     
     def add_all_constraints(self):
         """
-        Add all constraints to the TEAM-BASED model.
+        Add all constraints to the TEAM-BASED model with CROSS-TEAM support.
         """
         model = self.planning_model.get_model()
-        team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
+        (team_shift, employee_active, employee_weekend_shift, 
+         employee_cross_team_shift, employee_cross_team_weekend, td_vars) = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -75,20 +76,28 @@ class ShiftPlanningSolver:
         add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
-        add_employee_team_linkage_constraints(model, team_shift, employee_active, {}, employees, teams, dates, weeks, shift_codes, absences)
+        add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences)
         
         # STAFFING AND WORKING CONDITIONS
-        print("  - Staffing requirements (min/max per shift)")
-        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, {}, employees, teams, dates, weeks, shift_codes, shift_types)
+        print("  - Staffing requirements (min/max per shift, including cross-team)")
+        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, 
+                                employee_cross_team_shift, employee_cross_team_weekend, 
+                                employees, teams, dates, weeks, shift_codes, shift_types)
         
-        print("  - Rest time constraints (11 hours minimum)")
-        add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, employees, dates, weeks, shift_codes)
+        print("  - Rest time constraints (11 hours minimum, enforced for cross-team)")
+        add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
+                                 employee_cross_team_shift, employee_cross_team_weekend, 
+                                 employees, dates, weeks, shift_codes, teams)
         
-        print("  - Consecutive shifts constraints (max 6 days)")
-        add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, td_vars, employees, dates, shift_codes)
+        print("  - Consecutive shifts constraints (max 6 days, including cross-team)")
+        add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, 
+                                          employee_cross_team_shift, employee_cross_team_weekend, 
+                                          td_vars, employees, dates, shift_codes)
         
-        print("  - Working hours constraints (dynamic based on shift configuration)")
-        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
+        print("  - Working hours constraints (dynamic based on shift configuration, including cross-team)")
+        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, 
+                                     employee_cross_team_shift, employee_cross_team_weekend, 
+                                     td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
         
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")
@@ -103,8 +112,10 @@ class ShiftPlanningSolver:
         # add_weekly_available_employee_constraint(model, employee_active, employee_weekend_shift, employees, teams, weeks)
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
-        print("  - Fairness objectives")
-        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, td_vars, {}, employees, teams, dates, weeks, shift_codes)
+        print("  - Fairness objectives (per-employee, including block scheduling)")
+        objective_terms = add_fairness_objectives(model, employee_active, employee_weekend_shift, team_shift, 
+                                                  employee_cross_team_shift, employee_cross_team_weekend, 
+                                                  td_vars, employees, teams, dates, weeks, shift_codes)
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
@@ -417,12 +428,12 @@ class ShiftPlanningSolver:
     
     def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]:
         """
-        Extract shift assignments from the TEAM-BASED solution.
+        Extract shift assignments from the TEAM-BASED solution with CROSS-TEAM support.
         
         Returns:
             Tuple of (shift_assignments, special_functions, complete_schedule)
             where:
-            - shift_assignments: List of ShiftAssignment objects
+            - shift_assignments: List of ShiftAssignment objects (includes cross-team assignments)
             - special_functions: dict mapping (employee_id, date) to "TD"
             - complete_schedule: dict mapping (employee_id, date) to shift_code or "OFF"
                                 This ensures ALL employees appear for ALL days
@@ -430,7 +441,8 @@ class ShiftPlanningSolver:
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}, {}
         
-        team_shift, employee_active, employee_weekend_shift, td_vars = self.planning_model.get_variables()
+        (team_shift, employee_active, employee_weekend_shift, 
+         employee_cross_team_shift, employee_cross_team_weekend, td_vars) = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -540,6 +552,67 @@ class ShiftPlanningSolver:
                         )
                         assignments.append(assignment)
                         assignment_id += 1
+        
+        # Extract CROSS-TEAM assignments (NEW)
+        # These are employees working shifts from other teams to meet their monthly hours
+        for emp in employees:
+            if not emp.team_id:
+                continue
+            
+            for d in dates:
+                weekday = d.weekday()
+                
+                if weekday < 5:  # WEEKDAY cross-team
+                    # Check all shift codes this employee can work cross-team
+                    for shift_code in shift_codes:
+                        if (emp.id, d, shift_code) not in employee_cross_team_shift:
+                            continue
+                        
+                        if self.solution.Value(employee_cross_team_shift[(emp.id, d, shift_code)]) == 1:
+                            # Find shift type ID
+                            shift_type_id = None
+                            for st in STANDARD_SHIFT_TYPES:
+                                if st.code == shift_code:
+                                    shift_type_id = st.id
+                                    break
+                            
+                            if shift_type_id:
+                                assignment = ShiftAssignment(
+                                    id=assignment_id,
+                                    employee_id=emp.id,
+                                    shift_type_id=shift_type_id,
+                                    date=d,
+                                    notes="Cross-team assignment"
+                                )
+                                assignments.append(assignment)
+                                assignment_id += 1
+                                break  # Only one shift per day
+                
+                else:  # WEEKEND cross-team
+                    # Check all shift codes this employee can work cross-team on weekends
+                    for shift_code in shift_codes:
+                        if (emp.id, d, shift_code) not in employee_cross_team_weekend:
+                            continue
+                        
+                        if self.solution.Value(employee_cross_team_weekend[(emp.id, d, shift_code)]) == 1:
+                            # Find shift type ID
+                            shift_type_id = None
+                            for st in STANDARD_SHIFT_TYPES:
+                                if st.code == shift_code:
+                                    shift_type_id = st.id
+                                    break
+                            
+                            if shift_type_id:
+                                assignment = ShiftAssignment(
+                                    id=assignment_id,
+                                    employee_id=emp.id,
+                                    shift_type_id=shift_type_id,
+                                    date=d,
+                                    notes="Cross-team weekend assignment"
+                                )
+                                assignments.append(assignment)
+                                assignment_id += 1
+                                break  # Only one shift per day
         
         # Extract TD assignments
         special_functions = {}

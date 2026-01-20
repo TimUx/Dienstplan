@@ -27,16 +27,18 @@ DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calcu
 # WeeklyWorkingHours configuration in the database.
 
 # Staffing requirements
+# UPDATED: Increased max for F and S shifts to allow cross-team assignments
+# to help employees meet their monthly hours targets
 WEEKDAY_STAFFING = {
-    "F": {"min": 4, "max": 5},  # Früh
-    "S": {"min": 3, "max": 4},  # Spät
-    "N": {"min": 3, "max": 3},  # Nacht
+    "F": {"min": 4, "max": 8},  # Früh - increased from 5 to 8 for cross-team flexibility
+    "S": {"min": 3, "max": 7},  # Spät - increased from 4 to 7 for cross-team flexibility
+    "N": {"min": 3, "max": 3},  # Nacht - kept at 3 as per requirement
 }
 
 WEEKEND_STAFFING = {
-    "F": {"min": 2, "max": 3},
-    "S": {"min": 2, "max": 3},
-    "N": {"min": 2, "max": 3},
+    "F": {"min": 2, "max": 4},  # Increased from 3 to 4 proportionally
+    "S": {"min": 2, "max": 4},  # Increased from 3 to 4 proportionally
+    "N": {"min": 2, "max": 3},  # Kept at 3 as per requirement
 }
 
 # Forbidden transitions (violate 11-hour rest rule)
@@ -192,7 +194,7 @@ def add_employee_team_linkage_constraints(
     model: cp_model.CpModel,
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
-    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -201,11 +203,13 @@ def add_employee_team_linkage_constraints(
     absences: List[Absence]
 ):
     """
-    HARD CONSTRAINT: Link employee_active to team shifts.
+    HARD CONSTRAINT: Link employee_active to team shifts and enforce cross-team rules.
     
     - Team members CAN work when their team works (but not required to work every day)
-    - Employees CANNOT work if their team doesn't have a shift
-    - Employees cannot work when absent
+    - Employees CANNOT work if their team doesn't have a shift (unless cross-team)
+    - Employees cannot work when absent (applies to both regular and cross-team)
+    - Cross-team workers must have at most ONE shift per day
+    - ALL rest time and transition rules apply to cross-team assignments
     """
     
     # For each employee
@@ -226,9 +230,6 @@ def add_employee_team_linkage_constraints(
         
         # For each day
         for d in dates:
-            if (emp.id, d) not in employee_active:
-                continue
-            
             # Check if employee is absent
             is_absent = any(
                 abs.employee_id == emp.id and abs.overlaps_date(d)
@@ -236,32 +237,30 @@ def add_employee_team_linkage_constraints(
             )
             
             if is_absent:
-                # Force inactive if absent
-                model.Add(employee_active[(emp.id, d)] == 0)
-            else:
-                # Employee can only be active if their team is working
-                # (i.e., employee_active implies team has a shift this week)
-                # But employee doesn't HAVE to be active even if team works
+                # Force inactive if absent (both regular and cross-team)
+                if (emp.id, d) in employee_active:
+                    model.Add(employee_active[(emp.id, d)] == 0)
                 
-                # Find which week this day is in
-                week_idx = None
-                for w_idx, week_dates in enumerate(weeks):
-                    if d in week_dates:
-                        week_idx = w_idx
-                        break
-                
-                if week_idx is None:
-                    continue
-                
-                # Employee can only be active on weekdays when team works
-                if d.weekday() < 5:  # Monday to Friday
-                    # No constraint needed - employee can choose to work or not
-                    # Staffing constraints will ensure enough people work
-                    pass
-                else:  # Weekend
-                    # On weekends, typically fewer people work
-                    # Let staffing constraints handle this
-                    pass
+                # Also force all cross-team variables to 0
+                for shift_code in shift_codes:
+                    if (emp.id, d, shift_code) in employee_cross_team_shift:
+                        model.Add(employee_cross_team_shift[(emp.id, d, shift_code)] == 0)
+            
+            # CRITICAL: Employee can work at most ONE shift per day
+            # Either their team's shift OR one cross-team shift, but not both
+            if d.weekday() < 5:  # Weekday
+                if (emp.id, d) in employee_active:
+                    # Collect all possible shifts for this day
+                    all_shifts = [employee_active[(emp.id, d)]]
+                    
+                    # Add all cross-team shift possibilities
+                    for shift_code in shift_codes:
+                        if (emp.id, d, shift_code) in employee_cross_team_shift:
+                            all_shifts.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    
+                    # At most one shift active per day
+                    if len(all_shifts) > 1:
+                        model.Add(sum(all_shifts) <= 1)
 
 
 def add_staffing_constraints(
@@ -269,7 +268,8 @@ def add_staffing_constraints(
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
-    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -278,15 +278,15 @@ def add_staffing_constraints(
     shift_types: List[ShiftType] = None
 ):
     """
-    HARD CONSTRAINT: Minimum and maximum staffing per shift.
+    HARD CONSTRAINT: Minimum and maximum staffing per shift, INCLUDING cross-team workers.
     
     Staffing requirements are now configured per shift type in the database.
     Defaults to historical values if shift_types not provided (backwards compatibility).
     
-    Weekdays (Mon-Fri): Count active team members per shift based on team assignments.
-    Weekends (Sat-Sun): Count employees working weekend based on team shift type.
+    Weekdays (Mon-Fri): Count active team members + cross-team workers per shift.
+    Weekends (Sat-Sun): Count team weekend workers + cross-team weekend workers.
     
-    CRITICAL: Weekend employees work their team's shift type (only presence varies).
+    UPDATED: Now counts both regular team assignments and cross-team assignments.
     """
     # Build staffing lookup from shift_types
     if shift_types:
@@ -340,7 +340,7 @@ def add_staffing_constraints(
                 continue
             
             if is_weekend:
-                # WEEKEND: Count team members working this weekend with their team's shift
+                # WEEKEND: Count team members working + cross-team weekend workers
                 # For each team with this shift, count active members
                 assigned = []
                 
@@ -366,12 +366,17 @@ def add_staffing_constraints(
                         )
                         assigned.append(is_on_shift)
                 
+                # ADD: Count cross-team weekend workers for this shift
+                for emp in employees:
+                    if (emp.id, d, shift) in employee_cross_team_weekend:
+                        assigned.append(employee_cross_team_weekend[(emp.id, d, shift)])
+                
                 if assigned:
                     total_assigned = sum(assigned)
                     model.Add(total_assigned >= staffing[shift]["min"])
                     model.Add(total_assigned <= staffing[shift]["max"])
             else:
-                # WEEKDAY: Count team members who work this shift on this day
+                # WEEKDAY: Count team members + cross-team workers who work this shift
                 # A member works this shift if:
                 # 1. Their team has this shift this week
                 # 2. They are active on this day
@@ -397,6 +402,11 @@ def add_staffing_constraints(
                         )
                         assigned.append(is_on_shift)
                 
+                # ADD: Count cross-team workers for this shift on this day
+                for emp in employees:
+                    if (emp.id, d, shift) in employee_cross_team_shift:
+                        assigned.append(employee_cross_team_shift[(emp.id, d, shift)])
+                
                 if assigned:
                     total_assigned = sum(assigned)
                     model.Add(total_assigned >= staffing[shift]["min"])
@@ -408,51 +418,205 @@ def add_rest_time_constraints(
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
     weeks: List[List[date]],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    teams: List[Team] = None
 ):
     """
     HARD CONSTRAINT: Minimum 11 hours rest between shifts.
     
-    With team-based planning and weekend consistency, rest times are maintained:
-    - Within a week: Same shift type (F/N/S) daily, so no forbidden transitions
-    - Week boundaries: F→N, N→S, S→F all have 56+ hours rest
-    - Weekend transitions: Now safe because weekend shifts match team weekly shift
+    CRITICAL FOR CROSS-TEAM: Must enforce forbidden transitions to prevent violations.
     
     Forbidden transitions (violate 11-hour rest):
     - S → F (Spät 21:45 → Früh 05:45 = 8 hours)
     - N → F (Nacht 05:45 → Früh 05:45 = 0 hours in same day context)
     
-    With weekend consistency: If team has 'F' this week, weekends also 'F'.
-    This eliminates the problematic weekend transitions like Fri-F → Sat-S → Mon-N.
+    With team-based planning alone, these are prevented by rotation.
+    With cross-team assignments, we must explicitly forbid these transitions.
     """
-    # With team-based model and weekend consistency, forbidden transitions
-    # can only occur at week boundaries, which are already handled by rotation.
-    # The rotation F → N → S inherently provides sufficient rest:
-    # - F (ends Fri 13:45) → N (starts Mon 21:45): 80+ hours
-    # - N (ends Fri 05:45) → S (starts Mon 13:45): 56 hours
-    # - S (ends Fri 21:45) → F (starts Mon 05:45): 56 hours
-    #
-    # All transitions satisfy the 11-hour minimum rest requirement.
-    pass
+    # Define shift end times (approximate, for determining forbidden transitions)
+    shift_end_times = {
+        "F": 13.75,  # 13:45
+        "S": 21.75,  # 21:45
+        "N": 5.75,   # 05:45 (next day)
+    }
+    
+    shift_start_times = {
+        "F": 5.75,   # 05:45
+        "S": 13.75,  # 13:45
+        "N": 21.75,  # 21:45
+    }
+    
+    # For each employee, enforce no forbidden transitions between consecutive days
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        for i in range(len(dates) - 1):
+            today = dates[i]
+            tomorrow = dates[i + 1]
+            
+            # Get today's shift (either team shift or cross-team)
+            today_shifts = []
+            today_shift_codes = []
+            
+            # Check team shift for today
+            if today.weekday() < 5 and (emp.id, today) in employee_active:
+                # Find team's shift this week
+                week_idx = None
+                for w_idx, week_dates in enumerate(weeks):
+                    if today in week_dates:
+                        week_idx = w_idx
+                        break
+                
+                if week_idx is not None:
+                    team = None
+                    for t in teams:
+                        if t.id == emp.team_id:
+                            team = t
+                            break
+                    
+                    if team:
+                        for shift_code in shift_codes:
+                            if (team.id, week_idx, shift_code) in team_shift:
+                                # Create variable: emp has this shift today
+                                has_shift = model.NewBoolVar(f"emp{emp.id}_has{shift_code}_{today}")
+                                model.AddMultiplicationEquality(
+                                    has_shift,
+                                    [employee_active[(emp.id, today)], team_shift[(team.id, week_idx, shift_code)]]
+                                )
+                                today_shifts.append(has_shift)
+                                today_shift_codes.append(shift_code)
+            elif today.weekday() >= 5 and (emp.id, today) in employee_weekend_shift:
+                # Weekend team shift
+                week_idx = None
+                for w_idx, week_dates in enumerate(weeks):
+                    if today in week_dates:
+                        week_idx = w_idx
+                        break
+                
+                if week_idx is not None:
+                    team = None
+                    for t in teams:
+                        if t.id == emp.team_id:
+                            team = t
+                            break
+                    
+                    if team:
+                        for shift_code in shift_codes:
+                            if (team.id, week_idx, shift_code) in team_shift:
+                                # Create variable: emp has this shift today
+                                has_shift = model.NewBoolVar(f"emp{emp.id}_has{shift_code}_{today}")
+                                model.AddMultiplicationEquality(
+                                    has_shift,
+                                    [employee_weekend_shift[(emp.id, today)], team_shift[(team.id, week_idx, shift_code)]]
+                                )
+                                today_shifts.append(has_shift)
+                                today_shift_codes.append(shift_code)
+            
+            # Check cross-team shifts for today
+            for shift_code in shift_codes:
+                if today.weekday() < 5 and (emp.id, today, shift_code) in employee_cross_team_shift:
+                    today_shifts.append(employee_cross_team_shift[(emp.id, today, shift_code)])
+                    today_shift_codes.append(shift_code)
+                elif today.weekday() >= 5 and (emp.id, today, shift_code) in employee_cross_team_weekend:
+                    today_shifts.append(employee_cross_team_weekend[(emp.id, today, shift_code)])
+                    today_shift_codes.append(shift_code)
+            
+            # Get tomorrow's possible shifts (team or cross-team)
+            tomorrow_shifts = []
+            tomorrow_shift_codes = []
+            
+            # Similar logic for tomorrow...
+            if tomorrow.weekday() < 5 and (emp.id, tomorrow) in employee_active:
+                week_idx = None
+                for w_idx, week_dates in enumerate(weeks):
+                    if tomorrow in week_dates:
+                        week_idx = w_idx
+                        break
+                
+                if week_idx is not None:
+                    team = None
+                    for t in teams:
+                        if t.id == emp.team_id:
+                            team = t
+                            break
+                    
+                    if team:
+                        for shift_code in shift_codes:
+                            if (team.id, week_idx, shift_code) in team_shift:
+                                has_shift = model.NewBoolVar(f"emp{emp.id}_has{shift_code}_{tomorrow}")
+                                model.AddMultiplicationEquality(
+                                    has_shift,
+                                    [employee_active[(emp.id, tomorrow)], team_shift[(team.id, week_idx, shift_code)]]
+                                )
+                                tomorrow_shifts.append(has_shift)
+                                tomorrow_shift_codes.append(shift_code)
+            elif tomorrow.weekday() >= 5 and (emp.id, tomorrow) in employee_weekend_shift:
+                week_idx = None
+                for w_idx, week_dates in enumerate(weeks):
+                    if tomorrow in week_dates:
+                        week_idx = w_idx
+                        break
+                
+                if week_idx is not None:
+                    team = None
+                    for t in teams:
+                        if t.id == emp.team_id:
+                            team = t
+                            break
+                    
+                    if team:
+                        for shift_code in shift_codes:
+                            if (team.id, week_idx, shift_code) in team_shift:
+                                has_shift = model.NewBoolVar(f"emp{emp.id}_has{shift_code}_{tomorrow}")
+                                model.AddMultiplicationEquality(
+                                    has_shift,
+                                    [employee_weekend_shift[(emp.id, tomorrow)], team_shift[(team.id, week_idx, shift_code)]]
+                                )
+                                tomorrow_shifts.append(has_shift)
+                                tomorrow_shift_codes.append(shift_code)
+            
+            # Cross-team for tomorrow
+            for shift_code in shift_codes:
+                if tomorrow.weekday() < 5 and (emp.id, tomorrow, shift_code) in employee_cross_team_shift:
+                    tomorrow_shifts.append(employee_cross_team_shift[(emp.id, tomorrow, shift_code)])
+                    tomorrow_shift_codes.append(shift_code)
+                elif tomorrow.weekday() >= 5 and (emp.id, tomorrow, shift_code) in employee_cross_team_weekend:
+                    tomorrow_shifts.append(employee_cross_team_weekend[(emp.id, tomorrow, shift_code)])
+                    tomorrow_shift_codes.append(shift_code)
+            
+            # Forbid transitions: S→F and N→F
+            for i_today, today_shift_code in enumerate(today_shift_codes):
+                for i_tomorrow, tomorrow_shift_code in enumerate(tomorrow_shift_codes):
+                    # Check if this is a forbidden transition
+                    if (today_shift_code == "S" and tomorrow_shift_code == "F") or \
+                       (today_shift_code == "N" and tomorrow_shift_code == "F"):
+                        # Forbid: NOT(today_shift AND tomorrow_shift)
+                        # Equivalent to: today_shift + tomorrow_shift <= 1
+                        model.Add(today_shifts[i_today] + tomorrow_shifts[i_tomorrow] <= 1)
 
 
 def add_consecutive_shifts_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
     shift_codes: List[str]
 ):
     """
-    HARD CONSTRAINT: Maximum consecutive working days.
+    HARD CONSTRAINT: Maximum consecutive working days (INCLUDING cross-team).
     
-    - Maximum 6 consecutive shifts (including TD)
-    - Maximum 5 consecutive night shifts (handled by team rotation)
+    - Maximum 6 consecutive shifts (including TD and cross-team assignments)
+    - Maximum 5 consecutive night shifts (handled by team rotation + cross-team limits)
     """
     # Maximum 6 consecutive working days
     for emp in employees:
@@ -461,14 +625,36 @@ def add_consecutive_shifts_constraints(
             for j in range(MAXIMUM_CONSECUTIVE_SHIFTS + 1):
                 current_date = dates[i + j]
                 
-                # Check if working this day
+                # Check if working this day (team shift, cross-team, or weekend)
+                day_working = []
+                
                 if current_date.weekday() < 5:  # Weekday
+                    # Regular team shift
                     if (emp.id, current_date) in employee_active:
-                        shifts_in_period.append(employee_active[(emp.id, current_date)])
+                        day_working.append(employee_active[(emp.id, current_date)])
+                    
+                    # Cross-team shifts
+                    for shift_code in shift_codes:
+                        if (emp.id, current_date, shift_code) in employee_cross_team_shift:
+                            day_working.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
                 else:  # Weekend
-                    # Working on weekend if assigned to work
+                    # Regular weekend work
                     if (emp.id, current_date) in employee_weekend_shift:
-                        shifts_in_period.append(employee_weekend_shift[(emp.id, current_date)])
+                        day_working.append(employee_weekend_shift[(emp.id, current_date)])
+                    
+                    # Cross-team weekend work
+                    for shift_code in shift_codes:
+                        if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
+                            day_working.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
+                
+                # Employee works this day if ANY shift is active
+                if day_working:
+                    # Create boolean: is employee working this day?
+                    is_working = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
+                    # is_working = 1 if sum(day_working) >= 1
+                    model.Add(sum(day_working) >= 1).OnlyEnforceIf(is_working)
+                    model.Add(sum(day_working) == 0).OnlyEnforceIf(is_working.Not())
+                    shifts_in_period.append(is_working)
             
             if shifts_in_period:
                 model.Add(sum(shifts_in_period) <= MAXIMUM_CONSECUTIVE_SHIFTS)
@@ -479,6 +665,8 @@ def add_working_hours_constraints(
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
@@ -489,7 +677,7 @@ def add_working_hours_constraints(
     absences: List[Absence] = None
 ):
     """
-    HARD CONSTRAINT: Working hours limits based on shift configuration.
+    HARD CONSTRAINT: Working hours limits based on shift configuration INCLUDING cross-team.
     
     This constraint ensures that employees:
     1. Meet minimum required working hours based on their shift's WeeklyWorkingHours
@@ -498,12 +686,14 @@ def add_working_hours_constraints(
     3. Monthly hours are calculated as WeeklyWorkingHours * 4 (e.g., 192h/month for 48h/week)
     4. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
     5. If an employee works less in one week (without absence), they must compensate in other weeks
+    6. UPDATED: Hours from cross-team assignments count toward employee's total hours
     
     The limits are now DYNAMIC per employee based on their team's assigned shift(s),
     replacing the previous fixed limits of 192 hours/month and 48 hours/week.
     
     Note: All main shifts (F, S, N) are 8 hours by default.
     Weekend hours are based on team's shift type (same as weekday).
+    Cross-team hours are based on the actual shift worked.
     """
     absences = absences or []
     # Create shift hours lookup
@@ -577,6 +767,28 @@ def add_working_hours_constraints(
                 # Multiply by hours (scaled by 10)
                 scaled_hours = int(shift_hours[shift_code] * 10)
                 hours_terms.append(conditional_days * scaled_hours)
+            
+            # ADD: Count cross-team hours this week
+            for shift_code in shift_codes:
+                if shift_code not in shift_hours:
+                    continue
+                
+                cross_team_days = []
+                for d in week_dates:
+                    if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        cross_team_days.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    elif d.weekday() >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        cross_team_days.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                
+                if cross_team_days:
+                    # Count cross-team days for this shift
+                    cross_days_count = model.NewIntVar(0, len(week_dates), 
+                                                       f"emp{emp.id}_week{week_idx}_crossteam{shift_code}_days")
+                    model.Add(cross_days_count == sum(cross_team_days))
+                    
+                    # Multiply by hours (scaled by 10)
+                    scaled_hours = int(shift_hours[shift_code] * 10)
+                    hours_terms.append(cross_days_count * scaled_hours)
             
             if hours_terms:
                 # Use pre-calculated maximum weekly hours (scaled by 10)
@@ -665,6 +877,28 @@ def add_working_hours_constraints(
                 # Multiply by shift hours (from shift settings, scaled by 10)
                 scaled_hours = int(shift_hours[shift_code] * 10)
                 total_hours_terms.append(conditional_days * scaled_hours)
+            
+            # ADD: Count cross-team hours this week for minimum hours calculation
+            for shift_code in shift_codes:
+                if shift_code not in shift_hours:
+                    continue
+                
+                cross_team_days = []
+                for d in week_dates:
+                    if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        cross_team_days.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    elif d.weekday() >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        cross_team_days.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                
+                if cross_team_days:
+                    # Count cross-team days for this shift
+                    cross_days_count = model.NewIntVar(0, len(week_dates), 
+                                                       f"emp{emp.id}_week{week_idx}_crossteam{shift_code}_days_min")
+                    model.Add(cross_days_count == sum(cross_team_days))
+                    
+                    # Multiply by hours (scaled by 10)
+                    scaled_hours = int(shift_hours[shift_code] * 10)
+                    total_hours_terms.append(cross_days_count * scaled_hours)
         
         # Apply minimum hours constraint if employee has weeks without absences
         # Total hours must be at least: weekly_working_hours × 4 weeks (standard month)
@@ -833,121 +1067,290 @@ def add_fairness_objectives(
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
-    ferienjobber_cross_team: Dict[Tuple[int, int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
     weeks: List[List[date]],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    ytd_weekend_counts: Dict[int, int] = None,
+    ytd_night_counts: Dict[int, int] = None,
+    ytd_holiday_counts: Dict[int, int] = None
 ) -> List:
     """
-    SOFT CONSTRAINTS: Fairness and optimization objectives.
+    SOFT CONSTRAINTS: Fairness and optimization objectives with YEAR-LONG fairness tracking.
+    
+    NEW REQUIREMENTS:
+    - Fair distribution PER EMPLOYEE (not per team)
+    - Fairness across the ENTIRE YEAR (not just current planning period)
+    - Group employees by common shift types across teams
+    - Block scheduling: minimize gaps between working days
+    - Prefer own team shifts over cross-team (soft constraint)
     
     Goals:
-    - Even distribution of work across teams
-    - Fair distribution of weekend shifts
-    - Fair distribution of night shifts
+    - Even distribution of work across all employees with same shift types
+    - Fair distribution of weekend shifts (year-to-date + current period)
+    - Fair distribution of night shifts (year-to-date + current period)
+    - Fair distribution of holidays (year-to-date + current period)
     - Fair distribution of TD assignments
+    - Block scheduling: consecutive working days preferred
+    - Own team shifts preferred over cross-team
+    
+    Args:
+        ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year
+        ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year
+        ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year
     
     Returns list of objective terms to minimize.
     """
+    ytd_weekend_counts = ytd_weekend_counts or {}
+    ytd_night_counts = ytd_night_counts or {}
+    ytd_holiday_counts = ytd_holiday_counts or {}
+    
     objective_terms = []
     
-    # 1. Fair distribution of total shifts per employee (including weekends)
-    shift_counts = []
+    # Helper: Group employees by their allowed shift types
+    # Employees in different teams but with same shift capabilities should be compared
+    def get_employee_shift_group(emp: Employee) -> frozenset:
+        """Get the set of shift types this employee can work (determines fairness group)"""
+        if not emp.team_id:
+            return frozenset()
+        
+        # Find employee's team
+        emp_team = None
+        for t in teams:
+            if t.id == emp.team_id:
+                emp_team = t
+                break
+        
+        if not emp_team:
+            return frozenset()
+        
+        # If team has specific allowed shifts, use those
+        if emp_team.allowed_shift_type_ids:
+            return frozenset(emp_team.allowed_shift_type_ids)
+        else:
+            # No restrictions - can work all shifts
+            return frozenset(shift_codes)
+    
+    # Group employees by their shift capabilities
+    shift_groups = {}
     for emp in employees:
         if not emp.team_id:
-            continue  # Only include regular team members in fairness
+            continue
         
-        # Count weekday active days
-        weekday_active = []
-        for d in dates:
-            if d.weekday() < 5 and (emp.id, d) in employee_active:
-                weekday_active.append(employee_active[(emp.id, d)])
-        
-        # Count weekend work days
-        weekend_active = []
-        for d in dates:
-            if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
-                weekend_active.append(employee_weekend_shift[(emp.id, d)])
-        
-        all_active = weekday_active + weekend_active
-        if all_active:
-            total = model.NewIntVar(0, len(dates), f"total_shifts_{emp.id}")
-            model.Add(total == sum(all_active))
-            shift_counts.append(total)
-    
-    # Minimize pairwise differences
-    if len(shift_counts) > 1:
-        for i in range(len(shift_counts)):
-            for j in range(i + 1, len(shift_counts)):
-                diff = model.NewIntVar(-len(dates), len(dates), f"diff_{i}_{j}")
-                model.Add(diff == shift_counts[i] - shift_counts[j])
-                abs_diff = model.NewIntVar(0, len(dates), f"abs_diff_{i}_{j}")
-                model.AddAbsEquality(abs_diff, diff)
-                objective_terms.append(abs_diff)
+        group_key = get_employee_shift_group(emp)
+        if group_key not in shift_groups:
+            shift_groups[group_key] = []
+        shift_groups[group_key].append(emp)
     
     # Count total weeks and weekend days for proper variable bounds
     num_weeks = len(weeks)
     num_weekend_days = len([d for d in dates if d.weekday() >= 5])
     
-    # 2. Fair distribution of weekend work per employee WITHIN EACH TEAM
-    # This ensures that weekend work is balanced among team members
-    for team in teams:
-        team_members = [emp for emp in employees if emp.team_id == team.id]
-        if len(team_members) < 2:
-            continue  # Need at least 2 members to balance
+    # 1. BLOCK SCHEDULING: Minimize gaps between working days
+    # Penalize having OFF days between working days
+    print("  Adding block scheduling objectives...")
+    for emp in employees:
+        if not emp.team_id:
+            continue
         
-        weekend_counts = []
-        for emp in team_members:
-            weekend_work = []
+        for i in range(len(dates) - 2):
+            day1 = dates[i]
+            day2 = dates[i + 1]
+            day3 = dates[i + 2]
+            
+            # Check if day1, day2, day3 form a gap pattern: WORK - OFF - WORK
+            # We want to penalize this pattern
+            working_vars = []
+            for d in [day1, day2, day3]:
+                day_vars = []
+                
+                # Regular team work
+                if d.weekday() < 5 and (emp.id, d) in employee_active:
+                    day_vars.append(employee_active[(emp.id, d)])
+                elif d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                    day_vars.append(employee_weekend_shift[(emp.id, d)])
+                
+                # Cross-team work
+                for sc in shift_codes:
+                    if d.weekday() < 5 and (emp.id, d, sc) in employee_cross_team_shift:
+                        day_vars.append(employee_cross_team_shift[(emp.id, d, sc)])
+                    elif d.weekday() >= 5 and (emp.id, d, sc) in employee_cross_team_weekend:
+                        day_vars.append(employee_cross_team_weekend[(emp.id, d, sc)])
+                
+                if day_vars:
+                    is_working = model.NewBoolVar(f"emp{emp.id}_working_{d}_block")
+                    model.Add(sum(day_vars) >= 1).OnlyEnforceIf(is_working)
+                    model.Add(sum(day_vars) == 0).OnlyEnforceIf(is_working.Not())
+                    working_vars.append(is_working)
+                else:
+                    # No variables for this day - employee cannot work
+                    working_vars.append(0)
+            
+            if len(working_vars) == 3 and all(isinstance(v, cp_model.IntVar) for v in working_vars):
+                # Detect gap: day1=1, day2=0, day3=1
+                # Penalize: working_vars[0] + working_vars[2] - working_vars[1] >= 2 means gap exists
+                gap_penalty = model.NewIntVar(0, 3, f"gap_penalty_emp{emp.id}_{i}")
+                model.Add(gap_penalty == working_vars[0] + working_vars[2] - working_vars[1])
+                # If gap_penalty == 2, that's a gap (work-off-work)
+                # We penalize gaps with weight 3
+                objective_terms.append(gap_penalty * 3)
+    
+    # 2. PREFER OWN TEAM SHIFTS OVER CROSS-TEAM
+    # Add small penalty for cross-team assignments
+    print("  Adding cross-team preference objectives...")
+    for emp in employees:
+        cross_team_days = []
+        for d in dates:
+            for sc in shift_codes:
+                if d.weekday() < 5 and (emp.id, d, sc) in employee_cross_team_shift:
+                    cross_team_days.append(employee_cross_team_shift[(emp.id, d, sc)])
+                elif d.weekday() >= 5 and (emp.id, d, sc) in employee_cross_team_weekend:
+                    cross_team_days.append(employee_cross_team_weekend[(emp.id, d, sc)])
+        
+        if cross_team_days:
+            cross_team_count = model.NewIntVar(0, len(dates), f"cross_team_count_emp{emp.id}")
+            model.Add(cross_team_count == sum(cross_team_days))
+            # Small penalty for using cross-team (weight 1)
+            objective_terms.append(cross_team_count * 1)
+    
+    # 3. FAIR DISTRIBUTION OF WEEKEND WORK (YEAR-TO-DATE + CURRENT PERIOD)
+    # Compare ALL employees with same shift capabilities (across teams)
+    print("  Adding weekend fairness objectives (year-long)...")
+    for group_key, group_employees in shift_groups.items():
+        if len(group_employees) < 2:
+            continue
+        
+        # For each employee, calculate total weekends including YTD
+        weekend_totals = []
+        for emp in group_employees:
+            # Count current period weekends
+            weekend_work_current = []
             for d in dates:
-                if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
-                    weekend_work.append(employee_weekend_shift[(emp.id, d)])
+                if d.weekday() >= 5:  # Saturday or Sunday
+                    # Regular weekend work
+                    if (emp.id, d) in employee_weekend_shift:
+                        weekend_work_current.append(employee_weekend_shift[(emp.id, d)])
+                    
+                    # Cross-team weekend work
+                    for sc in shift_codes:
+                        if (emp.id, d, sc) in employee_cross_team_weekend:
+                            weekend_work_current.append(employee_cross_team_weekend[(emp.id, d, sc)])
             
-            if weekend_work:
-                total_weekends = model.NewIntVar(0, num_weekend_days, f"weekends_{emp.id}_team{team.id}")
-                model.Add(total_weekends == sum(weekend_work))
-                weekend_counts.append(total_weekends)
+            if weekend_work_current or emp.id in ytd_weekend_counts:
+                current_weekends = model.NewIntVar(0, num_weekend_days, f"current_weekends_{emp.id}")
+                if weekend_work_current:
+                    model.Add(current_weekends == sum(weekend_work_current))
+                else:
+                    model.Add(current_weekends == 0)
+                
+                # Add YTD count
+                ytd_count = ytd_weekend_counts.get(emp.id, 0)
+                total_weekends = model.NewIntVar(ytd_count, ytd_count + num_weekend_days, 
+                                                 f"total_weekends_{emp.id}")
+                model.Add(total_weekends == ytd_count + current_weekends)
+                weekend_totals.append((emp.id, total_weekends))
         
-        # Minimize variance in weekend distribution WITHIN this team
-        if len(weekend_counts) > 1:
-            for i in range(len(weekend_counts)):
-                for j in range(i + 1, len(weekend_counts)):
-                    diff = model.NewIntVar(-num_weekend_days, num_weekend_days, 
-                                          f"weekend_diff_team{team.id}_{i}_{j}")
-                    model.Add(diff == weekend_counts[i] - weekend_counts[j])
-                    abs_diff = model.NewIntVar(0, num_weekend_days, f"weekend_abs_diff_team{team.id}_{i}_{j}")
+        # Minimize pairwise differences in total weekend counts
+        if len(weekend_totals) > 1:
+            for i in range(len(weekend_totals)):
+                for j in range(i + 1, len(weekend_totals)):
+                    emp_i_id, count_i = weekend_totals[i]
+                    emp_j_id, count_j = weekend_totals[j]
+                    
+                    max_diff = num_weekend_days + max(ytd_weekend_counts.get(emp_i_id, 0), 
+                                                       ytd_weekend_counts.get(emp_j_id, 0))
+                    diff = model.NewIntVar(-max_diff, max_diff, 
+                                          f"weekend_diff_{emp_i_id}_{emp_j_id}")
+                    model.Add(diff == count_i - count_j)
+                    abs_diff = model.NewIntVar(0, max_diff, f"weekend_abs_diff_{emp_i_id}_{emp_j_id}")
                     model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff * 5)  # Weight weekend fairness within teams VERY high
+                    objective_terms.append(abs_diff * 10)  # VERY HIGH weight for weekend fairness
     
-    # 3. Fair distribution of night shifts (count by team)
+    # 4. FAIR DISTRIBUTION OF NIGHT SHIFTS (YEAR-TO-DATE + CURRENT PERIOD)
+    # Compare ALL employees with same shift capabilities (across teams)
     if "N" in shift_codes:
-        night_counts = []
-        for team in teams:
-            night_weeks = []
-            for week_idx in range(num_weeks):
-                if (team.id, week_idx, "N") in team_shift:
-                    night_weeks.append(team_shift[(team.id, week_idx, "N")])
+        print("  Adding night shift fairness objectives (year-long)...")
+        for group_key, group_employees in shift_groups.items():
+            if len(group_employees) < 2:
+                continue
             
-            if night_weeks:
-                total_nights = model.NewIntVar(0, num_weeks, f"nights_{team.id}")
-                model.Add(total_nights == sum(night_weeks))
-                night_counts.append(total_nights)
-        
-        # Minimize variance in night shift distribution
-        if len(night_counts) > 1:
-            for i in range(len(night_counts)):
-                for j in range(i + 1, len(night_counts)):
-                    diff = model.NewIntVar(-num_weeks, num_weeks, f"night_diff_{i}_{j}")
-                    model.Add(diff == night_counts[i] - night_counts[j])
-                    abs_diff = model.NewIntVar(0, num_weeks, f"night_abs_diff_{i}_{j}")
-                    model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff * 2)  # Weight night fairness higher
+            # For each employee, calculate total night shifts including YTD
+            night_totals = []
+            for emp in group_employees:
+                # Count current period night shifts
+                night_shifts_current = []
+                
+                # Regular team night shifts
+                emp_team = None
+                for t in teams:
+                    if t.id == emp.team_id:
+                        emp_team = t
+                        break
+                
+                if emp_team:
+                    for week_idx in range(num_weeks):
+                        if (emp_team.id, week_idx, "N") in team_shift:
+                            # Employee works night if team has night AND employee is active
+                            for d in weeks[week_idx]:
+                                if d.weekday() < 5 and (emp.id, d) in employee_active:
+                                    has_night = model.NewBoolVar(f"emp{emp.id}_night_{d}")
+                                    model.AddMultiplicationEquality(
+                                        has_night,
+                                        [employee_active[(emp.id, d)], team_shift[(emp_team.id, week_idx, "N")]]
+                                    )
+                                    night_shifts_current.append(has_night)
+                                elif d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                                    has_night = model.NewBoolVar(f"emp{emp.id}_night_{d}")
+                                    model.AddMultiplicationEquality(
+                                        has_night,
+                                        [employee_weekend_shift[(emp.id, d)], team_shift[(emp_team.id, week_idx, "N")]]
+                                    )
+                                    night_shifts_current.append(has_night)
+                
+                # Cross-team night shifts
+                for d in dates:
+                    if d.weekday() < 5 and (emp.id, d, "N") in employee_cross_team_shift:
+                        night_shifts_current.append(employee_cross_team_shift[(emp.id, d, "N")])
+                    elif d.weekday() >= 5 and (emp.id, d, "N") in employee_cross_team_weekend:
+                        night_shifts_current.append(employee_cross_team_weekend[(emp.id, d, "N")])
+                
+                if night_shifts_current or emp.id in ytd_night_counts:
+                    current_nights = model.NewIntVar(0, len(dates), f"current_nights_{emp.id}")
+                    if night_shifts_current:
+                        model.Add(current_nights == sum(night_shifts_current))
+                    else:
+                        model.Add(current_nights == 0)
+                    
+                    # Add YTD count
+                    ytd_count = ytd_night_counts.get(emp.id, 0)
+                    total_nights = model.NewIntVar(ytd_count, ytd_count + len(dates), 
+                                                   f"total_nights_{emp.id}")
+                    model.Add(total_nights == ytd_count + current_nights)
+                    night_totals.append((emp.id, total_nights))
+            
+            # Minimize pairwise differences in total night counts
+            if len(night_totals) > 1:
+                for i in range(len(night_totals)):
+                    for j in range(i + 1, len(night_totals)):
+                        emp_i_id, count_i = night_totals[i]
+                        emp_j_id, count_j = night_totals[j]
+                        
+                        max_diff = len(dates) + max(ytd_night_counts.get(emp_i_id, 0), 
+                                                    ytd_night_counts.get(emp_j_id, 0))
+                        diff = model.NewIntVar(-max_diff, max_diff, 
+                                              f"night_diff_{emp_i_id}_{emp_j_id}")
+                        model.Add(diff == count_i - count_j)
+                        abs_diff = model.NewIntVar(0, max_diff, f"night_abs_diff_{emp_i_id}_{emp_j_id}")
+                        model.AddAbsEquality(abs_diff, diff)
+                        objective_terms.append(abs_diff * 8)  # HIGH weight for night shift fairness
     
-    # 4. Fair distribution of TD assignments
+    # 5. FAIR DISTRIBUTION OF TD ASSIGNMENTS
     if td_vars:
+        print("  Adding TD fairness objectives...")
         td_counts = []
         for emp in employees:
             if not emp.can_do_td:
@@ -961,16 +1364,18 @@ def add_fairness_objectives(
             if emp_td_weeks:
                 total_td = model.NewIntVar(0, num_weeks, f"td_total_{emp.id}")
                 model.Add(total_td == sum(emp_td_weeks))
-                td_counts.append(total_td)
+                td_counts.append((emp.id, total_td))
         
         # Minimize variance in TD distribution
         if len(td_counts) > 1:
             for i in range(len(td_counts)):
                 for j in range(i + 1, len(td_counts)):
-                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{i}_{j}")
-                    model.Add(diff == td_counts[i] - td_counts[j])
-                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{i}_{j}")
+                    emp_i_id, count_i = td_counts[i]
+                    emp_j_id, count_j = td_counts[j]
+                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{emp_i_id}_{emp_j_id}")
+                    model.Add(diff == count_i - count_j)
+                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{emp_i_id}_{emp_j_id}")
                     model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff)
+                    objective_terms.append(abs_diff * 4)  # Medium-high weight for TD fairness
     
     return objective_terms

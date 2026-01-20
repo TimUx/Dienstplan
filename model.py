@@ -30,7 +30,10 @@ class ShiftPlanningModel:
         locked_team_shift: Dict[Tuple[int, int], str] = None,
         locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
         locked_td: Dict[Tuple[int, int], bool] = None,
-        locked_absence: Dict[Tuple[int, date], str] = None
+        locked_absence: Dict[Tuple[int, date], str] = None,
+        ytd_weekend_counts: Dict[int, int] = None,
+        ytd_night_counts: Dict[int, int] = None,
+        ytd_holiday_counts: Dict[int, int] = None
     ):
         """
         Initialize the shift planning model.
@@ -46,11 +49,19 @@ class ShiftPlanningModel:
             locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
             locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
             locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
+            ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year (for fairness)
+            ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year (for fairness)
+            ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year (for fairness)
         
         Note on key structures:
         - locked_td uses week_idx because TD is a weekly assignment (Mon-Fri)
         - locked_absence uses date because absences are daily (can span partial weeks)
         - This difference reflects the granularity of the underlying business logic
+        
+        Note on YTD statistics:
+        - These should be loaded from the database for the current year
+        - Used to ensure fairness across the ENTIRE YEAR, not just the current planning period
+        - If not provided, defaults to empty dicts (assumes no prior history this year)
         """
         self.model = cp_model.CpModel()
         self.employees = employees
@@ -65,6 +76,11 @@ class ShiftPlanningModel:
         self.locked_employee_weekend = locked_employee_weekend or {}
         self.locked_td = locked_td or {}
         self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
+        
+        # Year-to-date statistics for fairness tracking
+        self.ytd_weekend_counts = ytd_weekend_counts or {}
+        self.ytd_night_counts = ytd_night_counts or {}
+        self.ytd_holiday_counts = ytd_holiday_counts or {}
         
         # Generate list of dates
         self.dates = []
@@ -103,6 +119,8 @@ class ShiftPlanningModel:
         self.team_shift = {}  # team_shift[team_id, week_idx, shift_code] = 0 or 1
         self.employee_active = {}  # employee_active[employee_id, date] = 0 or 1 (derived from team shift)
         self.employee_weekend_shift = {}  # employee_weekend_shift[emp_id, date] = 0 or 1 (WEEKEND ONLY - shift type from team)
+        self.employee_cross_team_shift = {}  # employee_cross_team_shift[emp_id, date, shift_code] = 0 or 1 (cross-team weekday work)
+        self.employee_cross_team_weekend = {}  # employee_cross_team_weekend[emp_id, date, shift_code] = 0 or 1 (cross-team weekend work)
         self.td_vars = {}  # td[employee_id, week_idx] = 0 or 1 (Tagdienst assignment)
         
         # Build the model
@@ -213,6 +231,57 @@ class ShiftPlanningModel:
                     var_name = f"emp{emp.id}_weekend_work_{d}"
                     self.employee_weekend_shift[(emp.id, d)] = self.model.NewBoolVar(var_name)
         
+        # CROSS-TEAM ASSIGNMENT VARIABLES (NEW)
+        # Allow employees to work shifts from other teams when needed to meet their hours
+        # employee_cross_team_shift[emp_id, date, shift_code] ∈ {0, 1}
+        # employee_cross_team_weekend[emp_id, date, shift_code] ∈ {0, 1}
+        #
+        # IMPORTANT: These must respect ALL constraints:
+        # - 11 hours minimum rest between shifts
+        # - Forbidden transitions (S→F, N→F)
+        # - Max consecutive shifts
+        # - Working hour limits
+        # - Only shifts that the employee's team is ALLOWED to work (via allowed_shift_type_ids)
+        for emp in self.employees:
+            # Only for employees with a team
+            if not emp.team_id:
+                continue
+            
+            # Find employee's team
+            emp_team = None
+            for t in self.teams:
+                if t.id == emp.team_id:
+                    emp_team = t
+                    break
+            
+            if not emp_team:
+                continue
+            
+            # Determine which shifts this employee can work cross-team
+            # RULE: Employee can only work shifts that their team is allowed to work
+            allowed_shift_codes = []
+            if emp_team.allowed_shift_type_ids:
+                # Team has specific allowed shifts
+                for shift_type_id in emp_team.allowed_shift_type_ids:
+                    for st in self.shift_types:
+                        if st.id == shift_type_id:
+                            allowed_shift_codes.append(st.code)
+                            break
+            else:
+                # No restriction - can work all shifts (backward compatibility)
+                allowed_shift_codes = self.shift_codes
+            
+            # Create cross-team variables for weekdays
+            for d in self.dates:
+                if d.weekday() < 5:  # Monday to Friday
+                    for shift_code in allowed_shift_codes:
+                        var_name = f"emp{emp.id}_crossteam_{d}_{shift_code}"
+                        self.employee_cross_team_shift[(emp.id, d, shift_code)] = self.model.NewBoolVar(var_name)
+                else:  # Saturday or Sunday
+                    for shift_code in allowed_shift_codes:
+                        var_name = f"emp{emp.id}_crossteam_weekend_{d}_{shift_code}"
+                        self.employee_cross_team_weekend[(emp.id, d, shift_code)] = self.model.NewBoolVar(var_name)
+        
         # TD (Tagdienst) variables - weekly assignment on Monday-Friday
         # td_vars[emp_id, week_idx] ∈ {0, 1}
         td_qualified = [emp for emp in self.employees if emp.can_do_td]
@@ -234,17 +303,23 @@ class ShiftPlanningModel:
         Dict[Tuple[int, int, str], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
         Dict[Tuple[int, date], cp_model.IntVar],
+        Dict[Tuple[int, date, str], cp_model.IntVar],
+        Dict[Tuple[int, date, str], cp_model.IntVar],
         Dict[Tuple[int, int], cp_model.IntVar]
     ]:
         """
         Get all decision variables.
         
         Returns:
-            Tuple of (team_shift, employee_active, employee_weekend_shift, td_vars)
+            Tuple of (team_shift, employee_active, employee_weekend_shift, 
+                     employee_cross_team_shift, employee_cross_team_weekend, td_vars)
             where:
             - employee_weekend_shift is keyed by (emp_id, date) only
+            - employee_cross_team_shift is keyed by (emp_id, date, shift_code)
+            - employee_cross_team_weekend is keyed by (emp_id, date, shift_code)
         """
-        return self.team_shift, self.employee_active, self.employee_weekend_shift, self.td_vars
+        return (self.team_shift, self.employee_active, self.employee_weekend_shift, 
+                self.employee_cross_team_shift, self.employee_cross_team_weekend, self.td_vars)
     
     def get_team_by_id(self, team_id: int) -> Team:
         """Get team by ID"""

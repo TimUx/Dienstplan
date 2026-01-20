@@ -281,7 +281,8 @@ class ShiftPlanningModel:
         print("=" * 60)
         print(f"Planning period: {self.start_date} to {self.end_date}")
         print(f"Number of days: {len(self.dates)}")
-        print(f"Number of weeks: {len(self.weeks)}")
+        actual_weeks = len(self.dates) / 7.0
+        print(f"Number of weeks: {actual_weeks:.1f} (approx {len(self.weeks)} calendar weeks)")
         print(f"Number of teams: {len(self.teams)}")
         for team in self.teams:
             team_members = [e for e in self.employees if e.team_id == team.id]

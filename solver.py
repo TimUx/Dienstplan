@@ -131,7 +131,7 @@ class ShiftPlanningSolver:
             'total_employees': len(employees),
             'total_teams': len(teams),
             'planning_days': len(dates),
-            'planning_weeks': len(weeks),
+            'planning_weeks': len(dates) / 7.0,  # Actual weeks, not calendar weeks
             'total_absences': len(absences),
             'potential_issues': []
         }
@@ -269,9 +269,10 @@ class ShiftPlanningSolver:
             )
         
         # Check planning period constraints
-        if len(weeks) < 3:
+        actual_weeks = len(dates) / 7.0
+        if actual_weeks < 3:
             diagnostics['potential_issues'].append(
-                f"Planungszeitraum ist nur {len(weeks)} Woche(n). Rotationsmuster (F→N→S) funktioniert am besten mit 3+ Wochen."
+                f"Planungszeitraum ist nur {actual_weeks:.1f} Woche(n). Rotationsmuster (F→N→S) funktioniert am besten mit 3+ Wochen."
             )
         
         # Additional feasibility checks based on working hours and constraints
@@ -290,10 +291,12 @@ class ShiftPlanningSolver:
         
         # Each employee can work max 6 consecutive days, so effective capacity is reduced
         max_consecutive = 6
+        # Note: Using calendar weeks here (not actual weeks) to count rest periods needed.
+        # Each calendar week requires one rest day, regardless of whether it's a full week.
         weeks_in_period = len(weeks)
         effective_capacity_per_employee = min(
             len(dates),  # Can't work more days than exist
-            (weeks_in_period * max_consecutive)  # Max consecutive constraint
+            (weeks_in_period * max_consecutive)  # Max consecutive constraint (approx)
         )
         total_effective_capacity = len(employees) * effective_capacity_per_employee - absent_days
         

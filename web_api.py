@@ -21,7 +21,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
 
-from data_loader import load_from_database, get_existing_assignments
+from data_loader import load_from_database, get_existing_assignments, load_global_settings
 from model import create_shift_planning_model
 from solver import solve_shift_planning, get_infeasibility_diagnostics
 from entities import Employee, Team, Absence, AbsenceType, ShiftAssignment, VacationPeriod
@@ -2609,13 +2609,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Load data
             employees, teams, absences, shift_types = load_from_database(db.db_path)
             
+            # Load global settings (consecutive shifts limits, rest time, etc.)
+            global_settings = load_global_settings(db.db_path)
+            
             # Create model
             planning_model = create_shift_planning_model(
                 employees, teams, start_date, end_date, absences, shift_types=shift_types
             )
             
             # Solve
-            result = solve_shift_planning(planning_model, time_limit_seconds=300)
+            result = solve_shift_planning(planning_model, time_limit_seconds=300, global_settings=global_settings)
             
             if not result:
                 # Get diagnostic information to help user understand the issue

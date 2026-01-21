@@ -31,7 +31,8 @@ class ShiftPlanningSolver:
         self,
         planning_model: ShiftPlanningModel,
         time_limit_seconds: int = 300,
-        num_workers: int = 8
+        num_workers: int = 8,
+        global_settings: Dict = None
     ):
         """
         Initialize the solver.
@@ -40,12 +41,23 @@ class ShiftPlanningSolver:
             planning_model: The shift planning model
             time_limit_seconds: Maximum time for solver (default 5 minutes)
             num_workers: Number of parallel workers for solver
+            global_settings: Dict with global settings from database (optional)
+                - max_consecutive_shifts_weeks: Max weeks of same shift (default 6)
+                - max_consecutive_night_shifts_weeks: Max weeks of night shifts (default 3)
+                - min_rest_hours: Min rest hours between shifts (default 11)
         """
         self.planning_model = planning_model
         self.time_limit_seconds = time_limit_seconds
         self.num_workers = num_workers
         self.solution = None
         self.status = None
+        
+        # Store global settings
+        if global_settings is None:
+            global_settings = {}
+        self.max_consecutive_shifts_weeks = global_settings.get('max_consecutive_shifts_weeks', 6)
+        self.max_consecutive_night_shifts_weeks = global_settings.get('max_consecutive_night_shifts_weeks', 3)
+        self.min_rest_hours = global_settings.get('min_rest_hours', 11)
     
     def add_all_constraints(self):
         """
@@ -88,10 +100,12 @@ class ShiftPlanningSolver:
                                  employee_cross_team_shift, employee_cross_team_weekend, 
                                  employees, dates, weeks, shift_codes, teams)
         
-        print("  - Consecutive shifts constraints (max 6 days, including cross-team)")
+        print("  - Consecutive shifts constraints (max consecutive weeks from database)")
         add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, 
                                           employee_cross_team_shift, employee_cross_team_weekend, 
-                                          td_vars, employees, dates, shift_codes)
+                                          td_vars, employees, dates, shift_codes,
+                                          self.max_consecutive_shifts_weeks,
+                                          self.max_consecutive_night_shifts_weeks)
         
         print("  - Working hours constraints (dynamic based on shift configuration, including cross-team)")
         add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, 
@@ -842,7 +856,8 @@ class ShiftPlanningSolver:
 def solve_shift_planning(
     planning_model: ShiftPlanningModel,
     time_limit_seconds: int = 300,
-    num_workers: int = 8
+    num_workers: int = 8,
+    global_settings: Dict = None
 ) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]]:
     """
     Solve the shift planning problem.
@@ -851,6 +866,7 @@ def solve_shift_planning(
         planning_model: The shift planning model
         time_limit_seconds: Maximum time for solver
         num_workers: Number of parallel workers
+        global_settings: Dict with global settings from database (optional)
         
     Returns:
         Tuple of (shift_assignments, special_functions, complete_schedule) if solution found, None otherwise
@@ -863,7 +879,7 @@ def solve_shift_planning(
     Note: When None is returned (no solution found), diagnostic information is printed to stdout.
           To get structured diagnostic data, check solver.diagnostics attribute after calling solver.solve()
     """
-    solver = ShiftPlanningSolver(planning_model, time_limit_seconds, num_workers)
+    solver = ShiftPlanningSolver(planning_model, time_limit_seconds, num_workers, global_settings)
     solver.add_all_constraints()
     
     if solver.solve():

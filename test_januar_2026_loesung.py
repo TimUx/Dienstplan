@@ -1,11 +1,14 @@
 """
-Lösung für Januar 2026 Schichtmodell - BEHOBENE VERSION
+Lösungsversuche für Januar 2026 Schichtmodell
 
-Dieses Skript implementiert die Lösungen für die identifizierten Probleme
-und demonstriert, dass ein funktionierendes Schichtmodell erstellt werden kann.
+Dieses Skript testet verschiedene Lösungsansätze für die identifizierten Probleme.
+WICHTIG: Alle getesteten Lösungen sind WEITERHIN INFEASIBLE!
+Die Tests dokumentieren, dass auch angepasste Parameter das grundlegende
+architektonische Problem nicht lösen können.
 
-LÖSUNG 1: Nacht-Schicht flexibler gestalten (Max=5 statt Max=3)
-LÖSUNG 2: Reduzierte Arbeitsstunden (44h statt 48h Woche) 
+VERSUCH 1: Nacht-Schicht flexibler gestalten (Max=5 statt Max=3)
+VERSUCH 2: Reduzierte Arbeitsstunden (44h statt 48h Woche) 
+VERSUCH 3: Kombinierte Optimierungen (46h/Woche + flexible Nacht-Schicht)
 """
 
 from datetime import date, timedelta

@@ -6,10 +6,14 @@ Test scenario für Januar 2026 mit genauer Konstellation aus den Anforderungen:
 - Spezifische Min/Max Besetzungen
 - Schichtreihenfolge: Früh → Nacht → Spät
 
+WICHTIG: Die Schichtreihenfolge Früh → Nacht → Spät (statt üblicher Früh → Spät → Nacht)
+ist eine spezifische ANFORDERUNG und trägt zur Infeasibility bei, da sie die 
+Ruhezeit-Constraints zwischen Schichten verschärft.
+
 Dieser Test:
 1. Berechnet ob ein Schichtmodell für Januar 2026 (31 Tage) gebaut werden kann
 2. Überprüft ob jeder Mitarbeiter seine Mindest-Monatsstundenzahl erreicht
-3. Analysiert und behebt eventuelle Fehler bei der Schichtgenerierung
+3. Analysiert warum keine Lösung gefunden werden kann
 """
 
 from datetime import date, timedelta

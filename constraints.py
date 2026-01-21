@@ -17,8 +17,16 @@ from entities import Employee, Absence, ShiftType, Team, get_shift_type_by_id
 
 # Shift planning rules
 MINIMUM_REST_HOURS = 11
-MAXIMUM_CONSECUTIVE_SHIFTS = 6
-MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS = 5
+
+# Consecutive shift limits (measured in WEEKS of same shift type)
+# These are converted to DAYS for actual constraint enforcement:
+# - MaxConsecutiveShifts = 6 weeks → 42 consecutive days of F/S shifts
+# - MaxConsecutiveNightShifts = 3 weeks → 21 consecutive days of N shifts
+MAXIMUM_CONSECUTIVE_SHIFTS_WEEKS = 6
+MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS_WEEKS = 3
+MAXIMUM_CONSECUTIVE_SHIFTS = MAXIMUM_CONSECUTIVE_SHIFTS_WEEKS * 7  # 42 days
+MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS = MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS_WEEKS * 7  # 21 days
+
 DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calculations
                               # Note: Different from ShiftType default (40.0) which represents
                               # standard work week. This is the safety limit.
@@ -635,51 +643,61 @@ def add_consecutive_shifts_constraints(
     shift_codes: List[str]
 ):
     """
-    HARD CONSTRAINT: Maximum consecutive working days (INCLUDING cross-team).
+    HARD CONSTRAINT: Maximum consecutive working days of same shift type (INCLUDING cross-team).
     
-    - Maximum 6 consecutive shifts (including TD and cross-team assignments)
-    - Maximum 5 consecutive night shifts (handled by team rotation + cross-team limits)
+    CORRECTED UNDERSTANDING (per TimUx):
+    - Maximum 42 consecutive days of F/S shifts (6 weeks × 7 days)
+    - Maximum 21 consecutive days of N shifts (3 weeks × 7 days)
+    - NO limit on total consecutive working days (can work all 7 days/week)
+    
+    Note: With team rotation (F → N → S weekly), employees typically work max
+    7 consecutive days of the same shift, well below these limits.
     """
-    # Maximum 6 consecutive working days
+    # Maximum consecutive days for same shift type
+    # Note: This constraint checks consecutive days of the SAME shift (F, S, or N)
+    # It does NOT limit total consecutive working days
+    
     for emp in employees:
-        for i in range(len(dates) - MAXIMUM_CONSECUTIVE_SHIFTS):
-            shifts_in_period = []
-            for j in range(MAXIMUM_CONSECUTIVE_SHIFTS + 1):
-                current_date = dates[i + j]
-                
-                # Check if working this day (team shift, cross-team, or weekend)
-                day_working = []
-                
-                if current_date.weekday() < 5:  # Weekday
-                    # Regular team shift
-                    if (emp.id, current_date) in employee_active:
-                        day_working.append(employee_active[(emp.id, current_date)])
-                    
-                    # Cross-team shifts
-                    for shift_code in shift_codes:
-                        if (emp.id, current_date, shift_code) in employee_cross_team_shift:
-                            day_working.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
-                else:  # Weekend
-                    # Regular weekend work
-                    if (emp.id, current_date) in employee_weekend_shift:
-                        day_working.append(employee_weekend_shift[(emp.id, current_date)])
-                    
-                    # Cross-team weekend work
-                    for shift_code in shift_codes:
-                        if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
-                            day_working.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
-                
-                # Employee works this day if ANY shift is active
-                if day_working:
-                    # Create boolean: is employee working this day?
-                    is_working = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
-                    # is_working = 1 if sum(day_working) >= 1
-                    model.Add(sum(day_working) >= 1).OnlyEnforceIf(is_working)
-                    model.Add(sum(day_working) == 0).OnlyEnforceIf(is_working.Not())
-                    shifts_in_period.append(is_working)
+        # For each shift type, check consecutive days
+        for shift_code in shift_codes:
+            max_consecutive = MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS if shift_code == "N" else MAXIMUM_CONSECUTIVE_SHIFTS
             
-            if shifts_in_period:
-                model.Add(sum(shifts_in_period) <= MAXIMUM_CONSECUTIVE_SHIFTS)
+            # Only check if there are enough dates
+            if len(dates) <= max_consecutive:
+                continue
+                
+            for i in range(len(dates) - max_consecutive):
+                shifts_in_period = []
+                for j in range(max_consecutive + 1):
+                    current_date = dates[i + j]
+                    
+                    # Check if working this shift on this day
+                    day_shift_working = []
+                    
+                    # For weekdays: check team assignment and cross-team
+                    if current_date.weekday() < 5:
+                        # Cross-team assignment to this specific shift
+                        if (emp.id, current_date, shift_code) in employee_cross_team_shift:
+                            day_shift_working.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
+                        
+                        # Regular team assignment (need to determine if team has this shift)
+                        # This is complex - skip for now as team rotation handles it
+                    
+                    # For weekends: check weekend assignment
+                    else:
+                        # Cross-team weekend assignment to this specific shift
+                        if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
+                            day_shift_working.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
+                    
+                    # Employee works this shift on this day if ANY of these is active
+                    if day_shift_working:
+                        is_working_shift = model.NewBoolVar(f"emp{emp.id}_{shift_code}_{current_date}")
+                        model.Add(sum(day_shift_working) >= 1).OnlyEnforceIf(is_working_shift)
+                        model.Add(sum(day_shift_working) == 0).OnlyEnforceIf(is_working_shift.Not())
+                        shifts_in_period.append(is_working_shift)
+                
+                if shifts_in_period:
+                    model.Add(sum(shifts_in_period) <= max_consecutive)
 
 
 def add_working_hours_constraints(

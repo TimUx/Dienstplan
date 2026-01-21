@@ -114,7 +114,7 @@ def validate_shift_plan(
     validate_no_work_when_absent(result, assignments, absences, emp_dict)
     validate_rest_times(result, assignments, emp_dict)
     validate_consecutive_shifts(result, assignments, emp_dict)
-    validate_working_hours(result, assignments, emp_dict, start_date, end_date)
+    validate_working_hours(result, assignments, emp_dict, start_date, end_date, shift_types)
     validate_staffing_requirements(result, assignments_by_date, emp_dict, shift_types)
     validate_special_functions(result, assignments, emp_dict)
     validate_springer_availability(result, assignments, employees)
@@ -274,7 +274,7 @@ def validate_working_hours(
     emp_dict: Dict[int, Employee],
     start_date: date,
     end_date: date,
-    shift_types: List = None
+    shift_types: List
 ):
     """
     Validate working hours limits based on configured weekly_working_hours in shift types.
@@ -285,12 +285,12 @@ def validate_working_hours(
     - Do not exceed max monthly hours (weekly_working_hours * 4)
     
     Note: This is now dynamic based on shift configuration, not hardcoded to 48h/192h
-    """
-    from entities import STANDARD_SHIFT_TYPES
     
-    # Use provided shift_types or fallback to STANDARD_SHIFT_TYPES
-    if shift_types is None:
-        shift_types = STANDARD_SHIFT_TYPES
+    Args:
+        shift_types: List of ShiftType objects from database (REQUIRED)
+    """
+    if not shift_types:
+        raise ValueError("shift_types is required for validation - must be loaded from database")
     
     # Build lookup for shift weekly hours
     shift_weekly_hours_map = {}

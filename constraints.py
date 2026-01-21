@@ -26,21 +26,9 @@ DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calcu
 # dynamically based on each employee's team's assigned shift(s) and their
 # WeeklyWorkingHours configuration in the database.
 
-# Staffing requirements - FALLBACK VALUES ONLY
-# These values are ONLY used when shift_types is not provided (backward compatibility).
-# The primary source of truth is the ShiftType configuration in the database.
-# Max values set high to allow maximum flexibility for cross-team assignments.
-WEEKDAY_STAFFING = {
-    "F": {"min": 4, "max": 20},  # Früh - high max for cross-team flexibility
-    "S": {"min": 3, "max": 20},  # Spät - high max for cross-team flexibility
-    "N": {"min": 3, "max": 20},  # Nacht - high max for cross-team flexibility
-}
-
-WEEKEND_STAFFING = {
-    "F": {"min": 2, "max": 20},  # High max for flexibility
-    "S": {"min": 2, "max": 20},  # High max for flexibility
-    "N": {"min": 2, "max": 20},  # High max for flexibility
-}
+# NOTE: Min/max staffing values are NO LONGER hardcoded here.
+# They are ALWAYS read from the ShiftType configuration in the database.
+# See data_loader.py for default values used during DB initialization only.
 
 # Forbidden transitions (violate 11-hour rest rule)
 FORBIDDEN_TRANSITIONS = {
@@ -308,37 +296,38 @@ def add_staffing_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    shift_types: List[ShiftType] = None
+    shift_types: List[ShiftType]
 ):
     """
     HARD CONSTRAINT: Minimum and maximum staffing per shift, INCLUDING cross-team workers.
     
-    Staffing requirements are now configured per shift type in the database.
-    Defaults to historical values if shift_types not provided (backwards compatibility).
+    Staffing requirements are configured per shift type in the database.
+    Values are ALWAYS read from shift_types parameter (no fallback values).
     
     Weekdays (Mon-Fri): Count active team members + cross-team workers per shift.
     Weekends (Sat-Sun): Count team weekend workers + cross-team weekend workers.
     
     UPDATED: Now counts both regular team assignments and cross-team assignments.
+    
+    Args:
+        shift_types: List of ShiftType objects from database (REQUIRED)
     """
-    # Build staffing lookup from shift_types
-    if shift_types:
-        staffing_weekday = {}
-        staffing_weekend = {}
-        for st in shift_types:
-            if st.code in shift_codes:
-                staffing_weekday[st.code] = {
-                    "min": st.min_staff_weekday,
-                    "max": st.max_staff_weekday
-                }
-                staffing_weekend[st.code] = {
-                    "min": st.min_staff_weekend,
-                    "max": st.max_staff_weekend
-                }
-    else:
-        # Fallback to hardcoded values for backwards compatibility
-        staffing_weekday = WEEKDAY_STAFFING
-        staffing_weekend = WEEKEND_STAFFING
+    if not shift_types:
+        raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
+    
+    # Build staffing lookup from shift_types (database configuration)
+    staffing_weekday = {}
+    staffing_weekend = {}
+    for st in shift_types:
+        if st.code in shift_codes:
+            staffing_weekday[st.code] = {
+                "min": st.min_staff_weekday,
+                "max": st.max_staff_weekday
+            }
+            staffing_weekend[st.code] = {
+                "min": st.min_staff_weekend,
+                "max": st.max_staff_weekend
+            }
     
     for d in dates:
         is_weekend = d.weekday() >= 5

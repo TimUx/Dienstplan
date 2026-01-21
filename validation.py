@@ -369,28 +369,29 @@ def validate_staffing_requirements(
     result: ValidationResult,
     assignments_by_date: Dict[date, List[ShiftAssignment]],
     emp_dict: Dict[int, Employee],
-    shift_types: List = None
+    shift_types: List
 ):
-    """Validate minimum/maximum staffing per shift"""
-    # Build staffing lookup from shift_types
-    if shift_types:
-        staffing_weekday = {}
-        staffing_weekend = {}
-        for st in shift_types:
-            if st.code in ["F", "S", "N"]:
-                staffing_weekday[st.code] = {
-                    "min": st.min_staff_weekday,
-                    "max": st.max_staff_weekday
-                }
-                staffing_weekend[st.code] = {
-                    "min": st.min_staff_weekend,
-                    "max": st.max_staff_weekend
-                }
-    else:
-        # Fallback to hardcoded values for backwards compatibility
-        from constraints import WEEKDAY_STAFFING, WEEKEND_STAFFING
-        staffing_weekday = WEEKDAY_STAFFING
-        staffing_weekend = WEEKEND_STAFFING
+    """Validate minimum/maximum staffing per shift
+    
+    Args:
+        shift_types: List of ShiftType objects from database (REQUIRED)
+    """
+    if not shift_types:
+        raise ValueError("shift_types is required for validation - must be loaded from database")
+    
+    # Build staffing lookup from shift_types (database configuration)
+    staffing_weekday = {}
+    staffing_weekend = {}
+    for st in shift_types:
+        if st.code in ["F", "S", "N"]:
+            staffing_weekday[st.code] = {
+                "min": st.min_staff_weekday,
+                "max": st.max_staff_weekday
+            }
+            staffing_weekend[st.code] = {
+                "min": st.min_staff_weekend,
+                "max": st.max_staff_weekend
+            }
     
     for d, day_assignments in assignments_by_date.items():
         is_weekend = d.weekday() >= 5

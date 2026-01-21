@@ -44,7 +44,7 @@ class ShiftPlanningModel:
             start_date: Start date of planning period
             end_date: End date of planning period
             absences: List of employee absences (AUTHORITATIVE - always locked)
-            shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
+            shift_types: List of shift types (REQUIRED - must be loaded from database)
             locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
             locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
             locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
@@ -52,6 +52,10 @@ class ShiftPlanningModel:
             ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year (for fairness)
             ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year (for fairness)
             ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year (for fairness)
+        
+        Note:
+            shift_types MUST be loaded from the database. STANDARD_SHIFT_TYPES should only
+            be used for database initialization, not at runtime.
         
         Note on key structures:
         - locked_td uses week_idx because TD is a weekly assignment (Mon-Fri)
@@ -69,7 +73,12 @@ class ShiftPlanningModel:
         self.start_date = start_date
         self.end_date = end_date
         self.absences = absences
-        self.shift_types = shift_types or STANDARD_SHIFT_TYPES
+        # shift_types is REQUIRED and must be loaded from database
+        # STANDARD_SHIFT_TYPES should only be used for DB initialization, not at runtime
+        if not shift_types:
+            raise ValueError("shift_types is required and must be loaded from database. "
+                           "STANDARD_SHIFT_TYPES should only be used for database initialization.")
+        self.shift_types = shift_types
         
         # Manual overrides (locked assignments)
         self.locked_team_shift = locked_team_shift or {}
@@ -384,7 +393,7 @@ def create_shift_planning_model(
     start_date: date,
     end_date: date,
     absences: List[Absence],
-    shift_types: List[ShiftType] = None,
+    shift_types: List[ShiftType],
     locked_team_shift: Dict[Tuple[int, int], str] = None,
     locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
     locked_td: Dict[Tuple[int, int], bool] = None,
@@ -399,7 +408,7 @@ def create_shift_planning_model(
         start_date: Start date of planning period
         end_date: End date of planning period
         absences: List of employee absences (AUTHORITATIVE - always preserved)
-        shift_types: List of shift types (defaults to STANDARD_SHIFT_TYPES)
+        shift_types: List of shift types (REQUIRED - must be loaded from database)
         locked_team_shift: Dict mapping (team_id, week_idx) -> shift_code (manual overrides)
         locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
         locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
@@ -407,6 +416,10 @@ def create_shift_planning_model(
         
     Returns:
         ShiftPlanningModel instance
+    
+    Note:
+        shift_types MUST be loaded from the database. STANDARD_SHIFT_TYPES should only
+        be used for database initialization, not at runtime.
     """
     return ShiftPlanningModel(
         employees, teams, start_date, end_date, absences, shift_types,

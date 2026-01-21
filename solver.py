@@ -18,8 +18,7 @@ from constraints import (
     add_working_hours_constraints,
     add_td_constraints,
     add_weekly_available_employee_constraint,
-    add_fairness_objectives,
-    WEEKDAY_STAFFING
+    add_fairness_objectives
 )
 
 
@@ -186,18 +185,17 @@ class ShiftPlanningSolver:
         diagnostics['available_employees'] = len(employees)
         diagnostics['absent_employees'] = len(employees_with_absences)
         
-        # Build staffing requirements from shift_types
-        if shift_types:
-            staffing_weekday = {}
-            for st in shift_types:
-                if st.code in shift_codes:
-                    staffing_weekday[st.code] = {
-                        "min": st.min_staff_weekday,
-                        "max": st.max_staff_weekday
-                    }
-        else:
-            # Use default values imported at module level
-            staffing_weekday = WEEKDAY_STAFFING
+        # Build staffing requirements from shift_types (database configuration)
+        if not shift_types:
+            raise ValueError("shift_types is required for diagnostics - must be loaded from database")
+        
+        staffing_weekday = {}
+        for st in shift_types:
+            if st.code in shift_codes:
+                staffing_weekday[st.code] = {
+                    "min": st.min_staff_weekday,
+                    "max": st.max_staff_weekday
+                }
         
         # Check staffing feasibility per shift
         diagnostics['shift_analysis'] = {}

@@ -200,12 +200,16 @@ Drei Skripte wurden erstellt:
 
 ### Sofort umsetzbar:
 
-1. **Wochenarbeitszeit in STANDARD_SHIFT_TYPES anpassen:**
+1. **Wochenarbeitszeit in STANDARD_SHIFT_TYPES anpassen (entities.py Zeile 241-244):**
+   
+   Den Parameter `weekly_working_hours` von 48.0 auf 40.0 ändern:
    ```python
-   ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 40.0, ...)  # statt 48.0
-   ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 40.0, ...)  # statt 48.0
-   ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 40.0, ...)  # statt 48.0
+   # Beispiel für F-Schicht (analog für S und N):
+   # ShiftType(id, code, name, start, end, color, hours, weekly_hours, min_weekday, max_weekday, ...)
+   ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 40.0, 4, 20, 2, 20, True, True, True, True, True, True, True)
    ```
+   
+   Der 8. Parameter (weekly_working_hours) ist der relevante Wert: **von 48.0 auf 40.0**
 
 2. **Solver erneut ausführen** - sollte dann FEASIBLE sein
 

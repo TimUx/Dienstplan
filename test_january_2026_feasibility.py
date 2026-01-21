@@ -117,10 +117,11 @@ def test_january_2026_basic():
                 employee_days[emp_id] = employee_days.get(emp_id, 0) + 1
             
             print(f"\nDays worked per employee:")
-            for emp in employees[:5]:  # Show first 5
-                days = employee_days.get(emp.id, 0)
-                hours = days * shift_types[0].hours
-                print(f"  {emp.full_name}: {days} days = {hours}h (target: {monthly_hours:.1f}h)")
+            if shift_types:  # Guard against empty shift_types
+                for emp in employees[:5]:  # Show first 5
+                    days = employee_days.get(emp.id, 0)
+                    hours = days * shift_types[0].hours
+                    print(f"  {emp.full_name}: {days} days = {hours}h (target: {monthly_hours:.1f}h)")
             
         elif result['status'] == 'INFEASIBLE':
             print(f"✗ INFEASIBLE - No solution exists!")

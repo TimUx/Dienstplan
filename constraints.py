@@ -16,16 +16,18 @@ from typing import Dict, List, Set, Tuple
 from entities import Employee, Absence, ShiftType, Team, get_shift_type_by_id
 
 # Shift planning rules
-MINIMUM_REST_HOURS = 11
+# NOTE: MINIMUM_REST_HOURS, MAXIMUM_CONSECUTIVE_SHIFTS, and MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS
+# are now loaded dynamically from the GlobalSettings table in the database.
+# The values in the database are stored in WEEKS and must be converted to DAYS when used.
+# See load_global_settings() in data_loader.py
 
-# Consecutive shift limits (measured in WEEKS of same shift type)
-# These are converted to DAYS for actual constraint enforcement:
-# - MaxConsecutiveShifts = 6 weeks → 42 consecutive days of F/S shifts
-# - MaxConsecutiveNightShifts = 3 weeks → 21 consecutive days of N shifts
-MAXIMUM_CONSECUTIVE_SHIFTS_WEEKS = 6
-MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS_WEEKS = 3
-MAXIMUM_CONSECUTIVE_SHIFTS = MAXIMUM_CONSECUTIVE_SHIFTS_WEEKS * 7  # 42 days
-MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS = MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS_WEEKS * 7  # 21 days
+# Default values used as fallback if database is not available
+DEFAULT_MINIMUM_REST_HOURS = 11
+DEFAULT_MAXIMUM_CONSECUTIVE_SHIFTS_WEEKS = 6  # In weeks
+DEFAULT_MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS_WEEKS = 3  # In weeks
+
+# Legacy constants (deprecated - use values from GlobalSettings instead)
+MINIMUM_REST_HOURS = DEFAULT_MINIMUM_REST_HOURS
 
 DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calculations
                               # Note: Different from ShiftType default (40.0) which represents
@@ -640,22 +642,30 @@ def add_consecutive_shifts_constraints(
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     dates: List[date],
-    shift_codes: List[str]
+    shift_codes: List[str],
+    max_consecutive_shifts_weeks: int = 6,
+    max_consecutive_night_shifts_weeks: int = 3
 ):
     """
     HARD CONSTRAINT: Maximum consecutive working days of same shift type (INCLUDING cross-team).
     
     CORRECTED UNDERSTANDING (per stakeholder clarification):
-    - Maximum 42 consecutive days of F/S shifts (6 weeks times 7 days)
-    - Maximum 21 consecutive days of N shifts (3 weeks times 7 days)
+    - The database stores MaxConsecutiveShifts in WEEKS (e.g., 6)
+    - These values are converted to DAYS for constraint enforcement (6 weeks × 7 = 42 days)
+    - Maximum consecutive days of F/S shifts = max_consecutive_shifts_weeks × 7
+    - Maximum consecutive days of N shifts = max_consecutive_night_shifts_weeks × 7
     - NO limit on total consecutive working days (can work all 7 days/week)
+    
+    Args:
+        max_consecutive_shifts_weeks: Max weeks of same shift (F/S) from database (default 6)
+        max_consecutive_night_shifts_weeks: Max weeks of night shifts from database (default 3)
     
     Note: With team rotation (F -> N -> S weekly), employees typically work max
     7 consecutive days of the same shift, well below these limits.
     
     IMPORTANT: This constraint is effectively handled by the team rotation pattern.
     Since teams rotate weekly (F -> N -> S), no employee can work more than
-    ~7 consecutive days of the same shift type, which is far below the 42/21 day limits.
+    ~7 consecutive days of the same shift type, which is far below the limits.
     
     Therefore, we implement a simplified check that still respects the mathematical
     limits but relies primarily on the team rotation to prevent violations.

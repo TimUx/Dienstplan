@@ -4,7 +4,7 @@ Generates sample data or loads from external sources.
 """
 
 from datetime import date, timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from entities import (
     Employee, Team, Absence, AbsenceType,
     ShiftAssignment, STANDARD_SHIFT_TYPES
@@ -85,6 +85,53 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     ])
     
     return employees, teams, absences
+
+
+def load_global_settings(db_path: str) -> Dict:
+    """
+    Load global shift planning settings from the database.
+    
+    Returns:
+        Dict with global settings including:
+        - max_consecutive_shifts_weeks: Maximum consecutive weeks of same shift (F/S)
+        - max_consecutive_night_shifts_weeks: Maximum consecutive weeks of night shifts
+        - min_rest_hours: Minimum rest hours between shifts
+    """
+    import sqlite3
+    
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT * FROM GlobalSettings WHERE Id = 1")
+        row = cursor.fetchone()
+        
+        if row:
+            settings = {
+                'max_consecutive_shifts_weeks': row['MaxConsecutiveShifts'],  # In weeks
+                'max_consecutive_night_shifts_weeks': row['MaxConsecutiveNightShifts'],  # In weeks
+                'min_rest_hours': row['MinRestHoursBetweenShifts']
+            }
+        else:
+            # Default values if not found (same as DB defaults)
+            settings = {
+                'max_consecutive_shifts_weeks': 6,  # 6 weeks
+                'max_consecutive_night_shifts_weeks': 3,  # 3 weeks
+                'min_rest_hours': 11
+            }
+    except Exception as e:
+        # If table doesn't exist or error, use defaults
+        print(f"Warning: Could not load GlobalSettings from database: {e}")
+        settings = {
+            'max_consecutive_shifts_weeks': 6,
+            'max_consecutive_night_shifts_weeks': 3,
+            'min_rest_hours': 11
+        }
+    finally:
+        conn.close()
+    
+    return settings
 
 
 def load_from_database(db_path: str = "dienstplan.db"):

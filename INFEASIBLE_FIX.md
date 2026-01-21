@@ -136,7 +136,7 @@ ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700",
           8.0,  # hours per shift
           48.0, # weekly_working_hours (max, not min)
           min_staff_weekday=4,  # Increase this to employ more workers
-          max_staff_weekday=5)
+          max_staff_weekday=20) # High max for cross-team flexibility
 ```
 
 ## Future Enhancements

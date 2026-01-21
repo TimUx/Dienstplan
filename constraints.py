@@ -1099,6 +1099,88 @@ def add_weekly_available_employee_constraint(
             model.Add(sum(employee_free_vars) >= 1)
 
 
+def add_weekly_block_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    absences: List[Absence]
+):
+    """
+    HARD CONSTRAINT: Enforce Mon-Fri block scheduling for cross-team assignments.
+    
+    When an employee is assigned to a cross-team shift for any day in a week (Mon-Fri),
+    they must work all Mon-Fri days in that week for that shift (unless absent).
+    
+    This ensures:
+    - Complete Mon-Fri blocks for cross-team assignments
+    - No gaps in weekday work when assigned cross-team
+    - Weekends remain individually assignable
+    
+    Args:
+        model: CP-SAT model
+        employee_active: Regular team shift variables (weekdays only)
+        employee_cross_team_shift: Cross-team shift variables (emp_id, date, shift_code)
+        employees: List of employees
+        dates: All dates in planning period
+        weeks: List of weeks (each week is a list of dates)
+        shift_codes: All shift codes
+        absences: Employee absences
+    """
+    
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # Get weekdays in this week (Monday-Friday)
+            weekdays = [d for d in week_dates if d.weekday() < 5]
+            
+            if not weekdays:
+                continue
+            
+            # For each shift code, enforce Mon-Fri block if assigned
+            for shift_code in shift_codes:
+                # Collect cross-team variables for this employee, week, and shift
+                cross_team_vars = []
+                for d in weekdays:
+                    if (emp.id, d, shift_code) in employee_cross_team_shift:
+                        cross_team_vars.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                
+                if len(cross_team_vars) < 2:
+                    # Not enough days to enforce block constraint
+                    continue
+                
+                # If employee works ANY day in this shift, they must work ALL days (unless absent)
+                # Create: if sum(vars) > 0, then all vars must be 1 (considering absences)
+                
+                # Count absences in this week's weekdays
+                non_absent_vars = []
+                for d in weekdays:
+                    is_absent = any(
+                        abs.employee_id == emp.id and abs.overlaps_date(d)
+                        for abs in absences
+                    )
+                    
+                    if not is_absent and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        non_absent_vars.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                
+                if len(non_absent_vars) < 2:
+                    continue
+                
+                # If ANY day is worked, ALL non-absent days must be worked
+                # This creates the Mon-Fri block effect
+                for i in range(len(non_absent_vars)):
+                    for j in range(i + 1, len(non_absent_vars)):
+                        # If var[i] == 1, then var[j] must == 1
+                        # If var[j] == 1, then var[i] must == 1
+                        # This creates bidirectional implication: all or none
+                        model.Add(non_absent_vars[i] == non_absent_vars[j])
+
+
 def add_fairness_objectives(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
@@ -1253,6 +1335,75 @@ def add_fairness_objectives(
             model.Add(cross_team_count == sum(cross_team_days))
             # Small penalty for using cross-team (weight 1)
             objective_terms.append(cross_team_count * 1)
+    
+    # 2b. PREFER WEEKEND WORK FOR EMPLOYEES WHO WORKED MON-FRI
+    # Encourage employees who worked Mon-Fri to also work weekends
+    print("  Adding Mon-Fri weekend continuation preference...")
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # Get weekdays and weekend days
+            weekdays = [d for d in week_dates if d.weekday() < 5]
+            weekend_days = [d for d in week_dates if d.weekday() >= 5]
+            
+            if not weekdays or not weekend_days:
+                continue
+            
+            # Count how many weekdays the employee worked
+            weekday_vars = []
+            for d in weekdays:
+                day_vars = []
+                if (emp.id, d) in employee_active:
+                    day_vars.append(employee_active[(emp.id, d)])
+                for sc in shift_codes:
+                    if (emp.id, d, sc) in employee_cross_team_shift:
+                        day_vars.append(employee_cross_team_shift[(emp.id, d, sc)])
+                
+                if day_vars:
+                    is_working = model.NewBoolVar(f"emp{emp.id}_working_wd_{d}")
+                    model.Add(sum(day_vars) >= 1).OnlyEnforceIf(is_working)
+                    model.Add(sum(day_vars) == 0).OnlyEnforceIf(is_working.Not())
+                    weekday_vars.append(is_working)
+            
+            if not weekday_vars:
+                continue
+            
+            # Count weekend work
+            weekend_vars = []
+            for d in weekend_days:
+                day_vars = []
+                if (emp.id, d) in employee_weekend_shift:
+                    day_vars.append(employee_weekend_shift[(emp.id, d)])
+                for sc in shift_codes:
+                    if (emp.id, d, sc) in employee_cross_team_weekend:
+                        day_vars.append(employee_cross_team_weekend[(emp.id, d, sc)])
+                
+                if day_vars:
+                    is_working = model.NewBoolVar(f"emp{emp.id}_working_we_{d}")
+                    model.Add(sum(day_vars) >= 1).OnlyEnforceIf(is_working)
+                    model.Add(sum(day_vars) == 0).OnlyEnforceIf(is_working.Not())
+                    weekend_vars.append(is_working)
+            
+            if weekday_vars and weekend_vars:
+                # If worked many weekdays (e.g., 3+), prefer working weekend too
+                # This creates continuity and maximizes consecutive working days
+                weekday_count = model.NewIntVar(0, len(weekday_vars), f"emp{emp.id}_wd_count_w{week_idx}")
+                model.Add(weekday_count == sum(weekday_vars))
+                
+                weekend_count = model.NewIntVar(0, len(weekend_vars), f"emp{emp.id}_we_count_w{week_idx}")
+                model.Add(weekend_count == sum(weekend_vars))
+                
+                # Reward: If worked >=3 weekdays and worked weekend, give negative penalty (reward)
+                # This encourages block scheduling
+                worked_full_block = model.NewBoolVar(f"emp{emp.id}_full_block_w{week_idx}")
+                model.Add(weekday_count >= 3).OnlyEnforceIf(worked_full_block)
+                model.Add(weekend_count >= 1).OnlyEnforceIf(worked_full_block)
+                model.Add(weekday_count < 3).OnlyEnforceIf(worked_full_block.Not())
+                # Note: We can't give negative objective terms, so we penalize NOT having full blocks
+                # Penalty of 2 for not having full blocks when possible
+                objective_terms.append((1 - worked_full_block) * 2)
     
     # 3. FAIR DISTRIBUTION OF WEEKEND WORK (YEAR-TO-DATE + CURRENT PERIOD)
     # Compare ALL employees with same shift capabilities (across teams)

@@ -60,9 +60,9 @@ class ShiftType:
     hours: float = 8.0  # Duration in hours (daily)
     weekly_working_hours: float = 40.0  # Expected weekly working hours (standard work week default)
     min_staff_weekday: int = 3  # Minimum staff on weekdays
-    max_staff_weekday: int = 5  # Maximum staff on weekdays
+    max_staff_weekday: int = 20  # Maximum staff on weekdays (high value for flexibility)
     min_staff_weekend: int = 2  # Minimum staff on weekends
-    max_staff_weekend: int = 3  # Maximum staff on weekends
+    max_staff_weekend: int = 20  # Maximum staff on weekends (high value for flexibility)
     works_monday: bool = True  # Works on Monday
     works_tuesday: bool = True  # Works on Tuesday
     works_wednesday: bool = True  # Works on Wednesday
@@ -234,15 +234,17 @@ class VacationPeriod:
         return self.start_date <= check_date <= self.end_date
 
 
-# Predefined shift types for the system
+# Predefined shift types for the system - FALLBACK VALUES ONLY
+# These are used only when the database doesn't have ShiftTypes configured.
+# The primary source of truth is the ShiftType configuration in the database.
+# Max staff values set high to allow maximum flexibility for cross-team assignments.
 STANDARD_SHIFT_TYPES = [
-    # UPDATED: Increased max staff for F and S to allow cross-team assignments
-    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 48.0, 4, 8, 2, 4, True, True, True, True, True, True, True),
-    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 48.0, 3, 7, 2, 4, True, True, True, True, True, True, True),
-    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 48.0, 3, 3, 2, 3, True, True, True, True, True, True, True),
-    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0, 3, 5, 2, 3, True, True, True, True, True, False, False),
-    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0, 1, 2, 0, 0, True, True, True, True, True, False, False),
-    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0, 1, 2, 0, 0, True, True, True, True, True, False, False),
+    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 48.0, 4, 20, 2, 20, True, True, True, True, True, True, True),
+    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 48.0, 3, 20, 2, 20, True, True, True, True, True, True, True),
+    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 48.0, 3, 20, 2, 20, True, True, True, True, True, True, True),
+    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0, 3, 20, 2, 20, True, True, True, True, True, False, False),
+    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0, 1, 20, 0, 20, True, True, True, True, True, False, False),
+    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0, 1, 20, 0, 20, True, True, True, True, True, False, False),
 ]
 
 

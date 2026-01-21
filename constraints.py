@@ -26,19 +26,20 @@ DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calcu
 # dynamically based on each employee's team's assigned shift(s) and their
 # WeeklyWorkingHours configuration in the database.
 
-# Staffing requirements
-# UPDATED: Increased max for F and S shifts to allow cross-team assignments
-# to help employees meet their monthly hours targets
+# Staffing requirements - FALLBACK VALUES ONLY
+# These values are ONLY used when shift_types is not provided (backward compatibility).
+# The primary source of truth is the ShiftType configuration in the database.
+# Max values set high to allow maximum flexibility for cross-team assignments.
 WEEKDAY_STAFFING = {
-    "F": {"min": 4, "max": 8},  # Früh - increased from 5 to 8 for cross-team flexibility
-    "S": {"min": 3, "max": 7},  # Spät - increased from 4 to 7 for cross-team flexibility
-    "N": {"min": 3, "max": 3},  # Nacht - kept at 3 as per requirement
+    "F": {"min": 4, "max": 20},  # Früh - high max for cross-team flexibility
+    "S": {"min": 3, "max": 20},  # Spät - high max for cross-team flexibility
+    "N": {"min": 3, "max": 20},  # Nacht - high max for cross-team flexibility
 }
 
 WEEKEND_STAFFING = {
-    "F": {"min": 2, "max": 4},  # Increased from 3 to 4 proportionally
-    "S": {"min": 2, "max": 4},  # Increased from 3 to 4 proportionally
-    "N": {"min": 2, "max": 3},  # Kept at 3 as per requirement
+    "F": {"min": 2, "max": 20},  # High max for flexibility
+    "S": {"min": 2, "max": 20},  # High max for flexibility
+    "N": {"min": 2, "max": 20},  # High max for flexibility
 }
 
 # Forbidden transitions (violate 11-hour rest rule)

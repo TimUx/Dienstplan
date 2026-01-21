@@ -132,10 +132,11 @@ def load_from_database(db_path: str = "dienstplan.db"):
             max_staff_weekend = row['MaxStaffWeekend']
         except (KeyError, IndexError):
             # Default values if columns don't exist (for migration compatibility)
+            # Max values set high to allow flexibility for cross-team assignments
             min_staff_weekday = 3
-            max_staff_weekday = 5
+            max_staff_weekday = 20
             min_staff_weekend = 2
-            max_staff_weekend = 3
+            max_staff_weekend = 20
         
         try:
             works_monday = bool(row['WorksMonday'])

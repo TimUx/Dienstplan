@@ -669,7 +669,9 @@ def add_consecutive_shifts_constraints(
     """
     # NOTE: With team rotation enforcing weekly shift changes, this constraint
     # is automatically satisfied. An employee in a team with F -> N -> S rotation
-    # can never work 42 consecutive days of F/S or 21 consecutive days of N.
+    # can never work more consecutive days of the same shift than configured
+    # (max_consecutive_shifts_weeks × 7 days for F/S shifts, or
+    #  max_consecutive_night_shifts_weeks × 7 days for N shifts).
     # 
     # We keep this function for completeness and potential future configurations
     # where teams might have more flexible rotation patterns, but the actual
@@ -679,10 +681,10 @@ def add_consecutive_shifts_constraints(
     # ensures that:
     # 1. Each team works a different shift each week
     # 2. Maximum same shift = 7 days (one week)
-    # 3. This is well below 42 days (F/S) or 21 days (N) limits
+    # 3. This is well below the configured limits from the database
     
     # Therefore, no additional constraints are needed here.
-    # The mathematical limits are respected through the team rotation pattern.
+    # The configured limits are respected through the team rotation pattern.
     pass
 
 

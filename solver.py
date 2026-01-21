@@ -112,6 +112,12 @@ class ShiftPlanningSolver:
                                      employee_cross_team_shift, employee_cross_team_weekend, 
                                      td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
         
+        # BLOCK SCHEDULING FOR CROSS-TEAM
+        print("  - Weekly block constraints (Mon-Fri blocks for cross-team assignments)")
+        from constraints import add_weekly_block_constraints
+        add_weekly_block_constraints(model, employee_active, employee_cross_team_shift, 
+                                    employees, dates, weeks, shift_codes, absences)
+        
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")
         add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)

@@ -26,9 +26,6 @@ DEFAULT_MINIMUM_REST_HOURS = 11
 DEFAULT_MAXIMUM_CONSECUTIVE_SHIFTS_WEEKS = 6  # In weeks
 DEFAULT_MAXIMUM_CONSECUTIVE_NIGHT_SHIFTS_WEEKS = 3  # In weeks
 
-# Legacy constants (deprecated - use values from GlobalSettings instead)
-MINIMUM_REST_HOURS = DEFAULT_MINIMUM_REST_HOURS
-
 DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calculations
                               # Note: Different from ShiftType default (40.0) which represents
                               # standard work week. This is the safety limit.

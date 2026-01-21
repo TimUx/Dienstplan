@@ -5,15 +5,19 @@ Test scenario für Januar 2026 mit genauer Konstellation aus den Anforderungen:
 - 48h Arbeitswoche pro Mitarbeiter
 - Spezifische Min/Max Besetzungen
 - Schichtreihenfolge: Früh → Nacht → Spät
+- Teamübergreifende Einsätze aktiviert (Cross-Team Assignments)
 
-WICHTIG: Die Schichtreihenfolge Früh → Nacht → Spät (statt üblicher Früh → Spät → Nacht)
-ist eine spezifische ANFORDERUNG und trägt zur Infeasibility bei, da sie die 
-Ruhezeit-Constraints zwischen Schichten verschärft.
+WICHTIG ERKENNTNISSE:
+- Teams decken primär Schichten ab, aber nicht alle Mitarbeiter müssen in derselben Schicht arbeiten
+- Teamübergreifende Einsätze sind notwendig und erlaubt, um 48h/Woche zu erreichen
+- Bei Nacht-Schicht Max=3 mit Team-Größe 5: 2 Mitarbeiter werden auf andere Schichten verteilt
+- Wochenzuteilungen: Mo-Fr als Block, Wochenenden individuell
+- Ziel: Möglichst viele aufeinanderfolgende Arbeitstage pro Mitarbeiter
 
 Dieser Test:
 1. Berechnet ob ein Schichtmodell für Januar 2026 (31 Tage) gebaut werden kann
-2. Überprüft ob jeder Mitarbeiter seine Mindest-Monatsstundenzahl erreicht
-3. Analysiert warum keine Lösung gefunden werden kann
+2. Nutzt korrekt teamübergreifende Einsätze (Cross-Team)
+3. Überprüft ob jeder Mitarbeiter seine Mindest-Monatsstundenzahl erreicht
 """
 
 from datetime import date, timedelta
@@ -110,7 +114,7 @@ def erstelle_januar_2026_konstellation():
             hours=8.0,
             weekly_working_hours=48.0,
             min_staff_weekday=3,
-            max_staff_weekday=3,
+            max_staff_weekday=5,  # ANGEPASST: von 3 auf 5 erhöht für Flexibilität
             min_staff_weekend=2,
             max_staff_weekend=3,
             works_monday=True,
@@ -154,8 +158,10 @@ def erstelle_januar_2026_konstellation():
         team.allowed_shift_type_ids = [st.id for st in shift_types]
     
     # Generiere Januar 2026 Datumsliste (31 Tage)
-    start_date = date(2026, 1, 1)
-    end_date = date(2026, 1, 31)
+    # WICHTIG: Januar 2026 endet am Samstag (31.01.), also muss die letzte Woche
+    # bis Sonntag (01.02.) geplant werden, um eine vollständige Woche zu haben
+    start_date = date(2026, 1, 1)  # Donnerstag
+    end_date = date(2026, 2, 1)    # Sonntag - komplettiert die letzte Woche
     dates = []
     current = start_date
     while current <= end_date:

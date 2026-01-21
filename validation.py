@@ -114,7 +114,7 @@ def validate_shift_plan(
     validate_no_work_when_absent(result, assignments, absences, emp_dict)
     validate_rest_times(result, assignments, emp_dict)
     validate_consecutive_shifts(result, assignments, emp_dict)
-    validate_working_hours(result, assignments, emp_dict, start_date, end_date)
+    validate_working_hours(result, assignments, emp_dict, start_date, end_date, shift_types)
     validate_staffing_requirements(result, assignments_by_date, emp_dict, shift_types)
     validate_special_functions(result, assignments, emp_dict)
     validate_springer_availability(result, assignments, employees)
@@ -274,7 +274,7 @@ def validate_working_hours(
     emp_dict: Dict[int, Employee],
     start_date: date,
     end_date: date,
-    shift_types: List = None
+    shift_types: List
 ):
     """
     Validate working hours limits based on configured weekly_working_hours in shift types.
@@ -285,12 +285,12 @@ def validate_working_hours(
     - Do not exceed max monthly hours (weekly_working_hours * 4)
     
     Note: This is now dynamic based on shift configuration, not hardcoded to 48h/192h
-    """
-    from entities import STANDARD_SHIFT_TYPES
     
-    # Use provided shift_types or fallback to STANDARD_SHIFT_TYPES
-    if shift_types is None:
-        shift_types = STANDARD_SHIFT_TYPES
+    Args:
+        shift_types: List of ShiftType objects from database (REQUIRED)
+    """
+    if not shift_types:
+        raise ValueError("shift_types is required for validation - must be loaded from database")
     
     # Build lookup for shift weekly hours
     shift_weekly_hours_map = {}
@@ -369,28 +369,29 @@ def validate_staffing_requirements(
     result: ValidationResult,
     assignments_by_date: Dict[date, List[ShiftAssignment]],
     emp_dict: Dict[int, Employee],
-    shift_types: List = None
+    shift_types: List
 ):
-    """Validate minimum/maximum staffing per shift"""
-    # Build staffing lookup from shift_types
-    if shift_types:
-        staffing_weekday = {}
-        staffing_weekend = {}
-        for st in shift_types:
-            if st.code in ["F", "S", "N"]:
-                staffing_weekday[st.code] = {
-                    "min": st.min_staff_weekday,
-                    "max": st.max_staff_weekday
-                }
-                staffing_weekend[st.code] = {
-                    "min": st.min_staff_weekend,
-                    "max": st.max_staff_weekend
-                }
-    else:
-        # Fallback to hardcoded values for backwards compatibility
-        from constraints import WEEKDAY_STAFFING, WEEKEND_STAFFING
-        staffing_weekday = WEEKDAY_STAFFING
-        staffing_weekend = WEEKEND_STAFFING
+    """Validate minimum/maximum staffing per shift
+    
+    Args:
+        shift_types: List of ShiftType objects from database (REQUIRED)
+    """
+    if not shift_types:
+        raise ValueError("shift_types is required for validation - must be loaded from database")
+    
+    # Build staffing lookup from shift_types (database configuration)
+    staffing_weekday = {}
+    staffing_weekend = {}
+    for st in shift_types:
+        if st.code in ["F", "S", "N"]:
+            staffing_weekday[st.code] = {
+                "min": st.min_staff_weekday,
+                "max": st.max_staff_weekday
+            }
+            staffing_weekend[st.code] = {
+                "min": st.min_staff_weekend,
+                "max": st.max_staff_weekend
+            }
     
     for d, day_assignments in assignments_by_date.items():
         is_weekend = d.weekday() >= 5

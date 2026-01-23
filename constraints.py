@@ -1255,17 +1255,18 @@ def add_team_member_block_constraints(
     weeks: List[List[date]],
     shift_codes: List[str],
     absences: List[Absence]
-):
+) -> List[cp_model.IntVar]:
     """
-    HARD CONSTRAINT: Enforce block scheduling for team member regular assignments.
+    SOFT OBJECTIVES: Encourage block scheduling (Mon-Fri, Mon-Sun, Sat-Sun).
     
-    Block scheduling rules:
-    1. Mon-Fri block: If an employee works ANY weekday (Mon-Fri) in a week, 
-       they must work ALL weekdays (Mon-Fri) in that week (unless absent).
-    2. Sat-Sun block: If an employee works Saturday, they must also work Sunday (unless absent).
-    3. Employees can work: Mon-Fri only, Mon-Sun (full week), or Sat-Sun only.
+    Block scheduling preferences (flexible, NOT mandatory):
+    1. Prefer Mon-Fri blocks (5 days) when working weekdays
+    2. Prefer Mon-Sun blocks (7 days) for full week
+    3. Prefer Sat-Sun blocks (2 days) for weekends
     
-    This applies to regular team shift assignments (not cross-team, which has separate constraint).
+    The predefined blocks should be followed when possible but are NOT mandatory.
+    Smaller blocks can be used if needed. The system will try to use blocks but
+    may use individual days if necessary to meet minimum hours requirements.
     
     Args:
         model: CP-SAT model
@@ -1278,7 +1279,12 @@ def add_team_member_block_constraints(
         weeks: List of weeks (each week is a list of dates)
         shift_codes: All shift codes
         absences: Employee absences
+    
+    Returns:
+        List of objective variables for block scheduling preferences
     """
+    
+    objective_vars = []
     
     for emp in employees:
         if not emp.team_id:
@@ -1299,32 +1305,50 @@ def add_team_member_block_constraints(
             weekdays = [d for d in week_dates if d.weekday() < 5]
             weekend_days = [d for d in week_dates if d.weekday() >= 5]
             
-            # CONSTRAINT 1: Mon-Fri block for weekdays
-            if len(weekdays) >= 2:
-                # Collect weekday variables for this employee (non-absent days only)
+            # Collect all work variables for the week (for checking isolated days)
+            all_week_vars = []
+            all_week_dates = []
+            
+            for d in week_dates:
+                is_absent = any(
+                    abs.employee_id == emp.id and abs.overlaps_date(d)
+                    for abs in absences
+                )
+                
+                if not is_absent:
+                    if d.weekday() < 5 and (emp.id, d) in employee_active:
+                        all_week_vars.append(employee_active[(emp.id, d)])
+                        all_week_dates.append(d)
+                    elif d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                        all_week_vars.append(employee_weekend_shift[(emp.id, d)])
+                        all_week_dates.append(d)
+            
+            # SOFT OBJECTIVES: Encourage block scheduling
+            
+            # Objective 1: Encourage Mon-Fri blocks (all 5 weekdays)
+            if len(weekdays) >= 5:
                 weekday_vars = []
                 for d in weekdays:
                     is_absent = any(
                         abs.employee_id == emp.id and abs.overlaps_date(d)
                         for abs in absences
                     )
-                    
                     if not is_absent and (emp.id, d) in employee_active:
                         weekday_vars.append(employee_active[(emp.id, d)])
                 
-                # If ANY weekday is worked, ALL non-absent weekdays must be worked
-                if len(weekday_vars) >= 2:
-                    for i in range(len(weekday_vars)):
-                        for j in range(i + 1, len(weekday_vars)):
-                            # Bidirectional: if one works, all work (Mon-Fri block)
-                            model.Add(weekday_vars[i] == weekday_vars[j])
+                if len(weekday_vars) == 5:
+                    # Create a bonus variable: if all 5 weekdays are worked, bonus = 1
+                    mon_fri_bonus = model.NewBoolVar(f'mon_fri_bonus_e{emp.id}_w{week_idx}')
+                    # mon_fri_bonus == 1 if sum(weekday_vars) == 5
+                    model.Add(sum(weekday_vars) >= 5).OnlyEnforceIf(mon_fri_bonus)
+                    model.Add(sum(weekday_vars) < 5).OnlyEnforceIf(mon_fri_bonus.Not())
+                    objective_vars.append(mon_fri_bonus)
             
-            # CONSTRAINT 2: Sat-Sun block for weekends
-            if len(weekend_days) == 2:  # Both Saturday and Sunday present
+            # Objective 2: Encourage Sat-Sun blocks
+            if len(weekend_days) == 2:
                 sat = weekend_days[0] if weekend_days[0].weekday() == 5 else weekend_days[1]
                 sun = weekend_days[1] if weekend_days[1].weekday() == 6 else weekend_days[0]
                 
-                # Check if employee is absent on either day
                 sat_absent = any(
                     abs.employee_id == emp.id and abs.overlaps_date(sat)
                     for abs in absences
@@ -1334,11 +1358,18 @@ def add_team_member_block_constraints(
                     for abs in absences
                 )
                 
-                # If Saturday is worked and Sunday is not absent, Sunday must also be worked
                 if not sat_absent and not sun_absent:
                     if (emp.id, sat) in employee_weekend_shift and (emp.id, sun) in employee_weekend_shift:
-                        # If Saturday worked, Sunday must be worked too (Sat-Sun block)
-                        model.Add(employee_weekend_shift[(emp.id, sun)] >= employee_weekend_shift[(emp.id, sat)])
+                        # Create a bonus variable: if both Sat and Sun are worked, bonus = 1
+                        sat_sun_bonus = model.NewBoolVar(f'sat_sun_bonus_e{emp.id}_w{week_idx}')
+                        # sat_sun_bonus == 1 if both worked
+                        sat_var = employee_weekend_shift[(emp.id, sat)]
+                        sun_var = employee_weekend_shift[(emp.id, sun)]
+                        model.Add(sat_var + sun_var >= 2).OnlyEnforceIf(sat_sun_bonus)
+                        model.Add(sat_var + sun_var < 2).OnlyEnforceIf(sat_sun_bonus.Not())
+                        objective_vars.append(sat_sun_bonus)
+    
+    return objective_vars
 
 
 def add_fairness_objectives(

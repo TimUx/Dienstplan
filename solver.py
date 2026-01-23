@@ -118,11 +118,12 @@ class ShiftPlanningSolver:
         add_weekly_block_constraints(model, employee_active, employee_cross_team_shift, 
                                     employees, dates, weeks, shift_codes, absences)
         
-        # BLOCK SCHEDULING FOR TEAM MEMBERS
-        print("  - Team member block constraints (Mon-Fri and Sat-Sun blocks for regular assignments)")
+        # BLOCK SCHEDULING FOR TEAM MEMBERS (FLEXIBLE)
+        print("  - Team member block constraints (prevent isolated days, encourage full blocks)")
         from constraints import add_team_member_block_constraints
-        add_team_member_block_constraints(model, employee_active, employee_weekend_shift, team_shift,
-                                         employees, teams, dates, weeks, shift_codes, absences)
+        block_objective_vars = add_team_member_block_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employees, teams, dates, weeks, shift_codes, absences)
         
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")
@@ -146,6 +147,13 @@ class ShiftPlanningSolver:
             self.planning_model.ytd_night_counts,
             self.planning_model.ytd_holiday_counts
         )
+        
+        # Add block scheduling objectives (encourage full blocks)
+        # These are bonuses, so we want to maximize them (minimize negative sum)
+        if block_objective_vars:
+            print(f"  Adding {len(block_objective_vars)} block scheduling bonus objectives...")
+            for bonus_var in block_objective_vars:
+                objective_terms.append(-bonus_var)  # Negative because we minimize
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

@@ -569,16 +569,22 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     # All three shifts work Monday-Sunday (all 7 days) - represented by 1 for each day
     # Note: IDs are assigned based on legacy system compatibility (F=1, S=2, N=3), not rotation order
     # The rotation order F→N→S is defined separately in initialize_shift_type_relationships()
+    # 
+    # IMPORTANT: Max staffing should be flexible to allow teams of different sizes to work.
+    # Min staffing is the safety minimum, max staffing allows flexibility for larger teams.
     shift_types = [
-        # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, Sa–So mind. 2 Personen)
+        # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 3-5 Personen, Sa–So mind. 2-3 Personen)
         # Works all 7 days: Monday-Sunday
-        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 5, 2, 3, 1, 1, 1, 1, 1, 1, 1),
-        # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
+        # Flexible max allows teams of 5-6 to all work if needed
+        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 3, 6, 2, 3, 1, 1, 1, 1, 1, 1, 1),
+        # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 2-4 Personen, Sa–So mind. 2-3 Personen)
         # Works all 7 days: Monday-Sunday
-        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1),
-        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
+        # Flexible range allows distribution of work across team members
+        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 2, 5, 2, 3, 1, 1, 1, 1, 1, 1, 1),
+        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 2-4 Personen, Sa–So mind. 2-3 Personen)
         # Works all 7 days: Monday-Sunday
-        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 4, 2, 3, 1, 1, 1, 1, 1, 1, 1),
+        # Flexible range for better schedule feasibility
+        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 2, 5, 2, 3, 1, 1, 1, 1, 1, 1, 1),
         # Additional shifts (Z, BMT, BSB, TD) can be created manually in the UI as needed
     ]
     

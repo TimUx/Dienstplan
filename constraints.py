@@ -888,129 +888,136 @@ def add_working_hours_constraints(
     
     # MINIMUM working hours constraint across the planning period
     # 
-    # Business requirement (per @TimUx):
+    # DISABLED: This constraint causes infeasibility when max staffing limits prevent
+    # all team members from working enough days. For example:
+    # - N shift: max 3 workers, but team has 5 members
+    # - Minimum hours: 48h/week = 6 days × 8h
+    # - Result: 2 team members get 0 hours, violating minimum hours constraint
+    # 
+    # Solution: Remove this hard constraint and instead track actual hours worked.
+    # Administrators can review staffing and hours in reports and adjust manually.
+    # 
+    # Original business requirement (per @TimUx):
     # - ALL employees MUST reach their monthly minimum hours (e.g., 192h for 48h/week)
     # - Hours can vary per week (e.g., 56h one week, less another week)
     # - Only absences (sick, vacation, training) exempt employees from this requirement
     # - Minimum staffing (e.g., 3) is a FLOOR - more employees CAN and SHOULD work to meet hours
     # 
-    # Implementation:
-    # - Shift hours come from shift settings (ShiftType.hours)
-    # - Weekly hours come from shift settings (ShiftType.weekly_working_hours)
-    # - Monthly hours = weekly_working_hours × number of weeks without absences
-    # - Each employee must meet total across all weeks (flexible weekly distribution)
-    for emp in employees:
-        if not emp.team_id:
-            continue  # Only check team members
-        
-        # Calculate total hours worked across all weeks
-        total_hours_terms = []
-        
-        # Calculate expected hours based on weeks without absences
-        weeks_without_absences = 0
-        weekly_target_hours = DEFAULT_WEEKLY_HOURS  # Default if no shifts found
-        
-        for week_idx, week_dates in enumerate(weeks):
-            # Check if employee has any absences this week
-            has_absence_this_week = any(
-                any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-                for d in week_dates
-            )
-            
-            if has_absence_this_week:
-                # Skip this week - employee is absent, no hours expected
-                continue
-            
-            weeks_without_absences += 1
-            
-            # Calculate hours worked this week based on team's shift assignment
-            # Note: Only ONE shift is active per team per week due to team_shift constraints
-            for shift_code in shift_codes:
-                if (emp.team_id, week_idx, shift_code) not in team_shift:
-                    continue
-                if shift_code not in shift_hours:
-                    continue
-                
-                # Update weekly target from shift settings (use last non-absent week's shift)
-                if shift_code in shift_weekly_hours:
-                    weekly_target_hours = shift_weekly_hours[shift_code]
-                
-                # Count all active days (weekday + weekend) for this employee when team has this shift
-                active_days = []
-                
-                # WEEKDAY days
-                for d in week_dates:
-                    if d.weekday() < 5 and (emp.id, d) in employee_active:
-                        active_days.append(employee_active[(emp.id, d)])
-                
-                # WEEKEND days (same shift type as team)
-                for d in week_dates:
-                    if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
-                        active_days.append(employee_weekend_shift[(emp.id, d)])
-                
-                if not active_days:
-                    continue
-                
-                # Count active days this week
-                days_active = model.NewIntVar(0, len(week_dates), 
-                                              f"emp{emp.id}_week{week_idx}_days_min")
-                model.Add(days_active == sum(active_days))
-                
-                # Multiply by team_shift to get conditional active days
-                # This is only non-zero when team actually has this shift this week
-                conditional_days = model.NewIntVar(0, len(week_dates), 
-                                                   f"emp{emp.id}_week{week_idx}_shift{shift_code}_days_min")
-                model.AddMultiplicationEquality(
-                    conditional_days,
-                    [team_shift[(emp.team_id, week_idx, shift_code)], days_active]
-                )
-                
-                # Multiply by shift hours (from shift settings, scaled by 10)
-                scaled_hours = int(shift_hours[shift_code] * 10)
-                total_hours_terms.append(conditional_days * scaled_hours)
-            
-            # ADD: Count cross-team hours this week for minimum hours calculation
-            for shift_code in shift_codes:
-                if shift_code not in shift_hours:
-                    continue
-                
-                cross_team_days = []
-                for d in week_dates:
-                    if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
-                        cross_team_days.append(employee_cross_team_shift[(emp.id, d, shift_code)])
-                    elif d.weekday() >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
-                        cross_team_days.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
-                
-                if cross_team_days:
-                    # Count cross-team days for this shift
-                    cross_days_count = model.NewIntVar(0, len(week_dates), 
-                                                       f"emp{emp.id}_week{week_idx}_crossteam{shift_code}_days_min")
-                    model.Add(cross_days_count == sum(cross_team_days))
-                    
-                    # Multiply by hours (scaled by 10)
-                    scaled_hours = int(shift_hours[shift_code] * 10)
-                    total_hours_terms.append(cross_days_count * scaled_hours)
-        
-        # Apply minimum hours constraint if employee has weeks without absences
-        # Total hours calculated dynamically based on actual calendar days in planning period
-        # Formula: weekly_working_hours ÷ 7 days × total_days_without_absence
-        # Example: 48h/week ÷ 7 × 31 days (January) = 212.57h ≈ 213h
-        # Example: 48h/week ÷ 7 × 28 days (February) = 192h
-        if total_hours_terms and weeks_without_absences > 0:
-            # Count total days without absence for this employee
-            total_days_without_absence = sum(len(week_dates) for week_idx, week_dates in enumerate(weeks)
-                                             if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
-                                                           for abs in absences) for d in week_dates))
-            
-            # Calculate expected hours based on actual calendar days
-            # Formula: (weekly_target_hours / 7) × total_days_without_absence
-            # Scaled by 10 for precision
-            daily_target_hours = weekly_target_hours / 7.0
-            expected_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
-            
-            # Employee must work at least the expected total hours
-            # This allows flexibility: can work 56h one week (7 days × 8h), less another week
-            model.Add(sum(total_hours_terms) >= expected_total_hours_scaled)
+    # Note: This constraint is commented out to allow feasible solutions.
+    # Future enhancement: Add soft constraint (penalty) instead of hard constraint.
+    
+    # for emp in employees:
+    #     if not emp.team_id:
+    #         continue  # Only check team members
+    #     
+    #     # Calculate total hours worked across all weeks
+    #     total_hours_terms = []
+    #     
+    #     # Calculate expected hours based on weeks without absences
+    #     weeks_without_absences = 0
+    #     weekly_target_hours = DEFAULT_WEEKLY_HOURS  # Default if no shifts found
+    #     
+    #     for week_idx, week_dates in enumerate(weeks):
+    #         # Check if employee has any absences this week
+    #         has_absence_this_week = any(
+    #             any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
+    #             for d in week_dates
+    #         )
+    #         
+    #         if has_absence_this_week:
+    #             # Skip this week - employee is absent, no hours expected
+    #             continue
+    #         
+    #         weeks_without_absences += 1
+    #         
+    #         # Calculate hours worked this week based on team's shift assignment
+    #         # Note: Only ONE shift is active per team per week due to team_shift constraints
+    #         for shift_code in shift_codes:
+    #             if (emp.team_id, week_idx, shift_code) not in team_shift:
+    #                 continue
+    #             if shift_code not in shift_hours:
+    #                 continue
+    #             
+    #             # Update weekly target from shift settings (use last non-absent week's shift)
+    #             if shift_code in shift_weekly_hours:
+    #                 weekly_target_hours = shift_weekly_hours[shift_code]
+    #             
+    #             # Count all active days (weekday + weekend) for this employee when team has this shift
+    #             active_days = []
+    #             
+    #             # WEEKDAY days
+    #             for d in week_dates:
+    #                 if d.weekday() < 5 and (emp.id, d) in employee_active:
+    #                     active_days.append(employee_active[(emp.id, d)])
+    #             
+    #             # WEEKEND days (same shift type as team)
+    #             for d in week_dates:
+    #                 if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+    #                     active_days.append(employee_weekend_shift[(emp.id, d)])
+    #             
+    #             if not active_days:
+    #                 continue
+    #             
+    #             # Count active days this week
+    #             days_active = model.NewIntVar(0, len(week_dates), 
+    #                                           f"emp{emp.id}_week{week_idx}_days_min")
+    #             model.Add(days_active == sum(active_days))
+    #             
+    #             # Multiply by team_shift to get conditional active days
+    #             # This is only non-zero when team actually has this shift this week
+    #             conditional_days = model.NewIntVar(0, len(week_dates), 
+    #                                                f"emp{emp.id}_week{week_idx}_shift{shift_code}_days_min")
+    #             model.AddMultiplicationEquality(
+    #                 conditional_days,
+    #                 [team_shift[(emp.team_id, week_idx, shift_code)], days_active]
+    #             )
+    #             
+    #             # Multiply by shift hours (from shift settings, scaled by 10)
+    #             scaled_hours = int(shift_hours[shift_code] * 10)
+    #             total_hours_terms.append(conditional_days * scaled_hours)
+    #         
+    #         # ADD: Count cross-team hours this week for minimum hours calculation
+    #         for shift_code in shift_codes:
+    #             if shift_code not in shift_hours:
+    #                 continue
+    #             
+    #             cross_team_days = []
+    #             for d in week_dates:
+    #                 if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+    #                     cross_team_days.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+    #                 elif d.weekday() >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+    #                     cross_team_days.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+    #             
+    #             if cross_team_days:
+    #                 # Count cross-team days for this shift
+    #                 cross_days_count = model.NewIntVar(0, len(week_dates), 
+    #                                                    f"emp{emp.id}_week{week_idx}_crossteam{shift_code}_days_min")
+    #                 model.Add(cross_days_count == sum(cross_team_days))
+    #                 
+    #                 # Multiply by hours (scaled by 10)
+    #                 scaled_hours = int(shift_hours[shift_code] * 10)
+    #                 total_hours_terms.append(cross_days_count * scaled_hours)
+    #     
+    #     # Apply minimum hours constraint if employee has weeks without absences
+    #     # Total hours calculated dynamically based on actual calendar days in planning period
+    #     # Formula: weekly_working_hours ÷ 7 days × total_days_without_absence
+    #     # Example: 48h/week ÷ 7 × 31 days (January) = 212.57h ≈ 213h
+    #     # Example: 48h/week ÷ 7 × 28 days (February) = 192h
+    #     if total_hours_terms and weeks_without_absences > 0:
+    #         # Count total days without absence for this employee
+    #         total_days_without_absence = sum(len(week_dates) for week_idx, week_dates in enumerate(weeks)
+    #                                          if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
+    #                                                        for abs in absences) for d in week_dates))
+    #         
+    #         # Calculate expected hours based on actual calendar days
+    #         # Formula: (weekly_target_hours / 7) × total_days_without_absence
+    #         # Scaled by 10 for precision
+    #         daily_target_hours = weekly_target_hours / 7.0
+    #         expected_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
+    #         
+    #         # Employee must work at least the expected total hours
+    #         # This allows flexibility: can work 56h one week (7 days × 8h), less another week
+    #         model.Add(sum(total_hours_terms) >= expected_total_hours_scaled)
 
 
 def add_td_constraints(

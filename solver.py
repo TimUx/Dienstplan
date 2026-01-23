@@ -118,6 +118,12 @@ class ShiftPlanningSolver:
         add_weekly_block_constraints(model, employee_active, employee_cross_team_shift, 
                                     employees, dates, weeks, shift_codes, absences)
         
+        # BLOCK SCHEDULING FOR TEAM MEMBERS
+        print("  - Team member block constraints (Mon-Fri and Sat-Sun blocks for regular assignments)")
+        from constraints import add_team_member_block_constraints
+        add_team_member_block_constraints(model, employee_active, employee_weekend_shift, team_shift,
+                                         employees, teams, dates, weeks, shift_codes, absences)
+        
         # SPECIAL FUNCTIONS
         print("  - TD constraints (Tagdienst = organizational marker)")
         add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)

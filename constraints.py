@@ -1244,6 +1244,103 @@ def add_weekly_block_constraints(
                         model.Add(non_absent_vars[i] == non_absent_vars[j])
 
 
+def add_team_member_block_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    absences: List[Absence]
+):
+    """
+    HARD CONSTRAINT: Enforce block scheduling for team member regular assignments.
+    
+    Block scheduling rules:
+    1. Mon-Fri block: If an employee works ANY weekday (Mon-Fri) in a week, 
+       they must work ALL weekdays (Mon-Fri) in that week (unless absent).
+    2. Sat-Sun block: If an employee works Saturday, they must also work Sunday (unless absent).
+    3. Employees can work: Mon-Fri only, Mon-Sun (full week), or Sat-Sun only.
+    
+    This applies to regular team shift assignments (not cross-team, which has separate constraint).
+    
+    Args:
+        model: CP-SAT model
+        employee_active: Regular team shift variables for weekdays (emp_id, date)
+        employee_weekend_shift: Weekend shift variables (emp_id, date)
+        team_shift: Team shift assignments (team_id, week_idx, shift_code)
+        employees: List of employees
+        teams: List of teams
+        dates: All dates in planning period
+        weeks: List of weeks (each week is a list of dates)
+        shift_codes: All shift codes
+        absences: Employee absences
+    """
+    
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        # Find employee's team
+        team = None
+        for t in teams:
+            if t.id == emp.team_id:
+                team = t
+                break
+        
+        if not team:
+            continue
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # Get weekdays and weekend days in this week
+            weekdays = [d for d in week_dates if d.weekday() < 5]
+            weekend_days = [d for d in week_dates if d.weekday() >= 5]
+            
+            # CONSTRAINT 1: Mon-Fri block for weekdays
+            if len(weekdays) >= 2:
+                # Collect weekday variables for this employee (non-absent days only)
+                weekday_vars = []
+                for d in weekdays:
+                    is_absent = any(
+                        abs.employee_id == emp.id and abs.overlaps_date(d)
+                        for abs in absences
+                    )
+                    
+                    if not is_absent and (emp.id, d) in employee_active:
+                        weekday_vars.append(employee_active[(emp.id, d)])
+                
+                # If ANY weekday is worked, ALL non-absent weekdays must be worked
+                if len(weekday_vars) >= 2:
+                    for i in range(len(weekday_vars)):
+                        for j in range(i + 1, len(weekday_vars)):
+                            # Bidirectional: if one works, all work (Mon-Fri block)
+                            model.Add(weekday_vars[i] == weekday_vars[j])
+            
+            # CONSTRAINT 2: Sat-Sun block for weekends
+            if len(weekend_days) == 2:  # Both Saturday and Sunday present
+                sat = weekend_days[0] if weekend_days[0].weekday() == 5 else weekend_days[1]
+                sun = weekend_days[1] if weekend_days[1].weekday() == 6 else weekend_days[0]
+                
+                # Check if employee is absent on either day
+                sat_absent = any(
+                    abs.employee_id == emp.id and abs.overlaps_date(sat)
+                    for abs in absences
+                )
+                sun_absent = any(
+                    abs.employee_id == emp.id and abs.overlaps_date(sun)
+                    for abs in absences
+                )
+                
+                # If Saturday is worked and Sunday is not absent, Sunday must also be worked
+                if not sat_absent and not sun_absent:
+                    if (emp.id, sat) in employee_weekend_shift and (emp.id, sun) in employee_weekend_shift:
+                        # If Saturday worked, Sunday must be worked too (Sat-Sun block)
+                        model.Add(employee_weekend_shift[(emp.id, sun)] >= employee_weekend_shift[(emp.id, sat)])
+
+
 def add_fairness_objectives(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],

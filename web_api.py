@@ -212,13 +212,45 @@ def get_virtual_team_employee_count(cursor, team_id: int) -> int:
     return 0
 
 
+def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) -> tuple[date, date]:
+    """
+    Extend planning dates to ensure complete weeks (Monday to Sunday).
+    
+    If the last day of the planning period is not a Sunday, extend it to include
+    the remaining days of that week up to Sunday (may cross into the next month).
+    
+    The start date is NOT moved backwards - it stays as the first day of the month.
+    
+    Args:
+        start_date: Original start date (first day of month)
+        end_date: Original end date (last day of month)
+    
+    Returns:
+        Tuple of (extended_start_date, extended_end_date)
+    """
+    # Start date remains unchanged (first day of month)
+    extended_start = start_date
+    
+    # Extend end to next Sunday if not already Sunday
+    # This completes the partial week that starts in the current month
+    extended_end = end_date
+    if end_date.weekday() != 6:  # Not Sunday
+        days_until_sunday = 6 - end_date.weekday()
+        extended_end = end_date + timedelta(days=days_until_sunday)
+    
+    return extended_start, extended_end
+
+
 def validate_monthly_date_range(start_date: date, end_date: date) -> tuple[bool, str]:
     """
     Validate that the date range covers exactly one complete month.
     
+    NOTE: The actual planning period will be extended to complete weeks
+    (Monday to Sunday) which may include days from adjacent months.
+    
     Args:
-        start_date: Start date of the range
-        end_date: End date of the range
+        start_date: Start date of the range (first day of month)
+        end_date: End date of the range (last day of month)
     
     Returns:
         Tuple of (is_valid, error_message). If valid, error_message is empty string.
@@ -2589,7 +2621,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/shifts/plan', methods=['POST'])
     @require_role('Admin')
     def plan_shifts():
-        """Automatic shift planning using OR-Tools (Admin only) - Monthly planning only"""
+        """
+        Automatic shift planning using OR-Tools (Admin only) - Monthly planning with week completion.
+        
+        Planning extends beyond month boundaries to complete partial weeks:
+        - If the last day of the month is not Sunday, planning extends to the next Sunday
+        - Days from the next month that are already planned will be locked as constraints
+        """
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
         force = request.args.get('force', 'false').lower() == 'true'
@@ -2606,15 +2644,82 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not is_valid:
                 return jsonify({'error': error_msg}), 400
             
+            # Extend planning dates to complete weeks (may extend into next month)
+            extended_start, extended_end = extend_planning_dates_to_complete_weeks(start_date, end_date)
+            
+            # Log the extension for transparency
+            app.logger.info(f"Planning for {start_date} to {end_date}")
+            if extended_end > end_date:
+                app.logger.info(f"Extended to complete week: {extended_start} to {extended_end} (added {(extended_end - end_date).days} days from next month)")
+            
             # Load data
             employees, teams, absences, shift_types = load_from_database(db.db_path)
             
             # Load global settings (consecutive shifts limits, rest time, etc.)
             global_settings = load_global_settings(db.db_path)
             
-            # Create model
+            # Load existing assignments for the extended period (to lock days from adjacent months)
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get existing assignments for days that extend beyond the current month
+            # These will be locked so we don't overwrite already-planned shifts
+            locked_team_shift = {}
+            locked_employee_weekend = {}
+            
+            if extended_end > end_date or extended_start < start_date:
+                # Query existing TeamShiftAssignments for extended dates
+                cursor.execute("""
+                    SELECT TeamId, Date, ShiftTypeCode
+                    FROM TeamShiftAssignments
+                    WHERE Date >= ? AND Date <= ?
+                    AND (Date < ? OR Date > ?)
+                """, (extended_start.isoformat(), extended_end.isoformat(),
+                      start_date.isoformat(), end_date.isoformat()))
+                
+                existing_team_assignments = cursor.fetchall()
+                
+                # Build locked constraints from existing assignments
+                # We need to map dates to week indices
+                from datetime import timedelta
+                dates_list = []
+                current = extended_start
+                while current <= extended_end:
+                    dates_list.append(current)
+                    current += timedelta(days=1)
+                
+                # Calculate weeks
+                weeks = []
+                current_week = []
+                for d in dates_list:
+                    if d.weekday() == 0 and current_week:  # Monday
+                        weeks.append(current_week)
+                        current_week = []
+                    current_week.append(d)
+                if current_week:
+                    weeks.append(current_week)
+                
+                # Map dates to week indices
+                date_to_week = {}
+                for week_idx, week_dates in enumerate(weeks):
+                    for d in week_dates:
+                        date_to_week[d] = week_idx
+                
+                # Lock existing team assignments
+                for team_id, date_str, shift_code in existing_team_assignments:
+                    assignment_date = date.fromisoformat(date_str)
+                    if assignment_date in date_to_week:
+                        week_idx = date_to_week[assignment_date]
+                        locked_team_shift[(team_id, week_idx)] = shift_code
+                        app.logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignment on {date_str})")
+            
+            conn.close()
+            
+            # Create model with extended dates and locked constraints
             planning_model = create_shift_planning_model(
-                employees, teams, start_date, end_date, absences, shift_types=shift_types
+                employees, teams, extended_start, extended_end, absences, 
+                shift_types=shift_types,
+                locked_team_shift=locked_team_shift if locked_team_shift else None
             )
             
             # Solve
@@ -2680,19 +2785,29 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             assignments, special_functions, complete_schedule = result
             
+            # Filter assignments to only include days within the requested month
+            # (extended days from next month should not be saved/overwritten)
+            filtered_assignments = [a for a in assignments if start_date <= a.date <= end_date]
+            filtered_special_functions = {k: v for k, v in special_functions.items() 
+                                         if start_date <= k[1] <= end_date}
+            
+            app.logger.info(f"Total assignments generated: {len(assignments)}, for current month: {len(filtered_assignments)}")
+            if len(assignments) > len(filtered_assignments):
+                app.logger.info(f"Excluded {len(assignments) - len(filtered_assignments)} assignments from extended days (next month)")
+            
             # Save to database
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Delete existing non-fixed assignments if force
+            # Delete existing non-fixed assignments if force (only for requested month)
             if force:
                 cursor.execute("""
                     DELETE FROM ShiftAssignments 
                     WHERE Date >= ? AND Date <= ? AND IsFixed = 0
                 """, (start_date.isoformat(), end_date.isoformat()))
             
-            # Insert new assignments
-            for assignment in assignments:
+            # Insert new assignments (only for requested month)
+            for assignment in filtered_assignments:
                 cursor.execute("""
                     INSERT INTO ShiftAssignments 
                     (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
@@ -2707,13 +2822,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     "Python-OR-Tools"
                 ))
             
-            # Insert special functions (TD assignments)
+            # Insert special functions (TD assignments) - only for requested month
             # Get TD shift type ID
             cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = 'TD'")
             td_row = cursor.fetchone()
             if td_row:
                 td_shift_type_id = td_row[0]
-                for (emp_id, date_obj), function_code in special_functions.items():
+                for (emp_id, date_obj), function_code in filtered_special_functions.items():
                     if function_code == "TD":
                         cursor.execute("""
                             INSERT INTO ShiftAssignments 
@@ -2746,11 +2861,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             return jsonify({
                 'success': True,
-                'message': f'Successfully planned {len(assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
-                'assignmentsCount': len(assignments),
-                'specialFunctionsCount': len(special_functions),
+                'message': f'Successfully planned {len(filtered_assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
+                'assignmentsCount': len(filtered_assignments),
+                'specialFunctionsCount': len(filtered_special_functions),
                 'year': start_date.year,
-                'month': start_date.month
+                'month': start_date.month,
+                'extendedPlanning': {
+                    'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
+                    'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0
+                }
             })
             
         except Exception as e:

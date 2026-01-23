@@ -819,6 +819,32 @@ function getAbsenceCode(typeString) {
 }
 
 /**
+ * Calculate appropriate text color (black or white) based on background color brightness
+ * Uses relative luminance formula for better contrast
+ * @param {string} hexColor - Background color in hex format (e.g., "#FF5733")
+ * @returns {string} Text color (#000000 or #FFFFFF)
+ */
+function getContrastTextColor(hexColor) {
+    if (!hexColor || hexColor.length < 6) {
+        return '#000000'; // Default to black
+    }
+    
+    // Remove # if present
+    const hex = hexColor.replace('#', '');
+    
+    // Parse RGB values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    // Calculate relative luminance (ITU-R BT.709)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return white text for dark backgrounds, black text for light backgrounds
+    return luminance > 0.5 ? '#000000' : '#FFFFFF';
+}
+
+/**
  * Create an absence badge HTML element with status-based color coding
  * @param {object} absence - Absence object with type, status, and notes
  * @returns {string} HTML for absence badge
@@ -847,7 +873,7 @@ function createAbsenceBadge(absence) {
 
 /**
  * Create a shift badge HTML element with appropriate styling and onclick handlers
- * @param {object} shift - Shift object with id, shiftCode, shiftName, isFixed
+ * @param {object} shift - Shift object with id, shiftCode, shiftName, isFixed, colorCode
  * @returns {string} HTML for shift badge
  */
 function createShiftBadge(shift) {
@@ -867,14 +893,25 @@ function createShiftBadge(shift) {
     const isSelected = multiSelectMode && shiftId && selectedShifts.has(shiftId);
     const selectedClass = isSelected ? 'shift-selected' : '';
     
+    // Use colorCode from database if available, otherwise keep CSS class for fallback
+    const colorCode = shift.colorCode || '';
+    let styleAttr = '';
+    if (colorCode) {
+        const textColor = getContrastTextColor(colorCode);
+        styleAttr = `background-color: ${colorCode}; color: ${textColor};`;
+    }
+    
     // In multi-select mode, clicking toggles selection; otherwise, opens edit modal
     let onclickAttr = '';
     if (canEdit && shiftId) {
         if (multiSelectMode) {
-            onclickAttr = `onclick="toggleShiftSelection(${shiftId}); return false;" style="cursor:pointer;"`;
+            onclickAttr = `onclick="toggleShiftSelection(${shiftId}); return false;" style="cursor:pointer; ${styleAttr}"`;
         } else {
-            onclickAttr = `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer;"`;
+            onclickAttr = `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer; ${styleAttr}"`;
         }
+    } else if (colorCode) {
+        // Apply style even when not clickable
+        onclickAttr = `style="${styleAttr}"`;
     }
     
     return `<span class="shift-badge shift-${shiftCode} ${badgeClass} ${selectedClass}" title="${shiftName}${isFixed ? ' (Fixiert)' : ''}" ${onclickAttr}>${lockIcon}${shiftCode}</span>`;
@@ -1777,7 +1814,7 @@ function displayStatistics(stats) {
     
     // Work Hours
     html += '<div class="stat-card"><h3>⏱️ Arbeitsstunden</h3>';
-    stats.employeeWorkHours.slice(0, 10).forEach(e => {
+    stats.employeeWorkHours.forEach(e => {
         html += `<div class="stat-item">
             <span>${e.employeeName}</span>
             <span>${e.totalHours.toFixed(1)}h (${e.shiftCount} Schichten)</span>
@@ -1800,7 +1837,7 @@ function displayStatistics(stats) {
     
     // Absence Days
     html += '<div class="stat-card"><h3>📅 Fehltage</h3>';
-    stats.employeeAbsenceDays.slice(0, 10).forEach(e => {
+    stats.employeeAbsenceDays.forEach(e => {
         html += `<div class="stat-item">
             <span>${e.employeeName}</span>
             <span>${e.totalDays} Tage</span>

@@ -665,10 +665,9 @@ def add_consecutive_shifts_constraints(
     MIN_REST_DAYS = 6  # Minimum consecutive days off between work blocks (per requirements)
     
     # For each employee, enforce minimum rest between work blocks
+    # Note: All employees follow the same rest requirements. Cross-team flexibility
+    # is achieved through team shift assignments, not by exempting specific employees.
     for emp in employees:
-        if emp.is_springer:
-            continue  # Springers have more flexible schedules
-        
         # Check consecutive working days and ensure proper rest periods
         for i in range(len(dates) - MIN_REST_DAYS - 1):
             current_date = dates[i]

@@ -5580,10 +5580,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 try:
                     # Validate required fields
                     required_fields = ['Vorname', 'Name', 'Personalnummer']
-                    for field in required_fields:
-                        if field not in row or not row[field]:
-                            errors.append(f"Row {row_num}: Missing required field '{field}'")
-                            continue
+                    missing_fields = [field for field in required_fields if field not in row or not row[field]]
+                    if missing_fields:
+                        errors.append(f"Row {row_num}: Missing required fields: {', '.join(missing_fields)}")
+                        continue  # Skip to next row
                     
                     # Check if employee already exists
                     cursor.execute("""

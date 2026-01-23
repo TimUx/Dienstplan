@@ -83,12 +83,9 @@ Gesamt: 31 Tage
 ### Woche 1: Do 01.01. - So 05.01.
 
 **Team-Zuweisungen:**
-- Team Alpha → **F** (
-Frühschicht 05:45-13:45)
-- Team Beta → **N** (
-Nachtschicht 21:45-05:45)
-- Team Gamma → **S** (
-Spätschicht 13:45-21:45)
+- Team Alpha → **F** (Frühschicht 05:45-13:45)
+- Team Beta → **N** (Nachtschicht 21:45-05:45)
+- Team Gamma → **S** (Spätschicht 13:45-21:45)
 
 **Beispiel Werktag-Besetzung:**
 
@@ -106,12 +103,9 @@ Spätschicht 13:45-21:45)
 ### Woche 2: Mo 06.01. - So 12.01.
 
 **Team-Zuweisungen:**
-- Team Alpha → **N** (
-Nachtschicht 21:45-05:45)
-- Team Beta → **S** (
-Spätschicht 13:45-21:45)
-- Team Gamma → **F** (
-Frühschicht 05:45-13:45)
+- Team Alpha → **N** (Nachtschicht 21:45-05:45)
+- Team Beta → **S** (Spätschicht 13:45-21:45)
+- Team Gamma → **F** (Frühschicht 05:45-13:45)
 
 **TD dieser Woche:** Lisa Meyer
 
@@ -131,12 +125,9 @@ Frühschicht 05:45-13:45)
 ### Woche 3: Mo 13.01. - So 19.01.
 
 **Team-Zuweisungen:**
-- Team Alpha → **S** (
-Spätschicht 13:45-21:45)
-- Team Beta → **F** (
-Frühschicht 05:45-13:45)
-- Team Gamma → **N** (
-Nachtschicht 21:45-05:45)
+- Team Alpha → **S** (Spätschicht 13:45-21:45)
+- Team Beta → **F** (Frühschicht 05:45-13:45)
+- Team Gamma → **N** (Nachtschicht 21:45-05:45)
 
 **TD dieser Woche:** Michael Schulz
 
@@ -156,12 +147,9 @@ Nachtschicht 21:45-05:45)
 ### Woche 4: Mo 20.01. - So 26.01.
 
 **Team-Zuweisungen:**
-- Team Alpha → **F** (
-Frühschicht 05:45-13:45)
-- Team Beta → **N** (
-Nachtschicht 21:45-05:45)
-- Team Gamma → **S** (
-Spätschicht 13:45-21:45)
+- Team Alpha → **F** (Frühschicht 05:45-13:45)
+- Team Beta → **N** (Nachtschicht 21:45-05:45)
+- Team Gamma → **S** (Spätschicht 13:45-21:45)
 
 **TD dieser Woche:** Andreas Wolf
 
@@ -181,12 +169,9 @@ Spätschicht 13:45-21:45)
 ### Woche 5: Mo 27.01. - Fr 31.01.
 
 **Team-Zuweisungen:**
-- Team Alpha → **N** (
-Nachtschicht 21:45-05:45)
-- Team Beta → **S** (
-Spätschicht 13:45-21:45)
-- Team Gamma → **F** (
-Frühschicht 05:45-13:45)
+- Team Alpha → **N** (Nachtschicht 21:45-05:45)
+- Team Beta → **S** (Spätschicht 13:45-21:45)
+- Team Gamma → **F** (Frühschicht 05:45-13:45)
 
 **TD dieser Woche:** Lisa Meyer
 

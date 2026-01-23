@@ -163,7 +163,9 @@ team_schicht[team][woche][erwartete_schicht] == 1
 |---------|---------|---------|-----------|
 | **Früh (F)** | 4 | 5 | Höchste Anforderung |
 | **Spät (S)** | 3 | 4 | Mittlere Anforderung |
-| **Nacht (N)** | 3 | 3 | Exakte Anforderung |
+| **Nacht (N)** | 3 | 3 | Exakt 3 Personen (konfigurierbar) |
+
+**Hinweis:** Die Werte sind in der Datenbank konfigurierbar. Die angegebenen Werte sind die Standard-Defaults bei Systeminitialisierung.
 
 #### 3.3.2 Wochenende (Samstag–Sonntag)
 

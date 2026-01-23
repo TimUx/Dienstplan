@@ -644,48 +644,112 @@ def add_consecutive_shifts_constraints(
     max_consecutive_night_shifts_weeks: int = 3
 ):
     """
-    HARD CONSTRAINT: Maximum consecutive working days of same shift type (INCLUDING cross-team).
+    HARD CONSTRAINT: Enforce minimum rest period between work blocks.
     
-    CORRECTED UNDERSTANDING (per stakeholder clarification):
-    - The database stores MaxConsecutiveShifts in WEEKS (e.g., 6)
-    - These values are converted to DAYS for constraint enforcement (6 weeks × 7 = 42 days)
-    - Maximum consecutive days of F/S shifts = max_consecutive_shifts_weeks × 7
-    - Maximum consecutive days of N shifts = max_consecutive_night_shifts_weeks × 7
-    - NO limit on total consecutive working days (can work all 7 days/week)
+    Requirements (from stakeholder):
+    - A shift interruption (Schichtunterbrechung) is only valid when there are at least
+      6-7 consecutive days OFF between work periods for an employee
+    - This prevents scheduling employees for too many consecutive working days
+    - The max_consecutive_shifts_weeks parameter defines the maximum weeks of work before
+      requiring this rest period
+    
+    Implementation:
+    - If an employee works for consecutive days, they must have at least 6 days completely OFF
+      before starting another work block
+    - This is checked on a weekly basis as specified in requirements
     
     Args:
-        max_consecutive_shifts_weeks: Max weeks of same shift (F/S) from database (default 6)
+        max_consecutive_shifts_weeks: Max weeks of consecutive work from database (default 6)
         max_consecutive_night_shifts_weeks: Max weeks of night shifts from database (default 3)
-    
-    Note: With team rotation (F -> N -> S weekly), employees typically work max
-    7 consecutive days of the same shift, well below these limits.
-    
-    IMPORTANT: This constraint is effectively handled by the team rotation pattern.
-    Since teams rotate weekly (F -> N -> S), no employee can work more than
-    ~7 consecutive days of the same shift type, which is far below the limits.
-    
-    Therefore, we implement a simplified check that still respects the mathematical
-    limits but relies primarily on the team rotation to prevent violations.
     """
-    # NOTE: With team rotation enforcing weekly shift changes, this constraint
-    # is automatically satisfied. An employee in a team with F -> N -> S rotation
-    # can never work more consecutive days of the same shift than configured
-    # (max_consecutive_shifts_weeks × 7 days for F/S shifts, or
-    #  max_consecutive_night_shifts_weeks × 7 days for N shifts).
-    # 
-    # We keep this function for completeness and potential future configurations
-    # where teams might have more flexible rotation patterns, but the actual
-    # enforcement comes from the team rotation constraints.
+    MIN_REST_DAYS = 6  # Minimum consecutive days off between work blocks (per requirements)
     
-    # The team rotation constraint (F -> N -> S weekly) in add_team_rotation_constraints()
-    # ensures that:
-    # 1. Each team works a different shift each week
-    # 2. Maximum same shift = 7 days (one week)
-    # 3. This is well below the configured limits from the database
-    
-    # Therefore, no additional constraints are needed here.
-    # The configured limits are respected through the team rotation pattern.
-    pass
+    # For each employee, enforce minimum rest between work blocks
+    for emp in employees:
+        if emp.is_springer:
+            continue  # Springers have more flexible schedules
+        
+        # Check consecutive working days and ensure proper rest periods
+        for i in range(len(dates) - MIN_REST_DAYS - 1):
+            current_date = dates[i]
+            
+            # Get all work variables for current date (any shift type)
+            current_work_vars = []
+            
+            # Regular weekday shift
+            if (emp.id, current_date) in employee_active:
+                current_work_vars.append(employee_active[(emp.id, current_date)])
+            
+            # Weekend shift
+            if (emp.id, current_date) in employee_weekend_shift:
+                current_work_vars.append(employee_weekend_shift[(emp.id, current_date)])
+            
+            # Cross-team shifts
+            for shift_code in shift_codes:
+                if (emp.id, current_date, shift_code) in employee_cross_team_shift:
+                    current_work_vars.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
+                if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
+                    current_work_vars.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
+            
+            if not current_work_vars:
+                continue
+            
+            # Create boolean: is employee working on current_date?
+            is_working_current = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
+            model.Add(sum(current_work_vars) >= 1).OnlyEnforceIf(is_working_current)
+            model.Add(sum(current_work_vars) == 0).OnlyEnforceIf(is_working_current.Not())
+            
+            # Check date after rest period (MIN_REST_DAYS + 1 days later)
+            rest_end_idx = i + MIN_REST_DAYS + 1
+            if rest_end_idx >= len(dates):
+                continue
+            
+            future_date = dates[rest_end_idx]
+            future_work_vars = []
+            
+            # Get work variables for future date
+            if (emp.id, future_date) in employee_active:
+                future_work_vars.append(employee_active[(emp.id, future_date)])
+            if (emp.id, future_date) in employee_weekend_shift:
+                future_work_vars.append(employee_weekend_shift[(emp.id, future_date)])
+            for shift_code in shift_codes:
+                if (emp.id, future_date, shift_code) in employee_cross_team_shift:
+                    future_work_vars.append(employee_cross_team_shift[(emp.id, future_date, shift_code)])
+                if (emp.id, future_date, shift_code) in employee_cross_team_weekend:
+                    future_work_vars.append(employee_cross_team_weekend[(emp.id, future_date, shift_code)])
+            
+            if not future_work_vars:
+                continue
+            
+            is_working_future = model.NewBoolVar(f"emp{emp.id}_working_{future_date}")
+            model.Add(sum(future_work_vars) >= 1).OnlyEnforceIf(is_working_future)
+            model.Add(sum(future_work_vars) == 0).OnlyEnforceIf(is_working_future.Not())
+            
+            # If working on both current_date and future_date, ensure at least MIN_REST_DAYS off in between
+            both_working = model.NewBoolVar(f"emp{emp.id}_both_{current_date}_{future_date}")
+            model.AddMultiplicationEquality(both_working, [is_working_current, is_working_future])
+            
+            # When both_working == 1, ensure employee has at least MIN_REST_DAYS consecutive days off
+            # This means: for each day in the rest period, sum of all work vars must be 0
+            for rest_day_idx in range(i + 1, rest_end_idx):
+                if rest_day_idx >= len(dates):
+                    break
+                rest_date = dates[rest_day_idx]
+                
+                rest_day_work_vars = []
+                if (emp.id, rest_date) in employee_active:
+                    rest_day_work_vars.append(employee_active[(emp.id, rest_date)])
+                if (emp.id, rest_date) in employee_weekend_shift:
+                    rest_day_work_vars.append(employee_weekend_shift[(emp.id, rest_date)])
+                for shift_code in shift_codes:
+                    if (emp.id, rest_date, shift_code) in employee_cross_team_shift:
+                        rest_day_work_vars.append(employee_cross_team_shift[(emp.id, rest_date, shift_code)])
+                    if (emp.id, rest_date, shift_code) in employee_cross_team_weekend:
+                        rest_day_work_vars.append(employee_cross_team_weekend[(emp.id, rest_date, shift_code)])
+                
+                if rest_day_work_vars:
+                    # If both_working, then this rest day must be completely free
+                    model.Add(sum(rest_day_work_vars) == 0).OnlyEnforceIf(both_working)
 
 
 def add_working_hours_constraints(

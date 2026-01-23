@@ -163,9 +163,9 @@ team_schicht[team][woche][erwartete_schicht] == 1
 |---------|---------|---------|-----------|
 | **Früh (F)** | 4 | 5 | Höchste Anforderung |
 | **Spät (S)** | 3 | 4 | Mittlere Anforderung |
-| **Nacht (N)** | 3 | 3 | Exakt 3 Personen (konfigurierbar) |
+| **Nacht (N)** | 3 | 3 | Standard: 3 Personen (konfigurierbar) |
 
-**Hinweis:** Die Werte sind in der Datenbank konfigurierbar. Die angegebenen Werte sind die Standard-Defaults bei Systeminitialisierung.
+**Hinweis:** Die Werte sind in der Datenbank konfigurierbar. Die angegebenen Werte sind die Standard-Konfiguration bei Systeminitialisierung.
 
 #### 3.3.2 Wochenende (Samstag–Sonntag)
 
@@ -686,10 +686,10 @@ Gesamt: 25-26 Arbeitstage → ca. 200-208 Stunden
 ```
 F: 4-5 Personen
 S: 3-4 Personen
-N: 3 Personen
+N: 3 Personen (Standard)
 ──────────────────
-Total: 10-12 Personen/Schicht
-       30-36 Personen-Schichten/Tag (bei 3 Schichten)
+Total: 10-12 Personen gleichzeitig
+       30-36 Person-Schicht-Zuweisungen/Tag (bei 3 Schichten)
 ```
 
 **Mit 15 Mitarbeitern:**

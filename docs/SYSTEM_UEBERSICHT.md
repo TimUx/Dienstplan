@@ -18,9 +18,9 @@ Dieses Dokument bietet eine **vollständige und eindeutige Darstellung** des aut
 ✅ **Mindestbesetzung (Standard-Konfiguration):**
    - Früh: min 4, max 5 (werktags) | min 2, max 3 (Wochenende)
    - Spät: min 3, max 4 (werktags) | min 2, max 3 (Wochenende)
-   - Nacht: exakt 3 (werktags) | min 2, max 3 (Wochenende)
+   - Nacht: min 3, max 3 (werktags) | min 2, max 3 (Wochenende)
    
-   *Hinweis: Alle Werte sind in der Datenbank konfigurierbar.*
+   *Hinweis: Alle Werte sind in der Datenbank konfigurierbar und können angepasst werden.*
 
 ---
 
@@ -105,7 +105,7 @@ Diese Regeln sind **absolut verpflichtend** und werden zu 100% eingehalten:
 - ✓ **Werktags (Mo-Fr):**
   - Früh: 4-5 Personen
   - Spät: 3-4 Personen
-  - Nacht: exakt 3 Personen (min=max=3)
+  - Nacht: 3 Personen (Standard: min=3, max=3)
 - ✓ **Wochenende (Sa-So):**
   - Alle Schichten: 2-3 Personen
   

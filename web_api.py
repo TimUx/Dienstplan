@@ -5406,6 +5406,386 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'valid': False})
     
     # ============================================================================
+    # DATA EXPORT/IMPORT (Admin only)
+    # ============================================================================
+    
+    @app.route('/api/employees/export/csv', methods=['GET'])
+    @require_role('Admin')
+    def export_employees_csv():
+        """
+        Export all employees to CSV format.
+        
+        Returns a CSV file with all employee data for backup or migration.
+        """
+        import csv
+        from io import StringIO
+        
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get all employees with their data
+            cursor.execute("""
+                SELECT Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion,
+                       TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker,
+                       IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive
+                FROM Employees
+                WHERE Id > 1
+                ORDER BY TeamId, Name
+            """)
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            # Create CSV in memory
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow([
+                'Vorname', 'Name', 'Personalnummer', 'Email', 'Geburtsdatum', 'Funktion',
+                'TeamId', 'IsSpringer', 'IsFerienjobber', 'IsBrandmeldetechniker',
+                'IsBrandschutzbeauftragter', 'IsTdQualified', 'IsTeamLeader', 'IsActive'
+            ])
+            
+            # Write data
+            for row in rows:
+                writer.writerow(row)
+            
+            # Prepare response
+            output.seek(0)
+            from io import BytesIO
+            output_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))  # UTF-8 with BOM for Excel
+            output_bytes.seek(0)
+            
+            return send_file(
+                output_bytes,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f'employees_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Export employees error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    
+    @app.route('/api/teams/export/csv', methods=['GET'])
+    @require_role('Admin')
+    def export_teams_csv():
+        """
+        Export all teams to CSV format.
+        
+        Returns a CSV file with all team data for backup or migration.
+        """
+        import csv
+        from io import StringIO
+        
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get all teams
+            cursor.execute("""
+                SELECT Name, Description, Email, IsVirtual
+                FROM Teams
+                ORDER BY Name
+            """)
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            # Create CSV in memory
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow(['Name', 'Description', 'Email', 'IsVirtual'])
+            
+            # Write data
+            for row in rows:
+                writer.writerow(row)
+            
+            # Prepare response
+            output.seek(0)
+            from io import BytesIO
+            output_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))  # UTF-8 with BOM for Excel
+            output_bytes.seek(0)
+            
+            return send_file(
+                output_bytes,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f'teams_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Export teams error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    
+    @app.route('/api/employees/import/csv', methods=['POST'])
+    @require_role('Admin')
+    def import_employees_csv():
+        """
+        Import employees from CSV file.
+        
+        Supports conflict resolution:
+        - overwrite: Replace existing employees (matched by Personalnummer)
+        - skip: Skip existing employees, only add new ones
+        
+        Query parameters:
+        - conflict_mode: 'overwrite' or 'skip' (default: 'skip')
+        """
+        import csv
+        from io import StringIO, TextIOWrapper
+        
+        try:
+            # Check if file was uploaded
+            if 'file' not in request.files:
+                return jsonify({'error': 'No file uploaded'}), 400
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            
+            # Get conflict mode from query parameter
+            conflict_mode = request.args.get('conflict_mode', 'skip')
+            if conflict_mode not in ['overwrite', 'skip']:
+                return jsonify({'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}), 400
+            
+            # Read CSV file
+            # Try to detect encoding (UTF-8 with BOM, UTF-8, or Latin-1)
+            content = file.read()
+            try:
+                text = content.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                try:
+                    text = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    text = content.decode('latin-1')
+            
+            csv_file = StringIO(text)
+            reader = csv.DictReader(csv_file)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            imported_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+                try:
+                    # Validate required fields
+                    required_fields = ['Vorname', 'Name', 'Personalnummer']
+                    for field in required_fields:
+                        if field not in row or not row[field]:
+                            errors.append(f"Row {row_num}: Missing required field '{field}'")
+                            continue
+                    
+                    # Check if employee already exists
+                    cursor.execute("""
+                        SELECT Id FROM Employees WHERE Personalnummer = ?
+                    """, (row['Personalnummer'],))
+                    
+                    existing = cursor.fetchone()
+                    
+                    # Prepare values with defaults for optional fields
+                    values = {
+                        'Vorname': row['Vorname'],
+                        'Name': row['Name'],
+                        'Personalnummer': row['Personalnummer'],
+                        'Email': row.get('Email', ''),
+                        'Geburtsdatum': row.get('Geburtsdatum', None),
+                        'Funktion': row.get('Funktion', ''),
+                        'TeamId': int(row['TeamId']) if row.get('TeamId') and row['TeamId'].strip() else None,
+                        'IsSpringer': int(row.get('IsSpringer', 0)),
+                        'IsFerienjobber': int(row.get('IsFerienjobber', 0)),
+                        'IsBrandmeldetechniker': int(row.get('IsBrandmeldetechniker', 0)),
+                        'IsBrandschutzbeauftragter': int(row.get('IsBrandschutzbeauftragter', 0)),
+                        'IsTdQualified': int(row.get('IsTdQualified', 0)),
+                        'IsTeamLeader': int(row.get('IsTeamLeader', 0)),
+                        'IsActive': int(row.get('IsActive', 1))
+                    }
+                    
+                    if existing:
+                        if conflict_mode == 'overwrite':
+                            # Update existing employee
+                            cursor.execute("""
+                                UPDATE Employees
+                                SET Vorname = ?, Name = ?, Email = ?, Geburtsdatum = ?,
+                                    Funktion = ?, TeamId = ?, IsSpringer = ?, IsFerienjobber = ?,
+                                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?,
+                                    IsTdQualified = ?, IsTeamLeader = ?, IsActive = ?
+                                WHERE Personalnummer = ?
+                            """, (
+                                values['Vorname'], values['Name'], values['Email'],
+                                values['Geburtsdatum'], values['Funktion'], values['TeamId'],
+                                values['IsSpringer'], values['IsFerienjobber'],
+                                values['IsBrandmeldetechniker'], values['IsBrandschutzbeauftragter'],
+                                values['IsTdQualified'], values['IsTeamLeader'], values['IsActive'],
+                                values['Personalnummer']
+                            ))
+                            updated_count += 1
+                        else:
+                            # Skip existing employee
+                            skipped_count += 1
+                    else:
+                        # Insert new employee
+                        cursor.execute("""
+                            INSERT INTO Employees
+                            (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion,
+                             TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker,
+                             IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            values['Vorname'], values['Name'], values['Personalnummer'],
+                            values['Email'], values['Geburtsdatum'], values['Funktion'],
+                            values['TeamId'], values['IsSpringer'], values['IsFerienjobber'],
+                            values['IsBrandmeldetechniker'], values['IsBrandschutzbeauftragter'],
+                            values['IsTdQualified'], values['IsTeamLeader'], values['IsActive']
+                        ))
+                        imported_count += 1
+                        
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {str(e)}")
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'imported': imported_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'errors': errors
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Import employees error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    
+    @app.route('/api/teams/import/csv', methods=['POST'])
+    @require_role('Admin')
+    def import_teams_csv():
+        """
+        Import teams from CSV file.
+        
+        Supports conflict resolution:
+        - overwrite: Replace existing teams (matched by Name)
+        - skip: Skip existing teams, only add new ones
+        
+        Query parameters:
+        - conflict_mode: 'overwrite' or 'skip' (default: 'skip')
+        """
+        import csv
+        from io import StringIO
+        
+        try:
+            # Check if file was uploaded
+            if 'file' not in request.files:
+                return jsonify({'error': 'No file uploaded'}), 400
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            
+            # Get conflict mode from query parameter
+            conflict_mode = request.args.get('conflict_mode', 'skip')
+            if conflict_mode not in ['overwrite', 'skip']:
+                return jsonify({'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}), 400
+            
+            # Read CSV file
+            content = file.read()
+            try:
+                text = content.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                try:
+                    text = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    text = content.decode('latin-1')
+            
+            csv_file = StringIO(text)
+            reader = csv.DictReader(csv_file)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            imported_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for row_num, row in enumerate(reader, start=2):
+                try:
+                    # Validate required fields
+                    if 'Name' not in row or not row['Name']:
+                        errors.append(f"Row {row_num}: Missing required field 'Name'")
+                        continue
+                    
+                    # Check if team already exists
+                    cursor.execute("""
+                        SELECT Id FROM Teams WHERE Name = ?
+                    """, (row['Name'],))
+                    
+                    existing = cursor.fetchone()
+                    
+                    # Prepare values
+                    values = {
+                        'Name': row['Name'],
+                        'Description': row.get('Description', ''),
+                        'Email': row.get('Email', ''),
+                        'IsVirtual': int(row.get('IsVirtual', 0))
+                    }
+                    
+                    if existing:
+                        if conflict_mode == 'overwrite':
+                            # Update existing team
+                            cursor.execute("""
+                                UPDATE Teams
+                                SET Description = ?, Email = ?, IsVirtual = ?
+                                WHERE Name = ?
+                            """, (
+                                values['Description'], values['Email'],
+                                values['IsVirtual'], values['Name']
+                            ))
+                            updated_count += 1
+                        else:
+                            # Skip existing team
+                            skipped_count += 1
+                    else:
+                        # Insert new team
+                        cursor.execute("""
+                            INSERT INTO Teams (Name, Description, Email, IsVirtual)
+                            VALUES (?, ?, ?, ?)
+                        """, (
+                            values['Name'], values['Description'],
+                            values['Email'], values['IsVirtual']
+                        ))
+                        imported_count += 1
+                        
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {str(e)}")
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'imported': imported_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'errors': errors
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Import teams error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    # ============================================================================
     # STATIC FILES (Web UI)
     # ============================================================================
     

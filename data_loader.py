@@ -270,7 +270,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     # Load employees
     cursor.execute("""
         SELECT Id, Vorname, Name, Personalnummer, Email, Geburtsdatum, 
-               Funktion, IsFerienjobber, IsBrandmeldetechniker, 
+               Funktion, IsSpringer, IsFerienjobber, IsBrandmeldetechniker, 
                IsBrandschutzbeauftragter, TeamId
         FROM Employees
     """)
@@ -284,10 +284,11 @@ def load_from_database(db_path: str = "dienstplan.db"):
     COL_EMAIL = 4
     COL_GEBURTSDATUM = 5
     COL_FUNKTION = 6
-    COL_IS_FERIENJOBBER = 7
-    COL_IS_BMT = 8
-    COL_IS_BSB = 9
-    COL_TEAM_ID = 10
+    COL_IS_SPRINGER = 7
+    COL_IS_FERIENJOBBER = 8
+    COL_IS_BMT = 9
+    COL_IS_BSB = 10
+    COL_TEAM_ID = 11
     
     for row in cursor.fetchall():
         # TD qualification: employee is qualified if they have either BMT or BSB qualification
@@ -303,6 +304,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
             email=row[COL_EMAIL],
             geburtsdatum=date.fromisoformat(row[COL_GEBURTSDATUM]) if row[COL_GEBURTSDATUM] else None,
             funktion=row[COL_FUNKTION],
+            is_springer=bool(row[COL_IS_SPRINGER]),
             is_ferienjobber=bool(row[COL_IS_FERIENJOBBER]),
             is_brandmeldetechniker=bool(row[COL_IS_BMT]),
             is_brandschutzbeauftragter=bool(row[COL_IS_BSB]),

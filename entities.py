@@ -120,6 +120,7 @@ class Employee:
     email: Optional[str] = None
     geburtsdatum: Optional[date] = None  # Birth date
     funktion: Optional[str] = None  # Function/Role
+    is_springer: bool = False  # Springer (flexible cover/replacement worker)
     is_ferienjobber: bool = False  # Temporary worker
     is_brandmeldetechniker: bool = False  # BMT qualified (for legacy compatibility)
     is_brandschutzbeauftragter: bool = False  # BSB qualified (for legacy compatibility)

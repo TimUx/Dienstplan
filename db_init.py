@@ -569,16 +569,24 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     # All three shifts work Monday-Sunday (all 7 days) - represented by 1 for each day
     # Note: IDs are assigned based on legacy system compatibility (F=1, S=2, N=3), not rotation order
     # The rotation order F→N→S is defined separately in initialize_shift_type_relationships()
+    # 
+    # IMPORTANT: Max staffing set to 10 to allow cross-team assignments so all employees
+    # can reach their monthly minimum target hours (e.g., 192h minimum for 48h/week).
+    # Employees can work MORE than minimum hours but not less.
+    # With 3 teams of 5 employees (15 total), max=10 accommodates flexible distribution.
     shift_types = [
-        # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, Sa–So mind. 2 Personen)
+        # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, max. 10)
         # Works all 7 days: Monday-Sunday
-        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 5, 2, 3, 1, 1, 1, 1, 1, 1, 1),
-        # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
+        # Max set to 10 to allow cross-team assignments and flexible hour distribution
+        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, max. 10)
         # Works all 7 days: Monday-Sunday
-        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 3, 2, 3, 1, 1, 1, 1, 1, 1, 1),
-        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, Sa–So mind. 2 Personen)
-        # Works all 7 days: Monday-Sunday
-        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 4, 2, 3, 1, 1, 1, 1, 1, 1, 1),
+        # Max set to 10 to allow cross-team assignments and flexible hour distribution
+        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, max. 10)
+        # Works all 7 days: Monday-Sunday  
+        # Max set to 10 to allow cross-team assignments and flexible hour distribution
+        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
         # Additional shifts (Z, BMT, BSB, TD) can be created manually in the UI as needed
     ]
     

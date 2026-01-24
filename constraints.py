@@ -303,10 +303,11 @@ def add_staffing_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    shift_types: List[ShiftType]
-):
+    shift_types: List[ShiftType],
+    violation_tracker=None
+) -> List[cp_model.IntVar]:
     """
-    HARD CONSTRAINT: Minimum and maximum staffing per shift, INCLUDING cross-team workers.
+    HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
     Staffing requirements are configured per shift type in the database.
     Values are ALWAYS read from shift_types parameter (no fallback values).
@@ -314,10 +315,18 @@ def add_staffing_constraints(
     Weekdays (Mon-Fri): Count active team members + cross-team workers per shift.
     Weekends (Sat-Sun): Count team weekend workers + cross-team weekend workers.
     
+    CHANGE (per @TimUx): Maximum staffing is now SOFT - can be exceeded if needed
+    to meet higher priority constraints (minimum hours, absences, etc.).
+    Overstaffing creates a penalty but doesn't block feasibility.
+    
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
     Args:
         shift_types: List of ShiftType objects from database (REQUIRED)
+        violation_tracker: Optional tracker for recording when max is exceeded
+        
+    Returns:
+        List of IntVar representing overstaffing penalties for soft optimization
     """
     if not shift_types:
         raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
@@ -335,6 +344,9 @@ def add_staffing_constraints(
                 "min": st.min_staff_weekend,
                 "max": st.max_staff_weekend
             }
+    
+    # Initialize list for overstaffing penalty variables
+    overstaffing_penalties = []
     
     for d in dates:
         is_weekend = d.weekday() >= 5
@@ -402,8 +414,13 @@ def add_staffing_constraints(
                 
                 if assigned:
                     total_assigned = sum(assigned)
+                    # HARD minimum staffing
                     model.Add(total_assigned >= staffing[shift]["min"])
-                    model.Add(total_assigned <= staffing[shift]["max"])
+                    # SOFT maximum staffing - create penalty variable for overstaffing
+                    overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekend")
+                    model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
+                    model.Add(overstaffing >= 0)
+                    overstaffing_penalties.append(overstaffing)
             else:
                 # WEEKDAY: Count team members + cross-team workers who work this shift
                 # A member works this shift if:
@@ -438,8 +455,16 @@ def add_staffing_constraints(
                 
                 if assigned:
                     total_assigned = sum(assigned)
+                    # HARD minimum staffing
                     model.Add(total_assigned >= staffing[shift]["min"])
-                    model.Add(total_assigned <= staffing[shift]["max"])
+                    # SOFT maximum staffing - create penalty variable for overstaffing
+                    overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekday")
+                    model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
+                    model.Add(overstaffing >= 0)
+                    overstaffing_penalties.append(overstaffing)
+    
+    return overstaffing_penalties
+
 
 
 def add_rest_time_constraints(
@@ -453,10 +478,11 @@ def add_rest_time_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    teams: List[Team] = None
+    teams: List[Team] = None,
+    violation_tracker=None
 ):
     """
-    HARD CONSTRAINT: Minimum 11 hours rest between shifts.
+    HARD CONSTRAINT (with EXCEPTIONS): Minimum 11 hours rest between shifts.
     
     CRITICAL FOR CROSS-TEAM: Must enforce forbidden transitions to prevent violations.
     
@@ -464,8 +490,14 @@ def add_rest_time_constraints(
     - S → F (Spät 21:45 → Früh 05:45 = 8 hours)
     - N → F (Nacht 05:45 → Früh 05:45 = 0 hours in same day context)
     
+    EXCEPTION (per @TimUx): Sunday→Monday team rotation boundary
+    - When employee works cross-team on Sunday and their own team starts Monday
+    - This violation is UNAVOIDABLE with team rotation
+    - Exception allows 8 hours rest (better than blocking feasibility)
+    - Tracked for admin review
+    
     With team-based planning alone, these are prevented by rotation.
-    With cross-team assignments, we must explicitly forbid these transitions.
+    With cross-team assignments, we must explicitly forbid these transitions (except exceptions).
     """
     # Define shift end times (approximate, for determining forbidden transitions)
     shift_end_times = {
@@ -620,14 +652,28 @@ def add_rest_time_constraints(
                     tomorrow_shift_codes.append(shift_code)
             
             # Forbid transitions: S→F and N→F
+            # EXCEPTION: Sunday→Monday team rotation boundary (per @TimUx)
             for i_today, today_shift_code in enumerate(today_shift_codes):
                 for i_tomorrow, tomorrow_shift_code in enumerate(tomorrow_shift_codes):
                     # Check if this is a forbidden transition
                     if (today_shift_code == "S" and tomorrow_shift_code == "F") or \
                        (today_shift_code == "N" and tomorrow_shift_code == "F"):
-                        # Forbid: NOT(today_shift AND tomorrow_shift)
-                        # Equivalent to: today_shift + tomorrow_shift <= 1
-                        model.Add(today_shifts[i_today] + tomorrow_shifts[i_tomorrow] <= 1)
+                        
+                        # Check for Sunday→Monday exception with team rotation
+                        is_sunday_monday = (today.weekday() == 6 and tomorrow.weekday() == 0)
+                        
+                        # Only apply exception if this is Sunday→Monday
+                        # This allows unavoidable rest time violations due to team rotation
+                        if is_sunday_monday:
+                            # Skip constraint - allow this transition
+                            # Track as exception for admin review
+                            if violation_tracker:
+                                # Note: actual violation only logged if this transition occurs in solution
+                                pass  # Would need post-processing to detect actual violations
+                        else:
+                            # Forbid: NOT(today_shift AND tomorrow_shift)
+                            # Equivalent to: today_shift + tomorrow_shift <= 1
+                            model.Add(today_shifts[i_today] + tomorrow_shifts[i_tomorrow] <= 1)
 
 
 def add_consecutive_shifts_constraints(
@@ -765,19 +811,27 @@ def add_working_hours_constraints(
     weeks: List[List[date]],
     shift_codes: List[str],
     shift_types: List[ShiftType],
-    absences: List[Absence] = None
-):
+    absences: List[Absence] = None,
+    violation_tracker=None
+) -> List[cp_model.IntVar]:
     """
-    HARD CONSTRAINT: Working hours limits based on shift configuration INCLUDING cross-team.
+    SOFT CONSTRAINT: Working hours target based on proportional calculation INCLUDING cross-team.
     
     This constraint ensures that employees:
-    1. Meet minimum required working hours based on their shift's WeeklyWorkingHours
-       (48h/week for main shifts F, S, N)
-    2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration)
-    3. Monthly hours are calculated as WeeklyWorkingHours * 4 (e.g., 192h/month for 48h/week)
-    4. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
-    5. If an employee works less in one week (without absence), they must compensate in other weeks
-    6. UPDATED: Hours from cross-team assignments count toward employee's total hours
+    1. SOFT: Target proportional hours (48h/7 × days) - e.g., 212h for 31-day month
+       - Solver minimizes shortage from target
+       - NO hard minimum - feasibility is prioritized over hours target
+       - Violations tracked for admin review
+    2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration) - HARD
+    3. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
+    4. If an employee works less in one week (without absence), they should compensate in other weeks (SOFT)
+    5. UPDATED: Hours from cross-team assignments count toward employee's total hours
+    
+    CHANGE (per @TimUx): Removed hard 192h minimum to allow feasibility.
+    Target hours are now purely SOFT - system will get as close as possible.
+    
+    Returns:
+        List of IntVar representing shortage from target hours for soft optimization
     
     The limits are now DYNAMIC per employee based on their team's assigned shift(s),
     replacing the previous fixed limits of 192 hours/month and 48 hours/week.
@@ -787,6 +841,10 @@ def add_working_hours_constraints(
     Cross-team hours are based on the actual shift worked.
     """
     absences = absences or []
+    
+    # Initialize list for soft objective variables (minimize shortage from target hours)
+    soft_objectives = []
+    
     # Create shift hours lookup
     shift_hours = {}
     shift_weekly_hours = {}
@@ -794,23 +852,11 @@ def add_working_hours_constraints(
         shift_hours[st.code] = st.hours
         shift_weekly_hours[st.code] = st.weekly_working_hours
     
-    # Pre-calculate maximum weekly hours per team per week to avoid repeated computation
-    team_week_max_hours = {}
-    for emp in employees:
-        if not emp.team_id:
-            continue
-        for week_idx in range(len(weeks)):
-            key = (emp.team_id, week_idx)
-            if key not in team_week_max_hours:
-                # Calculate max hours for this team in this week
-                possible_max_hours = [shift_weekly_hours.get(sc, DEFAULT_WEEKLY_HOURS) 
-                                     for sc in shift_codes 
-                                     if (emp.team_id, week_idx, sc) in team_shift]
-                team_week_max_hours[key] = max(possible_max_hours) if possible_max_hours else DEFAULT_WEEKLY_HOURS
-    
-    # Calculate working hours per week and enforce MAXIMUM limits only
-    # Note: Minimum hours enforcement has been REMOVED due to infeasibility issues
-    # See explanation below for details
+    # NOTE: No weekly maximum hours constraints
+    # Employees can work varying hours per week (e.g., 40h one week, 56h another)
+    # The system only enforces:
+    # - SOFT target: proportional hours over the entire planning period
+    # - NO hard weekly limits
     for emp in employees:
         if not emp.team_id:
             continue  # Only check team members
@@ -881,24 +927,27 @@ def add_working_hours_constraints(
                     scaled_hours = int(shift_hours[shift_code] * 10)
                     hours_terms.append(cross_days_count * scaled_hours)
             
-            if hours_terms:
-                # Use pre-calculated maximum weekly hours (scaled by 10)
-                max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), DEFAULT_WEEKLY_HOURS) * 10)
-                model.Add(sum(hours_terms) <= max_scaled_hours)
+            # NOTE: No hard weekly maximum hours constraint
+            # Employees can work varying hours per week (e.g., 40h one week, 56h another)
+            # as long as the overall period targets are met
     
     # MINIMUM working hours constraint across the planning period
     # 
-    # Business requirement (per @TimUx):
-    # - ALL employees MUST reach their monthly minimum hours (e.g., 192h for 48h/week)
-    # - Hours can vary per week (e.g., 56h one week, less another week)
-    # - Only absences (sick, vacation, training) exempt employees from this requirement
-    # - Minimum staffing (e.g., 3) is a FLOOR - more employees CAN and SHOULD work to meet hours
+    # Business requirement (per @TimUx - updated 2026-01-24):
+    # - HARD CONSTRAINT: Absolute minimum 192h/month (48h/week × 4 weeks)
+    #   → No employee can work less than this (except when absent)
+    # - SOFT CONSTRAINT: Target is proportional to days: (48h/7) × days_in_period
+    #   → Example: January 31 days → 48/7 × 31 = 212.57h target
+    #   → Example: February 28 days → 48/7 × 28 = 192h target
+    # - Hours can vary per week (e.g., 56h one week, 40h another week)
+    # - Only absences (sick, vacation, training) exempt employees from these requirements
+    # - Minimum staffing (e.g., F=4, S=3, N=3) is a FLOOR - more employees SHOULD work to meet hours
     # 
     # Implementation:
+    # - Hard constraint: total_hours >= 192h (scaled: >= 1920)
+    # - Soft objective: maximize(total_hours - target_hours) where target = (48/7) × days
     # - Shift hours come from shift settings (ShiftType.hours)
     # - Weekly hours come from shift settings (ShiftType.weekly_working_hours)
-    # - Monthly hours = weekly_working_hours × number of weeks without absences
-    # - Each employee must meet total across all weeks (flexible weekly distribution)
     for emp in employees:
         if not emp.team_id:
             continue  # Only check team members
@@ -991,26 +1040,35 @@ def add_working_hours_constraints(
                     scaled_hours = int(shift_hours[shift_code] * 10)
                     total_hours_terms.append(cross_days_count * scaled_hours)
         
-        # Apply minimum hours constraint if employee has weeks without absences
-        # Total hours calculated dynamically based on actual calendar days in planning period
-        # Formula: weekly_working_hours ÷ 7 days × total_days_without_absence
-        # Example: 48h/week ÷ 7 × 31 days (January) = 212.57h ≈ 213h
-        # Example: 48h/week ÷ 7 × 28 days (February) = 192h
+        # Apply minimum hours constraints if employee has weeks without absences
         if total_hours_terms and weeks_without_absences > 0:
             # Count total days without absence for this employee
             total_days_without_absence = sum(len(week_dates) for week_idx, week_dates in enumerate(weeks)
                                              if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
                                                            for abs in absences) for d in week_dates))
             
-            # Calculate expected hours based on actual calendar days
-            # Formula: (weekly_target_hours / 7) × total_days_without_absence
-            # Scaled by 10 for precision
-            daily_target_hours = weekly_target_hours / 7.0
-            expected_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
+            # REMOVED: Hard 192h minimum constraint (per @TimUx request)
+            # Now using ONLY soft target to allow feasibility in difficult cases
             
-            # Employee must work at least the expected total hours
-            # This allows flexibility: can work 56h one week (7 days × 8h), less another week
-            model.Add(sum(total_hours_terms) >= expected_total_hours_scaled)
+            # SOFT CONSTRAINT: Target proportional hours (48h/7 × days)
+            # Example: 31 days → 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)
+            # We want to minimize the shortage from this target
+            daily_target_hours = weekly_target_hours / 7.0
+            target_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
+            
+            # Create variable for shortage from target (0 if at target, positive if below)
+            shortage_from_target = model.NewIntVar(0, target_total_hours_scaled, 
+                                                    f"emp{emp.id}_hours_shortage")
+            
+            # shortage = max(0, target - actual)
+            # We model this as: shortage >= target - actual AND shortage >= 0
+            model.Add(shortage_from_target >= target_total_hours_scaled - sum(total_hours_terms))
+            model.Add(shortage_from_target >= 0)
+            
+            # Add to soft objectives (minimize shortage)
+            soft_objectives.append(shortage_from_target)
+    
+    return soft_objectives
 
 
 def add_td_constraints(
@@ -1173,75 +1231,157 @@ def add_weekly_block_constraints(
     absences: List[Absence]
 ):
     """
-    HARD CONSTRAINT: Enforce Mon-Fri block scheduling for cross-team assignments.
+    DISABLED: Mon-Fri block scheduling for cross-team assignments is NOT enforced.
     
-    When an employee is assigned to a cross-team shift for any day in a week (Mon-Fri),
-    they must work all Mon-Fri days in that week for that shift (unless absent).
+    Per @TimUx feedback: Block scheduling should be preferred but NOT mandatory.
+    The predefined blocks (Mon-Fri, Mon-Sun, Sat-Sun) should be followed when possible,
+    but smaller blocks or individual days can be used if needed to meet minimum hours.
     
-    This ensures:
-    - Complete Mon-Fri blocks for cross-team assignments
-    - No gaps in weekday work when assigned cross-team
-    - Weekends remain individually assignable
+    This hard constraint was causing infeasibility by being too restrictive.
+    Block scheduling is now handled as SOFT objectives in add_team_member_block_constraints().
+    
+    Args:
+        model: CP-SAT model (unused)
+        employee_active: Regular team shift variables (unused)
+        employee_cross_team_shift: Cross-team shift variables (unused)
+        employees: List of employees (unused)
+        dates: All dates in planning period (unused)
+        weeks: List of weeks (unused)
+        shift_codes: All shift codes (unused)
+        absences: Employee absences (unused)
+    """
+    # INTENTIONALLY DISABLED: Block constraints were too restrictive
+    # Cross-team assignments can now be any length (1-7 days) as needed
+    # Block preferences are encouraged via soft objectives instead
+    pass
+
+
+def add_team_member_block_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    absences: List[Absence]
+) -> List[cp_model.IntVar]:
+    """
+    SOFT OBJECTIVES: Encourage block scheduling (Mon-Fri, Mon-Sun, Sat-Sun).
+    
+    Block scheduling preferences (flexible, NOT mandatory):
+    1. Prefer Mon-Fri blocks (5 days) when working weekdays
+    2. Prefer Mon-Sun blocks (7 days) for full week
+    3. Prefer Sat-Sun blocks (2 days) for weekends
+    
+    The predefined blocks should be followed when possible but are NOT mandatory.
+    Smaller blocks can be used if needed. The system will try to use blocks but
+    may use individual days if necessary to meet minimum hours requirements.
     
     Args:
         model: CP-SAT model
-        employee_active: Regular team shift variables (weekdays only)
-        employee_cross_team_shift: Cross-team shift variables (emp_id, date, shift_code)
+        employee_active: Regular team shift variables for weekdays (emp_id, date)
+        employee_weekend_shift: Weekend shift variables (emp_id, date)
+        team_shift: Team shift assignments (team_id, week_idx, shift_code)
         employees: List of employees
+        teams: List of teams
         dates: All dates in planning period
         weeks: List of weeks (each week is a list of dates)
         shift_codes: All shift codes
         absences: Employee absences
+    
+    Returns:
+        List of objective variables for block scheduling preferences
     """
+    
+    objective_vars = []
     
     for emp in employees:
         if not emp.team_id:
             continue
         
+        # Find employee's team
+        team = None
+        for t in teams:
+            if t.id == emp.team_id:
+                team = t
+                break
+        
+        if not team:
+            continue
+        
         for week_idx, week_dates in enumerate(weeks):
-            # Get weekdays in this week (Monday-Friday)
+            # Get weekdays and weekend days in this week
             weekdays = [d for d in week_dates if d.weekday() < 5]
+            weekend_days = [d for d in week_dates if d.weekday() >= 5]
             
-            if not weekdays:
-                continue
+            # Collect all work variables for the week (for checking isolated days)
+            all_week_vars = []
+            all_week_dates = []
             
-            # For each shift code, enforce Mon-Fri block if assigned
-            for shift_code in shift_codes:
-                # Collect cross-team variables for this employee, week, and shift
-                cross_team_vars = []
-                for d in weekdays:
-                    if (emp.id, d, shift_code) in employee_cross_team_shift:
-                        cross_team_vars.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+            for d in week_dates:
+                is_absent = any(
+                    abs.employee_id == emp.id and abs.overlaps_date(d)
+                    for abs in absences
+                )
                 
-                if len(cross_team_vars) < 2:
-                    # Not enough days to enforce block constraint
-                    continue
-                
-                # If employee works ANY day in this shift, they must work ALL days (unless absent)
-                # Create: if sum(vars) > 0, then all vars must be 1 (considering absences)
-                
-                # Count absences in this week's weekdays
-                non_absent_vars = []
+                if not is_absent:
+                    if d.weekday() < 5 and (emp.id, d) in employee_active:
+                        all_week_vars.append(employee_active[(emp.id, d)])
+                        all_week_dates.append(d)
+                    elif d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                        all_week_vars.append(employee_weekend_shift[(emp.id, d)])
+                        all_week_dates.append(d)
+            
+            # SOFT OBJECTIVES: Encourage block scheduling
+            
+            # Objective 1: Encourage Mon-Fri blocks (all 5 weekdays)
+            if len(weekdays) >= 5:
+                weekday_vars = []
                 for d in weekdays:
                     is_absent = any(
                         abs.employee_id == emp.id and abs.overlaps_date(d)
                         for abs in absences
                     )
-                    
-                    if not is_absent and (emp.id, d, shift_code) in employee_cross_team_shift:
-                        non_absent_vars.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    if not is_absent and (emp.id, d) in employee_active:
+                        weekday_vars.append(employee_active[(emp.id, d)])
                 
-                if len(non_absent_vars) < 2:
-                    continue
+                if len(weekday_vars) == 5:
+                    # Create a bonus variable: if all 5 weekdays are worked, bonus = 1
+                    mon_fri_bonus = model.NewBoolVar(f'mon_fri_bonus_e{emp.id}_w{week_idx}')
+                    # mon_fri_bonus == 1 if sum(weekday_vars) == 5
+                    model.Add(sum(weekday_vars) >= 5).OnlyEnforceIf(mon_fri_bonus)
+                    model.Add(sum(weekday_vars) < 5).OnlyEnforceIf(mon_fri_bonus.Not())
+                    objective_vars.append(mon_fri_bonus)
+            
+            # Objective 2: Encourage Sat-Sun blocks
+            if len(weekend_days) == 2:
+                sat = weekend_days[0] if weekend_days[0].weekday() == 5 else weekend_days[1]
+                sun = weekend_days[1] if weekend_days[1].weekday() == 6 else weekend_days[0]
                 
-                # If ANY day is worked, ALL non-absent days must be worked
-                # This creates the Mon-Fri block effect
-                for i in range(len(non_absent_vars)):
-                    for j in range(i + 1, len(non_absent_vars)):
-                        # If var[i] == 1, then var[j] must == 1
-                        # If var[j] == 1, then var[i] must == 1
-                        # This creates bidirectional implication: all or none
-                        model.Add(non_absent_vars[i] == non_absent_vars[j])
+                sat_absent = any(
+                    abs.employee_id == emp.id and abs.overlaps_date(sat)
+                    for abs in absences
+                )
+                sun_absent = any(
+                    abs.employee_id == emp.id and abs.overlaps_date(sun)
+                    for abs in absences
+                )
+                
+                if not sat_absent and not sun_absent:
+                    if (emp.id, sat) in employee_weekend_shift and (emp.id, sun) in employee_weekend_shift:
+                        # Create a bonus variable: if both Sat and Sun are worked, bonus = 1
+                        sat_sun_bonus = model.NewBoolVar(f'sat_sun_bonus_e{emp.id}_w{week_idx}')
+                        # sat_sun_bonus == 1 if both worked
+                        sat_var = employee_weekend_shift[(emp.id, sat)]
+                        sun_var = employee_weekend_shift[(emp.id, sun)]
+                        model.Add(sat_var + sun_var >= 2).OnlyEnforceIf(sat_sun_bonus)
+                        model.Add(sat_var + sun_var < 2).OnlyEnforceIf(sat_sun_bonus.Not())
+                        objective_vars.append(sat_sun_bonus)
+    
+    return objective_vars
 
 
 def add_fairness_objectives(

@@ -212,13 +212,56 @@ def get_virtual_team_employee_count(cursor, team_id: int) -> int:
     return 0
 
 
+def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) -> tuple[date, date]:
+    """
+    Extend planning dates to ensure complete weeks (Monday to Sunday).
+    
+    CRITICAL FIX: Extends BOTH start and end dates to create complete 7-day weeks.
+    This solves the infeasibility issue with partial weeks at month boundaries.
+    
+    - If start_date is not Monday, extend backwards to previous Monday (may be in previous month)
+    - If end_date is not Sunday, extend forward to next Sunday (may be in next month)
+    
+    This ensures the planning period consists of complete Mon-Sun weeks only,
+    which is required for the F→N→S team rotation to work properly without
+    creating infeasibility with the minimum working hours constraint.
+    
+    Example: January 2026 (Thu Jan 1 - Sat Jan 31)
+    - Extended: Mon Dec 29, 2025 - Sun Feb 1, 2026 (exactly 5 complete weeks)
+    
+    Args:
+        start_date: Original start date (first day of month)
+        end_date: Original end date (last day of month)
+    
+    Returns:
+        Tuple of (extended_start_date, extended_end_date) with complete weeks
+    """
+    # Extend START backwards to previous Monday if not already Monday
+    # weekday() returns: 0=Monday, 1=Tuesday, ..., 6=Sunday
+    extended_start = start_date
+    if start_date.weekday() != 0:  # Not Monday
+        days_since_monday = start_date.weekday()
+        extended_start = start_date - timedelta(days=days_since_monday)
+    
+    # Extend END forward to next Sunday if not already Sunday
+    extended_end = end_date
+    if end_date.weekday() != 6:  # Not Sunday
+        days_until_sunday = 6 - end_date.weekday()
+        extended_end = end_date + timedelta(days=days_until_sunday)
+    
+    return extended_start, extended_end
+
+
 def validate_monthly_date_range(start_date: date, end_date: date) -> tuple[bool, str]:
     """
     Validate that the date range covers exactly one complete month.
     
+    NOTE: The actual planning period will be extended to complete weeks
+    (Monday to Sunday) which may include days from adjacent months.
+    
     Args:
-        start_date: Start date of the range
-        end_date: End date of the range
+        start_date: Start date of the range (first day of month)
+        end_date: End date of the range (last day of month)
     
     Returns:
         Tuple of (is_valid, error_message). If valid, error_message is empty string.
@@ -2589,7 +2632,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/shifts/plan', methods=['POST'])
     @require_role('Admin')
     def plan_shifts():
-        """Automatic shift planning using OR-Tools (Admin only) - Monthly planning only"""
+        """
+        Automatic shift planning using OR-Tools (Admin only) - Monthly planning with week completion.
+        
+        Planning extends beyond month boundaries to complete partial weeks:
+        - If the last day of the month is not Sunday, planning extends to the next Sunday
+        - Days from the next month that are already planned will be locked as constraints
+        """
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
         force = request.args.get('force', 'false').lower() == 'true'
@@ -2606,15 +2655,82 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not is_valid:
                 return jsonify({'error': error_msg}), 400
             
+            # Extend planning dates to complete weeks (may extend into next month)
+            extended_start, extended_end = extend_planning_dates_to_complete_weeks(start_date, end_date)
+            
+            # Log the extension for transparency
+            app.logger.info(f"Planning for {start_date} to {end_date}")
+            if extended_end > end_date:
+                app.logger.info(f"Extended to complete week: {extended_start} to {extended_end} (added {(extended_end - end_date).days} days from next month)")
+            
             # Load data
             employees, teams, absences, shift_types = load_from_database(db.db_path)
             
             # Load global settings (consecutive shifts limits, rest time, etc.)
             global_settings = load_global_settings(db.db_path)
             
-            # Create model
+            # Load existing assignments for the extended period (to lock days from adjacent months)
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get existing assignments for days that extend beyond the current month
+            # These will be locked so we don't overwrite already-planned shifts
+            locked_team_shift = {}
+            locked_employee_weekend = {}
+            
+            if extended_end > end_date or extended_start < start_date:
+                # Query existing TeamShiftAssignments for extended dates
+                cursor.execute("""
+                    SELECT TeamId, Date, ShiftTypeCode
+                    FROM TeamShiftAssignments
+                    WHERE Date >= ? AND Date <= ?
+                    AND (Date < ? OR Date > ?)
+                """, (extended_start.isoformat(), extended_end.isoformat(),
+                      start_date.isoformat(), end_date.isoformat()))
+                
+                existing_team_assignments = cursor.fetchall()
+                
+                # Build locked constraints from existing assignments
+                # We need to map dates to week indices
+                from datetime import timedelta
+                dates_list = []
+                current = extended_start
+                while current <= extended_end:
+                    dates_list.append(current)
+                    current += timedelta(days=1)
+                
+                # Calculate weeks
+                weeks = []
+                current_week = []
+                for d in dates_list:
+                    if d.weekday() == 0 and current_week:  # Monday
+                        weeks.append(current_week)
+                        current_week = []
+                    current_week.append(d)
+                if current_week:
+                    weeks.append(current_week)
+                
+                # Map dates to week indices
+                date_to_week = {}
+                for week_idx, week_dates in enumerate(weeks):
+                    for d in week_dates:
+                        date_to_week[d] = week_idx
+                
+                # Lock existing team assignments
+                for team_id, date_str, shift_code in existing_team_assignments:
+                    assignment_date = date.fromisoformat(date_str)
+                    if assignment_date in date_to_week:
+                        week_idx = date_to_week[assignment_date]
+                        locked_team_shift[(team_id, week_idx)] = shift_code
+                        app.logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignment on {date_str})")
+            
+            conn.close()
+            
+            # Create model with extended dates and locked constraints
             planning_model = create_shift_planning_model(
-                employees, teams, start_date, end_date, absences, shift_types=shift_types
+                employees, teams, extended_start, extended_end, absences, 
+                shift_types=shift_types,
+                locked_team_shift=locked_team_shift if locked_team_shift else None
             )
             
             # Solve
@@ -2680,19 +2796,29 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             assignments, special_functions, complete_schedule = result
             
+            # Filter assignments to only include days within the requested month
+            # (extended days from next month should not be saved/overwritten)
+            filtered_assignments = [a for a in assignments if start_date <= a.date <= end_date]
+            filtered_special_functions = {k: v for k, v in special_functions.items() 
+                                         if start_date <= k[1] <= end_date}
+            
+            app.logger.info(f"Total assignments generated: {len(assignments)}, for current month: {len(filtered_assignments)}")
+            if len(assignments) > len(filtered_assignments):
+                app.logger.info(f"Excluded {len(assignments) - len(filtered_assignments)} assignments from extended days (next month)")
+            
             # Save to database
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Delete existing non-fixed assignments if force
+            # Delete existing non-fixed assignments if force (only for requested month)
             if force:
                 cursor.execute("""
                     DELETE FROM ShiftAssignments 
                     WHERE Date >= ? AND Date <= ? AND IsFixed = 0
                 """, (start_date.isoformat(), end_date.isoformat()))
             
-            # Insert new assignments
-            for assignment in assignments:
+            # Insert new assignments (only for requested month)
+            for assignment in filtered_assignments:
                 cursor.execute("""
                     INSERT INTO ShiftAssignments 
                     (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
@@ -2707,13 +2833,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     "Python-OR-Tools"
                 ))
             
-            # Insert special functions (TD assignments)
+            # Insert special functions (TD assignments) - only for requested month
             # Get TD shift type ID
             cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = 'TD'")
             td_row = cursor.fetchone()
             if td_row:
                 td_shift_type_id = td_row[0]
-                for (emp_id, date_obj), function_code in special_functions.items():
+                for (emp_id, date_obj), function_code in filtered_special_functions.items():
                     if function_code == "TD":
                         cursor.execute("""
                             INSERT INTO ShiftAssignments 
@@ -2746,11 +2872,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             return jsonify({
                 'success': True,
-                'message': f'Successfully planned {len(assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
-                'assignmentsCount': len(assignments),
-                'specialFunctionsCount': len(special_functions),
+                'message': f'Successfully planned {len(filtered_assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
+                'assignmentsCount': len(filtered_assignments),
+                'specialFunctionsCount': len(filtered_special_functions),
                 'year': start_date.year,
-                'month': start_date.month
+                'month': start_date.month,
+                'extendedPlanning': {
+                    'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
+                    'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0
+                }
             })
             
         except Exception as e:
@@ -5404,6 +5534,386 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         except Exception as e:
             app.logger.error(f"Validate reset token error: {str(e)}")
             return jsonify({'valid': False})
+    
+    # ============================================================================
+    # DATA EXPORT/IMPORT (Admin only)
+    # ============================================================================
+    
+    @app.route('/api/employees/export/csv', methods=['GET'])
+    @require_role('Admin')
+    def export_employees_csv():
+        """
+        Export all employees to CSV format.
+        
+        Returns a CSV file with all employee data for backup or migration.
+        """
+        import csv
+        from io import StringIO
+        
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get all employees with their data
+            cursor.execute("""
+                SELECT Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion,
+                       TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker,
+                       IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive
+                FROM Employees
+                WHERE Id > 1
+                ORDER BY TeamId, Name
+            """)
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            # Create CSV in memory
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow([
+                'Vorname', 'Name', 'Personalnummer', 'Email', 'Geburtsdatum', 'Funktion',
+                'TeamId', 'IsSpringer', 'IsFerienjobber', 'IsBrandmeldetechniker',
+                'IsBrandschutzbeauftragter', 'IsTdQualified', 'IsTeamLeader', 'IsActive'
+            ])
+            
+            # Write data
+            for row in rows:
+                writer.writerow(row)
+            
+            # Prepare response
+            output.seek(0)
+            from io import BytesIO
+            output_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))  # UTF-8 with BOM for Excel
+            output_bytes.seek(0)
+            
+            return send_file(
+                output_bytes,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f'employees_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Export employees error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    
+    @app.route('/api/teams/export/csv', methods=['GET'])
+    @require_role('Admin')
+    def export_teams_csv():
+        """
+        Export all teams to CSV format.
+        
+        Returns a CSV file with all team data for backup or migration.
+        """
+        import csv
+        from io import StringIO
+        
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get all teams
+            cursor.execute("""
+                SELECT Name, Description, Email, IsVirtual
+                FROM Teams
+                ORDER BY Name
+            """)
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            # Create CSV in memory
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow(['Name', 'Description', 'Email', 'IsVirtual'])
+            
+            # Write data
+            for row in rows:
+                writer.writerow(row)
+            
+            # Prepare response
+            output.seek(0)
+            from io import BytesIO
+            output_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))  # UTF-8 with BOM for Excel
+            output_bytes.seek(0)
+            
+            return send_file(
+                output_bytes,
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f'teams_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            )
+            
+        except Exception as e:
+            app.logger.error(f"Export teams error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    
+    @app.route('/api/employees/import/csv', methods=['POST'])
+    @require_role('Admin')
+    def import_employees_csv():
+        """
+        Import employees from CSV file.
+        
+        Supports conflict resolution:
+        - overwrite: Replace existing employees (matched by Personalnummer)
+        - skip: Skip existing employees, only add new ones
+        
+        Query parameters:
+        - conflict_mode: 'overwrite' or 'skip' (default: 'skip')
+        """
+        import csv
+        from io import StringIO, TextIOWrapper
+        
+        try:
+            # Check if file was uploaded
+            if 'file' not in request.files:
+                return jsonify({'error': 'No file uploaded'}), 400
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            
+            # Get conflict mode from query parameter
+            conflict_mode = request.args.get('conflict_mode', 'skip')
+            if conflict_mode not in ['overwrite', 'skip']:
+                return jsonify({'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}), 400
+            
+            # Read CSV file
+            # Try to detect encoding (UTF-8 with BOM, UTF-8, or Latin-1)
+            content = file.read()
+            try:
+                text = content.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                try:
+                    text = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    text = content.decode('latin-1')
+            
+            csv_file = StringIO(text)
+            reader = csv.DictReader(csv_file)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            imported_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+                try:
+                    # Validate required fields
+                    required_fields = ['Vorname', 'Name', 'Personalnummer']
+                    missing_fields = [field for field in required_fields if field not in row or not row[field]]
+                    if missing_fields:
+                        errors.append(f"Row {row_num}: Missing required fields: {', '.join(missing_fields)}")
+                        continue  # Skip to next row
+                    
+                    # Check if employee already exists
+                    cursor.execute("""
+                        SELECT Id FROM Employees WHERE Personalnummer = ?
+                    """, (row['Personalnummer'],))
+                    
+                    existing = cursor.fetchone()
+                    
+                    # Prepare values with defaults for optional fields
+                    values = {
+                        'Vorname': row['Vorname'],
+                        'Name': row['Name'],
+                        'Personalnummer': row['Personalnummer'],
+                        'Email': row.get('Email', ''),
+                        'Geburtsdatum': row.get('Geburtsdatum', None),
+                        'Funktion': row.get('Funktion', ''),
+                        'TeamId': int(row['TeamId']) if row.get('TeamId') and row['TeamId'].strip() else None,
+                        'IsSpringer': int(row.get('IsSpringer', 0)),
+                        'IsFerienjobber': int(row.get('IsFerienjobber', 0)),
+                        'IsBrandmeldetechniker': int(row.get('IsBrandmeldetechniker', 0)),
+                        'IsBrandschutzbeauftragter': int(row.get('IsBrandschutzbeauftragter', 0)),
+                        'IsTdQualified': int(row.get('IsTdQualified', 0)),
+                        'IsTeamLeader': int(row.get('IsTeamLeader', 0)),
+                        'IsActive': int(row.get('IsActive', 1))
+                    }
+                    
+                    if existing:
+                        if conflict_mode == 'overwrite':
+                            # Update existing employee
+                            cursor.execute("""
+                                UPDATE Employees
+                                SET Vorname = ?, Name = ?, Email = ?, Geburtsdatum = ?,
+                                    Funktion = ?, TeamId = ?, IsSpringer = ?, IsFerienjobber = ?,
+                                    IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?,
+                                    IsTdQualified = ?, IsTeamLeader = ?, IsActive = ?
+                                WHERE Personalnummer = ?
+                            """, (
+                                values['Vorname'], values['Name'], values['Email'],
+                                values['Geburtsdatum'], values['Funktion'], values['TeamId'],
+                                values['IsSpringer'], values['IsFerienjobber'],
+                                values['IsBrandmeldetechniker'], values['IsBrandschutzbeauftragter'],
+                                values['IsTdQualified'], values['IsTeamLeader'], values['IsActive'],
+                                values['Personalnummer']
+                            ))
+                            updated_count += 1
+                        else:
+                            # Skip existing employee
+                            skipped_count += 1
+                    else:
+                        # Insert new employee
+                        cursor.execute("""
+                            INSERT INTO Employees
+                            (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion,
+                             TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker,
+                             IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            values['Vorname'], values['Name'], values['Personalnummer'],
+                            values['Email'], values['Geburtsdatum'], values['Funktion'],
+                            values['TeamId'], values['IsSpringer'], values['IsFerienjobber'],
+                            values['IsBrandmeldetechniker'], values['IsBrandschutzbeauftragter'],
+                            values['IsTdQualified'], values['IsTeamLeader'], values['IsActive']
+                        ))
+                        imported_count += 1
+                        
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {str(e)}")
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'imported': imported_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'errors': errors
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Import employees error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+    
+    
+    @app.route('/api/teams/import/csv', methods=['POST'])
+    @require_role('Admin')
+    def import_teams_csv():
+        """
+        Import teams from CSV file.
+        
+        Supports conflict resolution:
+        - overwrite: Replace existing teams (matched by Name)
+        - skip: Skip existing teams, only add new ones
+        
+        Query parameters:
+        - conflict_mode: 'overwrite' or 'skip' (default: 'skip')
+        """
+        import csv
+        from io import StringIO
+        
+        try:
+            # Check if file was uploaded
+            if 'file' not in request.files:
+                return jsonify({'error': 'No file uploaded'}), 400
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            
+            # Get conflict mode from query parameter
+            conflict_mode = request.args.get('conflict_mode', 'skip')
+            if conflict_mode not in ['overwrite', 'skip']:
+                return jsonify({'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}), 400
+            
+            # Read CSV file
+            content = file.read()
+            try:
+                text = content.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                try:
+                    text = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    text = content.decode('latin-1')
+            
+            csv_file = StringIO(text)
+            reader = csv.DictReader(csv_file)
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            imported_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+            
+            for row_num, row in enumerate(reader, start=2):
+                try:
+                    # Validate required fields
+                    if 'Name' not in row or not row['Name']:
+                        errors.append(f"Row {row_num}: Missing required field 'Name'")
+                        continue
+                    
+                    # Check if team already exists
+                    cursor.execute("""
+                        SELECT Id FROM Teams WHERE Name = ?
+                    """, (row['Name'],))
+                    
+                    existing = cursor.fetchone()
+                    
+                    # Prepare values
+                    values = {
+                        'Name': row['Name'],
+                        'Description': row.get('Description', ''),
+                        'Email': row.get('Email', ''),
+                        'IsVirtual': int(row.get('IsVirtual', 0))
+                    }
+                    
+                    if existing:
+                        if conflict_mode == 'overwrite':
+                            # Update existing team
+                            cursor.execute("""
+                                UPDATE Teams
+                                SET Description = ?, Email = ?, IsVirtual = ?
+                                WHERE Name = ?
+                            """, (
+                                values['Description'], values['Email'],
+                                values['IsVirtual'], values['Name']
+                            ))
+                            updated_count += 1
+                        else:
+                            # Skip existing team
+                            skipped_count += 1
+                    else:
+                        # Insert new team
+                        cursor.execute("""
+                            INSERT INTO Teams (Name, Description, Email, IsVirtual)
+                            VALUES (?, ?, ?, ?)
+                        """, (
+                            values['Name'], values['Description'],
+                            values['Email'], values['IsVirtual']
+                        ))
+                        imported_count += 1
+                        
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {str(e)}")
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'imported': imported_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'errors': errors
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Import teams error: {str(e)}")
+            return jsonify({'error': str(e)}), 500
     
     # ============================================================================
     # STATIC FILES (Web UI)

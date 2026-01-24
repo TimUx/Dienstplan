@@ -766,18 +766,20 @@ def add_working_hours_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     absences: List[Absence] = None
-):
+) -> List[cp_model.IntVar]:
     """
-    HARD CONSTRAINT: Working hours limits based on shift configuration INCLUDING cross-team.
+    HARD + SOFT CONSTRAINTS: Working hours limits and targets based on shift configuration INCLUDING cross-team.
     
     This constraint ensures that employees:
-    1. Meet minimum required working hours based on their shift's WeeklyWorkingHours
-       (48h/week for main shifts F, S, N)
-    2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration)
-    3. Monthly hours are calculated as WeeklyWorkingHours * 4 (e.g., 192h/month for 48h/week)
+    1. HARD: Meet absolute minimum 192h/month (48h/week × 4 weeks) - cannot go below
+    2. SOFT: Target proportional hours (48h/7 × days) - e.g., 212h for 31-day month
+    3. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration)
     4. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
     5. If an employee works less in one week (without absence), they must compensate in other weeks
     6. UPDATED: Hours from cross-team assignments count toward employee's total hours
+    
+    Returns:
+        List of IntVar representing shortage from target hours for soft optimization
     
     The limits are now DYNAMIC per employee based on their team's assigned shift(s),
     replacing the previous fixed limits of 192 hours/month and 48 hours/week.
@@ -787,6 +789,10 @@ def add_working_hours_constraints(
     Cross-team hours are based on the actual shift worked.
     """
     absences = absences or []
+    
+    # Initialize list for soft objective variables (minimize shortage from target hours)
+    soft_objectives = []
+    
     # Create shift hours lookup
     shift_hours = {}
     shift_weekly_hours = {}
@@ -888,17 +894,21 @@ def add_working_hours_constraints(
     
     # MINIMUM working hours constraint across the planning period
     # 
-    # Business requirement (per @TimUx):
-    # - ALL employees MUST reach their monthly minimum hours (e.g., 192h for 48h/week)
-    # - Hours can vary per week (e.g., 56h one week, less another week)
-    # - Only absences (sick, vacation, training) exempt employees from this requirement
-    # - Minimum staffing (e.g., 3) is a FLOOR - more employees CAN and SHOULD work to meet hours
+    # Business requirement (per @TimUx - updated 2026-01-24):
+    # - HARD CONSTRAINT: Absolute minimum 192h/month (48h/week × 4 weeks)
+    #   → No employee can work less than this (except when absent)
+    # - SOFT CONSTRAINT: Target is proportional to days: (48h/7) × days_in_period
+    #   → Example: January 31 days → 48/7 × 31 = 212.57h target
+    #   → Example: February 28 days → 48/7 × 28 = 192h target
+    # - Hours can vary per week (e.g., 56h one week, 40h another week)
+    # - Only absences (sick, vacation, training) exempt employees from these requirements
+    # - Minimum staffing (e.g., F=4, S=3, N=3) is a FLOOR - more employees SHOULD work to meet hours
     # 
     # Implementation:
+    # - Hard constraint: total_hours >= 192h (scaled: >= 1920)
+    # - Soft objective: maximize(total_hours - target_hours) where target = (48/7) × days
     # - Shift hours come from shift settings (ShiftType.hours)
     # - Weekly hours come from shift settings (ShiftType.weekly_working_hours)
-    # - Monthly hours = weekly_working_hours × number of weeks without absences
-    # - Each employee must meet total across all weeks (flexible weekly distribution)
     for emp in employees:
         if not emp.team_id:
             continue  # Only check team members
@@ -985,32 +995,43 @@ def add_working_hours_constraints(
                     # Count cross-team days for this shift
                     cross_days_count = model.NewIntVar(0, len(week_dates), 
                                                        f"emp{emp.id}_week{week_idx}_crossteam{shift_code}_days_min")
-                    model.Add(cross_days_count == sum(cross_team_days))
+                     model.Add(cross_days_count == sum(cross_team_days))
                     
                     # Multiply by hours (scaled by 10)
                     scaled_hours = int(shift_hours[shift_code] * 10)
                     total_hours_terms.append(cross_days_count * scaled_hours)
         
-        # Apply minimum hours constraint if employee has weeks without absences
-        # Total hours calculated dynamically based on actual calendar days in planning period
-        # Formula: weekly_working_hours ÷ 7 days × total_days_without_absence
-        # Example: 48h/week ÷ 7 × 31 days (January) = 212.57h ≈ 213h
-        # Example: 48h/week ÷ 7 × 28 days (February) = 192h
+        # Apply minimum hours constraints if employee has weeks without absences
         if total_hours_terms and weeks_without_absences > 0:
             # Count total days without absence for this employee
             total_days_without_absence = sum(len(week_dates) for week_idx, week_dates in enumerate(weeks)
                                              if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
                                                            for abs in absences) for d in week_dates))
             
-            # Calculate expected hours based on actual calendar days
-            # Formula: (weekly_target_hours / 7) × total_days_without_absence
-            # Scaled by 10 for precision
-            daily_target_hours = weekly_target_hours / 7.0
-            expected_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
+            # HARD CONSTRAINT: Absolute minimum 192h (scaled by 10 = 1920)
+            # This is the floor that can NEVER be violated (4 weeks × 48h/week)
+            ABSOLUTE_MINIMUM_HOURS_SCALED = 1920  # 192h × 10
+            model.Add(sum(total_hours_terms) >= ABSOLUTE_MINIMUM_HOURS_SCALED)
             
-            # Employee must work at least the expected total hours
-            # This allows flexibility: can work 56h one week (7 days × 8h), less another week
-            model.Add(sum(total_hours_terms) >= expected_total_hours_scaled)
+            # SOFT CONSTRAINT: Target proportional hours (48h/7 × days)
+            # Example: 31 days → 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)
+            # We want to minimize the shortage from this target
+            daily_target_hours = weekly_target_hours / 7.0
+            target_total_hours_scaled = int(daily_target_hours * total_days_without_absence * 10)
+            
+            # Create variable for shortage from target (0 if at target, positive if below)
+            shortage_from_target = model.NewIntVar(0, target_total_hours_scaled, 
+                                                    f"emp{emp.id}_hours_shortage")
+            
+            # shortage = max(0, target - actual)
+            # We model this as: shortage >= target - actual AND shortage >= 0
+            model.Add(shortage_from_target >= target_total_hours_scaled - sum(total_hours_terms))
+            model.Add(shortage_from_target >= 0)
+            
+            # Add to soft objectives (minimize shortage)
+            soft_objectives.append(shortage_from_target)
+    
+    return soft_objectives
 
 
 def add_td_constraints(

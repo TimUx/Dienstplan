@@ -108,9 +108,10 @@ class ShiftPlanningSolver:
                                           self.max_consecutive_night_shifts_weeks)
         
         print("  - Working hours constraints (dynamic based on shift configuration, including cross-team)")
-        add_working_hours_constraints(model, employee_active, employee_weekend_shift, team_shift, 
-                                     employee_cross_team_shift, employee_cross_team_weekend, 
-                                     td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
+        hours_shortage_objectives = add_working_hours_constraints(
+            model, employee_active, employee_weekend_shift, team_shift, 
+            employee_cross_team_shift, employee_cross_team_weekend, 
+            td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
         
         # BLOCK SCHEDULING FOR CROSS-TEAM
         print("  - Weekly block constraints (Mon-Fri blocks for cross-team assignments)")
@@ -154,6 +155,13 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(block_objective_vars)} block scheduling bonus objectives...")
             for bonus_var in block_objective_vars:
                 objective_terms.append(-bonus_var)  # Negative because we minimize
+        
+        # Add hours shortage objectives (minimize shortage from target hours)
+        # These are shortages, so we want to minimize them directly
+        if hours_shortage_objectives:
+            print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties...")
+            for shortage_var in hours_shortage_objectives:
+                objective_terms.append(shortage_var)  # Positive because we minimize shortage
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

@@ -303,10 +303,11 @@ def add_staffing_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    shift_types: List[ShiftType]
-):
+    shift_types: List[ShiftType],
+    violation_tracker=None
+) -> List[cp_model.IntVar]:
     """
-    HARD CONSTRAINT: Minimum and maximum staffing per shift, INCLUDING cross-team workers.
+    HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
     Staffing requirements are configured per shift type in the database.
     Values are ALWAYS read from shift_types parameter (no fallback values).
@@ -314,10 +315,18 @@ def add_staffing_constraints(
     Weekdays (Mon-Fri): Count active team members + cross-team workers per shift.
     Weekends (Sat-Sun): Count team weekend workers + cross-team weekend workers.
     
+    CHANGE (per @TimUx): Maximum staffing is now SOFT - can be exceeded if needed
+    to meet higher priority constraints (minimum hours, absences, etc.).
+    Overstaffing creates a penalty but doesn't block feasibility.
+    
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
     Args:
         shift_types: List of ShiftType objects from database (REQUIRED)
+        violation_tracker: Optional tracker for recording when max is exceeded
+        
+    Returns:
+        List of IntVar representing overstaffing penalties for soft optimization
     """
     if not shift_types:
         raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
@@ -765,18 +774,24 @@ def add_working_hours_constraints(
     weeks: List[List[date]],
     shift_codes: List[str],
     shift_types: List[ShiftType],
-    absences: List[Absence] = None
+    absences: List[Absence] = None,
+    violation_tracker=None
 ) -> List[cp_model.IntVar]:
     """
-    HARD + SOFT CONSTRAINTS: Working hours limits and targets based on shift configuration INCLUDING cross-team.
+    SOFT CONSTRAINT: Working hours target based on proportional calculation INCLUDING cross-team.
     
     This constraint ensures that employees:
-    1. HARD: Meet absolute minimum 192h/month (48h/week × 4 weeks) - cannot go below
-    2. SOFT: Target proportional hours (48h/7 × days) - e.g., 212h for 31-day month
-    3. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration)
-    4. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
-    5. If an employee works less in one week (without absence), they must compensate in other weeks
-    6. UPDATED: Hours from cross-team assignments count toward employee's total hours
+    1. SOFT: Target proportional hours (48h/7 × days) - e.g., 212h for 31-day month
+       - Solver minimizes shortage from target
+       - NO hard minimum - feasibility is prioritized over hours target
+       - Violations tracked for admin review
+    2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration) - HARD
+    3. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
+    4. If an employee works less in one week (without absence), they should compensate in other weeks (SOFT)
+    5. UPDATED: Hours from cross-team assignments count toward employee's total hours
+    
+    CHANGE (per @TimUx): Removed hard 192h minimum to allow feasibility.
+    Target hours are now purely SOFT - system will get as close as possible.
     
     Returns:
         List of IntVar representing shortage from target hours for soft optimization
@@ -1008,10 +1023,8 @@ def add_working_hours_constraints(
                                              if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
                                                            for abs in absences) for d in week_dates))
             
-            # HARD CONSTRAINT: Absolute minimum 192h (scaled by 10 = 1920)
-            # This is the floor that can NEVER be violated (4 weeks × 48h/week)
-            ABSOLUTE_MINIMUM_HOURS_SCALED = 1920  # 192h × 10
-            model.Add(sum(total_hours_terms) >= ABSOLUTE_MINIMUM_HOURS_SCALED)
+            # REMOVED: Hard 192h minimum constraint (per @TimUx request)
+            # Now using ONLY soft target to allow feasibility in difficult cases
             
             # SOFT CONSTRAINT: Target proportional hours (48h/7 × days)
             # Example: 31 days → 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)

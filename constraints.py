@@ -1173,75 +1173,29 @@ def add_weekly_block_constraints(
     absences: List[Absence]
 ):
     """
-    HARD CONSTRAINT: Enforce Mon-Fri block scheduling for cross-team assignments.
+    DISABLED: Mon-Fri block scheduling for cross-team assignments is NOT enforced.
     
-    When an employee is assigned to a cross-team shift for any day in a week (Mon-Fri),
-    they must work all Mon-Fri days in that week for that shift (unless absent).
+    Per @TimUx feedback: Block scheduling should be preferred but NOT mandatory.
+    The predefined blocks (Mon-Fri, Mon-Sun, Sat-Sun) should be followed when possible,
+    but smaller blocks or individual days can be used if needed to meet minimum hours.
     
-    This ensures:
-    - Complete Mon-Fri blocks for cross-team assignments
-    - No gaps in weekday work when assigned cross-team
-    - Weekends remain individually assignable
+    This hard constraint was causing infeasibility by being too restrictive.
+    Block scheduling is now handled as SOFT objectives in add_team_member_block_constraints().
     
     Args:
-        model: CP-SAT model
-        employee_active: Regular team shift variables (weekdays only)
-        employee_cross_team_shift: Cross-team shift variables (emp_id, date, shift_code)
-        employees: List of employees
-        dates: All dates in planning period
-        weeks: List of weeks (each week is a list of dates)
-        shift_codes: All shift codes
-        absences: Employee absences
+        model: CP-SAT model (unused)
+        employee_active: Regular team shift variables (unused)
+        employee_cross_team_shift: Cross-team shift variables (unused)
+        employees: List of employees (unused)
+        dates: All dates in planning period (unused)
+        weeks: List of weeks (unused)
+        shift_codes: All shift codes (unused)
+        absences: Employee absences (unused)
     """
-    
-    for emp in employees:
-        if not emp.team_id:
-            continue
-        
-        for week_idx, week_dates in enumerate(weeks):
-            # Get weekdays in this week (Monday-Friday)
-            weekdays = [d for d in week_dates if d.weekday() < 5]
-            
-            if not weekdays:
-                continue
-            
-            # For each shift code, enforce Mon-Fri block if assigned
-            for shift_code in shift_codes:
-                # Collect cross-team variables for this employee, week, and shift
-                cross_team_vars = []
-                for d in weekdays:
-                    if (emp.id, d, shift_code) in employee_cross_team_shift:
-                        cross_team_vars.append(employee_cross_team_shift[(emp.id, d, shift_code)])
-                
-                if len(cross_team_vars) < 2:
-                    # Not enough days to enforce block constraint
-                    continue
-                
-                # If employee works ANY day in this shift, they must work ALL days (unless absent)
-                # Create: if sum(vars) > 0, then all vars must be 1 (considering absences)
-                
-                # Count absences in this week's weekdays
-                non_absent_vars = []
-                for d in weekdays:
-                    is_absent = any(
-                        abs.employee_id == emp.id and abs.overlaps_date(d)
-                        for abs in absences
-                    )
-                    
-                    if not is_absent and (emp.id, d, shift_code) in employee_cross_team_shift:
-                        non_absent_vars.append(employee_cross_team_shift[(emp.id, d, shift_code)])
-                
-                if len(non_absent_vars) < 2:
-                    continue
-                
-                # If ANY day is worked, ALL non-absent days must be worked
-                # This creates the Mon-Fri block effect
-                for i in range(len(non_absent_vars)):
-                    for j in range(i + 1, len(non_absent_vars)):
-                        # If var[i] == 1, then var[j] must == 1
-                        # If var[j] == 1, then var[i] must == 1
-                        # This creates bidirectional implication: all or none
-                        model.Add(non_absent_vars[i] == non_absent_vars[j])
+    # INTENTIONALLY DISABLED: Block constraints were too restrictive
+    # Cross-team assignments can now be any length (1-7 days) as needed
+    # Block preferences are encouraged via soft objectives instead
+    pass
 
 
 def add_team_member_block_constraints(

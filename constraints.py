@@ -117,29 +117,73 @@ def add_team_rotation_constraints(
     shift_types: List[ShiftType] = None
 ):
     """
-    DISABLED: Team rotation constraints are NOT enforced.
+    HARD CONSTRAINT: Teams follow fixed rotation pattern F → N → S.
     
-    Per requirements, there is no strict 3-week rotation cycle. Teams should
-    follow F → N → S → F → N → S rhythm but this is NOT enforced as a hard constraint.
+    Each team follows the same rotation cycle with offset based on team ID.
+    Week 0: Team 1=F, Team 2=N, Team 3=S
+    Week 1: Team 1=N, Team 2=S, Team 3=F
+    Week 2: Team 1=S, Team 2=F, Team 3=N
+    Week 3: Team 1=F, Team 2=N, Team 3=S (repeats)
     
-    This allows the solver to find feasible solutions for planning periods that
-    don't align to 3-week cycles (e.g., months with 4.4 weeks), while still
-    satisfying minimum working hours requirements for all employees.
+    Manual overrides (locked assignments) take precedence over rotation.
     
-    Teams can work any shift in any week as long as:
-    - Each team works exactly one shift per week (enforced by add_team_shift_assignment_constraints)
-    - Staffing requirements are met (enforced by add_staffing_constraints)
-    - Minimum hours requirements are satisfied (enforced by add_working_hours_constraints)
-    
-    Manual overrides (locked assignments) are still respected when provided.
-    
-    NOTE: This function is kept for backward compatibility but does not add any constraints.
-    Parameters are unused but retained to maintain the function signature.
+    IMPORTANT: Only applies to teams that have F, N, and S in their allowed shifts.
+    Teams with other shift configurations (e.g., only TD/BMT/BSB) are skipped.
     """
-    # INTENTIONALLY DISABLED: No rotation constraints enforced
-    # The solver will optimize shift assignments based on staffing needs,
-    # minimum hours requirements, and soft objectives only.
-    pass
+    if "F" not in shift_codes or "N" not in shift_codes or "S" not in shift_codes:
+        return  # Cannot enforce rotation if shifts are missing
+    
+    locked_team_shift = locked_team_shift or {}
+    
+    # Build shift type ID to code mapping
+    shift_id_to_code = {}
+    if shift_types:
+        for st in shift_types:
+            shift_id_to_code[st.id] = st.code
+    
+    # Find shift type IDs for F, N, S
+    f_id = n_id = s_id = None
+    for st_id, st_code in shift_id_to_code.items():
+        if st_code == "F":
+            f_id = st_id
+        elif st_code == "N":
+            n_id = st_id
+        elif st_code == "S":
+            s_id = st_id
+    
+    # Define the rotation cycle
+    rotation = ["F", "N", "S"]
+    
+    # For each team, assign shifts based on rotation
+    sorted_teams = sorted(teams, key=lambda t: t.id)
+    
+    for team_idx, team in enumerate(sorted_teams):
+        # Check if team has all three rotation shifts (F, N, S) in allowed shifts
+        # If team has allowed_shift_type_ids configured, check them
+        if team.allowed_shift_type_ids:
+            has_f = f_id in team.allowed_shift_type_ids if f_id else False
+            has_n = n_id in team.allowed_shift_type_ids if n_id else False
+            has_s = s_id in team.allowed_shift_type_ids if s_id else False
+            
+            if not (has_f and has_n and has_s):
+                # Team doesn't have all three shifts - skip rotation constraint
+                # Team will be constrained by add_team_shift_assignment_constraints instead
+                continue
+        
+        # Team participates in F→N→S rotation
+        for week_idx in range(len(weeks)):
+            # Check if this assignment is locked (manual override)
+            if (team.id, week_idx) in locked_team_shift:
+                # Skip - locked assignment will be applied by _apply_locked_assignments()
+                continue
+            
+            # Calculate which shift this team should have this week
+            rotation_idx = (week_idx + team_idx) % len(rotation)
+            assigned_shift = rotation[rotation_idx]
+            
+            # Force this team to have this specific shift this week
+            if (team.id, week_idx, assigned_shift) in team_shift:
+                model.Add(team_shift[(team.id, week_idx, assigned_shift)] == 1)
 
 
 def add_employee_team_linkage_constraints(

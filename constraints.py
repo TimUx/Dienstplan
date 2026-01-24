@@ -995,7 +995,7 @@ def add_working_hours_constraints(
                     # Count cross-team days for this shift
                     cross_days_count = model.NewIntVar(0, len(week_dates), 
                                                        f"emp{emp.id}_week{week_idx}_crossteam{shift_code}_days_min")
-                     model.Add(cross_days_count == sum(cross_team_days))
+                    model.Add(cross_days_count == sum(cross_team_days))
                     
                     # Multiply by hours (scaled by 10)
                     scaled_hours = int(shift_hours[shift_code] * 10)

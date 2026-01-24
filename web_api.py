@@ -216,23 +216,33 @@ def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) ->
     """
     Extend planning dates to ensure complete weeks (Monday to Sunday).
     
-    If the last day of the planning period is not a Sunday, extend it to include
-    the remaining days of that week up to Sunday (may cross into the next month).
+    CRITICAL FIX: Extends BOTH start and end dates to create complete 7-day weeks.
+    This solves the infeasibility issue with partial weeks at month boundaries.
     
-    The start date is NOT moved backwards - it stays as the first day of the month.
+    - If start_date is not Monday, extend backwards to previous Monday (may be in previous month)
+    - If end_date is not Sunday, extend forward to next Sunday (may be in next month)
+    
+    This ensures the planning period consists of complete Mon-Sun weeks only,
+    which is required for the F→N→S team rotation to work properly without
+    creating infeasibility with the minimum working hours constraint.
+    
+    Example: January 2026 (Thu Jan 1 - Sat Jan 31)
+    - Extended: Mon Dec 29, 2025 - Sun Feb 1, 2026 (exactly 5 complete weeks)
     
     Args:
         start_date: Original start date (first day of month)
         end_date: Original end date (last day of month)
     
     Returns:
-        Tuple of (extended_start_date, extended_end_date)
+        Tuple of (extended_start_date, extended_end_date) with complete weeks
     """
-    # Start date remains unchanged (first day of month)
+    # Extend START backwards to previous Monday if not already Monday
     extended_start = start_date
+    if start_date.weekday() != 0:  # Not Monday (0=Monday, 6=Sunday)
+        days_since_monday = start_date.weekday()
+        extended_start = start_date - timedelta(days=days_since_monday)
     
-    # Extend end to next Sunday if not already Sunday
-    # This completes the partial week that starts in the current month
+    # Extend END forward to next Sunday if not already Sunday
     extended_end = end_date
     if end_date.weekday() != 6:  # Not Sunday
         days_until_sunday = 6 - end_date.weekday()

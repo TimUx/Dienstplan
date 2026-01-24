@@ -90,12 +90,14 @@ class ShiftPlanningSolver:
         add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences, employee_weekend_shift, employee_cross_team_weekend)
         
         # STAFFING AND WORKING CONDITIONS
-        print("  - Staffing requirements (min/max per shift, including cross-team)")
-        add_staffing_constraints(model, employee_active, employee_weekend_shift, team_shift, 
-                                employee_cross_team_shift, employee_cross_team_weekend, 
-                                employees, teams, dates, weeks, shift_codes, shift_types)
+        print("  - Staffing requirements (min hard / max soft, including cross-team)")
+        # NEW: Collect overstaffing penalties for soft optimization
+        overstaffing_penalties = add_staffing_constraints(
+            model, employee_active, employee_weekend_shift, team_shift, 
+            employee_cross_team_shift, employee_cross_team_weekend, 
+            employees, teams, dates, weeks, shift_codes, shift_types)
         
-        print("  - Rest time constraints (11 hours minimum, enforced for cross-team)")
+        print("  - Rest time constraints (11h min, with Sunday→Monday exception)")
         add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
                                  employee_cross_team_shift, employee_cross_team_weekend, 
                                  employees, dates, weeks, shift_codes, teams)
@@ -107,7 +109,7 @@ class ShiftPlanningSolver:
                                           self.max_consecutive_shifts_weeks,
                                           self.max_consecutive_night_shifts_weeks)
         
-        print("  - Working hours constraints (dynamic based on shift configuration, including cross-team)")
+        print("  - Working hours constraints (soft target only, no hard 192h minimum)")
         hours_shortage_objectives = add_working_hours_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
@@ -162,6 +164,13 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties...")
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var)  # Positive because we minimize shortage
+        
+        # Add overstaffing penalties (minimize exceeding max staffing)
+        # Weight these moderately - less critical than hours but still important
+        if overstaffing_penalties:
+            print(f"  Adding {len(overstaffing_penalties)} overstaffing penalties (soft max)...")
+            for overstaff_var in overstaffing_penalties:
+                objective_terms.append(overstaff_var * 5)  # Weight 5x per excess worker
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

@@ -117,28 +117,28 @@ def add_team_rotation_constraints(
     shift_types: List[ShiftType] = None
 ):
     """
-    SOFT CONSTRAINT: Teams PREFER to follow rotation pattern F → N → S sequence.
+    DISABLED: Team rotation constraints are NOT enforced.
     
-    NOTE: This constraint has been DISABLED to allow flexible planning over
-    irregular time periods (e.g., months with partial weeks).
-    
-    The rotation rhythm (F → N → S → F → N → S) is encouraged via soft objectives
-    in the solver, but not enforced as a hard constraint.
+    Per requirements, there is no strict 3-week rotation cycle. Teams should
+    follow F → N → S → F → N → S rhythm but this is NOT enforced as a hard constraint.
     
     This allows the solver to find feasible solutions for planning periods that
-    don't align to 3-week cycles, while still maintaining minimum working hours
-    requirements for all employees.
+    don't align to 3-week cycles (e.g., months with 4.4 weeks), while still
+    satisfying minimum working hours requirements for all employees.
     
     Teams can work any shift in any week as long as:
     - Each team works exactly one shift per week (enforced by add_team_shift_assignment_constraints)
     - Staffing requirements are met (enforced by add_staffing_constraints)
     - Minimum hours requirements are satisfied (enforced by add_working_hours_constraints)
     
-    Manual overrides (locked assignments) still take precedence.
+    Manual overrides (locked assignments) are still respected when provided.
+    
+    NOTE: This function is kept for backward compatibility but does not add any constraints.
+    Parameters are unused but retained to maintain the function signature.
     """
-    # DISABLED: No rotation constraints enforced
+    # INTENTIONALLY DISABLED: No rotation constraints enforced
     # The solver will optimize shift assignments based on staffing needs,
-    # minimum hours requirements, and soft objectives.
+    # minimum hours requirements, and soft objectives only.
     pass
 
 

@@ -237,8 +237,9 @@ def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) ->
         Tuple of (extended_start_date, extended_end_date) with complete weeks
     """
     # Extend START backwards to previous Monday if not already Monday
+    # weekday() returns: 0=Monday, 1=Tuesday, ..., 6=Sunday
     extended_start = start_date
-    if start_date.weekday() != 0:  # Not Monday (0=Monday, 6=Sunday)
+    if start_date.weekday() != 0:  # Not Monday
         days_since_monday = start_date.weekday()
         extended_start = start_date - timedelta(days=days_since_monday)
     

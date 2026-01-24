@@ -852,23 +852,11 @@ def add_working_hours_constraints(
         shift_hours[st.code] = st.hours
         shift_weekly_hours[st.code] = st.weekly_working_hours
     
-    # Pre-calculate maximum weekly hours per team per week to avoid repeated computation
-    team_week_max_hours = {}
-    for emp in employees:
-        if not emp.team_id:
-            continue
-        for week_idx in range(len(weeks)):
-            key = (emp.team_id, week_idx)
-            if key not in team_week_max_hours:
-                # Calculate max hours for this team in this week
-                possible_max_hours = [shift_weekly_hours.get(sc, DEFAULT_WEEKLY_HOURS) 
-                                     for sc in shift_codes 
-                                     if (emp.team_id, week_idx, sc) in team_shift]
-                team_week_max_hours[key] = max(possible_max_hours) if possible_max_hours else DEFAULT_WEEKLY_HOURS
-    
-    # Calculate working hours per week and enforce MAXIMUM limits only
-    # Note: Minimum hours enforcement has been REMOVED due to infeasibility issues
-    # See explanation below for details
+    # NOTE: No weekly maximum hours constraints
+    # Employees can work varying hours per week (e.g., 40h one week, 56h another)
+    # The system only enforces:
+    # - SOFT target: proportional hours over the entire planning period
+    # - NO hard weekly limits
     for emp in employees:
         if not emp.team_id:
             continue  # Only check team members
@@ -939,10 +927,9 @@ def add_working_hours_constraints(
                     scaled_hours = int(shift_hours[shift_code] * 10)
                     hours_terms.append(cross_days_count * scaled_hours)
             
-            if hours_terms:
-                # Use pre-calculated maximum weekly hours (scaled by 10)
-                max_scaled_hours = int(team_week_max_hours.get((emp.team_id, week_idx), DEFAULT_WEEKLY_HOURS) * 10)
-                model.Add(sum(hours_terms) <= max_scaled_hours)
+            # NOTE: No hard weekly maximum hours constraint
+            # Employees can work varying hours per week (e.g., 40h one week, 56h another)
+            # as long as the overall period targets are met
     
     # MINIMUM working hours constraint across the planning period
     # 

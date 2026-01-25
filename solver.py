@@ -4,7 +4,7 @@ Configures and runs the solver, returns solution.
 """
 
 from ortools.sat.python import cp_model
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Dict, Tuple, Optional
 from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
@@ -397,6 +397,94 @@ class ShiftPlanningSolver:
                 diagnostics['potential_issues'].append(
                     f"Ungleiche Teamgrößen: Größtes Team hat {max_team_size} Mitglieder, "
                     f"kleinstes nur {min_team_size}. Dies kann zu Planungsproblemen führen."
+                )
+        
+        # NEW: Check for partial week conflicts
+        # Partial weeks (< 7 days) can create impossible situations with team rotation
+        week_sizes = [len(week) for week in weeks]
+        partial_weeks = [i for i, size in enumerate(week_sizes) if size < 7]
+        
+        if partial_weeks:
+            # Check if partial weeks could conflict with staffing requirements
+            for week_idx in partial_weeks:
+                week = weeks[week_idx]
+                week_size = len(week)
+                weekdays_in_week = sum(1 for d in week if d.weekday() < 5)
+                weekends_in_week = week_size - weekdays_in_week
+                
+                # Calculate minimum staff needed for this partial week
+                # Check how many teams participate in F→N→S rotation
+                rotation_shift_codes = ['F', 'N', 'S']
+                participating_teams = sum(1 for t in teams if all(
+                    code in shift_codes for code in rotation_shift_codes
+                ))
+                
+                if participating_teams >= len(rotation_shift_codes):
+                    # Each team will be assigned one shift for this week
+                    # Check if smallest team can meet staffing requirements
+                    if team_sizes:
+                        smallest_team = min(team_sizes)
+                        
+                        # Check against shift requirements
+                        for shift_code in shift_codes:
+                            if shift_code not in staffing_weekday:
+                                continue
+                            
+                            min_weekday = staffing_weekday[shift_code]["min"]
+                            
+                            # For a partial week, a team might need to provide min_weekday staff
+                            # on all weekdays in that week
+                            if weekdays_in_week > 0 and smallest_team < min_weekday:
+                                # CRITICAL: Team too small to meet minimum staffing
+                                diagnostics['potential_issues'].append(
+                                    f"Woche {week_idx + 1} ({week[0].strftime('%d.%m')} - {week[-1].strftime('%d.%m')}) "
+                                    f"ist eine Teilwoche mit nur {week_size} Tagen ({weekdays_in_week} Werktage). "
+                                    f"Kleinstes Team ({smallest_team} Mitarbeiter) kann Mindestbesetzung von "
+                                    f"{min_weekday} für Schicht {shift_code} nicht erfüllen. "
+                                    f"Dies macht die Rotation unmöglich."
+                                )
+                                break  # Only report once per partial week
+        
+        # NEW: Check if planning period starts on a day other than Monday
+        # This creates a partial first week which can cause rotation conflicts
+        # NOTE: In the Web UI, this is automatically handled by extending to complete weeks
+        first_date = dates[0]
+        last_date = dates[-1]
+        if first_date.weekday() != 0:  # Not Monday
+            # Calculate days in first week (from first_date until Sunday)
+            days_in_first_week = 7 - first_date.weekday()
+            diagnostics['potential_issues'].append(
+                f"Planungszeitraum beginnt am {first_date.strftime('%A, %d.%m.%Y')} "
+                f"(nicht Montag). Dies erzeugt eine unvollständige erste Woche mit nur "
+                f"{days_in_first_week} Tagen, was zu Konflikten mit der Team-Rotation und "
+                f"Mindestbesetzungsanforderungen führen kann. "
+                f"HINWEIS: Das System erweitert automatisch auf vollständige Wochen (Mo-So) "
+                f"und berücksichtigt bereits geplante Tage aus dem Vormonat."
+            )
+        
+        # NEW: Check if last week is also partial
+        if last_date.weekday() != 6 and len(weeks) > 0:  # Not Sunday
+            last_week_size = len(weeks[-1])
+            if last_week_size < 7:
+                diagnostics['potential_issues'].append(
+                    f"Planungszeitraum endet am {last_date.strftime('%A, %d.%m.%Y')} "
+                    f"(nicht Sonntag). Dies erzeugt eine unvollständige letzte Woche mit nur "
+                    f"{last_week_size} Tagen, was zu Planungsproblemen führen kann. "
+                    f"HINWEIS: Das System erweitert automatisch auf vollständige Wochen (Mo-So) "
+                    f"und plant monatsübergreifend bis zum nächsten Sonntag."
+                )
+        
+        # NEW: Check rotation pattern feasibility with actual planning weeks
+        # If we have exactly 5 weeks and teams rotate F→N→S, check if this creates conflicts
+        if len(weeks) == 5 and len(teams) == 3:
+            # With 3 teams and F→N→S rotation, week pattern repeats every 3 weeks
+            # Having 5 weeks means some teams will have same shift type 2 times (weeks 0,3 and 1,4 or 2,5)
+            # This is fine normally, but with partial weeks it can create problems
+            if len(partial_weeks) >= 2:
+                diagnostics['potential_issues'].append(
+                    f"Planungszeitraum hat {len(weeks)} Wochen mit {len(partial_weeks)} Teilwochen. "
+                    f"Bei 3-Team-Rotation (F→N→S) kann dies zu Konflikten führen, da manche Teams "
+                    f"dieselbe Schicht mehrmals übernehmen müssen und Teilwochen die Besetzung erschweren."
                 )
         
         return diagnostics

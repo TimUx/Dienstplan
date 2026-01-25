@@ -447,32 +447,31 @@ class ShiftPlanningSolver:
         
         # NEW: Check if planning period starts on a day other than Monday
         # This creates a partial first week which can cause rotation conflicts
+        # NOTE: In the Web UI, this is automatically handled by extending to complete weeks
         first_date = dates[0]
         last_date = dates[-1]
         if first_date.weekday() != 0:  # Not Monday
             # Calculate days in first week (from first_date until Sunday)
             days_in_first_week = 7 - first_date.weekday()
-            # Also suggest the solution
-            ideal_start = first_date - timedelta(days=first_date.weekday())
             diagnostics['potential_issues'].append(
                 f"Planungszeitraum beginnt am {first_date.strftime('%A, %d.%m.%Y')} "
                 f"(nicht Montag). Dies erzeugt eine unvollständige erste Woche mit nur "
                 f"{days_in_first_week} Tagen, was zu Konflikten mit der Team-Rotation und "
                 f"Mindestbesetzungsanforderungen führen kann. "
-                f"Empfehlung: Planungszeitraum am {ideal_start.strftime('%d.%m.%Y')} (Montag) beginnen."
+                f"HINWEIS: Das System erweitert automatisch auf vollständige Wochen (Mo-So) "
+                f"und berücksichtigt bereits geplante Tage aus dem Vormonat."
             )
         
         # NEW: Check if last week is also partial
         if last_date.weekday() != 6 and len(weeks) > 0:  # Not Sunday
             last_week_size = len(weeks[-1])
             if last_week_size < 7:
-                # Suggest ending on Sunday
-                ideal_end = last_date + timedelta(days=(6 - last_date.weekday()))
                 diagnostics['potential_issues'].append(
                     f"Planungszeitraum endet am {last_date.strftime('%A, %d.%m.%Y')} "
                     f"(nicht Sonntag). Dies erzeugt eine unvollständige letzte Woche mit nur "
                     f"{last_week_size} Tagen, was zu Planungsproblemen führen kann. "
-                    f"Empfehlung: Planungszeitraum am {ideal_end.strftime('%d.%m.%Y')} (Sonntag) beenden."
+                    f"HINWEIS: Das System erweitert automatisch auf vollständige Wochen (Mo-So) "
+                    f"und plant monatsübergreifend bis zum nächsten Sonntag."
                 )
         
         # NEW: Check rotation pattern feasibility with actual planning weeks

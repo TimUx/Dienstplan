@@ -2802,28 +2802,39 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             assignments, special_functions, complete_schedule = result
             
-            # Filter assignments to only include days within the requested month
-            # (extended days from next month should not be saved/overwritten)
-            filtered_assignments = [a for a in assignments if start_date <= a.date <= end_date]
+            # Filter assignments to include:
+            # 1. All days in the requested month (start_date to end_date)
+            # 2. Extended days into NEXT month (end_date < date <= extended_end) - to maintain rotation continuity
+            # 3. EXCLUDE extended days from PREVIOUS month (extended_start <= date < start_date) - these should already exist
+            filtered_assignments = [a for a in assignments if start_date <= a.date <= extended_end]
             filtered_special_functions = {k: v for k, v in special_functions.items() 
-                                         if start_date <= k[1] <= end_date}
+                                         if start_date <= k[1] <= extended_end}
             
-            app.logger.info(f"Total assignments generated: {len(assignments)}, for current month: {len(filtered_assignments)}")
-            if len(assignments) > len(filtered_assignments):
-                app.logger.info(f"Excluded {len(assignments) - len(filtered_assignments)} assignments from extended days (next month)")
+            # Count assignments by category for logging
+            current_month_count = len([a for a in filtered_assignments if start_date <= a.date <= end_date])
+            future_extended_count = len([a for a in filtered_assignments if a.date > end_date])
+            past_excluded_count = len([a for a in assignments if a.date < start_date])
+            
+            app.logger.info(f"Total assignments generated: {len(assignments)}")
+            app.logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
+            if future_extended_count > 0:
+                app.logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
+            if past_excluded_count > 0:
+                app.logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
             
             # Save to database
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Delete existing non-fixed assignments if force (only for requested month)
+            # Delete existing non-fixed assignments for current month AND future extended days
+            # (but NOT for past extended days - those were planned by previous month)
             if force:
                 cursor.execute("""
                     DELETE FROM ShiftAssignments 
                     WHERE Date >= ? AND Date <= ? AND IsFixed = 0
-                """, (start_date.isoformat(), end_date.isoformat()))
+                """, (start_date.isoformat(), extended_end.isoformat()))
             
-            # Insert new assignments (only for requested month)
+            # Insert new assignments (current month + future extended days)
             for assignment in filtered_assignments:
                 cursor.execute("""
                     INSERT INTO ShiftAssignments 
@@ -2839,7 +2850,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     "Python-OR-Tools"
                 ))
             
-            # Insert special functions (TD assignments) - only for requested month
+            # Insert special functions (TD assignments) - current month + future extended days
             # Get TD shift type ID
             cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = 'TD'")
             td_row = cursor.fetchone()

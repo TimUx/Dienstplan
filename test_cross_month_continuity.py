@@ -14,7 +14,7 @@ from model import create_shift_planning_model
 from solver import solve_shift_planning
 from entities import STANDARD_SHIFT_TYPES
 
-def get_team_rotation_for_week(assignments, week_dates, teams):
+def get_team_rotation_for_week(assignments, week_dates, teams, employees):
     """Get which team has which shift for a given week"""
     # Group assignments by team and shift type
     from collections import defaultdict
@@ -24,7 +24,7 @@ def get_team_rotation_for_week(assignments, week_dates, teams):
         if assignment.date in week_dates:
             # Find team for this employee
             for team in teams:
-                if any(e.id == assignment.employee_id for e in [emp for emp in generate_sample_data()[0] if emp.team_id == team.id]):
+                if any(e.id == assignment.employee_id for e in [emp for emp in employees if emp.team_id == team.id]):
                     # Get shift code from shift type ID
                     shift_code = None
                     for st in STANDARD_SHIFT_TYPES:

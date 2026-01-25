@@ -347,7 +347,9 @@ class ShiftPlanningSolver:
         # but provides a useful upper-bound feasibility check.
         
         # Constants for capacity calculation
-        MIN_CAPACITY_RATIO = 1.2  # Need 20% buffer for feasibility
+        # Note: MIN_CAPACITY_RATIO is a heuristic warning threshold, not a hard constraint.
+        # The solver will still attempt planning even if capacity is below this threshold.
+        MIN_CAPACITY_RATIO = 1.1  # Recommended 10% buffer for better feasibility (was 1.2)
         MAX_TEAM_SIZE_IMBALANCE_RATIO = 2.0  # Max ratio between largest and smallest team
         
         total_shifts_needed = len(dates) * len(shift_codes)  # Total shift slots
@@ -379,9 +381,10 @@ class ShiftPlanningSolver:
         
         if capacity_ratio < MIN_CAPACITY_RATIO:
             diagnostics['potential_issues'].append(
-                f"Zu wenig Personalkapazität: {capacity_ratio:.1f}x der Mindestanforderung (empfohlen: ≥{MIN_CAPACITY_RATIO}x). "
+                f"Knappe Personalkapazität: {capacity_ratio:.2f}x der Mindestanforderung (empfohlen: ≥{MIN_CAPACITY_RATIO}x für optimale Planbarkeit). "
                 f"Effektive Kapazität: {total_effective_capacity} Mitarbeitertage, "
-                f"Mindestbedarf: {min_capacity_needed} Mitarbeitertage"
+                f"Mindestbedarf: {min_capacity_needed} Mitarbeitertage. "
+                f"Planung kann trotzdem funktionieren, erfordert aber möglicherweise mehr Lösungszeit."
             )
         
         # Check for specific constraint violations

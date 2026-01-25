@@ -102,13 +102,13 @@ class ShiftPlanningModel:
         
         # Extend start to previous Monday if not already Monday
         if start_date.weekday() != 0:  # 0 = Monday
-            days_to_subtract = start_date.weekday()
-            extended_start = start_date - timedelta(days=days_to_subtract)
+            days_back_to_monday = start_date.weekday()
+            extended_start = start_date - timedelta(days=days_back_to_monday)
         
         # Extend end to next Sunday if not already Sunday
         if end_date.weekday() != 6:  # 6 = Sunday
-            days_to_add = 6 - end_date.weekday()
-            extended_end = end_date + timedelta(days=days_to_add)
+            days_forward_to_sunday = 6 - end_date.weekday()
+            extended_end = end_date + timedelta(days=days_forward_to_sunday)
         
         # Use extended dates for planning
         self.start_date = extended_start

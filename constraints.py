@@ -482,22 +482,21 @@ def add_rest_time_constraints(
     violation_tracker=None
 ):
     """
-    HARD CONSTRAINT (with EXCEPTIONS): Minimum 11 hours rest between shifts.
+    SOFT CONSTRAINT: Minimum 11 hours rest between shifts (allows violations for feasibility).
     
-    CRITICAL FOR CROSS-TEAM: Must enforce forbidden transitions to prevent violations.
+    Per @TimUx: Rules should be followed, but exceptions are allowed when necessary to make
+    planning feasible. Violations are tracked and reported in the summary.
     
     Forbidden transitions (violate 11-hour rest):
     - S → F (Spät 21:45 → Früh 05:45 = 8 hours)
     - N → F (Nacht 05:45 → Früh 05:45 = 0 hours in same day context)
     
-    EXCEPTION (per @TimUx): Sunday→Monday team rotation boundary
-    - When employee works cross-team on Sunday and their own team starts Monday
-    - This violation is UNAVOIDABLE with team rotation
-    - Exception allows 8 hours rest (better than blocking feasibility)
-    - Tracked for admin review
+    Implementation:
+    - Sunday→Monday transitions: Small penalty (expected with team rotation)
+    - Other weekday transitions: Large penalty (should be avoided but allowed if necessary)
     
-    With team-based planning alone, these are prevented by rotation.
-    With cross-team assignments, we must explicitly forbid these transitions (except exceptions).
+    Returns:
+        List of penalty variables for rest time violations (to be minimized in objective)
     """
     # Define shift end times (approximate, for determining forbidden transitions)
     shift_end_times = {
@@ -512,7 +511,10 @@ def add_rest_time_constraints(
         "N": 21.75,  # 21:45
     }
     
-    # For each employee, enforce no forbidden transitions between consecutive days
+    # Track violation penalties
+    rest_violation_penalties = []
+    
+    # For each employee, track forbidden transitions between consecutive days
     for emp in employees:
         if not emp.team_id:
             continue
@@ -651,29 +653,42 @@ def add_rest_time_constraints(
                     tomorrow_shifts.append(employee_cross_team_weekend[(emp.id, tomorrow, shift_code)])
                     tomorrow_shift_codes.append(shift_code)
             
-            # Forbid transitions: S→F and N→F
-            # EXCEPTION: Sunday→Monday team rotation boundary (per @TimUx)
+            # Track forbidden transitions: S→F and N→F (as soft penalties)
+            # Per @TimUx: Allow violations when necessary for feasibility, but penalize them
             for i_today, today_shift_code in enumerate(today_shift_codes):
                 for i_tomorrow, tomorrow_shift_code in enumerate(tomorrow_shift_codes):
                     # Check if this is a forbidden transition
                     if (today_shift_code == "S" and tomorrow_shift_code == "F") or \
                        (today_shift_code == "N" and tomorrow_shift_code == "F"):
                         
-                        # Check for Sunday→Monday exception with team rotation
+                        # Create a violation indicator variable
+                        # violation = 1 if both shifts happen (forbidden transition occurs)
+                        violation = model.NewBoolVar(f"rest_violation_{emp.id}_{today}_{tomorrow}")
+                        
+                        # violation = 1 if BOTH today_shift AND tomorrow_shift are active
+                        # This is: violation >= today_shift + tomorrow_shift - 1
+                        model.Add(violation >= today_shifts[i_today] + tomorrow_shifts[i_tomorrow] - 1)
+                        model.Add(violation <= today_shifts[i_today])
+                        model.Add(violation <= tomorrow_shifts[i_tomorrow])
+                        
+                        # Check if this is Sunday→Monday (expected with team rotation)
                         is_sunday_monday = (today.weekday() == 6 and tomorrow.weekday() == 0)
                         
-                        # Only apply exception if this is Sunday→Monday
-                        # This allows unavoidable rest time violations due to team rotation
                         if is_sunday_monday:
-                            # Skip constraint - allow this transition
-                            # Track as exception for admin review
-                            if violation_tracker:
-                                # Note: actual violation only logged if this transition occurs in solution
-                                pass  # Would need post-processing to detect actual violations
+                            # Small penalty for Sunday→Monday violations (expected)
+                            # Weight: 50 points per violation
+                            penalty_weight = 50
                         else:
-                            # Forbid: NOT(today_shift AND tomorrow_shift)
-                            # Equivalent to: today_shift + tomorrow_shift <= 1
-                            model.Add(today_shifts[i_today] + tomorrow_shifts[i_tomorrow] <= 1)
+                            # Large penalty for other violations (should be avoided)
+                            # Weight: 500 points per violation
+                            penalty_weight = 500
+                        
+                        # Add weighted penalty to objective
+                        penalty_var = model.NewIntVar(0, penalty_weight, f"rest_penalty_{emp.id}_{today}_{tomorrow}")
+                        model.Add(penalty_var == violation * penalty_weight)
+                        rest_violation_penalties.append(penalty_var)
+    
+    return rest_violation_penalties
 
 
 def add_consecutive_shifts_constraints(

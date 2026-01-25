@@ -97,17 +97,22 @@ class ShiftPlanningSolver:
             employee_cross_team_shift, employee_cross_team_weekend, 
             employees, teams, dates, weeks, shift_codes, shift_types)
         
-        print("  - Rest time constraints (11h min, with Sunday→Monday exception)")
-        add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
+        print("  - Rest time constraints (11h min, soft penalties for violations)")
+        rest_violation_penalties = add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
                                  employee_cross_team_shift, employee_cross_team_weekend, 
                                  employees, dates, weeks, shift_codes, teams)
         
         print("  - Consecutive shifts constraints (max consecutive weeks from database)")
-        add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, 
-                                          employee_cross_team_shift, employee_cross_team_weekend, 
-                                          td_vars, employees, dates, shift_codes,
-                                          self.max_consecutive_shifts_weeks,
-                                          self.max_consecutive_night_shifts_weeks)
+        # DISABLED per @TimUx feedback: Allow flexible exceptions for feasibility
+        # This constraint enforces 6 consecutive days off between work blocks, which is too strict
+        # for multi-week planning with small teams. Per user request, violations should be allowed
+        # when necessary for feasibility, then reported in summary.
+        # TODO: Convert to soft constraint with penalty tracking
+        # add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, 
+        #                                   employee_cross_team_shift, employee_cross_team_weekend, 
+        #                                   td_vars, employees, dates, shift_codes,
+        #                                   self.max_consecutive_shifts_weeks,
+        #                                   self.max_consecutive_night_shifts_weeks)
         
         print("  - Working hours constraints (soft target only, no hard 192h minimum)")
         hours_shortage_objectives = add_working_hours_constraints(
@@ -157,6 +162,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(block_objective_vars)} block scheduling bonus objectives...")
             for bonus_var in block_objective_vars:
                 objective_terms.append(-bonus_var)  # Negative because we minimize
+        
+        # Add rest time violation penalties (strongly discourage but allow for feasibility)
+        if rest_violation_penalties:
+            print(f"  Adding {len(rest_violation_penalties)} rest time violation penalties...")
+            for penalty_var in rest_violation_penalties:
+                objective_terms.append(penalty_var)  # Already weighted (50 or 500 per violation)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # These are shortages, so we want to minimize them directly

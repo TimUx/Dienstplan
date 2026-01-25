@@ -4,7 +4,7 @@ Configures and runs the solver, returns solution.
 """
 
 from ortools.sat.python import cp_model
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Dict, Tuple, Optional
 from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
@@ -449,21 +449,27 @@ class ShiftPlanningSolver:
             # Calculate days in first week (from first_date until Sunday)
             days_in_first_week = 7 - first_date.weekday()
             if days_in_first_week < 7:
+                # Also suggest the solution
+                ideal_start = first_date - timedelta(days=first_date.weekday())
                 diagnostics['potential_issues'].append(
                     f"Planungszeitraum beginnt am {first_date.strftime('%A, %d.%m.%Y')} "
                     f"(nicht Montag). Dies erzeugt eine unvollständige erste Woche mit nur "
                     f"{days_in_first_week} Tagen, was zu Konflikten mit der Team-Rotation und "
-                    f"Mindestbesetzungsanforderungen führen kann."
+                    f"Mindestbesetzungsanforderungen führen kann. "
+                    f"Empfehlung: Planungszeitraum am {ideal_start.strftime('%d.%m.%Y')} (Montag) beginnen."
                 )
         
         # NEW: Check if last week is also partial
         if last_date.weekday() != 6 and len(weeks) > 0:  # Not Sunday
             last_week_size = len(weeks[-1])
             if last_week_size < 7:
+                # Suggest ending on Sunday
+                ideal_end = last_date + timedelta(days=(6 - last_date.weekday()))
                 diagnostics['potential_issues'].append(
                     f"Planungszeitraum endet am {last_date.strftime('%A, %d.%m.%Y')} "
                     f"(nicht Sonntag). Dies erzeugt eine unvollständige letzte Woche mit nur "
-                    f"{last_week_size} Tagen, was zu Planungsproblemen führen kann."
+                    f"{last_week_size} Tagen, was zu Planungsproblemen führen kann. "
+                    f"Empfehlung: Planungszeitraum am {ideal_end.strftime('%d.%m.%Y')} (Sonntag) beenden."
                 )
         
         # NEW: Check rotation pattern feasibility with actual planning weeks

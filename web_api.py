@@ -2679,8 +2679,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             locked_employee_weekend = {}
             
             if extended_end > end_date or extended_start < start_date:
-                # Query existing shift assignments for extended dates
+                # Query existing shift assignments for extended dates ONLY (not the main month)
                 # Join ShiftAssignments with Employees (for TeamId) and ShiftTypes (for Code)
+                # Logic: Get assignments within extended range that are OUTSIDE main month range
+                # This ensures we only lock assignments from adjacent months, not current month
                 cursor.execute("""
                     SELECT e.TeamId, sa.Date, st.Code
                     FROM ShiftAssignments sa

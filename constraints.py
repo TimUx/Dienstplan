@@ -683,9 +683,9 @@ def add_rest_time_constraints(
                             # Weight: 500 points per violation
                             penalty_weight = 500
                         
-                        # Add weighted penalty to objective
+                        # Add weighted penalty to objective using proper multiplication
                         penalty_var = model.NewIntVar(0, penalty_weight, f"rest_penalty_{emp.id}_{today}_{tomorrow}")
-                        model.Add(penalty_var == violation * penalty_weight)
+                        model.AddMultiplicationEquality(penalty_var, [violation, penalty_weight])
                         rest_violation_penalties.append(penalty_var)
     
     return rest_violation_penalties

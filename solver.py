@@ -102,17 +102,19 @@ class ShiftPlanningSolver:
                                  employee_cross_team_shift, employee_cross_team_weekend, 
                                  employees, dates, weeks, shift_codes, teams)
         
-        print("  - Consecutive shifts constraints (max consecutive weeks from database)")
-        # DISABLED per @TimUx feedback: Allow flexible exceptions for feasibility
-        # This constraint enforces 6 consecutive days off between work blocks, which is too strict
-        # for multi-week planning with small teams. Per user request, violations should be allowed
-        # when necessary for feasibility, then reported in summary.
-        # TODO: Convert to soft constraint with penalty tracking
-        # add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, 
-        #                                   employee_cross_team_shift, employee_cross_team_weekend, 
-        #                                   td_vars, employees, dates, shift_codes,
-        #                                   self.max_consecutive_shifts_weeks,
-        #                                   self.max_consecutive_night_shifts_weeks)
+        # Consecutive shifts constraint (optional - disabled by default)
+        # Per @TimUx: Too restrictive for small teams, prioritize feasibility
+        # Can be re-enabled by setting enable_consecutive_shifts_constraint=True
+        enable_consecutive_shifts_constraint = False
+        if enable_consecutive_shifts_constraint:
+            print("  - Consecutive shifts constraints (max consecutive weeks from database)")
+            add_consecutive_shifts_constraints(model, employee_active, employee_weekend_shift, 
+                                              employee_cross_team_shift, employee_cross_team_weekend, 
+                                              td_vars, employees, dates, shift_codes,
+                                              self.max_consecutive_shifts_weeks,
+                                              self.max_consecutive_night_shifts_weeks)
+        else:
+            print("  - Consecutive shifts constraints (DISABLED - allows flexible scheduling)")
         
         print("  - Working hours constraints (soft target only, no hard 192h minimum)")
         hours_shortage_objectives = add_working_hours_constraints(

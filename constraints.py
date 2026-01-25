@@ -1122,12 +1122,13 @@ def add_td_constraints(
             if not is_absent_this_week and (emp.id, week_idx) in td_vars:
                 available_for_td.append(td_vars[(emp.id, week_idx)])
         
-        # Exactly 1 TD per week (or at most 1 if no qualified employees available)
+        # At most 1 TD per week (prefer exactly 1, but allow 0 when needed for staffing)
         if available_for_td:
             if len(available_for_td) > 0:
-                # Prefer exactly 1, but allow 0 only if absolutely necessary
-                # This handles edge cases where all TD-qualified are needed elsewhere
-                model.Add(sum(available_for_td) == 1)
+                # Allow 0 or 1 TD per week - flexibility for constraint satisfaction
+                # When TD-qualified employees are needed for regular shifts to meet
+                # minimum staffing requirements, we allow 0 TD that week
+                model.Add(sum(available_for_td) <= 1)
             else:
                 # No qualified employees available - skip this week
                 # Validation will flag this as an issue

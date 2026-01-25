@@ -91,10 +91,33 @@ class ShiftPlanningModel:
         self.ytd_night_counts = ytd_night_counts or {}
         self.ytd_holiday_counts = ytd_holiday_counts or {}
         
-        # Generate list of dates
+        # Store original dates for reference
+        self.original_start_date = start_date
+        self.original_end_date = end_date
+        
+        # Extend planning period to complete weeks (Monday to Sunday)
+        # This ensures team rotation constraints can be satisfied
+        extended_start = start_date
+        extended_end = end_date
+        
+        # Extend start to previous Monday if not already Monday
+        if start_date.weekday() != 0:  # 0 = Monday
+            days_back_to_monday = start_date.weekday()
+            extended_start = start_date - timedelta(days=days_back_to_monday)
+        
+        # Extend end to next Sunday if not already Sunday
+        if end_date.weekday() != 6:  # 6 = Sunday
+            days_forward_to_sunday = 6 - end_date.weekday()
+            extended_end = end_date + timedelta(days=days_forward_to_sunday)
+        
+        # Use extended dates for planning
+        self.start_date = extended_start
+        self.end_date = extended_end
+        
+        # Generate list of dates using extended range
         self.dates = []
-        current = start_date
-        while current <= end_date:
+        current = extended_start
+        while current <= extended_end:
             self.dates.append(current)
             current += timedelta(days=1)
         

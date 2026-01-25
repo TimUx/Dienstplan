@@ -413,9 +413,13 @@ class ShiftPlanningSolver:
                 weekends_in_week = week_size - weekdays_in_week
                 
                 # Calculate minimum staff needed for this partial week
-                # Assume rotation assigns teams to shifts
-                teams_in_rotation = 3  # F, N, S rotation requires 3 teams
-                if len(teams) >= teams_in_rotation:
+                # Check how many teams participate in F→N→S rotation
+                rotation_shift_codes = ['F', 'N', 'S']
+                participating_teams = sum(1 for t in teams if all(
+                    code in shift_codes for code in rotation_shift_codes
+                ))
+                
+                if participating_teams >= len(rotation_shift_codes):
                     # Each team will be assigned one shift for this week
                     # Check if smallest team can meet staffing requirements
                     if team_sizes:
@@ -448,16 +452,15 @@ class ShiftPlanningSolver:
         if first_date.weekday() != 0:  # Not Monday
             # Calculate days in first week (from first_date until Sunday)
             days_in_first_week = 7 - first_date.weekday()
-            if days_in_first_week < 7:
-                # Also suggest the solution
-                ideal_start = first_date - timedelta(days=first_date.weekday())
-                diagnostics['potential_issues'].append(
-                    f"Planungszeitraum beginnt am {first_date.strftime('%A, %d.%m.%Y')} "
-                    f"(nicht Montag). Dies erzeugt eine unvollständige erste Woche mit nur "
-                    f"{days_in_first_week} Tagen, was zu Konflikten mit der Team-Rotation und "
-                    f"Mindestbesetzungsanforderungen führen kann. "
-                    f"Empfehlung: Planungszeitraum am {ideal_start.strftime('%d.%m.%Y')} (Montag) beginnen."
-                )
+            # Also suggest the solution
+            ideal_start = first_date - timedelta(days=first_date.weekday())
+            diagnostics['potential_issues'].append(
+                f"Planungszeitraum beginnt am {first_date.strftime('%A, %d.%m.%Y')} "
+                f"(nicht Montag). Dies erzeugt eine unvollständige erste Woche mit nur "
+                f"{days_in_first_week} Tagen, was zu Konflikten mit der Team-Rotation und "
+                f"Mindestbesetzungsanforderungen führen kann. "
+                f"Empfehlung: Planungszeitraum am {ideal_start.strftime('%d.%m.%Y')} (Montag) beginnen."
+            )
         
         # NEW: Check if last week is also partial
         if last_date.weekday() != 6 and len(weeks) > 0:  # Not Sunday

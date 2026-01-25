@@ -4,7 +4,7 @@ Test script to reproduce the Januar 2026 planning issue.
 """
 
 from datetime import date
-from data_loader import generate_sample_data, load_global_settings
+from data_loader import generate_sample_data
 from model import create_shift_planning_model
 from solver import solve_shift_planning, get_infeasibility_diagnostics
 from entities import STANDARD_SHIFT_TYPES

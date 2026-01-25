@@ -710,14 +710,19 @@ def add_consecutive_shifts_constraints(
     """
     SOFT CONSTRAINT: Limit consecutive working days and consecutive night shifts.
     
-    Requirements (from @TimUx clarification):
+    Requirements (from @TimUx clarification - updated):
     - Maximum consecutive working days across ALL shift types (e.g., 6 days)
-      After reaching this limit, employee must have 24h break (not work next day)
+      After reaching this limit, employee MUST have 24h break (cannot work next day)
     - Maximum consecutive night shifts (e.g., 3 days)
-      After reaching this limit, employee must have 24h break OR switch to different shift
+      After reaching this limit, employee can EITHER:
+      a) Have 24h break, OR
+      b) Switch to a different shift type (respecting rest time rules)
     
     Implementation as SOFT constraint:
     - Violations are penalized but allowed for feasibility
+    - General consecutive: Penalizes working on day (max + 1)
+    - Night consecutive: Only penalizes if STILL working night shift on day (max + 1)
+      (switching to different shift type is acceptable)
     - Penalties tracked for reporting in summary
     - Goal: Follow rules but allow exceptions when necessary for planning
     
@@ -792,6 +797,8 @@ def add_consecutive_shifts_constraints(
                 consecutive_violation_penalties.append(penalty)
         
         # Track consecutive night shifts specifically
+        # NOTE: This only penalizes if employee continues working NIGHT shifts beyond the limit.
+        # Switching to a different shift type after max consecutive nights is acceptable.
         for start_idx in range(len(dates) - max_consecutive_night_shifts_days):
             night_indicators = []
             
@@ -845,7 +852,8 @@ def add_consecutive_shifts_constraints(
                 else:
                     night_indicators.append(0)
             
-            # Check if all (max_consecutive_night_shifts_days + 1) days are night shifts
+            # Violation only if ALL (max_consecutive_night_shifts_days + 1) days are night shifts
+            # If employee switches to different shift on day (max + 1), no violation occurs
             if len(night_indicators) == max_consecutive_night_shifts_days + 1:
                 night_violation = model.NewBoolVar(f"night_viol_{emp.id}_{start_idx}")
                 model.Add(sum(night_indicators) == max_consecutive_night_shifts_days + 1).OnlyEnforceIf(night_violation)

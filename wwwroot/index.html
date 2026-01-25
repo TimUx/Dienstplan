@@ -126,6 +126,8 @@
                         <h3>Mitarbeiterverwaltung</h3>
                         <div class="controls">
                             <button onclick="showAddEmployeeModal()" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
+                            <button onclick="exportEmployeesCsv()" class="btn-secondary admin-only">📤 Mitarbeiter exportieren (CSV)</button>
+                            <button onclick="showImportEmployeesModal()" class="btn-secondary admin-only">📥 Mitarbeiter importieren (CSV)</button>
                         </div>
                         <div id="employees-content">
                             <p class="loading">Lade Mitarbeiter...</p>
@@ -137,6 +139,8 @@
                         <h3>Teamverwaltung</h3>
                         <div class="controls">
                             <button onclick="showAddTeamModal()" class="btn-primary admin-only">+ Team hinzufügen</button>
+                            <button onclick="exportTeamsCsv()" class="btn-secondary admin-only">📤 Teams exportieren (CSV)</button>
+                            <button onclick="showImportTeamsModal()" class="btn-secondary admin-only">📥 Teams importieren (CSV)</button>
                         </div>
                         <div id="teams-content">
                             <p class="loading">Lade Teams...</p>
@@ -1566,6 +1570,60 @@
             <div id="notification-list" class="notification-list">
                 <p class="loading">Lade Benachrichtigungen...</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Import Employees Modal -->
+    <div id="importEmployeesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeImportEmployeesModal()">&times;</span>
+            <h2>Mitarbeiter importieren (CSV)</h2>
+            <form id="importEmployeesForm">
+                <div class="form-group">
+                    <label>CSV-Datei auswählen*</label>
+                    <input type="file" id="employeesFile" accept=".csv" required>
+                    <p class="help-text">CSV-Format: Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive</p>
+                </div>
+                <div class="form-group">
+                    <label>Bei Konflikten</label>
+                    <select id="employeesConflictResolution">
+                        <option value="skip">Vorhandene überspringen</option>
+                        <option value="overwrite">Vorhandene überschreiben</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeImportEmployeesModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Importieren</button>
+                </div>
+            </form>
+            <div id="importEmployeesResult" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Import Teams Modal -->
+    <div id="importTeamsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeImportTeamsModal()">&times;</span>
+            <h2>Teams importieren (CSV)</h2>
+            <form id="importTeamsForm">
+                <div class="form-group">
+                    <label>CSV-Datei auswählen*</label>
+                    <input type="file" id="teamsFile" accept=".csv" required>
+                    <p class="help-text">CSV-Format: Name, Description, Email, IsVirtual</p>
+                </div>
+                <div class="form-group">
+                    <label>Bei Konflikten</label>
+                    <select id="teamsConflictResolution">
+                        <option value="skip">Vorhandene überspringen</option>
+                        <option value="overwrite">Vorhandene überschreiben</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeImportTeamsModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Importieren</button>
+                </div>
+            </form>
+            <div id="importTeamsResult" style="margin-top: 20px;"></div>
         </div>
     </div>
 

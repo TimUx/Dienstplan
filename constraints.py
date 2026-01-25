@@ -695,121 +695,163 @@ def add_consecutive_shifts_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
     employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
     td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
+    teams: List[Team],
     dates: List[date],
+    weeks: List[List[date]],
     shift_codes: List[str],
-    max_consecutive_shifts_weeks: int = 6,
-    max_consecutive_night_shifts_weeks: int = 3
+    max_consecutive_shifts_days: int = 6,
+    max_consecutive_night_shifts_days: int = 3
 ):
     """
-    HARD CONSTRAINT: Enforce minimum rest period between work blocks.
+    SOFT CONSTRAINT: Limit consecutive working days and consecutive night shifts.
     
-    Requirements (from stakeholder):
-    - A shift interruption (Schichtunterbrechung) is only valid when there are at least
-      6-7 consecutive days OFF between work periods for an employee
-    - This prevents scheduling employees for too many consecutive working days
-    - The max_consecutive_shifts_weeks parameter defines the maximum weeks of work before
-      requiring this rest period
+    Requirements (from @TimUx clarification):
+    - Maximum consecutive working days across ALL shift types (e.g., 6 days)
+      After reaching this limit, employee must have 24h break (not work next day)
+    - Maximum consecutive night shifts (e.g., 3 days)
+      After reaching this limit, employee must have 24h break OR switch to different shift
     
-    Implementation:
-    - If an employee works for consecutive days, they must have at least 6 days completely OFF
-      before starting another work block
-    - This is checked on a weekly basis as specified in requirements
+    Implementation as SOFT constraint:
+    - Violations are penalized but allowed for feasibility
+    - Penalties tracked for reporting in summary
+    - Goal: Follow rules but allow exceptions when necessary for planning
     
     Args:
-        max_consecutive_shifts_weeks: Max weeks of consecutive work from database (default 6)
-        max_consecutive_night_shifts_weeks: Max weeks of night shifts from database (default 3)
-    """
-    MIN_REST_DAYS = 6  # Minimum consecutive days off between work blocks (per requirements)
+        max_consecutive_shifts_days: Max consecutive working days across all shifts (default 6)
+        max_consecutive_night_shifts_days: Max consecutive night shift days (default 3)
     
-    # For each employee, enforce minimum rest between work blocks
-    # Note: All employees follow the same rest requirements. Cross-team flexibility
-    # is achieved through team shift assignments, not by exempting specific employees.
+    Returns:
+        List of penalty variables for consecutive shift violations
+    """
+    consecutive_violation_penalties = []
+    
+    # For each employee, check consecutive working days
     for emp in employees:
-        # Check consecutive working days and ensure proper rest periods
-        for i in range(len(dates) - MIN_REST_DAYS - 1):
-            current_date = dates[i]
+        # Track consecutive working days (any shift type)
+        for start_idx in range(len(dates) - max_consecutive_shifts_days):
+            # Check if employee works max_consecutive_shifts_days + 1 days in a row
+            # This violates the rule (should have break after max days)
+            working_indicators = []
             
-            # Get all work variables for current date (any shift type)
-            current_work_vars = []
-            
-            # Regular weekday shift
-            if (emp.id, current_date) in employee_active:
-                current_work_vars.append(employee_active[(emp.id, current_date)])
-            
-            # Weekend shift
-            if (emp.id, current_date) in employee_weekend_shift:
-                current_work_vars.append(employee_weekend_shift[(emp.id, current_date)])
-            
-            # Cross-team shifts
-            for shift_code in shift_codes:
-                if (emp.id, current_date, shift_code) in employee_cross_team_shift:
-                    current_work_vars.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
-                if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
-                    current_work_vars.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
-            
-            if not current_work_vars:
-                continue
-            
-            # Create boolean: is employee working on current_date?
-            is_working_current = model.NewBoolVar(f"emp{emp.id}_working_{current_date}")
-            model.Add(sum(current_work_vars) >= 1).OnlyEnforceIf(is_working_current)
-            model.Add(sum(current_work_vars) == 0).OnlyEnforceIf(is_working_current.Not())
-            
-            # Check date after rest period (MIN_REST_DAYS + 1 days later)
-            rest_end_idx = i + MIN_REST_DAYS + 1
-            if rest_end_idx >= len(dates):
-                continue
-            
-            future_date = dates[rest_end_idx]
-            future_work_vars = []
-            
-            # Get work variables for future date
-            if (emp.id, future_date) in employee_active:
-                future_work_vars.append(employee_active[(emp.id, future_date)])
-            if (emp.id, future_date) in employee_weekend_shift:
-                future_work_vars.append(employee_weekend_shift[(emp.id, future_date)])
-            for shift_code in shift_codes:
-                if (emp.id, future_date, shift_code) in employee_cross_team_shift:
-                    future_work_vars.append(employee_cross_team_shift[(emp.id, future_date, shift_code)])
-                if (emp.id, future_date, shift_code) in employee_cross_team_weekend:
-                    future_work_vars.append(employee_cross_team_weekend[(emp.id, future_date, shift_code)])
-            
-            if not future_work_vars:
-                continue
-            
-            is_working_future = model.NewBoolVar(f"emp{emp.id}_working_{future_date}")
-            model.Add(sum(future_work_vars) >= 1).OnlyEnforceIf(is_working_future)
-            model.Add(sum(future_work_vars) == 0).OnlyEnforceIf(is_working_future.Not())
-            
-            # If working on both current_date and future_date, ensure at least MIN_REST_DAYS off in between
-            both_working = model.NewBoolVar(f"emp{emp.id}_both_{current_date}_{future_date}")
-            model.AddMultiplicationEquality(both_working, [is_working_current, is_working_future])
-            
-            # When both_working == 1, ensure employee has at least MIN_REST_DAYS consecutive days off
-            # This means: for each day in the rest period, sum of all work vars must be 0
-            for rest_day_idx in range(i + 1, rest_end_idx):
-                if rest_day_idx >= len(dates):
-                    break
-                rest_date = dates[rest_day_idx]
+            for day_offset in range(max_consecutive_shifts_days + 1):
+                date_idx = start_idx + day_offset
+                current_date = dates[date_idx]
                 
-                rest_day_work_vars = []
-                if (emp.id, rest_date) in employee_active:
-                    rest_day_work_vars.append(employee_active[(emp.id, rest_date)])
-                if (emp.id, rest_date) in employee_weekend_shift:
-                    rest_day_work_vars.append(employee_weekend_shift[(emp.id, rest_date)])
+                # Collect all work variables for this date
+                work_vars = []
+                if (emp.id, current_date) in employee_active:
+                    work_vars.append(employee_active[(emp.id, current_date)])
+                if (emp.id, current_date) in employee_weekend_shift:
+                    work_vars.append(employee_weekend_shift[(emp.id, current_date)])
                 for shift_code in shift_codes:
-                    if (emp.id, rest_date, shift_code) in employee_cross_team_shift:
-                        rest_day_work_vars.append(employee_cross_team_shift[(emp.id, rest_date, shift_code)])
-                    if (emp.id, rest_date, shift_code) in employee_cross_team_weekend:
-                        rest_day_work_vars.append(employee_cross_team_weekend[(emp.id, rest_date, shift_code)])
+                    if (emp.id, current_date, shift_code) in employee_cross_team_shift:
+                        work_vars.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
+                    if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
+                        work_vars.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
                 
-                if rest_day_work_vars:
-                    # If both_working, then this rest day must be completely free
-                    model.Add(sum(rest_day_work_vars) == 0).OnlyEnforceIf(both_working)
+                if work_vars:
+                    # Create indicator: is employee working this day?
+                    is_working = model.NewBoolVar(f"consec_work_{emp.id}_{date_idx}")
+                    model.Add(sum(work_vars) >= 1).OnlyEnforceIf(is_working)
+                    model.Add(sum(work_vars) == 0).OnlyEnforceIf(is_working.Not())
+                    working_indicators.append(is_working)
+                else:
+                    # No work variables for this date, count as not working
+                    working_indicators.append(0)
+            
+            # Check if all (max_consecutive_shifts_days + 1) days are working
+            if len(working_indicators) == max_consecutive_shifts_days + 1:
+                # Violation occurs when sum equals the full length
+                violation = model.NewBoolVar(f"consec_viol_{emp.id}_{start_idx}")
+                model.Add(sum(working_indicators) == max_consecutive_shifts_days + 1).OnlyEnforceIf(violation)
+                model.Add(sum(working_indicators) < max_consecutive_shifts_days + 1).OnlyEnforceIf(violation.Not())
+                
+                # Penalty: 300 points per violation
+                penalty = model.NewIntVar(0, 300, f"consec_penalty_{emp.id}_{start_idx}")
+                model.AddMultiplicationEquality(penalty, [violation, 300])
+                consecutive_violation_penalties.append(penalty)
+        
+        # Track consecutive night shifts specifically
+        # Note: This is more complex as we need to identify which shifts are night shifts
+        # For simplicity, we'll check team-based night shifts and cross-team night shifts
+        for start_idx in range(len(dates) - max_consecutive_night_shifts_days):
+            night_indicators = []
+            
+            for day_offset in range(max_consecutive_night_shifts_days + 1):
+                date_idx = start_idx + day_offset
+                current_date = dates[date_idx]
+                
+                # Find which week this date belongs to
+                week_idx = None
+                for w_idx, week_dates in enumerate(weeks):
+                    if current_date in week_dates:
+                        week_idx = w_idx
+                        break
+                
+                if week_idx is None:
+                    night_indicators.append(0)
+                    continue
+                
+                # Collect night shift variables
+                night_vars = []
+                
+                # Team-based night shift (weekday)
+                if current_date.weekday() < 5 and (emp.id, current_date) in employee_active and emp.team_id:
+                    # Check if employee's team has night shift this week
+                    for team in teams:
+                        if team.id == emp.team_id and (team.id, week_idx, 'N') in team_shift:
+                            # Employee works night if: active AND team has night shift
+                            night_work = model.NewBoolVar(f"night_team_{emp.id}_{date_idx}")
+                            model.AddMultiplicationEquality(
+                                night_work,
+                                [employee_active[(emp.id, current_date)], team_shift[(team.id, week_idx, 'N')]]
+                            )
+                            night_vars.append(night_work)
+                            break
+                
+                # Team-based night shift (weekend)
+                if current_date.weekday() >= 5 and (emp.id, current_date) in employee_weekend_shift and emp.team_id:
+                    for team in teams:
+                        if team.id == emp.team_id and (team.id, week_idx, 'N') in team_shift:
+                            night_weekend = model.NewBoolVar(f"night_weekend_{emp.id}_{date_idx}")
+                            model.AddMultiplicationEquality(
+                                night_weekend,
+                                [employee_weekend_shift[(emp.id, current_date)], team_shift[(team.id, week_idx, 'N')]]
+                            )
+                            night_vars.append(night_weekend)
+                            break
+                
+                # Cross-team night shift
+                if (emp.id, current_date, 'N') in employee_cross_team_shift:
+                    night_vars.append(employee_cross_team_shift[(emp.id, current_date, 'N')])
+                if (emp.id, current_date, 'N') in employee_cross_team_weekend:
+                    night_vars.append(employee_cross_team_weekend[(emp.id, current_date, 'N')])
+                
+                if night_vars:
+                    is_night = model.NewBoolVar(f"is_night_{emp.id}_{date_idx}")
+                    model.Add(sum(night_vars) >= 1).OnlyEnforceIf(is_night)
+                    model.Add(sum(night_vars) == 0).OnlyEnforceIf(is_night.Not())
+                    night_indicators.append(is_night)
+                else:
+                    night_indicators.append(0)
+            
+            # Check if all (max_consecutive_night_shifts_days + 1) days are night shifts
+            if len(night_indicators) == max_consecutive_night_shifts_days + 1:
+                night_violation = model.NewBoolVar(f"night_viol_{emp.id}_{start_idx}")
+                model.Add(sum(night_indicators) == max_consecutive_night_shifts_days + 1).OnlyEnforceIf(night_violation)
+                model.Add(sum(night_indicators) < max_consecutive_night_shifts_days + 1).OnlyEnforceIf(night_violation.Not())
+                
+                # Penalty: 400 points per violation (higher than general consecutive)
+                night_penalty = model.NewIntVar(0, 400, f"night_penalty_{emp.id}_{start_idx}")
+                model.AddMultiplicationEquality(night_penalty, [night_violation, 400])
+                consecutive_violation_penalties.append(night_penalty)
+    
+    return consecutive_violation_penalties
 
 
 def add_working_hours_constraints(

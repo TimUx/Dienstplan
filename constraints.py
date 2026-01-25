@@ -730,6 +730,21 @@ def add_consecutive_shifts_constraints(
     """
     consecutive_violation_penalties = []
     
+    # Pre-compute date-to-week mapping for efficiency
+    date_to_week = {}
+    for week_idx, week_dates in enumerate(weeks):
+        for d in week_dates:
+            date_to_week[d] = week_idx
+    
+    # Pre-compute employee-to-team mapping for efficiency
+    emp_to_team = {}
+    for emp in employees:
+        if emp.team_id:
+            for team in teams:
+                if team.id == emp.team_id:
+                    emp_to_team[emp.id] = team
+                    break
+    
     # For each employee, check consecutive working days
     for emp in employees:
         # Track consecutive working days (any shift type)
@@ -777,8 +792,6 @@ def add_consecutive_shifts_constraints(
                 consecutive_violation_penalties.append(penalty)
         
         # Track consecutive night shifts specifically
-        # Note: This is more complex as we need to identify which shifts are night shifts
-        # For simplicity, we'll check team-based night shifts and cross-team night shifts
         for start_idx in range(len(dates) - max_consecutive_night_shifts_days):
             night_indicators = []
             
@@ -786,13 +799,8 @@ def add_consecutive_shifts_constraints(
                 date_idx = start_idx + day_offset
                 current_date = dates[date_idx]
                 
-                # Find which week this date belongs to
-                week_idx = None
-                for w_idx, week_dates in enumerate(weeks):
-                    if current_date in week_dates:
-                        week_idx = w_idx
-                        break
-                
+                # Get week index from pre-computed mapping
+                week_idx = date_to_week.get(current_date)
                 if week_idx is None:
                     night_indicators.append(0)
                     continue
@@ -801,30 +809,27 @@ def add_consecutive_shifts_constraints(
                 night_vars = []
                 
                 # Team-based night shift (weekday)
-                if current_date.weekday() < 5 and (emp.id, current_date) in employee_active and emp.team_id:
-                    # Check if employee's team has night shift this week
-                    for team in teams:
-                        if team.id == emp.team_id and (team.id, week_idx, 'N') in team_shift:
-                            # Employee works night if: active AND team has night shift
-                            night_work = model.NewBoolVar(f"night_team_{emp.id}_{date_idx}")
-                            model.AddMultiplicationEquality(
-                                night_work,
-                                [employee_active[(emp.id, current_date)], team_shift[(team.id, week_idx, 'N')]]
-                            )
-                            night_vars.append(night_work)
-                            break
+                if current_date.weekday() < 5 and (emp.id, current_date) in employee_active:
+                    team = emp_to_team.get(emp.id)
+                    if team and (team.id, week_idx, 'N') in team_shift:
+                        # Employee works night if: active AND team has night shift
+                        night_work = model.NewBoolVar(f"night_team_{emp.id}_{date_idx}")
+                        model.AddMultiplicationEquality(
+                            night_work,
+                            [employee_active[(emp.id, current_date)], team_shift[(team.id, week_idx, 'N')]]
+                        )
+                        night_vars.append(night_work)
                 
                 # Team-based night shift (weekend)
-                if current_date.weekday() >= 5 and (emp.id, current_date) in employee_weekend_shift and emp.team_id:
-                    for team in teams:
-                        if team.id == emp.team_id and (team.id, week_idx, 'N') in team_shift:
-                            night_weekend = model.NewBoolVar(f"night_weekend_{emp.id}_{date_idx}")
-                            model.AddMultiplicationEquality(
-                                night_weekend,
-                                [employee_weekend_shift[(emp.id, current_date)], team_shift[(team.id, week_idx, 'N')]]
-                            )
-                            night_vars.append(night_weekend)
-                            break
+                if current_date.weekday() >= 5 and (emp.id, current_date) in employee_weekend_shift:
+                    team = emp_to_team.get(emp.id)
+                    if team and (team.id, week_idx, 'N') in team_shift:
+                        night_weekend = model.NewBoolVar(f"night_weekend_{emp.id}_{date_idx}")
+                        model.AddMultiplicationEquality(
+                            night_weekend,
+                            [employee_weekend_shift[(emp.id, current_date)], team_shift[(team.id, week_idx, 'N')]]
+                        )
+                        night_vars.append(night_weekend)
                 
                 # Cross-team night shift
                 if (emp.id, current_date, 'N') in employee_cross_team_shift:

@@ -2679,12 +2679,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             locked_employee_weekend = {}
             
             if extended_end > end_date or extended_start < start_date:
-                # Query existing TeamShiftAssignments for extended dates
+                # Query existing shift assignments for extended dates
+                # Join ShiftAssignments with Employees (for TeamId) and ShiftTypes (for Code)
                 cursor.execute("""
-                    SELECT TeamId, Date, ShiftTypeCode
-                    FROM TeamShiftAssignments
-                    WHERE Date >= ? AND Date <= ?
-                    AND (Date < ? OR Date > ?)
+                    SELECT e.TeamId, sa.Date, st.Code
+                    FROM ShiftAssignments sa
+                    INNER JOIN Employees e ON sa.EmployeeId = e.Id
+                    INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                    WHERE sa.Date >= ? AND sa.Date <= ?
+                    AND (sa.Date < ? OR sa.Date > ?)
+                    AND e.TeamId IS NOT NULL
                 """, (extended_start.isoformat(), extended_end.isoformat(),
                       start_date.isoformat(), end_date.isoformat()))
                 

@@ -2040,6 +2040,193 @@ async function saveTeam(event) {
     }
 }
 
+// Export/Import Functions for Employees and Teams
+async function exportEmployeesCsv() {
+    try {
+        const response = await fetch(`${API_BASE}/employees/export/csv`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mitarbeiter_export_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            alert('Mitarbeiter erfolgreich exportiert!');
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Export: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        alert(`Fehler beim Export: ${error.message}`);
+    }
+}
+
+async function exportTeamsCsv() {
+    try {
+        const response = await fetch(`${API_BASE}/teams/export/csv`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `teams_export_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            alert('Teams erfolgreich exportiert!');
+        } else {
+            const error = await response.json();
+            alert(`Fehler beim Export: ${error.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        alert(`Fehler beim Export: ${error.message}`);
+    }
+}
+
+function showImportEmployeesModal() {
+    document.getElementById('importEmployeesModal').style.display = 'block';
+    document.getElementById('importEmployeesForm').reset();
+    document.getElementById('importEmployeesResult').innerHTML = '';
+}
+
+function closeImportEmployeesModal() {
+    document.getElementById('importEmployeesModal').style.display = 'none';
+}
+
+function showImportTeamsModal() {
+    document.getElementById('importTeamsModal').style.display = 'block';
+    document.getElementById('importTeamsForm').reset();
+    document.getElementById('importTeamsResult').innerHTML = '';
+}
+
+function closeImportTeamsModal() {
+    document.getElementById('importTeamsModal').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Import Employees Form Handler
+    const importEmployeesForm = document.getElementById('importEmployeesForm');
+    if (importEmployeesForm) {
+        importEmployeesForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('employeesFile');
+            const conflictResolution = document.getElementById('employeesConflictResolution').value;
+            const resultDiv = document.getElementById('importEmployeesResult');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Bitte wählen Sie eine CSV-Datei aus.');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            resultDiv.innerHTML = '<p class="loading">Importiere Mitarbeiter...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/employees/import/csv?conflict_resolution=${conflictResolution}`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success-message">
+                            <p><strong>✓ Import erfolgreich!</strong></p>
+                            <p>Importiert: ${result.imported || 0}</p>
+                            <p>Übersprungen: ${result.skipped || 0}</p>
+                            <p>Aktualisiert: ${result.updated || 0}</p>
+                            ${result.errors && result.errors.length > 0 ? `<p>Fehler: ${result.errors.length}</p>` : ''}
+                        </div>
+                    `;
+                    
+                    // Reload employees list
+                    setTimeout(() => {
+                        loadEmployees();
+                        closeImportEmployeesModal();
+                    }, 2000);
+                } else {
+                    resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler beim Import:</strong></p><p>${result.error || 'Unbekannter Fehler'}</p></div>`;
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${error.message}</p></div>`;
+            }
+        });
+    }
+    
+    // Import Teams Form Handler
+    const importTeamsForm = document.getElementById('importTeamsForm');
+    if (importTeamsForm) {
+        importTeamsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('teamsFile');
+            const conflictResolution = document.getElementById('teamsConflictResolution').value;
+            const resultDiv = document.getElementById('importTeamsResult');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Bitte wählen Sie eine CSV-Datei aus.');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            resultDiv.innerHTML = '<p class="loading">Importiere Teams...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/teams/import/csv?conflict_resolution=${conflictResolution}`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success-message">
+                            <p><strong>✓ Import erfolgreich!</strong></p>
+                            <p>Importiert: ${result.imported || 0}</p>
+                            <p>Übersprungen: ${result.skipped || 0}</p>
+                            <p>Aktualisiert: ${result.updated || 0}</p>
+                            ${result.errors && result.errors.length > 0 ? `<p>Fehler: ${result.errors.length}</p>` : ''}
+                        </div>
+                    `;
+                    
+                    // Reload teams list
+                    setTimeout(() => {
+                        loadTeams();
+                        closeImportTeamsModal();
+                    }, 2000);
+                } else {
+                    resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler beim Import:</strong></p><p>${result.error || 'Unbekannter Fehler'}</p></div>`;
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${error.message}</p></div>`;
+            }
+        });
+    }
+});
+
 // Vacation Management Functions
 // Vacation Management Functions (no longer needed, vacations are separate)
 async function loadVacationRequests(filter = 'all') {

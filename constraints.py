@@ -737,6 +737,78 @@ def add_shift_stability_constraints(
     # Higher penalty for rapid back-and-forth changes
     HOPPING_PENALTY = 200
     
+    # Helper to collect shift assignment for a day
+    def get_shift_vars_for_day(emp_id, d):
+        """Returns list of (shift_code, var) tuples for this day"""
+        result = []
+        weekday = d.weekday()
+        
+        # Team shift (weekday)
+        if weekday < 5 and (emp_id, d) in employee_active:
+            # Find team and week
+            week_idx = None
+            for w_idx, week_dates in enumerate(weeks):
+                if d in week_dates:
+                    week_idx = w_idx
+                    break
+            
+            if week_idx is not None:
+                team = None
+                for t in teams:
+                    if t.id == emp_id or any(e.id == emp_id for e in employees if e.team_id == t.id):
+                        for emp in employees:
+                            if emp.id == emp_id and emp.team_id == t.id:
+                                team = t
+                                break
+                        break
+                
+                if team:
+                    for shift_code in shift_codes:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            # This shift is active if both team has it AND employee is active
+                            result.append((shift_code, [team_shift[(team.id, week_idx, shift_code)], 
+                                                        employee_active[(emp_id, d)]]))
+        
+        # Team shift (weekend)
+        elif weekday >= 5 and (emp_id, d) in employee_weekend_shift:
+            # Find team and week
+            week_idx = None
+            for w_idx, week_dates in enumerate(weeks):
+                if d in week_dates:
+                    week_idx = w_idx
+                    break
+            
+            if week_idx is not None:
+                team = None
+                for emp in employees:
+                    if emp.id == emp_id:
+                        for t in teams:
+                            if t.id == emp.team_id:
+                                team = t
+                                break
+                        break
+                
+                if team:
+                    for shift_code in shift_codes:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            # This shift is active if both team has it AND employee works weekend
+                            result.append((shift_code, [team_shift[(team.id, week_idx, shift_code)],
+                                                        employee_weekend_shift[(emp_id, d)]]))
+        
+        # Cross-team shifts (weekday)
+        if weekday < 5:
+            for shift_code in shift_codes:
+                if (emp_id, d, shift_code) in employee_cross_team_shift:
+                    result.append((shift_code, [employee_cross_team_shift[(emp_id, d, shift_code)]]))
+        
+        # Cross-team shifts (weekend)
+        elif weekday >= 5:
+            for shift_code in shift_codes:
+                if (emp_id, d, shift_code) in employee_cross_team_weekend:
+                    result.append((shift_code, [employee_cross_team_weekend[(emp_id, d, shift_code)]]))
+        
+        return result
+    
     for emp in employees:
         if not emp.team_id:
             continue
@@ -746,75 +818,6 @@ def add_shift_stability_constraints(
             day1 = dates[i]
             day2 = dates[i + 1]
             day3 = dates[i + 2]
-            
-            # Get shift codes for each day
-            # We need to determine what shift each day has
-            
-            # Helper to collect shift assignment for a day
-            def get_shift_vars_for_day(emp_id, d):
-                """Returns list of (shift_code, var) tuples for this day"""
-                result = []
-                weekday = d.weekday()
-                
-                # Team shift (weekday)
-                if weekday < 5 and (emp_id, d) in employee_active:
-                    # Find team and week
-                    week_idx = None
-                    for w_idx, week_dates in enumerate(weeks):
-                        if d in week_dates:
-                            week_idx = w_idx
-                            break
-                    
-                    if week_idx is not None:
-                        team = None
-                        for t in teams:
-                            if t.id == emp.team_id:
-                                team = t
-                                break
-                        
-                        if team:
-                            for shift_code in shift_codes:
-                                if (team.id, week_idx, shift_code) in team_shift:
-                                    # This shift is active if both team has it AND employee is active
-                                    result.append((shift_code, [team_shift[(team.id, week_idx, shift_code)], 
-                                                                employee_active[(emp_id, d)]]))
-                
-                # Team shift (weekend)
-                elif weekday >= 5 and (emp_id, d) in employee_weekend_shift:
-                    # Find team and week
-                    week_idx = None
-                    for w_idx, week_dates in enumerate(weeks):
-                        if d in week_dates:
-                            week_idx = w_idx
-                            break
-                    
-                    if week_idx is not None:
-                        team = None
-                        for t in teams:
-                            if t.id == emp.team_id:
-                                team = t
-                                break
-                        
-                        if team:
-                            for shift_code in shift_codes:
-                                if (team.id, week_idx, shift_code) in team_shift:
-                                    # This shift is active if both team has it AND employee works weekend
-                                    result.append((shift_code, [team_shift[(team.id, week_idx, shift_code)],
-                                                                employee_weekend_shift[(emp_id, d)]]))
-                
-                # Cross-team shifts (weekday)
-                if weekday < 5:
-                    for shift_code in shift_codes:
-                        if (emp_id, d, shift_code) in employee_cross_team_shift:
-                            result.append((shift_code, [employee_cross_team_shift[(emp_id, d, shift_code)]]))
-                
-                # Cross-team shifts (weekend)
-                elif weekday >= 5:
-                    for shift_code in shift_codes:
-                        if (emp_id, d, shift_code) in employee_cross_team_weekend:
-                            result.append((shift_code, [employee_cross_team_weekend[(emp_id, d, shift_code)]]))
-                
-                return result
             
             # Get possible shifts for all three days
             shifts1 = get_shift_vars_for_day(emp.id, day1)
@@ -842,15 +845,15 @@ def add_shift_stability_constraints(
                                 all_active.append(v)
                             
                             # Create boolean: is_hopping = (all variables are 1)
-                            is_hopping = model.NewBoolVar(f"hopping_{emp.id}_{day1}_{code1}_{code2}_{code3}")
-                            # is_hopping = 1 if all_active vars are all 1
+                            is_hopping = model.NewBoolVar(f"hop_{emp.id}_{i}")
+                            # Use proper constraint form for OR-Tools
+                            # is_hopping = 1 if all variables are 1
                             # This is an AND operation: is_hopping = AND(all_active)
                             model.AddBoolAnd(all_active).OnlyEnforceIf(is_hopping)
                             model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(is_hopping.Not())
                             
                             # Add penalty
-                            penalty_var = model.NewIntVar(0, HOPPING_PENALTY, 
-                                                        f"hop_penalty_{emp.id}_{day1}_{day2}_{day3}")
+                            penalty_var = model.NewIntVar(0, HOPPING_PENALTY, f"hop_pen_{emp.id}_{i}")
                             model.AddMultiplicationEquality(penalty_var, [is_hopping, HOPPING_PENALTY])
                             hopping_penalties.append(penalty_var)
     

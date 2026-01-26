@@ -102,6 +102,14 @@ class ShiftPlanningSolver:
                                  employee_cross_team_shift, employee_cross_team_weekend, 
                                  employees, dates, weeks, shift_codes, teams)
         
+        # Shift stability constraint (prevent shift hopping)
+        print("  - Shift stability constraints (prevent rapid shift changes like N→S→N)")
+        from constraints import add_shift_stability_constraints
+        shift_hopping_penalties = add_shift_stability_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, dates, weeks, shift_codes, teams)
+        
         # Consecutive shifts constraint (re-enabled as SOFT constraint per @TimUx)
         # Limits consecutive working days and consecutive night shifts
         # Violations are penalized but allowed for feasibility
@@ -173,6 +181,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(rest_violation_penalties)} rest time violation penalties...")
             for penalty_var in rest_violation_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (50 or 500 per violation)
+        
+        # Add shift hopping penalties (discourage rapid shift changes)
+        if shift_hopping_penalties:
+            print(f"  Adding {len(shift_hopping_penalties)} shift hopping penalties...")
+            for penalty_var in shift_hopping_penalties:
+                objective_terms.append(penalty_var)  # Already weighted (200 per hopping pattern)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # These are shortages, so we want to minimize them directly
@@ -617,6 +631,10 @@ class ShiftPlanningSolver:
         # Complete schedule: every employee, every day
         complete_schedule = {}
         
+        # Track assigned shifts to prevent double assignments (safety check)
+        # Maps (employee_id, date) -> shift_type_id
+        assigned_shifts = {}
+        
         # Extract shift assignments based on team shifts and employee activity
         for emp in employees:
             # Regular team members
@@ -666,6 +684,12 @@ class ShiftPlanningSolver:
                             break
                     
                     if shift_type_id:
+                        # Safety check: prevent double assignment
+                        if (emp.id, d) in assigned_shifts:
+                            print(f"WARNING: Double shift assignment prevented for employee {emp.id} on {d}")
+                            print(f"  Already assigned: {assigned_shifts[(emp.id, d)]}, attempted: {shift_type_id}")
+                            continue
+                        
                         assignment = ShiftAssignment(
                             id=assignment_id,
                             employee_id=emp.id,
@@ -673,6 +697,7 @@ class ShiftPlanningSolver:
                             date=d
                         )
                         assignments.append(assignment)
+                        assigned_shifts[(emp.id, d)] = shift_type_id
                         assignment_id += 1
                 
                 else:  # WEEKEND (Sat-Sun): Use team shift type with individual presence
@@ -705,6 +730,12 @@ class ShiftPlanningSolver:
                             break
                     
                     if shift_type_id:
+                        # Safety check: prevent double assignment
+                        if (emp.id, d) in assigned_shifts:
+                            print(f"WARNING: Double shift assignment prevented for employee {emp.id} on {d}")
+                            print(f"  Already assigned: {assigned_shifts[(emp.id, d)]}, attempted: {shift_type_id}")
+                            continue
+                        
                         assignment = ShiftAssignment(
                             id=assignment_id,
                             employee_id=emp.id,
@@ -712,6 +743,7 @@ class ShiftPlanningSolver:
                             date=d
                         )
                         assignments.append(assignment)
+                        assigned_shifts[(emp.id, d)] = shift_type_id
                         assignment_id += 1
         
         # Extract CROSS-TEAM assignments (NEW)
@@ -730,6 +762,12 @@ class ShiftPlanningSolver:
                             continue
                         
                         if self.solution.Value(employee_cross_team_shift[(emp.id, d, shift_code)]) == 1:
+                            # Safety check: prevent double assignment
+                            if (emp.id, d) in assigned_shifts:
+                                print(f"WARNING: Cross-team double shift assignment prevented for employee {emp.id} on {d}")
+                                print(f"  Already assigned: {assigned_shifts[(emp.id, d)]}, attempted: cross-team {shift_code}")
+                                break
+                            
                             # Find shift type ID
                             shift_type_id = None
                             for st in STANDARD_SHIFT_TYPES:
@@ -746,6 +784,7 @@ class ShiftPlanningSolver:
                                     notes="Cross-team assignment"
                                 )
                                 assignments.append(assignment)
+                                assigned_shifts[(emp.id, d)] = shift_type_id
                                 assignment_id += 1
                                 break  # Only one shift per day
                 
@@ -756,6 +795,12 @@ class ShiftPlanningSolver:
                             continue
                         
                         if self.solution.Value(employee_cross_team_weekend[(emp.id, d, shift_code)]) == 1:
+                            # Safety check: prevent double assignment
+                            if (emp.id, d) in assigned_shifts:
+                                print(f"WARNING: Cross-team weekend double shift assignment prevented for employee {emp.id} on {d}")
+                                print(f"  Already assigned: {assigned_shifts[(emp.id, d)]}, attempted: cross-team weekend {shift_code}")
+                                break
+                            
                             # Find shift type ID
                             shift_type_id = None
                             for st in STANDARD_SHIFT_TYPES:
@@ -772,6 +817,7 @@ class ShiftPlanningSolver:
                                     notes="Cross-team weekend assignment"
                                 )
                                 assignments.append(assignment)
+                                assigned_shifts[(emp.id, d)] = shift_type_id
                                 assignment_id += 1
                                 break  # Only one shift per day
         

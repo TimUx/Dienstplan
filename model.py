@@ -31,6 +31,7 @@ class ShiftPlanningModel:
         locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
         locked_td: Dict[Tuple[int, int], bool] = None,
         locked_absence: Dict[Tuple[int, date], str] = None,
+        locked_employee_shift: Dict[Tuple[int, date], str] = None,
         ytd_weekend_counts: Dict[int, int] = None,
         ytd_night_counts: Dict[int, int] = None,
         ytd_holiday_counts: Dict[int, int] = None
@@ -49,6 +50,7 @@ class ShiftPlanningModel:
             locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
             locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
             locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
+            locked_employee_shift: Dict mapping (emp_id, date) -> shift_code (existing assignments from previous planning)
             ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year (for fairness)
             ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year (for fairness)
             ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year (for fairness)
@@ -85,6 +87,7 @@ class ShiftPlanningModel:
         self.locked_employee_weekend = locked_employee_weekend or {}
         self.locked_td = locked_td or {}
         self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
+        self.locked_employee_shift = locked_employee_shift or {}  # NEW: locked employee shift assignments from previous planning
         
         # Year-to-date statistics for fairness tracking
         self.ytd_weekend_counts = ytd_weekend_counts or {}
@@ -168,6 +171,7 @@ class ShiftPlanningModel:
         - locked_team_shift: Forces a team to a specific shift in a week
         - locked_employee_weekend: Forces employee presence/absence on weekend
         - locked_td: Forces TD assignment to specific employee in a week
+        - locked_employee_shift: Forces employee to have a specific shift on a date (from previous planning periods)
         """
         # Apply locked team shift assignments
         for (team_id, week_idx), shift_code in self.locked_team_shift.items():
@@ -176,6 +180,34 @@ class ShiftPlanningModel:
                 # Note: Other shifts for this team/week are implicitly set to 0
                 # by the "exactly one shift per team per week" constraint
                 self.model.Add(self.team_shift[(team_id, week_idx, shift_code)] == 1)
+        
+        # Apply locked employee shift assignments (from previous planning periods)
+        # This prevents double shifts when planning across months
+        for (emp_id, d), shift_code in self.locked_employee_shift.items():
+            # For weekdays, ensure employee is active on this date
+            if d.weekday() < 5:  # Monday to Friday
+                if (emp_id, d) in self.employee_active:
+                    # Force employee to be active on this date
+                    self.model.Add(self.employee_active[(emp_id, d)] == 1)
+            else:  # Weekend
+                if (emp_id, d) in self.employee_weekend_shift:
+                    # Force employee to work on this weekend day
+                    self.model.Add(self.employee_weekend_shift[(emp_id, d)] == 1)
+            
+            # Additionally, we need to ensure the team has the correct shift for this date
+            # Find the employee's team
+            emp = next((e for e in self.employees if e.id == emp_id), None)
+            if emp and emp.team_id:
+                # Find which week this date belongs to
+                week_idx = None
+                for idx, week_dates in enumerate(self.weeks):
+                    if d in week_dates:
+                        week_idx = idx
+                        break
+                
+                # Lock the team to this shift for this week
+                if week_idx is not None and (emp.team_id, week_idx, shift_code) in self.team_shift:
+                    self.model.Add(self.team_shift[(emp.team_id, week_idx, shift_code)] == 1)
         
         # Apply locked employee weekend work
         for (emp_id, d), is_working in self.locked_employee_weekend.items():
@@ -420,7 +452,8 @@ def create_shift_planning_model(
     locked_team_shift: Dict[Tuple[int, int], str] = None,
     locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
     locked_td: Dict[Tuple[int, int], bool] = None,
-    locked_absence: Dict[Tuple[int, date], str] = None
+    locked_absence: Dict[Tuple[int, date], str] = None,
+    locked_employee_shift: Dict[Tuple[int, date], str] = None
 ) -> ShiftPlanningModel:
     """
     Factory function to create a shift planning model.
@@ -436,6 +469,7 @@ def create_shift_planning_model(
         locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
         locked_td: Dict mapping (emp_id, week_idx) -> bool (manual overrides)
         locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
+        locked_employee_shift: Dict mapping (emp_id, date) -> shift_code (existing assignments from previous planning)
         
     Returns:
         ShiftPlanningModel instance
@@ -446,7 +480,7 @@ def create_shift_planning_model(
     """
     return ShiftPlanningModel(
         employees, teams, start_date, end_date, absences, shift_types,
-        locked_team_shift, locked_employee_weekend, locked_td, locked_absence
+        locked_team_shift, locked_employee_weekend, locked_td, locked_absence, locked_employee_shift
     )
 
 

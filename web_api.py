@@ -2677,6 +2677,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # These will be locked so we don't overwrite already-planned shifts
             locked_team_shift = {}
             locked_employee_weekend = {}
+            locked_employee_shift = {}  # NEW: Lock individual employee shifts to prevent double shifts
+            
+            # Query ALL existing shift assignments in the extended planning period
+            # This prevents double shifts when planning across months
+            cursor.execute("""
+                SELECT sa.EmployeeId, sa.Date, st.Code
+                FROM ShiftAssignments sa
+                INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+            """, (extended_start.isoformat(), extended_end.isoformat()))
+            
+            existing_employee_assignments = cursor.fetchall()
+            
+            # Lock existing employee assignments
+            for emp_id, date_str, shift_code in existing_employee_assignments:
+                assignment_date = date.fromisoformat(date_str)
+                locked_employee_shift[(emp_id, assignment_date)] = shift_code
+                app.logger.info(f"Locked: Employee {emp_id}, Date {date_str} -> {shift_code} (existing assignment)")
             
             if extended_end > end_date or extended_start < start_date:
                 # Query existing shift assignments for extended dates ONLY (not the main month)
@@ -2736,7 +2754,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             planning_model = create_shift_planning_model(
                 employees, teams, extended_start, extended_end, absences, 
                 shift_types=shift_types,
-                locked_team_shift=locked_team_shift if locked_team_shift else None
+                locked_team_shift=locked_team_shift if locked_team_shift else None,
+                locked_employee_shift=locked_employee_shift if locked_employee_shift else None
             )
             
             # Solve

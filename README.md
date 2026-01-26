@@ -1212,6 +1212,41 @@ def my_endpoint():
 ### Beispieldaten für Entwicklung
 Siehe [docs/SAMPLE_DATA.md](docs/SAMPLE_DATA.md) für Details zu Beispieldaten und API-Aufrufen.
 
+### Datenbank-Verwaltungs-Skripte
+
+#### Alle Schichten löschen
+
+Das System bietet ein Utility-Skript zum Löschen aller Schichtzuweisungen aus der Datenbank:
+
+```bash
+# Alle Schichten mit Backup und Bestätigung löschen (empfohlen)
+python delete_all_shifts.py
+
+# Spezifische Datenbank
+python delete_all_shifts.py /pfad/zur/dienstplan.db
+
+# Ohne Backup (nicht empfohlen)
+python delete_all_shifts.py --no-backup
+
+# Ohne Bestätigungsabfrage (für Automatisierung)
+python delete_all_shifts.py --yes
+
+# Hilfe anzeigen
+python delete_all_shifts.py --help
+```
+
+**Funktionen:**
+- ✅ Erstellt automatisch ein Backup vor dem Löschen
+- ✅ Fordert Bestätigung an (kann übersprungen werden)
+- ✅ Zeigt Anzahl der zu löschenden Schichten
+- ✅ Verifiziert erfolgreiche Löschung
+- ✅ Behandelt Fehler sicher
+
+**Anwendungsfälle:**
+- Zurücksetzen der Planung für einen Neustart
+- Bereinigung von Testdaten
+- Vorbereitung für Import neuer Daten
+
 ## 🤝 Beitragen
 
 ### Entwicklungsrichtlinien

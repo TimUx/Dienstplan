@@ -211,11 +211,24 @@ class ShiftPlanningModel:
                 
                 # Lock the team to this shift for this week
                 if week_idx is not None and (emp.team_id, week_idx, shift_code) in self.team_shift:
-                    self.model.Add(self.team_shift[(emp.team_id, week_idx, shift_code)] == 1)
-                    # CRITICAL FIX: Update locked_team_shift so rotation constraint skips this week,
-                    # preventing conflicts between locked employee shifts and ISO week-based rotation
-                    if (emp.team_id, week_idx) not in self.locked_team_shift:
+                    # CRITICAL FIX: Check for conflicts BEFORE adding constraint
+                    # Update locked_team_shift BEFORE adding the constraint to prevent race conditions
+                    if (emp.team_id, week_idx) in self.locked_team_shift:
+                        existing_shift = self.locked_team_shift[(emp.team_id, week_idx)]
+                        if existing_shift != shift_code:
+                            # Conflict detected: different locked shifts for same team/week
+                            # This can happen when multiple employees from the same team have
+                            # different locked shifts for overlapping weeks across month boundaries
+                            print(f"WARNING: Skipping conflicting locked shift for team {emp.team_id}, week {week_idx}")
+                            print(f"  Existing: {existing_shift}, Attempted: {shift_code} (from employee {emp_id} on {d})")
+                            continue  # Skip this lock to avoid infeasibility
+                    else:
+                        # No conflict - safe to lock this team/week to this shift
                         self.locked_team_shift[(emp.team_id, week_idx)] = shift_code
+                    
+                    # Add the constraint only if we didn't skip due to conflict
+                    if self.locked_team_shift.get((emp.team_id, week_idx)) == shift_code:
+                        self.model.Add(self.team_shift[(emp.team_id, week_idx, shift_code)] == 1)
         
         # Apply locked employee weekend work
         for (emp_id, d), is_working in self.locked_employee_weekend.items():

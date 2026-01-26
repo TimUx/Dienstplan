@@ -75,15 +75,40 @@ def setup_test_database():
     return conn, db_path
 
 
-def save_assignments_to_db(conn, assignments):
+def save_assignments_to_db(conn, assignments, locked_employee_shift=None):
     """Save shift assignments to database"""
+    if locked_employee_shift is None:
+        locked_employee_shift = {}
+    
     cursor = conn.cursor()
+    skipped = 0
+    inserted = 0
+    
     for assignment in assignments:
+        # CRITICAL FIX: Skip assignments that are locked (already exist from previous planning)
+        # Convert emp_id to match the type used in locked_employee_shift
+        emp_id_key = assignment.employee_id
+        try:
+            # Try converting to int if it's a string, or vice versa to match locked keys
+            if isinstance(emp_id_key, str):
+                emp_id_key = int(emp_id_key)
+        except (ValueError, TypeError):
+            pass
+        
+        if (emp_id_key, assignment.date) in locked_employee_shift:
+            skipped += 1
+            continue
+        
         cursor.execute("""
             INSERT INTO ShiftAssignments (EmployeeId, ShiftTypeId, Date, Notes)
             VALUES (?, ?, ?, ?)
         """, (assignment.employee_id, assignment.shift_type_id, 
               assignment.date.isoformat(), assignment.notes))
+        inserted += 1
+    
+    if skipped > 0:
+        print(f"  Skipped {skipped} locked assignments, inserted {inserted} new assignments")
+    
     conn.commit()
 
 
@@ -97,7 +122,16 @@ def load_assignments_from_db(conn, start_date, end_date):
         WHERE sa.Date >= ? AND sa.Date <= ?
     """, (start_date.isoformat(), end_date.isoformat()))
     
-    return cursor.fetchall()
+    # Convert emp_id to int to match assignment.employee_id type
+    results = []
+    for emp_id, date_str, shift_code in cursor.fetchall():
+        try:
+            emp_id = int(emp_id)
+        except (ValueError, TypeError):
+            pass
+        results.append((emp_id, date_str, shift_code))
+    
+    return results
 
 
 def test_february_march_no_double_shifts():
@@ -151,13 +185,20 @@ def test_february_march_no_double_shifts():
         feb_end = date(2026, 2, 28)     # Saturday
         
         # Planning will extend to complete weeks
-        # February ends on Saturday, so it extends to Sunday, March 1
+        # CRITICAL: Model internally extends to complete weeks (Mon-Sun)
+        # Feb 1 is Sunday, so it extends BACKWARDS to previous Monday (Jan 26)!
         feb_extended_start = feb_start
-        feb_extended_end = feb_end + timedelta(days=1)  # March 1 (Sunday)
+        if feb_start.weekday() != 0:  # Not Monday
+            feb_extended_start = feb_start - timedelta(days=feb_start.weekday())
+        
+        feb_extended_end = feb_end
+        if feb_end.weekday() != 6:  # Not Sunday
+            feb_extended_end = feb_end + timedelta(days=(6 - feb_end.weekday()))
         
         print(f"Requested period: {feb_start} to {feb_end}")
         print(f"Extended period:  {feb_extended_start} to {feb_extended_end}")
-        print(f"  -> Extends {(feb_extended_end - feb_end).days} day(s) into March")
+        print(f"  -> Extended BACKWARDS {(feb_start - feb_extended_start).days} days to previous Monday")
+        print(f"  -> Extended FORWARD {(feb_extended_end - feb_end).days} day(s) into March")
         
         # Create model and solve for February
         feb_model = create_shift_planning_model(
@@ -210,13 +251,23 @@ def test_february_march_no_double_shifts():
         march_end = date(2026, 3, 31)    # Tuesday
         
         # Planning will extend to complete weeks
-        march_extended_start = march_start  # Already Sunday
-        march_extended_end = march_end + timedelta(days=4)  # Next Sunday (April 5)
+        # CRITICAL: Model internally extends to complete weeks (Mon-Sun)
+        # March 1 is Sunday, so it extends BACKWARDS to previous Monday (Feb 23)!
+        march_extended_start = march_start
+        if march_start.weekday() != 0:  # Not Monday
+            march_extended_start = march_start - timedelta(days=march_start.weekday())
+        
+        march_extended_end = march_end
+        if march_end.weekday() != 6:  # Not Sunday
+            march_extended_end = march_end + timedelta(days=(6 - march_end.weekday()))
         
         print(f"Requested period: {march_start} to {march_end}")
         print(f"Extended period:  {march_extended_start} to {march_extended_end}")
+        print(f"  -> Extended BACKWARDS {(march_start - march_extended_start).days} days to previous Monday")
+        print(f"  -> Extended FORWARD {(march_extended_end - march_end).days} days to next Sunday")
         
-        # Load existing assignments from the extended period
+        # Load existing assignments from the EXTENDED period (including backwards extension)
+        # This is critical to prevent duplicates when model extends to complete weeks
         existing_assignments = load_assignments_from_db(conn, march_extended_start, 
                                                        march_extended_end)
         
@@ -229,6 +280,16 @@ def test_february_march_no_double_shifts():
         print(f"\n  Loading {len(locked_employee_shift)} existing employee assignments as locked constraints")
         march_1_locked = sum(1 for (_, d), _ in locked_employee_shift.items() if d == march_1st)
         print(f"  -> {march_1_locked} assignments locked for March 1st")
+        
+        # Debug: Check how many are locked for Feb 23-28
+        feb_23_to_28 = sum(1 for (_, d), _ in locked_employee_shift.items() if date(2026, 2, 23) <= d <= date(2026, 2, 28))
+        print(f"  -> {feb_23_to_28} assignments locked for Feb 23-28")
+        
+        # Debug: Print first few locked assignments
+        if locked_employee_shift:
+            print(f"  Debug: First 5 locked assignments:")
+            for i, ((emp_id, d), shift) in enumerate(list(locked_employee_shift.items())[:5]):
+                print(f"    ({emp_id}, {d}) -> {shift}")
         
         # Create model and solve for March WITH locked constraints
         march_model = create_shift_planning_model(
@@ -252,6 +313,15 @@ def test_february_march_no_double_shifts():
         march_assignments, _, _ = march_result
         print(f"✓ March planned: {len(march_assignments)} assignments")
         
+        # CRITICAL FIX: Filter out locked assignments from March results
+        # These would be skipped during INSERT in web_api, so we skip them here too
+        march_assignments_filtered = [
+            a for a in march_assignments 
+            if (a.employee_id, a.date) not in locked_employee_shift
+        ]
+        skipped = len(march_assignments) - len(march_assignments_filtered)
+        print(f"  Filtered March assignments: {len(march_assignments_filtered)} (skipped {skipped} locked)")
+        
         # ====================================================================
         # STEP 3: Verify no double shifts
         # ====================================================================
@@ -259,9 +329,9 @@ def test_february_march_no_double_shifts():
         print("STEP 3: Checking for Double Shifts")
         print("=" * 80)
         
-        # Combine all assignments (February + March)
-        # Note: February assignments are already in the DB, March are new
-        all_assignments = list(feb_assignments) + list(march_assignments)
+        # Combine all assignments (February + March filtered)
+        # Note: February assignments are already in the DB, March are new (after filtering locked ones)
+        all_assignments = list(feb_assignments) + list(march_assignments_filtered)
         
         # Group by (employee_id, date)
         employee_date_map = {}

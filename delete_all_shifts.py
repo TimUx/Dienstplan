@@ -130,8 +130,7 @@ def delete_all_shifts(db_path: str = "dienstplan.db", create_backup_flag: bool =
         print()
         print("Deleting all shift assignments...")
         
-        # Delete all shifts using explicit transaction
-        cursor.execute("BEGIN TRANSACTION")
+        # Delete all shifts (SQLite automatically begins transaction)
         cursor.execute("DELETE FROM ShiftAssignments")
         conn.commit()
         

@@ -212,6 +212,12 @@ class ShiftPlanningModel:
                 # Lock the team to this shift for this week
                 if week_idx is not None and (emp.team_id, week_idx, shift_code) in self.team_shift:
                     self.model.Add(self.team_shift[(emp.team_id, week_idx, shift_code)] == 1)
+                    # CRITICAL FIX: Also update locked_team_shift so rotation constraint skips this week
+                    # This prevents conflicts between locked employee shifts and ISO week-based rotation
+                    # Without this, the rotation constraint might force a different shift for the same
+                    # (team_id, week_idx), causing infeasibility when combined with the constraint above
+                    if (emp.team_id, week_idx) not in self.locked_team_shift:
+                        self.locked_team_shift[(emp.team_id, week_idx)] = shift_code
         
         # Apply locked employee weekend work
         for (emp_id, d), is_working in self.locked_employee_weekend.items():

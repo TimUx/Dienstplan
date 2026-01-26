@@ -31,26 +31,25 @@ def test_locked_employee_shift_constraints():
     print(f"\nPlanning period: {start} to {end}")
     
     # Create locked_employee_shift constraints
-    # Lock employee PN001 (Max Müller) to early shift (F) on March 1st
-    # Lock employee PN002 (Anna Schmidt) to late shift (S) on March 3rd
     locked_employee_shift = {}
     
-    emp_max = next((e for e in employees if e.personalnummer == '1001'), None)
-    emp_anna = next((e for e in employees if e.personalnummer == '1002'), None)
-    
-    if emp_max and emp_anna:
-        march_1 = date(2026, 3, 1)
-        march_3 = date(2026, 3, 3)
-        
-        locked_employee_shift[(emp_max.id, march_1)] = 'F'  # Early shift
-        locked_employee_shift[(emp_anna.id, march_3)] = 'S'  # Late shift
-        
-        print(f"\nLocked employee shifts:")
-        print(f"  - {emp_max.name} (ID: {emp_max.id}) on {march_1}: F (Early)")
-        print(f"  - {emp_anna.name} (ID: {emp_anna.id}) on {march_3}: S (Late)")
-    else:
-        print("❌ FAILED: Could not find test employees")
+    # Use the first two employees from the sample data
+    if len(employees) < 2:
+        print("❌ FAILED: Not enough employees in sample data")
         return False
+    
+    emp_1 = employees[0]
+    emp_2 = employees[1]
+    
+    march_1 = date(2026, 3, 1)
+    march_3 = date(2026, 3, 3)
+    
+    locked_employee_shift[(emp_1.id, march_1)] = 'F'  # Early shift
+    locked_employee_shift[(emp_2.id, march_3)] = 'S'  # Late shift
+    
+    print(f"\nLocked employee shifts:")
+    print(f"  - {emp_1.name} (ID: {emp_1.id}) on {march_1}: F (Early)")
+    print(f"  - {emp_2.name} (ID: {emp_2.id}) on {march_3}: S (Late)")
     
     # Create model with locked constraints
     try:
@@ -71,24 +70,24 @@ def test_locked_employee_shift_constraints():
             print(f"✓ Model has {len(model.locked_employee_shift)} locked employee shift constraints")
             
             # Verify the specific constraints we added
-            if (emp_max.id, march_1) in model.locked_employee_shift:
-                if model.locked_employee_shift[(emp_max.id, march_1)] == 'F':
-                    print(f"✓ Constraint for {emp_max.name} on {march_1} is correctly set to 'F'")
+            if (emp_1.id, march_1) in model.locked_employee_shift:
+                if model.locked_employee_shift[(emp_1.id, march_1)] == 'F':
+                    print(f"✓ Constraint for {emp_1.name} on {march_1} is correctly set to 'F'")
                 else:
-                    print(f"❌ Constraint for {emp_max.name} has wrong shift code")
+                    print(f"❌ Constraint for {emp_1.name} has wrong shift code")
                     return False
             else:
-                print(f"❌ Constraint for {emp_max.name} not found in model")
+                print(f"❌ Constraint for {emp_1.name} not found in model")
                 return False
             
-            if (emp_anna.id, march_3) in model.locked_employee_shift:
-                if model.locked_employee_shift[(emp_anna.id, march_3)] == 'S':
-                    print(f"✓ Constraint for {emp_anna.name} on {march_3} is correctly set to 'S'")
+            if (emp_2.id, march_3) in model.locked_employee_shift:
+                if model.locked_employee_shift[(emp_2.id, march_3)] == 'S':
+                    print(f"✓ Constraint for {emp_2.name} on {march_3} is correctly set to 'S'")
                 else:
-                    print(f"❌ Constraint for {emp_anna.name} has wrong shift code")
+                    print(f"❌ Constraint for {emp_2.name} has wrong shift code")
                     return False
             else:
-                print(f"❌ Constraint for {emp_anna.name} not found in model")
+                print(f"❌ Constraint for {emp_2.name} not found in model")
                 return False
         else:
             print("❌ Model does not have locked_employee_shift attribute")

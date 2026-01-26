@@ -2681,6 +2681,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Query ALL existing shift assignments in the extended planning period
             # This prevents double shifts when planning across months
+            # NOTE: This is separate from the team-level locking below because we need to
+            # lock individual employee assignments for the ENTIRE period, not just adjacent months
             cursor.execute("""
                 SELECT sa.EmployeeId, sa.Date, st.Code
                 FROM ShiftAssignments sa

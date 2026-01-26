@@ -183,6 +183,10 @@ class ShiftPlanningModel:
         
         # Apply locked employee shift assignments (from previous planning periods)
         # This prevents double shifts when planning across months
+        
+        # Create employee ID mapping for efficient lookups
+        emp_by_id = {emp.id: emp for emp in self.employees}
+        
         for (emp_id, d), shift_code in self.locked_employee_shift.items():
             # For weekdays, ensure employee is active on this date
             if d.weekday() < 5:  # Monday to Friday
@@ -196,7 +200,7 @@ class ShiftPlanningModel:
             
             # Additionally, we need to ensure the team has the correct shift for this date
             # Find the employee's team
-            emp = next((e for e in self.employees if e.id == emp_id), None)
+            emp = emp_by_id.get(emp_id)
             if emp and emp.team_id:
                 # Find which week this date belongs to
                 week_idx = None

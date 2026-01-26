@@ -178,7 +178,17 @@ def add_team_rotation_constraints(
                 continue
             
             # Calculate which shift this team should have this week
-            rotation_idx = (week_idx + team_idx) % len(rotation)
+            # CRITICAL FIX: Use ISO week number for consistent rotation across month boundaries
+            # This ensures the same calendar week always gets the same shift assignment
+            # regardless of which month's planning period it appears in
+            week_dates = weeks[week_idx]
+            monday_of_week = week_dates[0]  # First day of week (Monday)
+            iso_year, iso_week, iso_weekday = monday_of_week.isocalendar()
+            
+            # Use ISO week number for rotation calculation (absolute reference)
+            # This ensures cross-month continuity: if a week spans two months,
+            # both planning periods will assign the same shift to the same team
+            rotation_idx = (iso_week + team_idx) % len(rotation)
             assigned_shift = rotation[rotation_idx]
             
             # Force this team to have this specific shift this week
@@ -689,6 +699,165 @@ def add_rest_time_constraints(
                         rest_violation_penalties.append(penalty_var)
     
     return rest_violation_penalties
+
+
+def add_shift_stability_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    teams: List[Team] = None
+):
+    """
+    SOFT CONSTRAINT: Prevent shift hopping (rapid changes like N→S→N).
+    
+    Requirement from issue #2:
+    - Prevent daily switching between shift types (e.g., night-late-night)
+    - Prefer gradual transitions (e.g., night-night-late) 
+    - If changes must happen, they should be stable (e.g., N→N→S rather than N→S→N)
+    
+    Implementation:
+    - Penalize "zig-zag" shift patterns over 3 consecutive days
+    - Pattern A→B→A gets high penalty (200 points)
+    - Pattern A→A→B gets low/no penalty (stable, then gradual change)
+    - Helps create stable, predictable schedules
+    
+    Returns:
+        List of penalty variables for shift hopping violations
+    """
+    hopping_penalties = []
+    
+    # Define shift change penalty
+    # Higher penalty for rapid back-and-forth changes
+    HOPPING_PENALTY = 200
+    
+    # Helper to collect shift assignment for a day
+    def get_shift_vars_for_day(emp_id, d):
+        """Returns list of (shift_code, var) tuples for this day"""
+        result = []
+        weekday = d.weekday()
+        
+        # Team shift (weekday)
+        if weekday < 5 and (emp_id, d) in employee_active:
+            # Find team and week
+            week_idx = None
+            for w_idx, week_dates in enumerate(weeks):
+                if d in week_dates:
+                    week_idx = w_idx
+                    break
+            
+            if week_idx is not None:
+                team = None
+                for t in teams:
+                    if t.id == emp_id or any(e.id == emp_id for e in employees if e.team_id == t.id):
+                        for emp in employees:
+                            if emp.id == emp_id and emp.team_id == t.id:
+                                team = t
+                                break
+                        break
+                
+                if team:
+                    for shift_code in shift_codes:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            # This shift is active if both team has it AND employee is active
+                            result.append((shift_code, [team_shift[(team.id, week_idx, shift_code)], 
+                                                        employee_active[(emp_id, d)]]))
+        
+        # Team shift (weekend)
+        elif weekday >= 5 and (emp_id, d) in employee_weekend_shift:
+            # Find team and week
+            week_idx = None
+            for w_idx, week_dates in enumerate(weeks):
+                if d in week_dates:
+                    week_idx = w_idx
+                    break
+            
+            if week_idx is not None:
+                team = None
+                for emp in employees:
+                    if emp.id == emp_id:
+                        for t in teams:
+                            if t.id == emp.team_id:
+                                team = t
+                                break
+                        break
+                
+                if team:
+                    for shift_code in shift_codes:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            # This shift is active if both team has it AND employee works weekend
+                            result.append((shift_code, [team_shift[(team.id, week_idx, shift_code)],
+                                                        employee_weekend_shift[(emp_id, d)]]))
+        
+        # Cross-team shifts (weekday)
+        if weekday < 5:
+            for shift_code in shift_codes:
+                if (emp_id, d, shift_code) in employee_cross_team_shift:
+                    result.append((shift_code, [employee_cross_team_shift[(emp_id, d, shift_code)]]))
+        
+        # Cross-team shifts (weekend)
+        elif weekday >= 5:
+            for shift_code in shift_codes:
+                if (emp_id, d, shift_code) in employee_cross_team_weekend:
+                    result.append((shift_code, [employee_cross_team_weekend[(emp_id, d, shift_code)]]))
+        
+        return result
+    
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        # Check triplets of consecutive working days
+        for i in range(len(dates) - 2):
+            day1 = dates[i]
+            day2 = dates[i + 1]
+            day3 = dates[i + 2]
+            
+            # Get possible shifts for all three days
+            shifts1 = get_shift_vars_for_day(emp.id, day1)
+            shifts2 = get_shift_vars_for_day(emp.id, day2)
+            shifts3 = get_shift_vars_for_day(emp.id, day3)
+            
+            # Check for hopping patterns: shift1 != shift2 AND shift2 != shift3 AND shift1 == shift3
+            # This indicates A→B→A pattern
+            for code1, vars1 in shifts1:
+                for code2, vars2 in shifts2:
+                    for code3, vars3 in shifts3:
+                        # Only penalize if we have a "zig-zag": A→B→A
+                        if code1 != code2 and code2 != code3 and code1 == code3:
+                            # This is a hopping pattern!
+                            # Create penalty variable: penalty is active if all three shifts are active
+                            # We need all vars to be 1: day1 has code1, day2 has code2, day3 has code3
+                            
+                            # Collect all variables that must be 1
+                            all_active = []
+                            for v in vars1:
+                                all_active.append(v)
+                            for v in vars2:
+                                all_active.append(v)
+                            for v in vars3:
+                                all_active.append(v)
+                            
+                            # Create boolean: is_hopping = (all variables are 1)
+                            is_hopping = model.NewBoolVar(f"hop_{emp.id}_{i}")
+                            # Use proper constraint form for OR-Tools
+                            # is_hopping = 1 if all variables are 1
+                            # This is an AND operation: is_hopping = AND(all_active)
+                            model.AddBoolAnd(all_active).OnlyEnforceIf(is_hopping)
+                            model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(is_hopping.Not())
+                            
+                            # Add penalty
+                            penalty_var = model.NewIntVar(0, HOPPING_PENALTY, f"hop_pen_{emp.id}_{i}")
+                            model.AddMultiplicationEquality(penalty_var, [is_hopping, HOPPING_PENALTY])
+                            hopping_penalties.append(penalty_var)
+    
+    return hopping_penalties
 
 
 def add_consecutive_shifts_constraints(

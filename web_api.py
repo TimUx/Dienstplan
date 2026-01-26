@@ -2695,8 +2695,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Lock existing employee assignments
             for emp_id, date_str, shift_code in existing_employee_assignments:
                 assignment_date = date.fromisoformat(date_str)
-                locked_employee_shift[(emp_id, assignment_date)] = shift_code
-                app.logger.info(f"Locked: Employee {emp_id}, Date {date_str} -> {shift_code} (existing assignment)")
+                # CRITICAL FIX: Convert emp_id to int to match assignment.employee_id type
+                # Database returns TEXT ids as strings, but solver uses integers
+                try:
+                    emp_id_int = int(emp_id)
+                except (ValueError, TypeError):
+                    # If conversion fails, use as-is (for backward compatibility with non-numeric IDs)
+                    emp_id_int = emp_id
+                locked_employee_shift[(emp_id_int, assignment_date)] = shift_code
+                app.logger.info(f"Locked: Employee {emp_id_int}, Date {date_str} -> {shift_code} (existing assignment)")
             
             if extended_end > end_date or extended_start < start_date:
                 # Query existing shift assignments for extended dates ONLY (not the main month)
@@ -2856,7 +2863,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 """, (start_date.isoformat(), extended_end.isoformat()))
             
             # Insert new assignments (current month + future extended days)
+            # CRITICAL FIX: Skip assignments that are locked (already exist from previous planning)
+            # This prevents duplicate shifts when planning months that overlap with previously planned weeks
+            skipped_locked = 0
+            inserted = 0
             for assignment in filtered_assignments:
+                # Check if this assignment was locked (already exists from previous month)
+                if (assignment.employee_id, assignment.date) in locked_employee_shift:
+                    # Skip inserting - this assignment already exists in the database
+                    # It was loaded as a locked constraint and should not be duplicated
+                    skipped_locked += 1
+                    continue
                 cursor.execute("""
                     INSERT INTO ShiftAssignments 
                     (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
@@ -2870,6 +2887,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     datetime.utcnow().isoformat(),
                     "Python-OR-Tools"
                 ))
+                inserted += 1
+            
+            app.logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
             
             # Insert special functions (TD assignments) - current month + future extended days
             # Get TD shift type ID
@@ -2879,6 +2899,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 td_shift_type_id = td_row[0]
                 for (emp_id, date_obj), function_code in filtered_special_functions.items():
                     if function_code == "TD":
+                        # CRITICAL FIX: Skip TD assignments that are locked (already exist from previous planning)
+                        if (emp_id, date_obj) in locked_employee_shift:
+                            continue
                         cursor.execute("""
                             INSERT INTO ShiftAssignments 
                             (EmployeeId, ShiftTypeId, Date, IsManual, IsSpringerAssignment, IsFixed, CreatedAt, CreatedBy)

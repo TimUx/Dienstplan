@@ -79,10 +79,10 @@ def delete_all_shifts(db_path: str = "dienstplan.db", create_backup_flag: bool =
     print()
     
     # Connect to database to check current state
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
+    conn = None
     try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
         # Check if ShiftAssignments table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ShiftAssignments'")
         if not cursor.fetchone():
@@ -130,7 +130,8 @@ def delete_all_shifts(db_path: str = "dienstplan.db", create_backup_flag: bool =
         print()
         print("Deleting all shift assignments...")
         
-        # Delete all shifts
+        # Delete all shifts using explicit transaction
+        cursor.execute("BEGIN TRANSACTION")
         cursor.execute("DELETE FROM ShiftAssignments")
         conn.commit()
         
@@ -151,10 +152,12 @@ def delete_all_shifts(db_path: str = "dienstplan.db", create_backup_flag: bool =
         
     except sqlite3.Error as e:
         print(f"❌ Database error: {e}")
-        conn.rollback()
+        if conn:
+            conn.rollback()
         result = False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
     
     return result
 
@@ -175,7 +178,7 @@ def main():
             sys.exit(0)
         elif arg == "--no-backup":
             create_backup_flag = False
-        elif arg == "--yes" or arg == "-y":
+        elif arg in ["--yes", "-y"]:
             skip_confirmation = True
         elif arg.startswith("--") or arg.startswith("-"):
             print(f"❌ Unknown option: {arg}")

@@ -196,25 +196,25 @@ class ShiftPlanningSolver:
                 objective_terms.append(shortage_var)  # Positive because we minimize shortage
         
         # Add overstaffing penalties with differential weights
-        # CRITICAL: Weekend overstaffing should be HEAVILY penalized (weight 20x)
+        # CRITICAL: Weekend overstaffing should be HEAVILY penalized (weight 50x)
         # to prioritize filling weekday gaps before scheduling weekend shifts
-        # Weekday overstaffing is less critical (weight 3x)
+        # Weekday overstaffing is less critical (weight 2x)
         if weekend_overstaffing:
-            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 20x)...")
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 50x)...")
             for overstaff_var in weekend_overstaffing:
-                objective_terms.append(overstaff_var * 20)  # Heavy penalty for weekend overstaffing
+                objective_terms.append(overstaff_var * 50)  # Very heavy penalty for weekend overstaffing
         
         if weekday_overstaffing:
-            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight 3x)...")
+            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight 2x)...")
             for overstaff_var in weekday_overstaffing:
-                objective_terms.append(overstaff_var * 3)  # Moderate penalty for weekday overstaffing
+                objective_terms.append(overstaff_var * 2)  # Light penalty for weekday overstaffing
         
         # Add weekday understaffing penalties to encourage filling weekday gaps
         # This creates an incentive to maximize weekday staffing up to the max limit
         if weekday_understaffing:
-            print(f"  Adding {len(weekday_understaffing)} weekday understaffing penalties (weight 2x)...")
+            print(f"  Adding {len(weekday_understaffing)} weekday understaffing penalties (weight 5x)...")
             for understaff_var in weekday_understaffing:
-                objective_terms.append(understaff_var * 2)  # Encourage filling weekday positions
+                objective_terms.append(understaff_var * 5)  # Strong encouragement to fill weekday positions
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

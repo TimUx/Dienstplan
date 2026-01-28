@@ -233,8 +233,8 @@ class ShiftPlanningSolver:
         print("  Adding shift type preference objectives (F > S > N)...")
         shift_penalty_weights = {
             'F': -3,  # Früh/Early - REWARD (negative penalty = bonus)
-            'S': 0,   # Spät/Late - neutral
-            'N': 2    # Nacht/Night - small PENALTY (discourage when possible)
+            'S': 1,   # Spät/Late - slight penalty (less preferred than F)
+            'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
         }
         
         for d in dates:

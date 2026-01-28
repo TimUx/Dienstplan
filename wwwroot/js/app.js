@@ -1303,6 +1303,8 @@ function showPlanShiftsModal() {
 function closePlanShiftsModal() {
     document.getElementById('planShiftsModal').style.display = 'none';
     document.getElementById('planShiftsForm').reset();
+    // Hide loading overlay when closing modal
+    document.getElementById('planningOverlay').classList.remove('active');
 }
 
 async function executePlanShifts(event) {
@@ -1340,6 +1342,10 @@ async function executePlanShifts(event) {
         return;
     }
     
+    // Show loading overlay
+    const planningOverlay = document.getElementById('planningOverlay');
+    planningOverlay.classList.add('active');
+    
     try {
         const response = await fetch(
             `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}`,
@@ -1348,6 +1354,9 @@ async function executePlanShifts(event) {
                 credentials: 'include'
             }
         );
+        
+        // Hide loading overlay
+        planningOverlay.classList.remove('active');
         
         if (response.ok) {
             const data = await response.json();
@@ -1372,6 +1381,8 @@ async function executePlanShifts(event) {
             }
         }
     } catch (error) {
+        // Hide loading overlay on error
+        planningOverlay.classList.remove('active');
         alert(`Fehler: ${error.message}`);
     }
 }

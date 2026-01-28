@@ -199,6 +199,14 @@ class ShiftPlanningModel:
                     self.model.Add(self.employee_weekend_shift[(emp_id, d)] == 1)
             
             # Additionally, we need to ensure the team has the correct shift for this date
+            # CRITICAL FIX: Only convert employee locks to team locks for dates WITHIN the original planning period
+            # Dates in the extended period (from adjacent months) should not create team-level locks
+            # because different team members may have worked different days during partial weeks
+            if d < self.original_start_date or d > self.original_end_date:
+                # This date is in the extended portion (adjacent month)
+                # Don't convert to team lock - employee lock is sufficient
+                continue
+            
             # Find the employee's team
             emp = emp_by_id.get(emp_id)
             if emp and emp.team_id:

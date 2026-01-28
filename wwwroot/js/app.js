@@ -1846,12 +1846,28 @@ function displayStatistics(stats) {
     });
     html += '</div>';
     
-    // Absence Days
-    html += '<div class="stat-card"><h3>📅 Fehltage</h3>';
+    // Absence Days - categorized by type
+    html += '<div class="stat-card"><h3>📅 Abwesenheiten</h3>';
     stats.employeeAbsenceDays.forEach(e => {
+        // Map absence types to display names
+        const typeNames = {
+            'AU': 'Krank/AU',
+            'U': 'Urlaub',
+            'L': 'Lehrgang'
+        };
+        
+        // Build type breakdown
+        let typeBreakdown = '';
+        if (e.byType) {
+            const types = Object.entries(e.byType)
+                .map(([type, days]) => `${typeNames[type] || type}: ${days}`)
+                .join(', ');
+            typeBreakdown = types ? ` (${types})` : '';
+        }
+        
         html += `<div class="stat-item">
             <span>${e.employeeName}</span>
-            <span>${e.totalDays} Tage</span>
+            <span>${e.totalDays} Tage${typeBreakdown}</span>
         </div>`;
     });
     html += '</div>';

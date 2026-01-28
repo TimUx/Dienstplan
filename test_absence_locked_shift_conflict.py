@@ -8,7 +8,7 @@ This test verifies the fix for the issue where:
 - The planning should succeed by skipping the locked shift (absence takes precedence)
 """
 
-from datetime import date, timedelta
+from datetime import date
 from data_loader import generate_sample_data
 from model import create_shift_planning_model
 from entities import STANDARD_SHIFT_TYPES, Absence, AbsenceType
@@ -123,9 +123,9 @@ def test_absence_overrides_locked_weekend():
     
     print(f"Planning period: {start} to {end}")
     
-    # Create an absence for March 1-2 (weekend)
-    march_1 = date(2026, 3, 1)  # Sunday
-    march_2 = date(2026, 3, 2)  # Monday
+    # Create an absence for March 1-2 (Sunday and Monday)
+    march_1 = date(2026, 3, 1)  # Sunday (weekend)
+    march_2 = date(2026, 3, 2)  # Monday (weekday)
     
     absences = [
         Absence(

@@ -1205,7 +1205,7 @@ Das System bietet umfangreiche Statistiken und Auswertungen.
 - Vergleich zwischen Teams
 - Auslastung pro Team
 
-#### 3. Fehltage-Übersicht
+#### 3. Abwesenheiten-Übersicht
 
 - Urlaubstage pro Mitarbeiter
 - Krankheitstage pro Mitarbeiter

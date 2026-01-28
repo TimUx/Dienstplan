@@ -4861,7 +4861,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             }
         
         # Then, calculate Lehrgang hours separately
-        # Note: Type is stored as INTEGER in database: 1=U, 2=AU, 3=L
+        # Note: Type is stored as INTEGER in database: 1=AU, 2=U, 3=L
         cursor.execute("""
             SELECT a.EmployeeId,
                    SUM(

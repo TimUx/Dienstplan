@@ -163,6 +163,40 @@ class ShiftPlanningModel:
         self._apply_locked_assignments()
     
     
+    def _employee_has_absence_on_date(self, emp_id: int, check_date: date) -> bool:
+        """
+        Check if an employee has an absence on a specific date.
+        
+        Args:
+            emp_id: Employee ID to check
+            check_date: Date to check for absence
+            
+        Returns:
+            True if employee has an absence on this date, False otherwise
+        """
+        return any(
+            abs.employee_id == emp_id and abs.overlaps_date(check_date)
+            for abs in self.absences
+        )
+    
+    
+    def _employee_has_absence_in_week(self, emp_id: int, week_dates: List[date]) -> bool:
+        """
+        Check if an employee has an absence on any day in a given week.
+        
+        Args:
+            emp_id: Employee ID to check
+            week_dates: List of dates in the week to check
+            
+        Returns:
+            True if employee has an absence on any day in the week, False otherwise
+        """
+        return any(
+            self._employee_has_absence_on_date(emp_id, d)
+            for d in week_dates
+        )
+    
+    
     def _apply_locked_assignments(self):
         """
         Apply manual overrides (locked assignments) as hard constraints.
@@ -188,6 +222,15 @@ class ShiftPlanningModel:
         emp_by_id = {emp.id: emp for emp in self.employees}
         
         for (emp_id, d), shift_code in self.locked_employee_shift.items():
+            # CRITICAL FIX: Check for conflicts with absences BEFORE adding constraints
+            # If employee has an absence on this date, skip the locked shift to avoid infeasibility
+            if self._employee_has_absence_on_date(emp_id, d):
+                # Conflict detected: employee has absence on this date
+                # Absence takes precedence over locked shifts from previous planning
+                print(f"WARNING: Skipping locked shift for employee {emp_id} on {d}")
+                print(f"  Reason: Employee has absence on this date (absence overrides locked shift)")
+                continue  # Skip this lock to avoid infeasibility
+            
             # For weekdays, ensure employee is active on this date
             if d.weekday() < 5:  # Monday to Friday
                 if (emp_id, d) in self.employee_active:
@@ -240,12 +283,38 @@ class ShiftPlanningModel:
         
         # Apply locked employee weekend work
         for (emp_id, d), is_working in self.locked_employee_weekend.items():
+            # Check for conflicts with absences
+            # Note: We skip both cases (working=True and working=False) when absent
+            # because applying a constraint when absent is redundant and potentially confusing
+            if self._employee_has_absence_on_date(emp_id, d):
+                if is_working:
+                    # Conflict: employee has absence but locked to work this weekend
+                    print(f"WARNING: Skipping locked weekend work for employee {emp_id} on {d}")
+                    print(f"  Reason: Employee has absence on this date (absence overrides locked weekend)")
+                # Note: When is_working=False and employee is absent, both indicate non-working,
+                # but we still skip the constraint to avoid redundancy
+                continue  # Skip this lock (absence already enforces non-working)
+            
             if (emp_id, d) in self.employee_weekend_shift:
                 # Force employee to work (1) or not work (0) on this weekend day
                 self.model.Add(self.employee_weekend_shift[(emp_id, d)] == (1 if is_working else 0))
         
         # Apply locked TD assignments
         for (emp_id, week_idx), has_td in self.locked_td.items():
+            # Check for conflicts with absences
+            if has_td:  # Only check if trying to force TD (not when forcing no TD)
+                # Get week dates
+                week_dates = self.weeks[week_idx] if week_idx < len(self.weeks) else []
+                weekday_dates = [d for d in week_dates if d.weekday() < 5]
+                
+                # Check if employee is absent any day this week using helper method
+                if self._employee_has_absence_in_week(emp_id, weekday_dates):
+                    # Conflict detected: employee has absence but locked to TD this week
+                    # Absence takes precedence
+                    print(f"WARNING: Skipping locked TD for employee {emp_id} in week {week_idx}")
+                    print(f"  Reason: Employee has absence this week (absence overrides locked TD)")
+                    continue  # Skip this lock to avoid infeasibility
+            
             if (emp_id, week_idx) in self.td_vars:
                 # Force TD assignment (1) or no TD (0) for this employee in this week
                 self.model.Add(self.td_vars[(emp_id, week_idx)] == (1 if has_td else 0))

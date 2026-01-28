@@ -315,7 +315,7 @@ def add_staffing_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     violation_tracker=None
-) -> List[cp_model.IntVar]:
+) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], List[cp_model.IntVar]]:
     """
     HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
@@ -331,12 +331,15 @@ def add_staffing_constraints(
     
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
+    NEW: Returns separate penalty lists for weekday/weekend to allow differential weighting.
+    Also returns weekday understaffing penalties to encourage filling weekday gaps.
+    
     Args:
         shift_types: List of ShiftType objects from database (REQUIRED)
         violation_tracker: Optional tracker for recording when max is exceeded
         
     Returns:
-        List of IntVar representing overstaffing penalties for soft optimization
+        Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_penalties)
     """
     if not shift_types:
         raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
@@ -355,8 +358,10 @@ def add_staffing_constraints(
                 "max": st.max_staff_weekend
             }
     
-    # Initialize list for overstaffing penalty variables
-    overstaffing_penalties = []
+    # Initialize separate lists for different penalty types
+    weekday_overstaffing_penalties = []
+    weekend_overstaffing_penalties = []
+    weekday_understaffing_penalties = []
     
     for d in dates:
         is_weekend = d.weekday() >= 5
@@ -430,7 +435,7 @@ def add_staffing_constraints(
                     overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekend")
                     model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
                     model.Add(overstaffing >= 0)
-                    overstaffing_penalties.append(overstaffing)
+                    weekend_overstaffing_penalties.append(overstaffing)
             else:
                 # WEEKDAY: Count team members + cross-team workers who work this shift
                 # A member works this shift if:
@@ -471,9 +476,16 @@ def add_staffing_constraints(
                     overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekday")
                     model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
                     model.Add(overstaffing >= 0)
-                    overstaffing_penalties.append(overstaffing)
+                    weekday_overstaffing_penalties.append(overstaffing)
+                    
+                    # NEW: Add understaffing penalty for weekdays to encourage filling gaps
+                    # This creates an incentive to use more staff on weekdays (up to max)
+                    understaffing = model.NewIntVar(0, 20, f"understaff_{shift}_{d}_weekday")
+                    model.Add(understaffing >= staffing[shift]["max"] - total_assigned)
+                    model.Add(understaffing >= 0)
+                    weekday_understaffing_penalties.append(understaffing)
     
-    return overstaffing_penalties
+    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_penalties
 
 
 

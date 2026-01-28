@@ -91,8 +91,8 @@ class ShiftPlanningSolver:
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min hard / max soft, including cross-team)")
-        # NEW: Collect overstaffing penalties for soft optimization
-        overstaffing_penalties = add_staffing_constraints(
+        # NEW: Collect separate penalties for weekday/weekend overstaffing and weekday understaffing
+        weekday_overstaffing, weekend_overstaffing, weekday_understaffing = add_staffing_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
             employees, teams, dates, weeks, shift_codes, shift_types)
@@ -195,12 +195,26 @@ class ShiftPlanningSolver:
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var)  # Positive because we minimize shortage
         
-        # Add overstaffing penalties (minimize exceeding max staffing)
-        # Weight these moderately - less critical than hours but still important
-        if overstaffing_penalties:
-            print(f"  Adding {len(overstaffing_penalties)} overstaffing penalties (soft max)...")
-            for overstaff_var in overstaffing_penalties:
-                objective_terms.append(overstaff_var * 5)  # Weight 5x per excess worker
+        # Add overstaffing penalties with differential weights
+        # CRITICAL: Weekend overstaffing should be HEAVILY penalized (weight 20x)
+        # to prioritize filling weekday gaps before scheduling weekend shifts
+        # Weekday overstaffing is less critical (weight 3x)
+        if weekend_overstaffing:
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 20x)...")
+            for overstaff_var in weekend_overstaffing:
+                objective_terms.append(overstaff_var * 20)  # Heavy penalty for weekend overstaffing
+        
+        if weekday_overstaffing:
+            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight 3x)...")
+            for overstaff_var in weekday_overstaffing:
+                objective_terms.append(overstaff_var * 3)  # Moderate penalty for weekday overstaffing
+        
+        # Add weekday understaffing penalties to encourage filling weekday gaps
+        # This creates an incentive to maximize weekday staffing up to the max limit
+        if weekday_understaffing:
+            print(f"  Adding {len(weekday_understaffing)} weekday understaffing penalties (weight 2x)...")
+            for understaff_var in weekday_understaffing:
+                objective_terms.append(understaff_var * 2)  # Encourage filling weekday positions
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

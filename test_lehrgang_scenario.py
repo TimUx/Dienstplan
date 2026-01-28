@@ -13,6 +13,12 @@ import os
 from datetime import date, datetime, timezone
 from entities import AbsenceType
 
+# Absence type constants - MUST match database schema
+# Database stores Type as INTEGER (not string!)
+ABSENCE_TYPE_AU = 1  # Arbeitsunfähigkeit (Sick leave)
+ABSENCE_TYPE_U = 2   # Urlaub (Vacation)
+ABSENCE_TYPE_L = 3   # Lehrgang (Training)
+
 def setup_scenario_database():
     """Create test database matching the issue scenario"""
     db_path = '/tmp/test_lehrgang_scenario.db'
@@ -183,6 +189,7 @@ def get_statistics_for_employee(conn, employee_id, start_date, end_date):
     shift_hours = float(shift_row['ShiftHours'] or 0) if shift_row else 0.0
     
     # Get Lehrgang hours separately
+    # Note: Type is stored as INTEGER in database: 1=AU, 2=U, 3=L
     cursor.execute("""
         SELECT SUM(
                    CASE
@@ -199,7 +206,7 @@ def get_statistics_for_employee(conn, employee_id, start_date, end_date):
                ) * 8.0 as LehrgangHours
         FROM Absences a
         WHERE a.EmployeeId = ?
-          AND a.Type = 'L'
+          AND a.Type = 3
           AND ((a.StartDate <= ? AND a.EndDate >= ?)
             OR (a.StartDate >= ? AND a.StartDate <= ?))
     """, (
@@ -270,7 +277,7 @@ def test_exact_scenario():
         cursor.execute("""
             INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (13, AbsenceType.L.value, '2026-01-12', '2026-01-18', 
+        """, (13, ABSENCE_TYPE_L, '2026-01-12', '2026-01-18', 
               'Lehrgang', datetime.now().isoformat()))
         
         absence_id = cursor.lastrowid

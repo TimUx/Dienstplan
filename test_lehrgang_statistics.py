@@ -11,6 +11,12 @@ import os
 from datetime import date, datetime, timezone
 from entities import AbsenceType
 
+# Absence type constants - MUST match database schema
+# Database stores Type as INTEGER (not string!)
+ABSENCE_TYPE_AU = 1  # Arbeitsunfähigkeit (Sick leave)
+ABSENCE_TYPE_U = 2   # Urlaub (Vacation)
+ABSENCE_TYPE_L = 3   # Lehrgang (Training)
+
 def setup_test_database():
     """Create a temporary test database with sample data"""
     db_path = '/tmp/test_lehrgang_statistics.db'
@@ -154,6 +160,7 @@ def get_statistics_for_employee(conn, employee_id, start_date, end_date):
     shift_hours = float(shift_row['ShiftHours'] or 0) if shift_row else 0.0
     
     # Get Lehrgang hours separately
+    # Note: Type is stored as INTEGER in database: 1=AU, 2=U, 3=L
     cursor.execute("""
         SELECT SUM(
                    CASE
@@ -170,7 +177,7 @@ def get_statistics_for_employee(conn, employee_id, start_date, end_date):
                ) * 8.0 as LehrgangHours
         FROM Absences a
         WHERE a.EmployeeId = ?
-          AND a.Type = 'L'
+          AND a.Type = 3
           AND ((a.StartDate <= ? AND a.EndDate >= ?)
             OR (a.StartDate >= ? AND a.StartDate <= ?))
     """, (
@@ -229,7 +236,7 @@ def test_all_absence_types():
         cursor.execute("""
             INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (1, AbsenceType.AU.value, '2026-01-06', '2026-01-10', 
+        """, (1, ABSENCE_TYPE_AU, '2026-01-06', '2026-01-10', 
               'AU Test', datetime.now().isoformat()))
         
         absence_id = cursor.lastrowid
@@ -262,7 +269,7 @@ def test_all_absence_types():
         cursor.execute("""
             INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (2, AbsenceType.U.value, '2026-01-06', '2026-01-10',
+        """, (2, ABSENCE_TYPE_U, '2026-01-06', '2026-01-10',
               'Urlaub Test', datetime.now().isoformat()))
         
         absence_id = cursor.lastrowid
@@ -295,7 +302,7 @@ def test_all_absence_types():
         cursor.execute("""
             INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (3, AbsenceType.L.value, '2026-01-06', '2026-01-10',
+        """, (3, ABSENCE_TYPE_L, '2026-01-06', '2026-01-10',
               'Lehrgang Test', datetime.now().isoformat()))
         
         absence_id = cursor.lastrowid

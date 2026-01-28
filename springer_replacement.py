@@ -378,12 +378,12 @@ def assign_springer_to_shift(
         ))
         
         assignment_id = cursor.lastrowid
-        conn.commit()
+        # NOTE: Don't commit here - parent function will commit all changes together
         
         return True, assignment_id, None
         
     except sqlite3.Error as e:
-        conn.rollback()
+        # NOTE: Don't rollback here - parent function will handle rollback
         return False, None, f"Datenbankfehler: {str(e)}"
 
 
@@ -401,9 +401,10 @@ def process_absence_with_springer_assignment(
     
     This function:
     1. Finds all shifts affected by the absence
-    2. For each affected shift, tries to find a suitable springer
-    3. Assigns springers automatically
-    4. Creates notifications for admins and springers
+    2. Deletes the absent employee's shifts from the database
+    3. For each deleted shift, tries to find a suitable springer
+    4. Assigns springers automatically
+    5. Creates notifications for admins and springers
     
     Args:
         conn: Database connection
@@ -420,6 +421,7 @@ def process_absence_with_springer_assignment(
             'assignmentsCreated': int,
             'notificationsSent': int,
             'shiftsNeedingCoverage': int,
+            'shiftsRemoved': int,
             'details': List[Dict]
         }
     """
@@ -429,6 +431,7 @@ def process_absence_with_springer_assignment(
         'assignmentsCreated': 0,
         'notificationsSent': 0,
         'shiftsNeedingCoverage': 0,
+        'shiftsRemoved': 0,
         'details': []
     }
     
@@ -446,6 +449,33 @@ def process_absence_with_springer_assignment(
     affected_shifts = cursor.fetchall()
     results['shiftsNeedingCoverage'] = len(affected_shifts)
     
+    # CRITICAL FIX: Delete the absent employee's shifts from the database
+    # When an employee is marked absent, their planned shifts must be removed
+    # so that statistics correctly reflect actual working hours.
+    # This prevents the bug where statistics show incorrect hours when
+    # an employee is marked absent after shifts have been planned.
+    #
+    # NOTE: We store affected_shifts in memory BEFORE deletion so we can
+    # still use this data to find springer replacements below.
+    if affected_shifts:
+        shift_ids_to_delete = [shift_row[0] for shift_row in affected_shifts]
+        placeholders = ','.join(['?' for _ in shift_ids_to_delete])
+        cursor.execute(f"""
+            DELETE FROM ShiftAssignments
+            WHERE Id IN ({placeholders})
+        """, shift_ids_to_delete)
+        
+        deleted_count = cursor.rowcount
+        results['shiftsRemoved'] = deleted_count
+        
+        # NOTE: Commit is deferred until after all springer assignments succeed
+        # to ensure data integrity. If springer assignment fails, we can rollback.
+        
+        print(f"INFO: Removed {deleted_count} shift assignment(s) for absent employee {employee_id}")
+        print(f"      Date range: {start_date.isoformat()} to {end_date.isoformat()}")
+    
+    # Process each affected shift to find springer replacements
+    # We use the cached 'affected_shifts' data from before deletion
     for shift_row in affected_shifts:
         assignment_id = shift_row[0]
         shift_date = date.fromisoformat(shift_row[1])
@@ -542,6 +572,10 @@ def process_absence_with_springer_assignment(
                 'shiftName': shift_name,
                 'status': 'no_springer_found'
             })
+    
+    # Commit all changes (shift deletions and springer assignments) together
+    # This ensures data integrity - either all changes succeed or all are rolled back
+    conn.commit()
     
     return results
 

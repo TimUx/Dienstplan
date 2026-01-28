@@ -4137,11 +4137,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     session.get('user_email')
                 )
                 
+                # Log shift removal and springer assignments
+                shifts_removed = springer_results.get('shiftsRemoved', 0)
+                if shifts_removed > 0:
+                    app.logger.info(
+                        f"Removed {shifts_removed} shift assignment(s) for absent employee (Absence ID: {absence_id})"
+                    )
+                
                 if springer_results['assignmentsCreated'] > 0:
                     app.logger.info(
-                        f"Automatically assigned {springer_results['assignmentsCreated']} springers " +
-                        f"for {springer_results['shiftsNeedingCoverage']} affected shifts " +
-                        f"(Absence ID: {absence_id})"
+                        f"Automatically assigned {springer_results['assignmentsCreated']} springers "
+                        f"for {springer_results['shiftsNeedingCoverage']} affected shifts (Absence ID: {absence_id})"
                     )
                     
                     # Include springer results in response
@@ -4155,6 +4161,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                             'assignmentsCreated': springer_results['assignmentsCreated'],
                             'notificationsSent': springer_results['notificationsSent'],
                             'shiftsNeedingCoverage': springer_results['shiftsNeedingCoverage'],
+                            'shiftsRemoved': shifts_removed,
                             'details': springer_results['details']
                         }
                     }), 201
@@ -4826,27 +4833,102 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         cursor = conn.cursor()
         
         # Employee work hours
+        # IMPORTANT: For statistics calculation:
+        # - AU (sick leave) and U (vacation): Count actual shift hours only (shifts are removed when absence is created)
+        # - L (Lehrgang/training): Count 8h per training day even though shifts are removed
+        
+        # First, calculate shift hours
         cursor.execute("""
             SELECT e.Id, e.Vorname, e.Name, e.TeamId,
                    COUNT(sa.Id) as ShiftCount,
-                   COUNT(sa.Id) * 8.0 as TotalHours
+                   COALESCE(SUM(st.DurationHours), 0) as ShiftHours
             FROM Employees e
             LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
                 AND sa.Date >= ? AND sa.Date <= ?
+            LEFT JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
             GROUP BY e.Id, e.Vorname, e.Name, e.TeamId
-            HAVING ShiftCount > 0
-            ORDER BY TotalHours DESC
         """, (start_date.isoformat(), end_date.isoformat()))
         
-        employee_work_hours = []
+        employee_hours_map = {}
         for row in cursor.fetchall():
-            employee_work_hours.append({
-                'employeeId': row['Id'],
-                'employeeName': f"{row['Vorname']} {row['Name']}",
+            employee_hours_map[row['Id']] = {
+                'id': row['Id'],
+                'name': f"{row['Vorname']} {row['Name']}",
                 'teamId': row['TeamId'],
                 'shiftCount': row['ShiftCount'],
-                'totalHours': row['TotalHours']
-            })
+                'shiftHours': float(row['ShiftHours'] or 0),
+                'lehrgangHours': 0.0
+            }
+        
+        # Then, calculate Lehrgang hours separately
+        cursor.execute("""
+            SELECT a.EmployeeId,
+                   SUM(
+                       CASE
+                           WHEN a.StartDate >= ? AND a.EndDate <= ? THEN
+                               julianday(a.EndDate) - julianday(a.StartDate) + 1
+                           WHEN a.StartDate < ? AND a.EndDate <= ? THEN
+                               julianday(a.EndDate) - julianday(?) + 1
+                           WHEN a.StartDate >= ? AND a.EndDate > ? THEN
+                               julianday(?) - julianday(a.StartDate) + 1
+                           WHEN a.StartDate < ? AND a.EndDate > ? THEN
+                               julianday(?) - julianday(?) + 1
+                           ELSE 0
+                       END
+                   ) * 8.0 as LehrgangHours
+            FROM Absences a
+            WHERE a.Type = 'L'
+              AND ((a.StartDate <= ? AND a.EndDate >= ?)
+                OR (a.StartDate >= ? AND a.StartDate <= ?))
+            GROUP BY a.EmployeeId
+        """, (
+            start_date.isoformat(), end_date.isoformat(),  # Case 1: absence fully within period
+            start_date.isoformat(), end_date.isoformat(), start_date.isoformat(),  # Case 2: absence starts before period
+            start_date.isoformat(), end_date.isoformat(), end_date.isoformat(),  # Case 3: absence ends after period
+            start_date.isoformat(), end_date.isoformat(), end_date.isoformat(), start_date.isoformat(),  # Case 4: absence spans entire period
+            end_date.isoformat(), start_date.isoformat(),  # Overlap condition
+            start_date.isoformat(), end_date.isoformat()  # Overlap condition
+        ))
+        
+        for row in cursor.fetchall():
+            emp_id = row['EmployeeId']
+            lehrgang_hours = float(row['LehrgangHours'] or 0)
+            
+            if emp_id not in employee_hours_map:
+                # Employee has Lehrgang but no shifts in this period
+                cursor.execute("""
+                    SELECT Id, Vorname, Name, TeamId
+                    FROM Employees
+                    WHERE Id = ?
+                """, (emp_id,))
+                emp_row = cursor.fetchone()
+                if emp_row:
+                    employee_hours_map[emp_id] = {
+                        'id': emp_id,
+                        'name': f"{emp_row['Vorname']} {emp_row['Name']}",
+                        'teamId': emp_row['TeamId'],
+                        'shiftCount': 0,
+                        'shiftHours': 0.0,
+                        'lehrgangHours': lehrgang_hours
+                    }
+            else:
+                employee_hours_map[emp_id]['lehrgangHours'] = lehrgang_hours
+        
+        # Build final result list
+        employee_work_hours = []
+        for emp_data in employee_hours_map.values():
+            total_hours = emp_data['shiftHours'] + emp_data['lehrgangHours']
+            if total_hours > 0:  # Only include employees with hours
+                employee_work_hours.append({
+                    'employeeId': emp_data['id'],
+                    'employeeName': emp_data['name'],
+                    'teamId': emp_data['teamId'],
+                    'shiftCount': emp_data['shiftCount'],
+                    'totalHours': total_hours
+                })
+        
+        # Sort by total hours descending
+        employee_work_hours.sort(key=lambda x: x['totalHours'], reverse=True)
         
         # Team shift distribution
         cursor.execute("""

@@ -120,13 +120,13 @@ def setup_scenario_database():
     # Create 27 shifts for employee A in January 2026 (216 hours)
     # This matches "216h" from the problem statement
     shift_dates = [
-        # Week 1: Jan 1-5 (5 days, Wed-Sun)
+        # Week 1: Jan 1-5 (5 days, Thu-Mon)
         date(2026, 1, 1),  # Thu
         date(2026, 1, 2),  # Fri
         date(2026, 1, 3),  # Sat
         date(2026, 1, 4),  # Sun
         date(2026, 1, 5),  # Mon
-        # Week 2: Jan 6-11 (6 days - will be removed)
+        # Week 2: Jan 6-11 (6 days)
         date(2026, 1, 6),  # Tue
         date(2026, 1, 7),  # Wed
         date(2026, 1, 8),  # Thu

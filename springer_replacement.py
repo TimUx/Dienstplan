@@ -429,6 +429,7 @@ def process_absence_with_springer_assignment(
         'assignmentsCreated': 0,
         'notificationsSent': 0,
         'shiftsNeedingCoverage': 0,
+        'shiftsRemoved': 0,
         'details': []
     }
     
@@ -445,6 +446,26 @@ def process_absence_with_springer_assignment(
     
     affected_shifts = cursor.fetchall()
     results['shiftsNeedingCoverage'] = len(affected_shifts)
+    
+    # CRITICAL FIX: Delete the absent employee's shifts from the database
+    # When an employee is marked absent, their planned shifts must be removed
+    # so that statistics correctly reflect actual working hours.
+    # This prevents the bug where statistics show incorrect hours when
+    # an employee is marked absent after shifts have been planned.
+    if affected_shifts:
+        shift_ids_to_delete = [shift_row[0] for shift_row in affected_shifts]
+        placeholders = ','.join(['?' for _ in shift_ids_to_delete])
+        cursor.execute(f"""
+            DELETE FROM ShiftAssignments
+            WHERE Id IN ({placeholders})
+        """, shift_ids_to_delete)
+        
+        deleted_count = cursor.rowcount
+        results['shiftsRemoved'] = deleted_count
+        conn.commit()
+        
+        print(f"INFO: Removed {deleted_count} shift assignment(s) for absent employee {employee_id}")
+        print(f"      Date range: {start_date.isoformat()} to {end_date.isoformat()}")
     
     for shift_row in affected_shifts:
         assignment_id = shift_row[0]

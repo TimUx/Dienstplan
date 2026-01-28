@@ -1510,6 +1510,13 @@
         <div class="modal-content">
             <span class="close" onclick="closePlanShiftsModal()">&times;</span>
             <h2>Schichten automatisch planen</h2>
+            
+            <!-- Loading Overlay -->
+            <div id="planningOverlay" class="planning-overlay">
+                <div class="planning-spinner"></div>
+                <div class="planning-message">Schichten werden geplant...<br>Bitte warten Sie.</div>
+            </div>
+            
             <form id="planShiftsForm" onsubmit="executePlanShifts(event)">
                 <div class="form-group">
                     <label>Monat*</label>

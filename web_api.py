@@ -4861,6 +4861,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             }
         
         # Then, calculate Lehrgang hours separately
+        # Note: Type is stored as INTEGER in database: 1=AU, 2=U, 3=L
         cursor.execute("""
             SELECT a.EmployeeId,
                    SUM(
@@ -4877,7 +4878,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                        END
                    ) * 8.0 as LehrgangHours
             FROM Absences a
-            WHERE a.Type = 'L'
+            WHERE a.Type = 3
               AND ((a.StartDate <= ? AND a.EndDate >= ?)
                 OR (a.StartDate >= ? AND a.StartDate <= ?))
             GROUP BY a.EmployeeId

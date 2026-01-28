@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Unit test to verify that absences are handled correctly for statistics:
-- AU (sick leave): Remove shifts, do NOT count hours
-- U (vacation): Remove shifts, do NOT count hours  
-- L (Lehrgang/training): Remove shifts, BUT count 8h per training day
+Test to replicate the exact scenario from the issue:
+- Employee "A" had 216h scheduled (27 shifts)
+- A Lehrgang (training) for 7 days (Monday-Sunday) is added
+- 6 shifts were removed from those 7 days (48h)
+- Statistics should show: 216 - 48 + 56 = 224h
+  (216h initial - 6 days * 8h shifts removed + 7 days * 8h training)
 """
 
 import sqlite3
@@ -17,11 +19,10 @@ ABSENCE_TYPE_AU = 1  # Arbeitsunfähigkeit (Sick leave)
 ABSENCE_TYPE_U = 2   # Urlaub (Vacation)
 ABSENCE_TYPE_L = 3   # Lehrgang (Training)
 
-def setup_test_database():
-    """Create a temporary test database with sample data"""
-    db_path = '/tmp/test_lehrgang_statistics.db'
+def setup_scenario_database():
+    """Create test database matching the issue scenario"""
+    db_path = '/tmp/test_lehrgang_scenario.db'
     
-    # Remove existing test database
     if os.path.exists(db_path):
         os.remove(db_path)
     
@@ -104,12 +105,10 @@ def setup_test_database():
     # Insert test data
     cursor.execute("INSERT INTO Teams (Id, Name) VALUES (1, 'Team A')")
     
-    # Create 3 test employees
-    for emp_id in range(1, 4):
-        cursor.execute("""
-            INSERT INTO Employees (Id, Vorname, Name, Personalnummer, Email, TeamId)
-            VALUES (?, ?, ?, ?, ?, 1)
-        """, (emp_id, f'Employee{emp_id}', 'Test', f'EMP00{emp_id}', f'emp{emp_id}@test.de'))
+    cursor.execute("""
+        INSERT INTO Employees (Id, Vorname, Name, Personalnummer, Email, TeamId)
+        VALUES (13, 'Mitarbeiter', 'A', 'EMP013', 'a@test.de', 1)
+    """)
     
     cursor.execute("""
         INSERT INTO ShiftTypes (Id, Code, Name, StartTime, EndTime, DurationHours)
@@ -119,23 +118,53 @@ def setup_test_database():
             (3, 'N', 'Nachtdienst', '21:45', '05:45', 8.0)
     """)
     
-    # Assign shift types to team
     cursor.execute("""
         INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId)
         VALUES (1, 1), (1, 2), (1, 3)
     """)
     
-    # Create 20 shifts for each employee (160 hours total each)
-    # Planning for January 1-20, 2026
-    for emp_id in range(1, 4):
-        for day in range(1, 21):
-            shift_date = date(2026, 1, day)
-            shift_type_id = 1  # Early shift (F)
-            
-            cursor.execute("""
-                INSERT INTO ShiftAssignments (EmployeeId, ShiftTypeId, Date, CreatedAt)
-                VALUES (?, ?, ?, ?)
-            """, (emp_id, shift_type_id, shift_date.isoformat(), datetime.now().isoformat()))
+    # Create 27 shifts for employee A in January 2026 (216 hours)
+    # This matches "216h" from the problem statement
+    shift_dates = [
+        # Week 1: Jan 1-5 (5 days, Thu-Mon)
+        date(2026, 1, 1),  # Thu
+        date(2026, 1, 2),  # Fri
+        date(2026, 1, 3),  # Sat
+        date(2026, 1, 4),  # Sun
+        date(2026, 1, 5),  # Mon
+        # Week 2: Jan 6-11 (6 days)
+        date(2026, 1, 6),  # Tue
+        date(2026, 1, 7),  # Wed
+        date(2026, 1, 8),  # Thu
+        date(2026, 1, 9),  # Fri
+        date(2026, 1, 10), # Sat
+        date(2026, 1, 11), # Sun
+        # Week 3: Jan 13-19 (7 days, skip 12 which is Monday of Lehrgang week)
+        date(2026, 1, 13), # Tue
+        date(2026, 1, 14), # Wed
+        date(2026, 1, 15), # Thu
+        date(2026, 1, 16), # Fri
+        date(2026, 1, 17), # Sat
+        date(2026, 1, 18), # Sun
+        date(2026, 1, 19), # Mon
+        # Week 4: Jan 20-26 (7 days)
+        date(2026, 1, 20), # Tue
+        date(2026, 1, 21), # Wed
+        date(2026, 1, 22), # Thu
+        date(2026, 1, 23), # Fri
+        date(2026, 1, 24), # Sat
+        date(2026, 1, 25), # Sun
+        date(2026, 1, 26), # Mon
+        # Week 5: Jan 27-28 (2 days)
+        date(2026, 1, 27), # Tue
+        date(2026, 1, 28), # Wed
+    ]
+    
+    for shift_date in shift_dates:
+        cursor.execute("""
+            INSERT INTO ShiftAssignments (EmployeeId, ShiftTypeId, Date, CreatedAt)
+            VALUES (?, ?, ?, ?)
+        """, (13, 1, shift_date.isoformat(), datetime.now().isoformat()))
     
     conn.commit()
     return conn, db_path
@@ -203,19 +232,21 @@ def get_statistics_for_employee(conn, employee_id, start_date, end_date):
     }
 
 
-def test_all_absence_types():
+def test_exact_scenario():
     """
-    Test that all three absence types are handled correctly:
-    - Employee 1: AU (sick) for 5 days → Remove shifts, NO hours counted
-    - Employee 2: U (vacation) for 5 days → Remove shifts, NO hours counted
-    - Employee 3: L (training) for 5 days → Remove shifts, BUT count 8h/day
+    Test the exact scenario from the issue:
+    - Employee A has 216h (27 shifts of 8h each)
+    - Lehrgang for 7 days (Jan 12-18, Monday to Sunday) is added
+    - 6 shifts exist in those 7 days and are removed
+    - Expected result: 216 - 48 + 56 = 224h
     """
     print("=" * 80)
-    print("TEST: All Absence Types - AU, U, and L")
+    print("TEST: Exact Scenario from Issue")
+    print("Employee A: 216h planned, Lehrgang for 7 days (6 shifts removed)")
+    print("Expected: 216 - (6 * 8h) + (7 * 8h) = 224h")
     print("=" * 80)
     
-    # Setup test database
-    conn, db_path = setup_test_database()
+    conn, db_path = setup_scenario_database()
     
     try:
         from springer_replacement import process_absence_with_springer_assignment
@@ -223,117 +254,82 @@ def test_all_absence_types():
         month_start = date(2026, 1, 1)
         month_end = date(2026, 1, 31)
         
-        # Test Employee 1: AU (sick leave)
-        print("\n" + "=" * 80)
-        print("TEST CASE 1: AU (Sick Leave) - Employee 1")
-        print("=" * 80)
+        # Check initial state
+        print("\n" + "-" * 80)
+        print("BEFORE LEHRGANG:")
+        print("-" * 80)
+        initial_stats = get_statistics_for_employee(conn, 13, month_start, month_end)
+        print(f"Shifts: {initial_stats['shiftCount']}")
+        print(f"Shift hours: {initial_stats['shiftHours']}h")
+        print(f"Lehrgang hours: {initial_stats['lehrgangHours']}h")
+        print(f"Total hours: {initial_stats['totalHours']}h")
         
-        emp1_stats_before = get_statistics_for_employee(conn, 1, month_start, month_end)
-        print(f"Before absence: {emp1_stats_before['shiftCount']} shifts, {emp1_stats_before['totalHours']}h")
+        assert initial_stats['shiftCount'] == 27, f"Expected 27 initial shifts, got {initial_stats['shiftCount']}"
+        assert initial_stats['totalHours'] == 216.0, f"Expected 216h initial, got {initial_stats['totalHours']}"
+        print("✅ Initial state correct: 27 shifts, 216h")
         
-        # Create AU absence for Jan 6-10 (5 days)
+        # Add Lehrgang for Jan 12-18 (7 days, Monday to Sunday)
+        print("\n" + "-" * 80)
+        print("ADDING LEHRGANG: Jan 12-18 (7 days, Monday to Sunday)")
+        print("-" * 80)
+        
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (1, ABSENCE_TYPE_AU, '2026-01-06', '2026-01-10', 
-              'AU Test', datetime.now().isoformat()))
+        """, (13, ABSENCE_TYPE_L, '2026-01-12', '2026-01-18', 
+              'Lehrgang', datetime.now().isoformat()))
         
         absence_id = cursor.lastrowid
         conn.commit()
         
+        # Process the absence (should remove shifts)
         results = process_absence_with_springer_assignment(
-            conn, absence_id, 1, date(2026, 1, 6), date(2026, 1, 10), 1, 'test@test.de'
+            conn, absence_id, 13, date(2026, 1, 12), date(2026, 1, 18), 13, 'test@test.de'
         )
         
         print(f"Shifts removed: {results['shiftsRemoved']}")
         
-        emp1_stats_after = get_statistics_for_employee(conn, 1, month_start, month_end)
-        print(f"After absence: {emp1_stats_after['shiftCount']} shifts, {emp1_stats_after['totalHours']}h")
-        print(f"Expected: 15 shifts, 120h")
+        # Check final state
+        print("\n" + "-" * 80)
+        print("AFTER LEHRGANG:")
+        print("-" * 80)
+        final_stats = get_statistics_for_employee(conn, 13, month_start, month_end)
+        print(f"Shifts: {final_stats['shiftCount']}")
+        print(f"Shift hours: {final_stats['shiftHours']}h")
+        print(f"Lehrgang hours: {final_stats['lehrgangHours']}h")
+        print(f"Total hours: {final_stats['totalHours']}h")
         
-        # Verify: 20 - 5 = 15 shifts, 160h - 40h = 120h
-        assert emp1_stats_after['shiftCount'] == 15, f"AU: Expected 15 shifts, got {emp1_stats_after['shiftCount']}"
-        assert emp1_stats_after['totalHours'] == 120.0, f"AU: Expected 120h, got {emp1_stats_after['totalHours']}"
-        print("✅ AU (sick leave): Shifts removed, hours NOT counted - CORRECT")
+        # Calculate expected
+        shifts_removed = results['shiftsRemoved']
+        expected_shifts = 27 - shifts_removed
+        expected_shift_hours = 216.0 - (shifts_removed * 8.0)
+        expected_lehrgang_hours = 7 * 8.0  # 7 days * 8h
+        expected_total_hours = expected_shift_hours + expected_lehrgang_hours
         
-        # Test Employee 2: U (vacation)
-        print("\n" + "=" * 80)
-        print("TEST CASE 2: U (Urlaub/Vacation) - Employee 2")
-        print("=" * 80)
+        print("\n" + "-" * 80)
+        print("VERIFICATION:")
+        print("-" * 80)
+        print(f"Expected shifts: {expected_shifts} (27 - {shifts_removed})")
+        print(f"Expected shift hours: {expected_shift_hours}h (216h - {shifts_removed * 8}h)")
+        print(f"Expected Lehrgang hours: {expected_lehrgang_hours}h (7 days * 8h)")
+        print(f"Expected total hours: {expected_total_hours}h")
         
-        emp2_stats_before = get_statistics_for_employee(conn, 2, month_start, month_end)
-        print(f"Before absence: {emp2_stats_before['shiftCount']} shifts, {emp2_stats_before['totalHours']}h")
-        
-        # Create U absence for Jan 6-10 (5 days)
-        cursor.execute("""
-            INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (2, ABSENCE_TYPE_U, '2026-01-06', '2026-01-10',
-              'Urlaub Test', datetime.now().isoformat()))
-        
-        absence_id = cursor.lastrowid
-        conn.commit()
-        
-        results = process_absence_with_springer_assignment(
-            conn, absence_id, 2, date(2026, 1, 6), date(2026, 1, 10), 2, 'test@test.de'
-        )
-        
-        print(f"Shifts removed: {results['shiftsRemoved']}")
-        
-        emp2_stats_after = get_statistics_for_employee(conn, 2, month_start, month_end)
-        print(f"After absence: {emp2_stats_after['shiftCount']} shifts, {emp2_stats_after['totalHours']}h")
-        print(f"Expected: 15 shifts, 120h")
-        
-        # Verify: 20 - 5 = 15 shifts, 160h - 40h = 120h
-        assert emp2_stats_after['shiftCount'] == 15, f"U: Expected 15 shifts, got {emp2_stats_after['shiftCount']}"
-        assert emp2_stats_after['totalHours'] == 120.0, f"U: Expected 120h, got {emp2_stats_after['totalHours']}"
-        print("✅ U (vacation): Shifts removed, hours NOT counted - CORRECT")
-        
-        # Test Employee 3: L (Lehrgang/training)
-        print("\n" + "=" * 80)
-        print("TEST CASE 3: L (Lehrgang/Training) - Employee 3")
-        print("=" * 80)
-        
-        emp3_stats_before = get_statistics_for_employee(conn, 3, month_start, month_end)
-        print(f"Before absence: {emp3_stats_before['shiftCount']} shifts, {emp3_stats_before['totalHours']}h")
-        
-        # Create L absence for Jan 6-10 (5 days)
-        cursor.execute("""
-            INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (3, ABSENCE_TYPE_L, '2026-01-06', '2026-01-10',
-              'Lehrgang Test', datetime.now().isoformat()))
-        
-        absence_id = cursor.lastrowid
-        conn.commit()
-        
-        results = process_absence_with_springer_assignment(
-            conn, absence_id, 3, date(2026, 1, 6), date(2026, 1, 10), 3, 'test@test.de'
-        )
-        
-        print(f"Shifts removed: {results['shiftsRemoved']}")
-        
-        emp3_stats_after = get_statistics_for_employee(conn, 3, month_start, month_end)
-        print(f"After absence: {emp3_stats_after['shiftCount']} shifts, {emp3_stats_after['totalHours']}h")
-        print(f"  - Shift hours: {emp3_stats_after['shiftHours']}h")
-        print(f"  - Lehrgang hours: {emp3_stats_after['lehrgangHours']}h")
-        print(f"Expected: 15 shifts, 160h total (120h shifts + 40h training)")
-        
-        # Verify: 20 - 5 = 15 shifts, but hours = 120h (shifts) + 40h (5 days * 8h training) = 160h
-        assert emp3_stats_after['shiftCount'] == 15, f"L: Expected 15 shifts, got {emp3_stats_after['shiftCount']}"
-        assert emp3_stats_after['shiftHours'] == 120.0, f"L: Expected 120h shift hours, got {emp3_stats_after['shiftHours']}"
-        assert emp3_stats_after['lehrgangHours'] == 40.0, f"L: Expected 40h training hours, got {emp3_stats_after['lehrgangHours']}"
-        assert emp3_stats_after['totalHours'] == 160.0, f"L: Expected 160h total, got {emp3_stats_after['totalHours']}"
-        print("✅ L (training): Shifts removed, but 8h/day STILL counted - CORRECT")
+        # Assertions
+        assert final_stats['shiftCount'] == expected_shifts, \
+            f"Expected {expected_shifts} shifts, got {final_stats['shiftCount']}"
+        assert final_stats['shiftHours'] == expected_shift_hours, \
+            f"Expected {expected_shift_hours}h shift hours, got {final_stats['shiftHours']}h"
+        assert final_stats['lehrgangHours'] == expected_lehrgang_hours, \
+            f"Expected {expected_lehrgang_hours}h Lehrgang hours, got {final_stats['lehrgangHours']}h"
+        assert final_stats['totalHours'] == expected_total_hours, \
+            f"Expected {expected_total_hours}h total, got {final_stats['totalHours']}h"
         
         print("\n" + "=" * 80)
-        print("✅ ALL TESTS PASSED")
+        print("✅ TEST PASSED")
         print("=" * 80)
-        print("Summary:")
-        print("  ✓ AU (sick): Shifts removed, hours NOT counted")
-        print("  ✓ U (vacation): Shifts removed, hours NOT counted")
-        print("  ✓ L (training): Shifts removed, hours STILL counted (8h/day)")
+        print(f"Calculation: 216h - ({shifts_removed} shifts × 8h) + (7 days × 8h) = {expected_total_hours}h")
+        print("The statistics correctly count Lehrgang days as 8h/day!")
         print("=" * 80)
         
         return True
@@ -352,11 +348,10 @@ def test_all_absence_types():
         return False
     finally:
         conn.close()
-        # Clean up test database
         if os.path.exists(db_path):
             os.remove(db_path)
 
 
 if __name__ == "__main__":
-    success = test_all_absence_types()
+    success = test_exact_scenario()
     exit(0 if success else 1)

@@ -8,7 +8,7 @@ Unit test to verify that absences are handled correctly for statistics:
 
 import sqlite3
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from entities import AbsenceType
 
 def setup_test_database():

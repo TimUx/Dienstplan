@@ -4141,15 +4141,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 shifts_removed = springer_results.get('shiftsRemoved', 0)
                 if shifts_removed > 0:
                     app.logger.info(
-                        f"Removed {shifts_removed} shift assignment(s) for absent employee " +
-                        f"(Absence ID: {absence_id})"
+                        f"Removed {shifts_removed} shift assignment(s) for absent employee (Absence ID: {absence_id})"
                     )
                 
                 if springer_results['assignmentsCreated'] > 0:
                     app.logger.info(
-                        f"Automatically assigned {springer_results['assignmentsCreated']} springers " +
-                        f"for {springer_results['shiftsNeedingCoverage']} affected shifts " +
-                        f"(Absence ID: {absence_id})"
+                        f"Automatically assigned {springer_results['assignmentsCreated']} springers "
+                        f"for {springer_results['shiftsNeedingCoverage']} affected shifts (Absence ID: {absence_id})"
                     )
                     
                     # Include springer results in response

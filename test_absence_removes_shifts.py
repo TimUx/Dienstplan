@@ -11,7 +11,7 @@ This test reproduces the bug described in the issue:
 
 import sqlite3
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from entities import AbsenceType
 
 def setup_test_database():
@@ -130,7 +130,7 @@ def setup_test_database():
         cursor.execute("""
             INSERT INTO ShiftAssignments (EmployeeId, ShiftTypeId, Date, CreatedAt)
             VALUES (?, ?, ?, ?)
-        """, (1, shift_type_id, shift_date.isoformat(), datetime.utcnow().isoformat()))
+        """, (1, shift_type_id, shift_date.isoformat(), datetime.now(timezone.utc).isoformat()))
     
     conn.commit()
     return conn, db_path
@@ -204,7 +204,7 @@ def test_absence_removes_shifts():
             INSERT INTO Absences (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (employee_id, AbsenceType.AU.value, absence_start.isoformat(), 
-              absence_end.isoformat(), 'Test absence', datetime.utcnow().isoformat()))
+              absence_end.isoformat(), 'Test absence', datetime.now(timezone.utc).isoformat()))
         
         absence_id = cursor.lastrowid
         conn.commit()

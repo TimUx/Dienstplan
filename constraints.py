@@ -315,7 +315,7 @@ def add_staffing_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     violation_tracker=None
-) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], List[cp_model.IntVar]]:
+) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], Dict[str, List[cp_model.IntVar]]]:
     """
     HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
@@ -332,14 +332,16 @@ def add_staffing_constraints(
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
     NEW: Returns separate penalty lists for weekday/weekend to allow differential weighting.
-    Also returns weekday understaffing penalties to encourage filling weekday gaps.
+    Also returns weekday understaffing penalties BY SHIFT TYPE to allow priority ordering (F > S > N).
     
     Args:
         shift_types: List of ShiftType objects from database (REQUIRED)
         violation_tracker: Optional tracker for recording when max is exceeded
         
     Returns:
-        Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_penalties)
+        Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, 
+                  weekday_understaffing_by_shift) where weekday_understaffing_by_shift is a dict
+                  mapping shift codes to their understaffing penalty lists
     """
     if not shift_types:
         raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
@@ -361,7 +363,7 @@ def add_staffing_constraints(
     # Initialize separate lists for different penalty types
     weekday_overstaffing_penalties = []
     weekend_overstaffing_penalties = []
-    weekday_understaffing_penalties = []
+    weekday_understaffing_by_shift = {shift: [] for shift in shift_codes}  # Separate by shift type for priority
     
     for d in dates:
         is_weekend = d.weekday() >= 5
@@ -479,13 +481,13 @@ def add_staffing_constraints(
                     weekday_overstaffing_penalties.append(overstaffing)
                     
                     # NEW: Add understaffing penalty for weekdays to encourage filling gaps
-                    # This creates an incentive to use more staff on weekdays (up to max)
+                    # Store by shift type to allow priority ordering (F > S > N)
                     understaffing = model.NewIntVar(0, 20, f"understaff_{shift}_{d}_weekday")
                     model.Add(understaffing >= staffing[shift]["max"] - total_assigned)
                     model.Add(understaffing >= 0)
-                    weekday_understaffing_penalties.append(understaffing)
+                    weekday_understaffing_by_shift[shift].append(understaffing)
     
-    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_penalties
+    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift
 
 
 

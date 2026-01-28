@@ -91,8 +91,8 @@ class ShiftPlanningSolver:
         
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min hard / max soft, including cross-team)")
-        # NEW: Collect overstaffing penalties for soft optimization
-        overstaffing_penalties = add_staffing_constraints(
+        # NEW: Collect separate penalties for weekday/weekend overstaffing and weekday understaffing by shift
+        weekday_overstaffing, weekend_overstaffing, weekday_understaffing_by_shift = add_staffing_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
             employees, teams, dates, weeks, shift_codes, shift_types)
@@ -195,12 +195,102 @@ class ShiftPlanningSolver:
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var)  # Positive because we minimize shortage
         
-        # Add overstaffing penalties (minimize exceeding max staffing)
-        # Weight these moderately - less critical than hours but still important
-        if overstaffing_penalties:
-            print(f"  Adding {len(overstaffing_penalties)} overstaffing penalties (soft max)...")
-            for overstaff_var in overstaffing_penalties:
-                objective_terms.append(overstaff_var * 5)  # Weight 5x per excess worker
+        # Add overstaffing penalties with differential weights
+        # CRITICAL: Weekend overstaffing should be HEAVILY penalized (weight 50x)
+        # to prioritize filling weekday gaps before scheduling weekend shifts
+        # Weekday overstaffing is less critical (weight 2x)
+        if weekend_overstaffing:
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 50x)...")
+            for overstaff_var in weekend_overstaffing:
+                objective_terms.append(overstaff_var * 50)  # Very heavy penalty for weekend overstaffing
+        
+        if weekday_overstaffing:
+            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight 2x)...")
+            for overstaff_var in weekday_overstaffing:
+                objective_terms.append(overstaff_var * 2)  # Light penalty for weekday overstaffing
+        
+        # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
+        # Priority order: Früh (F) > Spät (S) > Nacht (N)
+        # Higher weight = higher priority to fill
+        # Use VERY strong differentials to ensure priority overrides other soft constraints
+        shift_priority_weights = {
+            'F': 20,  # Früh/Early - highest priority (4x night)
+            'S': 12,  # Spät/Late - medium priority (2.4x night)
+            'N': 5    # Nacht/Night - lowest priority (baseline)
+        }
+        
+        for shift_code, understaffing_list in weekday_understaffing_by_shift.items():
+            if understaffing_list:
+                weight = shift_priority_weights.get(shift_code, 5)  # Default to 5 if shift not in priority map
+                shift_name = {'F': 'Früh', 'S': 'Spät', 'N': 'Nacht'}.get(shift_code, shift_code)
+                print(f"  Adding {len(understaffing_list)} {shift_name} ({shift_code}) weekday understaffing penalties (weight {weight}x)...")
+                for understaff_var in understaffing_list:
+                    objective_terms.append(understaff_var * weight)
+        
+        # NEW: Add shift type preference objective to directly reward F > S > N
+        # Count total staff assigned to each shift and apply inverse priority weights
+        # Lower priority shifts get small penalties to discourage their use when alternatives exist
+        print("  Adding shift type preference objectives (F > S > N)...")
+        shift_penalty_weights = {
+            'F': -3,  # Früh/Early - REWARD (negative penalty = bonus)
+            'S': 1,   # Spät/Late - slight penalty (less preferred than F)
+            'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
+        }
+        
+        for d in dates:
+            if d.weekday() >= 5:  # Skip weekends
+                continue
+                
+            # Find which week this date belongs to
+            week_idx = None
+            for w_idx, week_dates in enumerate(weeks):
+                if d in week_dates:
+                    week_idx = w_idx
+                    break
+            
+            if week_idx is None:
+                continue
+            
+            for shift in shift_codes:
+                if shift not in shift_penalty_weights:
+                    continue
+                    
+                # Count employees working this shift on this day
+                assigned = []
+                
+                for team in teams:
+                    if (team.id, week_idx, shift) not in team_shift:
+                        continue
+                    
+                    # Count active members of this team on this day
+                    for emp in employees:
+                        if emp.team_id != team.id:
+                            continue
+                        
+                        if (emp.id, d) not in employee_active:
+                            continue
+                        
+                        # Employee works this shift if team has shift AND employee is active
+                        is_on_shift = model.NewBoolVar(f"pref_emp{emp.id}_onshift{shift}_date{d}")
+                        model.AddMultiplicationEquality(
+                            is_on_shift,
+                            [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
+                        )
+                        assigned.append(is_on_shift)
+                
+                # Add cross-team workers for this shift on this day
+                for emp in employees:
+                    if (emp.id, d, shift) in employee_cross_team_shift:
+                        assigned.append(employee_cross_team_shift[(emp.id, d, shift)])
+                
+                if assigned:
+                    # Count total assigned to this shift
+                    total_assigned = model.NewIntVar(0, len(employees), f"pref_total_{shift}_{d}")
+                    model.Add(total_assigned == sum(assigned))
+                    
+                    # Apply priority weight (negative = reward, positive = penalty)
+                    weight = shift_penalty_weights[shift]
+                    objective_terms.append(total_assigned * weight)
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

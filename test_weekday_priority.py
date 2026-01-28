@@ -50,7 +50,7 @@ def test_weekday_priority():
     employees, teams, absences = generate_sample_data()
     
     # Use a short planning period covering one week
-    # Week of Jan 27-Feb 2, 2026 (Mon-Sun)
+    # Week of Jan 26-Feb 1, 2026 (Mon-Sun)
     start_date = date(2026, 1, 26)  # Monday
     end_date = date(2026, 2, 1)    # Sunday
     

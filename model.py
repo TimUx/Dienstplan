@@ -248,6 +248,7 @@ class ShiftPlanningModel:
             if d < self.original_start_date or d > self.original_end_date:
                 # This date is in the extended portion (adjacent month)
                 # Don't convert to team lock - employee lock is sufficient
+                print(f"DEBUG: Skipping team lock for date {d} (outside original period {self.original_start_date} to {self.original_end_date})")
                 continue
             
             # Find the employee's team

@@ -4928,8 +4928,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'totalHours': total_hours
                 })
         
-        # Sort by total hours descending
-        employee_work_hours.sort(key=lambda x: x['totalHours'], reverse=True)
+        # Sort alphabetically by employee name
+        employee_work_hours.sort(key=lambda x: x['employeeName'])
         
         # Team shift distribution
         cursor.execute("""
@@ -4994,11 +4994,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             employee_absence_map[emp_id]['byType'][absence_type_code] = days
             employee_absence_map[emp_id]['totalDays'] += days
         
-        # Sort by total days descending
+        # Sort alphabetically by employee name
         employee_absence_days = sorted(
             employee_absence_map.values(),
-            key=lambda x: x['totalDays'],
-            reverse=True
+            key=lambda x: x['employeeName']
         )
         
         # Team workload

@@ -4362,6 +4362,52 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             app.logger.error(f"Update vacation request error: {str(e)}")
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
     
+    @app.route('/api/vacationrequests/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_vacation_request(id):
+        """Delete vacation request (Admin only) - allows cancellation of approved requests"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Get request info for audit log
+            cursor.execute("""
+                SELECT vr.EmployeeId, vr.StartDate, vr.EndDate, vr.Status, e.Vorname, e.Name
+                FROM VacationRequests vr
+                JOIN Employees e ON vr.EmployeeId = e.Id
+                WHERE vr.Id = ?
+            """, (id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return jsonify({'error': 'Urlaubsantrag nicht gefunden'}), 404
+            
+            employee_name = f"{row['Vorname']} {row['Name']}"
+            status = row['Status']
+            
+            # Delete the vacation request
+            cursor.execute("DELETE FROM VacationRequests WHERE Id = ?", (id,))
+            
+            conn.commit()
+            
+            # Log audit
+            changes = {
+                'employeeName': employee_name,
+                'startDate': row['StartDate'],
+                'endDate': row['EndDate'],
+                'status': status
+            }
+            log_audit(conn, 'VacationRequest', id, 'Deleted', changes)
+            
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete vacation request error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
     # ============================================================================
     # VACATION YEAR APPROVAL ENDPOINTS
     # ============================================================================

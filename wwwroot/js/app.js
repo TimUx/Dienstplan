@@ -2322,6 +2322,11 @@ function displayVacationRequests(requests) {
                     <button onclick="processVacationRequest(${req.id}, 'Genehmigt')" class="btn-small btn-success">✓ Genehmigen</button>
                     <button onclick="processVacationRequest(${req.id}, 'NichtGenehmigt')" class="btn-small btn-danger">✗ Ablehnen</button>
                 </td>`;
+        } else if (canProcess && req.status === 'Genehmigt') {
+            html += `
+                <td>
+                    <button onclick="deleteVacationRequest(${req.id}, '${req.employeeName}')" class="btn-small btn-danger">🗑️ Stornieren</button>
+                </td>`;
         } else if (canProcess) {
             html += '<td>-</td>';
         }
@@ -2414,6 +2419,33 @@ async function processVacationRequest(id, status) {
             alert('Sie haben keine Berechtigung für diese Aktion.');
         } else {
             alert('Fehler beim Verarbeiten des Antrags.');
+        }
+    } catch (error) {
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+async function deleteVacationRequest(id, employeeName) {
+    if (!confirm(`Möchten Sie den Urlaubsantrag von "${employeeName}" wirklich stornieren?\n\nDieser genehmigte Urlaub wird gelöscht.`)) {
+        return;
+    }
+    
+    try {
+        const result = await fetch(`${API_BASE}/vacationrequests/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (result.ok) {
+            alert('Urlaubsantrag wurde erfolgreich storniert!');
+            loadVacationRequests('all');
+        } else if (result.status === 401) {
+            alert('Bitte melden Sie sich an.');
+        } else if (result.status === 403) {
+            alert('Sie haben keine Berechtigung für diese Aktion.');
+        } else {
+            const error = await result.json();
+            alert(error.error || 'Fehler beim Stornieren des Urlaubsantrags.');
         }
     } catch (error) {
         alert(`Fehler: ${error.message}`);

@@ -115,7 +115,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 ### Dashboard & Statistiken
 - 📊 Arbeitsstunden pro Mitarbeiter
 - 📈 Schichtverteilung pro Team
-- 📅 Fehltageübersicht
+- 📅 Abwesenheiten (kategorisiert nach Typ)
 - 💼 Team-Workload Analyse
 - 📆 Samstags-/Sonntagsdienste je Mitarbeiter (Nur Admin)
 
@@ -508,7 +508,7 @@ graph TD
     Header --> Statistiken[📊 Statistiken<br/><i>nur Admin</i>]
     Statistiken --> S_Arbeitsstunden[Arbeitsstunden]
     Statistiken --> S_Schichtverteilung[Schichtverteilung]
-    Statistiken --> S_Fehltage[Fehltageübersicht]
+    Statistiken --> S_Abwesenheiten[Abwesenheiten]
     Statistiken --> S_Workload[Team-Workload]
     
     Header --> Hilfe[📖 Hilfe]

@@ -4959,27 +4959,43 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         
         team_shift_distribution = list(team_shift_data.values())
         
-        # Employee absence days
+        # Employee absence days - categorized by type
         cursor.execute("""
-            SELECT e.Id, e.Vorname, e.Name,
+            SELECT e.Id, e.Vorname, e.Name, a.Type,
                    SUM(julianday(a.EndDate) - julianday(a.StartDate) + 1) as TotalDays
             FROM Employees e
             JOIN Absences a ON e.Id = a.EmployeeId
             WHERE (a.StartDate <= ? AND a.EndDate >= ?)
                OR (a.StartDate >= ? AND a.StartDate <= ?)
-            GROUP BY e.Id, e.Vorname, e.Name
+            GROUP BY e.Id, e.Vorname, e.Name, a.Type
             HAVING TotalDays > 0
-            ORDER BY TotalDays DESC
+            ORDER BY e.Vorname, e.Name, a.Type
         """, (end_date.isoformat(), start_date.isoformat(),
               start_date.isoformat(), end_date.isoformat()))
         
-        employee_absence_days = []
+        # Build employee absence data with categorization
+        employee_absence_map = {}
         for row in cursor.fetchall():
-            employee_absence_days.append({
-                'employeeId': row['Id'],
-                'employeeName': f"{row['Vorname']} {row['Name']}",
-                'totalDays': int(row['TotalDays'])
-            })
+            emp_id = row['Id']
+            if emp_id not in employee_absence_map:
+                employee_absence_map[emp_id] = {
+                    'employeeId': emp_id,
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'totalDays': 0,
+                    'byType': {}
+                }
+            
+            absence_type = row['Type']
+            days = int(row['TotalDays'])
+            employee_absence_map[emp_id]['byType'][absence_type] = days
+            employee_absence_map[emp_id]['totalDays'] += days
+        
+        # Sort by total days descending
+        employee_absence_days = sorted(
+            employee_absence_map.values(),
+            key=lambda x: x['totalDays'],
+            reverse=True
+        )
         
         # Team workload
         cursor.execute("""

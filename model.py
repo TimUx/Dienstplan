@@ -290,31 +290,13 @@ class ShiftPlanningModel:
             # Additionally, we need to ensure the team has the correct shift for this date
             # Find the employee's team
             emp = emp_by_id.get(emp_id)
-            if emp and emp.team_id:
-                # Find which week this date belongs to
-                week_idx = None
-                for idx, week_dates in enumerate(self.weeks):
-                    if d in week_dates:
-                        week_idx = idx
-                        break
+            if emp and emp.team_id and week_idx_for_date is not None:
+                # Reuse the week_idx computed earlier
+                week_idx = week_idx_for_date
                 
                 # Lock the team to this shift for this week
-                if week_idx is not None and (emp.team_id, week_idx, shift_code) in self.team_shift:
-                    # CRITICAL FIX: Check if this week spans across month boundaries
-                    # If the week contains dates outside the original planning period,
-                    # don't create team-level locks because different team members may have
-                    # worked different shifts on different days during the partial week
-                    week_dates = self.weeks[week_idx]
-                    week_spans_boundary = any(
-                        wd < self.original_start_date or wd > self.original_end_date 
-                        for wd in week_dates
-                    )
-                    
-                    if week_spans_boundary:
-                        # Week spans month boundary - skip team lock to avoid conflicts
-                        # Employee-level locks are sufficient for dates in this week
-                        continue
-                    
+                # Note: We already know this is NOT a boundary week (filtered above at line 278)
+                if (emp.team_id, week_idx, shift_code) in self.team_shift:
                     # CRITICAL FIX: Check for conflicts BEFORE adding constraint
                     # Update locked_team_shift BEFORE adding the constraint to prevent race conditions
                     if (emp.team_id, week_idx) in self.locked_team_shift:
@@ -322,7 +304,7 @@ class ShiftPlanningModel:
                         if existing_shift != shift_code:
                             # Conflict detected: different locked shifts for same team/week
                             # This can happen when multiple employees from the same team have
-                            # different locked shifts for overlapping weeks across month boundaries
+                            # different locked shifts within the same week
                             print(f"WARNING: Skipping conflicting locked shift for team {emp.team_id}, week {week_idx}")
                             print(f"  Existing: {existing_shift}, Attempted: {shift_code} (from employee {emp_id} on {d})")
                             continue  # Skip this lock to avoid infeasibility

@@ -45,18 +45,18 @@ The issue occurred in weeks that span month boundaries (boundary weeks):
 
 The previous code applied employee locks at two levels:
 
+**Level 1: Force employee to be active/work**
 ```python
-# Level 1: Force employee to be active/work (lines 234-242)
 if d.weekday() < 5:
     self.model.Add(self.employee_active[(emp_id, d)] == 1)
 else:
     self.model.Add(self.employee_weekend_shift[(emp_id, d)] == 1)
-
-# Level 2: Try to create team lock (lines 244-297)
-# This was skipped for dates outside original period or in boundary weeks
 ```
 
-The problem: Level 1 constraints were applied for ALL dates, including those in boundary weeks. This forced employees to work on specific dates, even though the team rotation for the boundary week might assign a different shift pattern.
+**Level 2: Try to create team lock**
+This was skipped for dates outside original period or in boundary weeks, but Level 1 constraints were still applied.
+
+**The Problem**: Level 1 constraints were applied for ALL dates, including those in boundary weeks. This forced employees to work on specific dates, even though the team rotation for the boundary week might assign a different shift pattern, creating conflicts and INFEASIBLE errors.
 
 ## Solution
 

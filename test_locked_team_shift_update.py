@@ -26,9 +26,9 @@ def test_locked_employee_shift_updates_locked_team_shift():
     # Setup
     employees, teams, _ = generate_sample_data()
     
-    # Create a simple date range
-    start_date = date(2026, 2, 1)  # Sunday
-    end_date = date(2026, 2, 7)     # Saturday (one week)
+    # Create a realistic date range (full month to avoid all weeks being boundary weeks)
+    start_date = date(2026, 2, 1)  # Sunday, Feb 1
+    end_date = date(2026, 2, 28)    # Saturday, Feb 28
     
     # Find an employee with a team
     emp_with_team = None
@@ -41,15 +41,18 @@ def test_locked_employee_shift_updates_locked_team_shift():
         print("❌ No employee with team found")
         return False
     
-    # Create a locked employee shift for Monday (Feb 2)
-    monday = date(2026, 2, 2)
+    # Create a locked employee shift for a date in a NON-boundary week
+    # Week 0 (Jan 26 - Feb 1) spans boundaries
+    # Week 1 (Feb 2 - Feb 8) does NOT span boundaries (all dates within Feb 1-28)
+    # Use Monday Feb 9 which is in Week 2
+    monday_feb_9 = date(2026, 2, 9)
     locked_employee_shift = {
-        (emp_with_team.id, monday): "F"  # Lock employee to Frühschicht (F)
+        (emp_with_team.id, monday_feb_9): "F"  # Lock employee to Frühschicht (F)
     }
     
     print(f"\nEmployee: {emp_with_team.name}")
     print(f"Team: {emp_with_team.team_id}")
-    print(f"Locked shift: {monday} -> F")
+    print(f"Locked shift: {monday_feb_9} -> F (in a non-boundary week)")
     print(f"\nInitial locked_team_shift: empty")
     
     # Create model with locked employee shift
@@ -68,18 +71,18 @@ def test_locked_employee_shift_updates_locked_team_shift():
     print(f"locked_team_shift entries: {len(model.locked_team_shift)}")
     
     # Verify that the team shift was locked
-    # Find which week Monday belongs to
+    # Find which week Monday Feb 9 belongs to
     week_idx = None
     for idx, week_dates in enumerate(model.weeks):
-        if monday in week_dates:
+        if monday_feb_9 in week_dates:
             week_idx = idx
             break
     
     if week_idx is None:
-        print(f"❌ Monday {monday} not found in weeks")
+        print(f"❌ Monday {monday_feb_9} not found in weeks")
         return False
     
-    print(f"Monday is in week {week_idx}")
+    print(f"Monday Feb 9 is in week {week_idx}")
     
     # Check if locked_team_shift was updated
     expected_key = (emp_with_team.team_id, week_idx)

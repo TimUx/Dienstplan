@@ -2325,7 +2325,7 @@ function displayVacationRequests(requests) {
         } else if (canProcess && req.status === 'Genehmigt') {
             html += `
                 <td>
-                    <button onclick="deleteVacationRequest(${req.id}, '${req.employeeName}')" class="btn-small btn-danger">🗑️ Stornieren</button>
+                    <button onclick="deleteVacationRequest(${req.id}, '${escapeHtml(req.employeeName)}')" class="btn-small btn-danger">🗑️ Stornieren</button>
                 </td>`;
         } else if (canProcess) {
             html += '<td>-</td>';

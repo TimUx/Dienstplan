@@ -4389,17 +4389,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Delete the vacation request
             cursor.execute("DELETE FROM VacationRequests WHERE Id = ?", (id,))
             
-            conn.commit()
-            
-            # Log audit
-            changes = {
+            # Log audit before commit
+            changes = json.dumps({
                 'employeeName': employee_name,
                 'startDate': row['StartDate'],
                 'endDate': row['EndDate'],
                 'status': status
-            }
+            }, ensure_ascii=False)
             log_audit(conn, 'VacationRequest', id, 'Deleted', changes)
             
+            conn.commit()
             conn.close()
             
             return jsonify({'success': True})

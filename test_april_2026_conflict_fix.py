@@ -6,6 +6,15 @@ This test verifies that when planning April 2026 with conflicting team assignmen
 from March in week 0, the system properly detects and removes conflicting locks
 to allow the solver to find a solution.
 
+NOTE: This test validates that model.py can handle pre-existing conflicting locks
+passed in as parameters. The actual fix in web_api.py (lines 2753-2783) detects
+and removes conflicts when loading from the database. This test simulates the
+outcome of that detection (conflicting locks) to verify the model can still solve.
+
+A complete integration test would require setting up a test database with conflicting
+ShiftAssignments records, which is more complex. This unit test validates the core
+conflict handling capability.
+
 User Issue:
 - Planning April 2026 failed with INFEASIBLE
 - Many warnings: "WARNING: Skipping conflicting locked shift for team X, week 0"

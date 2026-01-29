@@ -43,9 +43,11 @@ def test_february_with_locked_constraints():
     # In reality, these would come from the database (existing ShiftAssignments)
     locked_employee_shift = {}
     
-    # Simulate that January planning extended to Sunday, Feb 1st
-    # Let's lock the first few employees to specific shifts on Feb 1st
-    sunday_feb_1 = date(2026, 2, 1)
+    # UPDATED: Simulate locked assignments on dates INSIDE February (not in boundary weeks)
+    # to avoid the boundary week issue where locks are skipped
+    # Use dates from week 1 (Feb 2-8) instead of week 0 (Jan 26 - Feb 1)
+    monday_feb_2 = date(2026, 2, 2)   # First Monday of February
+    tuesday_feb_3 = date(2026, 2, 3)  # Tuesday
     
     # Get employees from different teams to avoid conflicts
     # (all team members must work the same shift on the same day)
@@ -58,15 +60,23 @@ def test_february_with_locked_constraints():
             if len(employees_with_teams) >= 3:
                 break
     
-    print(f"\nSimulating locked assignments from January planning:")
-    print(f"Date: {sunday_feb_1} (first Sunday of February)")
+    print(f"\nSimulating locked assignments for dates inside February (not in boundary weeks):")
+    print(f"Dates: {monday_feb_2} and {tuesday_feb_3}")
     
-    # Lock employees from different teams to different shifts - simulating January's last week
-    shift_codes = ["F", "N", "S"]
-    for i, emp in enumerate(employees_with_teams):
-        shift_code = shift_codes[i % 3]
-        locked_employee_shift[(emp.id, sunday_feb_1)] = shift_code
-        print(f"  - {emp.name} (Team {emp.team_id}): {shift_code}")
+    # Lock employees from different teams to different shifts
+    # Employee 1 (Team 1) on Monday Feb 2
+    # Employee 2 (Team 2) on Tuesday Feb 3
+    # Employee 3 (Team 3) on Monday Feb 2
+    shift_assignments = [
+        (employees_with_teams[0].id, monday_feb_2, "F"),
+        (employees_with_teams[1].id, tuesday_feb_3, "N"),
+        (employees_with_teams[2].id, monday_feb_2, "S"),
+    ]
+    
+    for emp_id, d, shift_code in shift_assignments:
+        locked_employee_shift[(emp_id, d)] = shift_code
+        emp = next(e for e in employees if e.id == emp_id)
+        print(f"  - {emp.name} (Team {emp.team_id}) on {d}: {shift_code}")
     
     print(f"\nTotal locked constraints: {len(locked_employee_shift)}")
     

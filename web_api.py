@@ -2750,12 +2750,37 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         date_to_week[d] = week_idx
                 
                 # Lock existing team assignments
+                # CRITICAL FIX: Detect and handle conflicting team assignments within the same week
+                # If multiple assignments exist for the same team in the same week with different shifts,
+                # we should NOT lock the team to any shift (let the solver decide) to avoid INFEASIBLE errors
+                
+                # First pass: identify conflicts
+                conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
                 for team_id, date_str, shift_code in existing_team_assignments:
                     assignment_date = date.fromisoformat(date_str)
                     if assignment_date in date_to_week:
                         week_idx = date_to_week[assignment_date]
-                        locked_team_shift[(team_id, week_idx)] = shift_code
-                        app.logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignment on {date_str})")
+                        
+                        # Check for conflicts
+                        if (team_id, week_idx) in locked_team_shift:
+                            existing_shift = locked_team_shift[(team_id, week_idx)]
+                            if existing_shift != shift_code:
+                                # Conflict detected: different shift codes for same team/week
+                                app.logger.warning(f"CONFLICT: Team {team_id}, Week {week_idx} has conflicting shifts: {existing_shift} vs {shift_code}")
+                                conflicting_team_weeks.add((team_id, week_idx))
+                        else:
+                            # No conflict yet - tentatively add this lock
+                            locked_team_shift[(team_id, week_idx)] = shift_code
+                
+                # Second pass: remove all conflicting locks
+                for team_id, week_idx in conflicting_team_weeks:
+                    if (team_id, week_idx) in locked_team_shift:
+                        app.logger.warning(f"  Removing team lock for Team {team_id}, Week {week_idx} to avoid INFEASIBLE")
+                        del locked_team_shift[(team_id, week_idx)]
+                
+                # Log remaining locks
+                for (team_id, week_idx), shift_code in locked_team_shift.items():
+                    app.logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignments)")
             
             conn.close()
             

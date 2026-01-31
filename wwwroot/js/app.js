@@ -35,7 +35,7 @@ function formatImportResult(result) {
     return `
         <div class="success-message">
             <p><strong>✓ Import erfolgreich!</strong></p>
-            <p>Gesamt im File gefunden: ${result.total || 0}</p>
+            <p>Gesamt in Datei gefunden: ${result.total || 0}</p>
             <p>Neu importiert: ${result.imported || 0}</p>
             <p>Aktualisiert: ${result.updated || 0}</p>
             <p>Übersprungen: ${result.skipped || 0}</p>

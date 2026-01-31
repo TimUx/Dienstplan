@@ -2690,6 +2690,9 @@ function displayAbsences(absences, type) {
 
 // Show Add Absence Modal
 async function showAddAbsenceModal(type) {
+    // Get modal title element first
+    const modalTitle = document.getElementById('absenceModalTitle');
+    
     // Load employees for dropdown
     try {
         const response = await fetch(`${API_BASE}/employees`);
@@ -2731,8 +2734,7 @@ async function showAddAbsenceModal(type) {
         document.getElementById('absenceType').value = type;
     }
     
-    // Set modal title and type
-    const modalTitle = document.getElementById('absenceModalTitle');
+    // Set modal title based on type
     if (type === 'AU') {
         modalTitle.textContent = 'Arbeitsunfähigkeit (AU) erfassen';
     } else if (type === 'L') {
@@ -6212,7 +6214,7 @@ async function loadAbsenceTypes() {
                 html += `<td>${new Date(type.createdAt).toLocaleDateString('de-DE')}</td>`;
                 html += '<td class="admin-only">';
                 html += `<button onclick="editAbsenceType(${type.id})" class="btn-secondary btn-small">✏️ Bearbeiten</button> `;
-                html += `<button onclick="deleteAbsenceType(${type.id}, '${escapeHtml(type.name).replace(/'/g, "\\'")}')" class="btn-danger btn-small">🗑️ Löschen</button>`;
+                html += `<button onclick="deleteAbsenceType(${type.id}, ${JSON.stringify(type.name)})" class="btn-danger btn-small">🗑️ Löschen</button>`;
                 html += '</td>';
                 html += '</tr>';
             });

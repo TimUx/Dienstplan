@@ -99,7 +99,9 @@ def migrate_database(db_path: str = "dienstplan.db"):
             null_count = cursor.fetchone()[0]
             
             if null_count > 0:
-                print(f"⚠️  Warning: {null_count} absences could not be migrated")
+                print(f"⚠️  Warning: {null_count} absences could not be migrated automatically")
+                print(f"   Action required: These absences have invalid Type values")
+                print(f"   Recommendation: Review and correct these records manually or contact support")
             else:
                 print("✓ All existing absences migrated to new system")
         else:

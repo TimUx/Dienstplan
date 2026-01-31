@@ -5938,8 +5938,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             updated_count = 0
             skipped_count = 0
             errors = []
+            total_rows = 0
             
             for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+                total_rows += 1
                 try:
                     # Validate required fields
                     required_fields = ['Vorname', 'Name', 'Personalnummer']
@@ -6020,6 +6022,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             return jsonify({
                 'success': True,
+                'total': total_rows,
                 'imported': imported_count,
                 'updated': updated_count,
                 'skipped': skipped_count,
@@ -6081,8 +6084,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             updated_count = 0
             skipped_count = 0
             errors = []
+            total_rows = 0
             
             for row_num, row in enumerate(reader, start=2):
+                total_rows += 1
                 try:
                     # Validate required fields
                     if 'Name' not in row or not row['Name']:
@@ -6138,6 +6143,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             return jsonify({
                 'success': True,
+                'total': total_rows,
                 'imported': imported_count,
                 'updated': updated_count,
                 'skipped': skipped_count,

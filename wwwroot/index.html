@@ -208,8 +208,10 @@
                     <button class="tab-btn active" onclick="switchAbsenceTab('vacation')">🏖️ Urlaub</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('sick')">🏥 Arbeitsunfähigkeit (AU)</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('training')">🎓 Lehrgang / Schulung</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('other')">📋 Sonstige Abwesenheiten</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('vacation-periods')">📅 Ferienzeiten</button>
                     <button class="tab-btn admin-only" onclick="switchAbsenceTab('vacation-year-approvals')" id="tab-vacation-year-approvals" style="display:none;">✅ Urlaubsjahresplan Freigabe</button>
+                    <button class="tab-btn admin-only" onclick="switchAbsenceTab('absence-types')" id="tab-absence-types" style="display:none;">⚙️ Abwesenheitstypen</button>
                 </div>
                 
                 <!-- Vacation Tab -->
@@ -253,6 +255,22 @@
                     </div>
                 </div>
 
+                <!-- Other Absences Tab -->
+                <div id="other-tab" class="tab-content">
+                    <h3>📋 Sonstige Abwesenheiten</h3>
+                    <p class="info">
+                        Benutzerdefinierte Abwesenheiten (z.B. Elternzeit, Fortbildung, Sonderurlaub). 
+                        Diese werden wie Standard-Abwesenheiten behandelt: keine Schichtplanung, automatische Springer-Zuweisung.
+                    </p>
+                    <div class="controls">
+                        <button onclick="showAddAbsenceModal('all')" class="btn-primary admin-only">+ Sonstige Abwesenheit erfassen</button>
+                        <button onclick="loadAbsences('all')" class="btn-secondary">Alle anzeigen</button>
+                    </div>
+                    <div id="other-absences-content">
+                        <p class="loading">Lade sonstige Abwesenheiten...</p>
+                    </div>
+                </div>
+
                 <!-- Vacation Periods Tab -->
                 <div id="vacation-periods-tab" class="tab-content">
                     <h3>📅 Ferienzeiten verwalten</h3>
@@ -274,6 +292,22 @@
                     </div>
                     <div id="vacation-year-approvals-absence-content">
                         <p class="loading">Lade Freigaben...</p>
+                    </div>
+                </div>
+
+                <!-- Absence Types Management Tab -->
+                <div id="absence-types-tab" class="tab-content">
+                    <h3>⚙️ Abwesenheitstypen verwalten</h3>
+                    <p class="info">
+                        Definieren Sie eigene Abwesenheitstypen (z.B. Elternzeit, Fortbildung, Sonderurlaub). 
+                        Diese verhalten sich wie die Standard-Abwesenheiten (U, AU, L): keine Schichtplanung, automatisches Entfernen von Schichten, Springer-Aktivierung.
+                    </p>
+                    <div class="controls">
+                        <button onclick="showAbsenceTypeModal()" class="btn-primary admin-only">+ Abwesenheitstyp hinzufügen</button>
+                        <button onclick="loadAbsenceTypes()" class="btn-secondary">🔄 Aktualisieren</button>
+                    </div>
+                    <div id="absence-types-content">
+                        <p class="loading">Lade Abwesenheitstypen...</p>
                     </div>
                 </div>
             </div>
@@ -1244,6 +1278,12 @@
                         <option value="">Mitarbeiter wählen...</option>
                     </select>
                 </div>
+                <div class="form-group" id="absenceTypeSelectGroup" style="display: none;">
+                    <label>Abwesenheitstyp*</label>
+                    <select id="absenceTypeIdSelect" required>
+                        <option value="">Abwesenheitstyp wählen...</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Von (Startdatum)*</label>
                     <input type="date" id="absenceStartDate" required>
@@ -1258,6 +1298,48 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeAbsenceModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Absence Type Management Modal -->
+    <div id="absenceTypeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeAbsenceTypeModal()">&times;</span>
+            <h2 id="absenceTypeModalTitle">Abwesenheitstyp hinzufügen</h2>
+            <form id="absenceTypeForm" onsubmit="saveAbsenceType(event)">
+                <input type="hidden" id="absenceTypeId">
+                <div class="form-group">
+                    <label>Bezeichnung*</label>
+                    <input type="text" id="absenceTypeName" required placeholder="z.B. Elternzeit, Fortbildung, Sonderurlaub">
+                </div>
+                <div class="form-group">
+                    <label>Kürzel*</label>
+                    <input type="text" id="absenceTypeCode" required maxlength="5" placeholder="z.B. EZ, FB, SU" style="text-transform: uppercase;">
+                    <small>Hinweis: U, AU und L sind für Systemtypen reserviert</small>
+                </div>
+                <div class="form-group">
+                    <label>Farbdarstellung im Dienstplan*</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" id="absenceTypeColor" value="#E0E0E0" required style="width: 60px; height: 40px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+                        <span id="absenceTypeColorPreview" style="padding: 8px 20px; border-radius: 4px; background: #E0E0E0; border: 1px solid #ccc;">Vorschau</span>
+                    </div>
+                    <small>Diese Farbe wird im Dienstplan für diesen Abwesenheitstyp angezeigt</small>
+                </div>
+                <div class="info-box">
+                    <p><strong>ℹ️ Hinweis:</strong></p>
+                    <p>Dieser Abwesenheitstyp verhält sich wie die Standard-Abwesenheiten (U, AU, L):</p>
+                    <ul style="margin-left: 20px;">
+                        <li>Keine Schichtplanung an Tagen mit dieser Abwesenheit</li>
+                        <li>Automatisches Entfernen von Schichten bei nachträglicher Eintragung</li>
+                        <li>Springer-System wird aktiviert</li>
+                        <li>Unterbesetzungs-Benachrichtigungen werden ausgelöst</li>
+                    </ul>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeAbsenceTypeModal()" class="btn-secondary">Abbrechen</button>
                     <button type="submit" class="btn-primary">Speichern</button>
                 </div>
             </form>

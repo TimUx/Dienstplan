@@ -111,18 +111,35 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # AbsenceTypes table for custom absence type definitions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AbsenceTypes (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Code TEXT NOT NULL UNIQUE,
+            ColorCode TEXT NOT NULL DEFAULT '#E0E0E0',
+            IsSystemType INTEGER NOT NULL DEFAULT 0,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CreatedBy TEXT,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+    
     # Absences table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS Absences (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
             EmployeeId INTEGER NOT NULL,
             Type INTEGER NOT NULL,
+            AbsenceTypeId INTEGER,
             StartDate TEXT NOT NULL,
             EndDate TEXT NOT NULL,
             Notes TEXT,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CreatedBy TEXT,
-            FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
+            FOREIGN KEY (EmployeeId) REFERENCES Employees(Id),
+            FOREIGN KEY (AbsenceTypeId) REFERENCES AbsenceTypes(Id)
         )
     """)
     
@@ -393,6 +410,11 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     """)
     
     cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_absences_type 
+        ON Absences(AbsenceTypeId)
+    """)
+    
+    cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_auditlogs_timestamp 
         ON AuditLogs(Timestamp DESC)
     """)
@@ -658,6 +680,43 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     print("[OK] Shift type relationships initialized: F -> N -> S rotation")
 
 
+def initialize_absence_types(db_path: str = "dienstplan.db"):
+    """
+    Initialize standard absence types (U, AU, L).
+    
+    These are the system absence types that must always exist.
+    Custom absence types can be added later via the Admin interface.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Check if absence types already exist
+    cursor.execute("SELECT COUNT(*) FROM AbsenceTypes WHERE IsSystemType = 1")
+    count = cursor.fetchone()[0]
+    
+    if count >= 3:
+        print("[!] Standard absence types already initialized")
+        conn.close()
+        return
+    
+    # Standard absence types
+    # Format: (Name, Code, ColorCode, IsSystemType)
+    standard_types = [
+        ('Urlaub', 'U', '#90EE90', 1),  # Light green for vacation
+        ('Krank / AU', 'AU', '#FFB6C1', 1),  # Light pink for sick leave
+        ('Lehrgang', 'L', '#87CEEB', 1)  # Sky blue for training
+    ]
+    
+    cursor.executemany("""
+        INSERT OR IGNORE INTO AbsenceTypes (Name, Code, ColorCode, IsSystemType, CreatedBy)
+        VALUES (?, ?, ?, ?, 'system')
+    """, standard_types)
+    
+    conn.commit()
+    conn.close()
+    print("[OK] Standard absence types initialized (U, AU, L)")
+
+
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
     """
     Initialize sample teams.
@@ -769,6 +828,9 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
     
     # Initialize shift type relationships (rotation order: F → N → S)
     initialize_shift_type_relationships(db_path)
+    
+    # Initialize standard absence types (U, AU, L)
+    initialize_absence_types(db_path)
     
     if with_sample_data:
         # Initialize sample teams

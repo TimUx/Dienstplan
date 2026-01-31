@@ -4064,27 +4064,44 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     
     @app.route('/api/absences', methods=['GET'])
     def get_absences():
-        """Get all absences"""
+        """Get all absences with their type information"""
         conn = db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT a.*, e.Vorname, e.Name, e.TeamId
+            SELECT a.*, e.Vorname, e.Name, e.TeamId,
+                   at.Name as TypeName, at.Code as TypeCode, at.ColorCode as TypeColor
             FROM Absences a
             JOIN Employees e ON a.EmployeeId = e.Id
+            LEFT JOIN AbsenceTypes at ON a.AbsenceTypeId = at.Id
             ORDER BY a.StartDate DESC
         """)
         
         absences = []
         for row in cursor.fetchall():
-            # Map type: 1=AU (Krank), 2=U (Urlaub), 3=L (Lehrgang)
-            type_names = ['', 'Krank / AU', 'Urlaub', 'Lehrgang']
+            # Use new type system if available, otherwise fall back to legacy
+            if row['TypeName']:
+                type_name = row['TypeName']
+                type_code = row['TypeCode']
+                type_color = row['TypeColor']
+            else:
+                # Legacy fallback: Map type: 1=AU (Krank), 2=U (Urlaub), 3=L (Lehrgang)
+                type_names = {1: 'Krank / AU', 2: 'Urlaub', 3: 'Lehrgang'}
+                type_codes = {1: 'AU', 2: 'U', 3: 'L'}
+                type_colors = {1: '#FFB6C1', 2: '#90EE90', 3: '#87CEEB'}
+                type_name = type_names.get(row['Type'], 'Unbekannt')
+                type_code = type_codes.get(row['Type'], 'U')
+                type_color = type_colors.get(row['Type'], '#E0E0E0')
+            
             absences.append({
                 'id': row['Id'],
                 'employeeId': row['EmployeeId'],
                 'employeeName': f"{row['Vorname']} {row['Name']}",
                 'teamId': row['TeamId'],
-                'type': type_names[row['Type']] if row['Type'] < len(type_names) else 'Unbekannt',
+                'type': type_name,
+                'typeCode': type_code,
+                'typeColor': type_color,
+                'absenceTypeId': row['AbsenceTypeId'],
                 'startDate': row['StartDate'],
                 'endDate': row['EndDate'],
                 'notes': row['Notes'],
@@ -4097,23 +4114,54 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     @app.route('/api/absences', methods=['POST'])
     @require_role('Admin')
     def create_absence():
-        """Create new absence (AU or Lehrgang)"""
+        """Create new absence with support for custom absence types"""
         try:
             data = request.get_json()
             
-            if not data.get('employeeId') or not data.get('type') or not data.get('startDate') or not data.get('endDate'):
-                return jsonify({'error': 'EmployeeId, Type, StartDate und EndDate sind erforderlich'}), 400
+            # Support both legacy 'type' and new 'absenceTypeId'
+            absence_type_id = data.get('absenceTypeId')
+            legacy_type = data.get('type')
+            
+            if not data.get('employeeId') or not data.get('startDate') or not data.get('endDate'):
+                return jsonify({'error': 'EmployeeId, StartDate und EndDate sind erforderlich'}), 400
+            
+            if not absence_type_id and not legacy_type:
+                return jsonify({'error': 'AbsenceTypeId oder Type ist erforderlich'}), 400
             
             conn = db.get_connection()
             cursor = conn.cursor()
             
+            # If absenceTypeId is provided, use it; otherwise map legacy type to absenceTypeId
+            if absence_type_id:
+                # Verify absence type exists
+                cursor.execute("SELECT Id, Code FROM AbsenceTypes WHERE Id = ?", (absence_type_id,))
+                type_row = cursor.fetchone()
+                if not type_row:
+                    conn.close()
+                    return jsonify({'error': 'Ungültiger Abwesenheitstyp'}), 400
+                
+                # Determine legacy type from code for backward compatibility
+                type_code = type_row['Code']
+                legacy_type_map = {'AU': 1, 'U': 2, 'L': 3}
+                legacy_type_value = legacy_type_map.get(type_code, 1)  # Default to 1 (AU) for custom types
+            else:
+                # Map legacy type to absenceTypeId
+                legacy_to_code = {1: 'AU', 2: 'U', 3: 'L'}
+                type_code = legacy_to_code.get(legacy_type, 'U')
+                cursor.execute("SELECT Id FROM AbsenceTypes WHERE Code = ? AND IsSystemType = 1", (type_code,))
+                type_row = cursor.fetchone()
+                if type_row:
+                    absence_type_id = type_row['Id']
+                legacy_type_value = legacy_type
+            
             cursor.execute("""
                 INSERT INTO Absences 
-                (EmployeeId, Type, StartDate, EndDate, Notes, CreatedAt, CreatedBy)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (EmployeeId, Type, AbsenceTypeId, StartDate, EndDate, Notes, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('employeeId'),
-                data.get('type'),
+                legacy_type_value,
+                absence_type_id,
                 data.get('startDate'),
                 data.get('endDate'),
                 data.get('notes'),
@@ -4126,7 +4174,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # Log audit entry
             changes = json.dumps({
                 'employeeId': data.get('employeeId'),
-                'type': data.get('type'),
+                'absenceTypeId': absence_type_id,
+                'type': legacy_type_value,
                 'startDate': data.get('startDate'),
                 'endDate': data.get('endDate'),
                 'notes': data.get('notes')
@@ -4241,6 +4290,224 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
         except Exception as e:
             app.logger.error(f"Delete absence error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
+    # ============================================================================
+    # ABSENCE TYPE ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/absencetypes', methods=['GET'])
+    def get_absence_types():
+        """Get all absence types (system and custom)"""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT Id, Name, Code, ColorCode, IsSystemType, CreatedAt, CreatedBy, ModifiedAt, ModifiedBy
+            FROM AbsenceTypes
+            ORDER BY IsSystemType DESC, Name ASC
+        """)
+        
+        absence_types = []
+        for row in cursor.fetchall():
+            absence_types.append({
+                'id': row['Id'],
+                'name': row['Name'],
+                'code': row['Code'],
+                'colorCode': row['ColorCode'],
+                'isSystemType': bool(row['IsSystemType']),
+                'createdAt': row['CreatedAt'],
+                'createdBy': row['CreatedBy'],
+                'modifiedAt': row['ModifiedAt'],
+                'modifiedBy': row['ModifiedBy']
+            })
+        
+        conn.close()
+        return jsonify(absence_types)
+    
+    @app.route('/api/absencetypes', methods=['POST'])
+    @require_role('Admin')
+    def create_absence_type():
+        """Create new custom absence type (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            if not data.get('name') or not data.get('code'):
+                return jsonify({'error': 'Name und Code sind erforderlich'}), 400
+            
+            # Validate code doesn't conflict with system types
+            code = data.get('code').upper()
+            if code in ['U', 'AU', 'L']:
+                return jsonify({'error': 'Code U, AU und L sind für Systemtypen reserviert'}), 400
+            
+            # Set default color if not provided
+            color_code = data.get('colorCode', '#E0E0E0')
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if code already exists
+            cursor.execute("SELECT Id FROM AbsenceTypes WHERE Code = ?", (code,))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': f'Ein Abwesenheitstyp mit dem Kürzel "{code}" existiert bereits'}), 400
+            
+            cursor.execute("""
+                INSERT INTO AbsenceTypes 
+                (Name, Code, ColorCode, IsSystemType, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, 0, ?, ?)
+            """, (
+                data.get('name'),
+                code,
+                color_code,
+                datetime.utcnow().isoformat(),
+                session.get('user_email')
+            ))
+            
+            absence_type_id = cursor.lastrowid
+            
+            # Log audit entry
+            changes = json.dumps({
+                'name': data.get('name'),
+                'code': code,
+                'colorCode': color_code
+            }, ensure_ascii=False)
+            log_audit(conn, 'AbsenceType', absence_type_id, 'Created', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': absence_type_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create absence type error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/absencetypes/<int:id>', methods=['PUT'])
+    @require_role('Admin')
+    def update_absence_type(id):
+        """Update custom absence type (Admin only)"""
+        try:
+            data = request.get_json()
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if absence type exists and is not a system type
+            cursor.execute("SELECT IsSystemType, Code FROM AbsenceTypes WHERE Id = ?", (id,))
+            type_row = cursor.fetchone()
+            
+            if not type_row:
+                conn.close()
+                return jsonify({'error': 'Abwesenheitstyp nicht gefunden'}), 404
+            
+            if type_row['IsSystemType']:
+                conn.close()
+                return jsonify({'error': 'Systemtypen (U, AU, L) können nicht geändert werden'}), 400
+            
+            # Build update query dynamically based on provided fields
+            update_fields = []
+            params = []
+            
+            if data.get('name'):
+                update_fields.append("Name = ?")
+                params.append(data.get('name'))
+            
+            if data.get('code'):
+                new_code = data.get('code').upper()
+                if new_code in ['U', 'AU', 'L']:
+                    conn.close()
+                    return jsonify({'error': 'Code U, AU und L sind für Systemtypen reserviert'}), 400
+                
+                # Check if code already exists for a different type
+                cursor.execute("SELECT Id FROM AbsenceTypes WHERE Code = ? AND Id != ?", (new_code, id))
+                if cursor.fetchone():
+                    conn.close()
+                    return jsonify({'error': f'Ein Abwesenheitstyp mit dem Kürzel "{new_code}" existiert bereits'}), 400
+                
+                update_fields.append("Code = ?")
+                params.append(new_code)
+            
+            if data.get('colorCode'):
+                update_fields.append("ColorCode = ?")
+                params.append(data.get('colorCode'))
+            
+            if not update_fields:
+                conn.close()
+                return jsonify({'error': 'Keine Felder zum Aktualisieren'}), 400
+            
+            update_fields.append("ModifiedAt = ?")
+            params.append(datetime.utcnow().isoformat())
+            
+            update_fields.append("ModifiedBy = ?")
+            params.append(session.get('user_email'))
+            
+            params.append(id)
+            
+            cursor.execute(f"""
+                UPDATE AbsenceTypes 
+                SET {', '.join(update_fields)}
+                WHERE Id = ?
+            """, params)
+            
+            # Log audit entry
+            log_audit(conn, 'AbsenceType', id, 'Updated', json.dumps(data, ensure_ascii=False))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update absence type error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/absencetypes/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_absence_type(id):
+        """Delete custom absence type (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if absence type exists and is not a system type
+            cursor.execute("SELECT IsSystemType, Code, Name FROM AbsenceTypes WHERE Id = ?", (id,))
+            type_row = cursor.fetchone()
+            
+            if not type_row:
+                conn.close()
+                return jsonify({'error': 'Abwesenheitstyp nicht gefunden'}), 404
+            
+            if type_row['IsSystemType']:
+                conn.close()
+                return jsonify({'error': 'Systemtypen (U, AU, L) können nicht gelöscht werden'}), 400
+            
+            # Check if any absences use this type
+            cursor.execute("SELECT COUNT(*) FROM Absences WHERE AbsenceTypeId = ?", (id,))
+            usage_count = cursor.fetchone()[0]
+            
+            if usage_count > 0:
+                conn.close()
+                return jsonify({
+                    'error': f'Dieser Abwesenheitstyp kann nicht gelöscht werden, da er von {usage_count} Abwesenheit(en) verwendet wird'
+                }), 400
+            
+            cursor.execute("DELETE FROM AbsenceTypes WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            changes = json.dumps({
+                'code': type_row['Code'],
+                'name': type_row['Name']
+            }, ensure_ascii=False)
+            log_audit(conn, 'AbsenceType', id, 'Deleted', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete absence type error: {str(e)}")
             return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
     
     # ============================================================================

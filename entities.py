@@ -19,6 +19,9 @@ class AbsenceType(Enum):
     - L (Lehrgang) = Training / Course
     
     FORBIDDEN: "V" and "K" must NOT be used
+    
+    NOTE: This enum is kept for backward compatibility with old code.
+    New code should use AbsenceTypeDefinition from the database.
     """
     AU = "AU"  # Sick leave / Medical certificate (Arbeitsunfähigkeit)
     U = "U"   # Vacation (Urlaub)
@@ -34,6 +37,30 @@ class AbsenceType(Enum):
             "L": "Lehrgang"
         }
         return display_names.get(self.value, self.value)
+
+
+@dataclass
+class AbsenceTypeDefinition:
+    """
+    Represents a configurable absence type definition.
+    
+    This allows administrators to define custom absence types beyond
+    the standard U, AU, and L types. Custom absence types behave
+    identically to standard types in shift planning:
+    - No shifts are planned on days with absences
+    - Existing shifts are removed when absence is added
+    - Springer system is activated
+    - Understaffing notifications are triggered
+    """
+    id: int
+    name: str  # e.g., "Elternzeit", "Fortbildung", "Sonderurlaub"
+    code: str  # Short code, e.g., "EZ", "FB", "SU"
+    color_code: str  # Hex color for display in schedule, e.g., "#FF9800"
+    is_system_type: bool = False  # True for U, AU, L; False for custom types
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None
+    modified_at: Optional[datetime] = None
+    modified_by: Optional[str] = None
 
 
 class ShiftTypeCode(Enum):
@@ -159,6 +186,12 @@ class Absence:
     - TD (Day Duty)
     - Any other assignments
     
+    ALL absence types (standard and custom) behave identically in shift planning:
+    - No shifts are planned on days with absences
+    - Existing shifts are removed when absence is added
+    - Springer system is activated
+    - Understaffing notifications are triggered
+    
     Absences MUST:
     - Be visible in all views
     - Persist through re-solving
@@ -166,19 +199,46 @@ class Absence:
     """
     id: int
     employee_id: int
-    absence_type: AbsenceType
+    absence_type: AbsenceType  # Legacy: kept for backward compatibility
     start_date: date
     end_date: date
     notes: Optional[str] = None
     is_locked: bool = True  # Absences are locked by default to prevent loss
+    absence_type_id: Optional[int] = None  # New: references AbsenceTypeDefinition
+    absence_type_code: Optional[str] = None  # Cached code from AbsenceTypeDefinition
+    absence_type_name: Optional[str] = None  # Cached name from AbsenceTypeDefinition
+    absence_type_color: Optional[str] = None  # Cached color from AbsenceTypeDefinition
     
     def overlaps_date(self, check_date: date) -> bool:
         """Check if absence overlaps with given date"""
         return self.start_date <= check_date <= self.end_date
     
     def get_code(self) -> str:
-        """Get the absence code (U, AU, or L)"""
+        """
+        Get the absence code.
+        Returns code from new system if available, otherwise falls back to legacy enum.
+        """
+        if self.absence_type_code:
+            return self.absence_type_code
         return self.absence_type.value
+    
+    def get_name(self) -> str:
+        """Get the absence type name for display"""
+        if self.absence_type_name:
+            return self.absence_type_name
+        return self.absence_type.display_name
+    
+    def get_color(self) -> str:
+        """Get the absence type color for display"""
+        if self.absence_type_color:
+            return self.absence_type_color
+        # Default colors for legacy types
+        default_colors = {
+            "U": "#90EE90",   # Light green for vacation
+            "AU": "#FFB6C1",  # Light pink for sick leave
+            "L": "#87CEEB"    # Sky blue for training
+        }
+        return default_colors.get(self.absence_type.value, "#E0E0E0")
 
 
 @dataclass

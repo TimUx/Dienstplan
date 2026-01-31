@@ -2164,7 +2164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resultDiv.innerHTML = '<p class="loading">Importiere Mitarbeiter...</p>';
             
             try {
-                const response = await fetch(`${API_BASE}/employees/import/csv?conflict_resolution=${conflictResolution}`, {
+                const response = await fetch(`${API_BASE}/employees/import/csv?conflict_mode=${conflictResolution}`, {
                     method: 'POST',
                     credentials: 'include',
                     body: formData
@@ -2173,13 +2173,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
                 
                 if (response.ok) {
+                    let errorDetails = '';
+                    if (result.errors && result.errors.length > 0) {
+                        errorDetails = '<div class="error-list"><p><strong>Fehler Details:</strong></p><ul>';
+                        result.errors.forEach(err => {
+                            errorDetails += `<li>${err}</li>`;
+                        });
+                        errorDetails += '</ul></div>';
+                    }
+                    
                     resultDiv.innerHTML = `
                         <div class="success-message">
                             <p><strong>✓ Import erfolgreich!</strong></p>
-                            <p>Importiert: ${result.imported || 0}</p>
-                            <p>Übersprungen: ${result.skipped || 0}</p>
+                            <p>Gesamt im File gefunden: ${result.total || 0}</p>
+                            <p>Neu importiert: ${result.imported || 0}</p>
                             <p>Aktualisiert: ${result.updated || 0}</p>
-                            ${result.errors && result.errors.length > 0 ? `<p>Fehler: ${result.errors.length}</p>` : ''}
+                            <p>Übersprungen: ${result.skipped || 0}</p>
+                            ${errorDetails}
                         </div>
                     `;
                     
@@ -2219,7 +2229,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resultDiv.innerHTML = '<p class="loading">Importiere Teams...</p>';
             
             try {
-                const response = await fetch(`${API_BASE}/teams/import/csv?conflict_resolution=${conflictResolution}`, {
+                const response = await fetch(`${API_BASE}/teams/import/csv?conflict_mode=${conflictResolution}`, {
                     method: 'POST',
                     credentials: 'include',
                     body: formData
@@ -2228,13 +2238,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
                 
                 if (response.ok) {
+                    let errorDetails = '';
+                    if (result.errors && result.errors.length > 0) {
+                        errorDetails = '<div class="error-list"><p><strong>Fehler Details:</strong></p><ul>';
+                        result.errors.forEach(err => {
+                            errorDetails += `<li>${err}</li>`;
+                        });
+                        errorDetails += '</ul></div>';
+                    }
+                    
                     resultDiv.innerHTML = `
                         <div class="success-message">
                             <p><strong>✓ Import erfolgreich!</strong></p>
-                            <p>Importiert: ${result.imported || 0}</p>
-                            <p>Übersprungen: ${result.skipped || 0}</p>
+                            <p>Gesamt im File gefunden: ${result.total || 0}</p>
+                            <p>Neu importiert: ${result.imported || 0}</p>
                             <p>Aktualisiert: ${result.updated || 0}</p>
-                            ${result.errors && result.errors.length > 0 ? `<p>Fehler: ${result.errors.length}</p>` : ''}
+                            <p>Übersprungen: ${result.skipped || 0}</p>
+                            ${errorDetails}
                         </div>
                     `;
                     

@@ -6209,7 +6209,7 @@ async function loadAbsenceTypes() {
                 html += `<td>${escapeHtml(type.name)}</td>`;
                 html += `<td><strong>${escapeHtml(type.code)}</strong></td>`;
                 html += `<td><span style="display: inline-block; padding: 4px 12px; background: ${type.colorCode}; border: 1px solid #ccc; border-radius: 4px;">${type.colorCode}</span></td>`;
-                html += `<td>${formatDate(type.createdAt)}</td>`;
+                html += `<td>${new Date(type.createdAt).toLocaleDateString('de-DE')}</td>`;
                 html += '<td class="admin-only">';
                 html += `<button onclick="editAbsenceType(${type.id})" class="btn-secondary btn-small">✏️ Bearbeiten</button> `;
                 html += `<button onclick="deleteAbsenceType(${type.id}, '${escapeHtml(type.name).replace(/'/g, "\\'")}')" class="btn-danger btn-small">🗑️ Löschen</button>`;

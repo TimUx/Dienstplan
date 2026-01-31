@@ -2504,6 +2504,8 @@ function switchAbsenceTab(tabName) {
         loadVacationPeriods();
     } else if (tabName === 'vacation-year-approvals') {
         loadVacationYearApprovalsAbsence();
+    } else if (tabName === 'absence-types') {
+        loadAbsenceTypes();
     }
 }
 
@@ -6056,4 +6058,215 @@ async function submitResetPassword(event) {
 // Check for password reset token on page load
 document.addEventListener('DOMContentLoaded', () => {
     checkPasswordResetToken();
+});
+
+// ============================================================================
+// ABSENCE TYPE MANAGEMENT
+// ============================================================================
+
+// Load and display absence types
+async function loadAbsenceTypes() {
+    try {
+        const result = await fetch('/api/absencetypes');
+        const absenceTypes = await result.json();
+        
+        const content = document.getElementById('absence-types-content');
+        
+        if (absenceTypes.length === 0) {
+            content.innerHTML = '<p class="info">Keine Abwesenheitstypen definiert.</p>';
+            return;
+        }
+        
+        // Separate system types and custom types
+        const systemTypes = absenceTypes.filter(t => t.isSystemType);
+        const customTypes = absenceTypes.filter(t => !t.isSystemType);
+        
+        let html = '';
+        
+        // Display system types
+        if (systemTypes.length > 0) {
+            html += '<h4>Systemtypen (Standard)</h4>';
+            html += '<table class="data-table"><thead><tr>';
+            html += '<th>Bezeichnung</th>';
+            html += '<th>Kürzel</th>';
+            html += '<th>Farbe</th>';
+            html += '<th>Status</th>';
+            html += '</tr></thead><tbody>';
+            
+            systemTypes.forEach(type => {
+                html += '<tr>';
+                html += `<td>${escapeHtml(type.name)}</td>`;
+                html += `<td><strong>${escapeHtml(type.code)}</strong></td>`;
+                html += `<td><span style="display: inline-block; padding: 4px 12px; background: ${type.colorCode}; border: 1px solid #ccc; border-radius: 4px;">${type.colorCode}</span></td>`;
+                html += '<td><span style="color: #666;">Systemtyp (nicht änderbar)</span></td>';
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table><br>';
+        }
+        
+        // Display custom types
+        if (customTypes.length > 0) {
+            html += '<h4>Benutzerdefinierte Typen</h4>';
+            html += '<table class="data-table"><thead><tr>';
+            html += '<th>Bezeichnung</th>';
+            html += '<th>Kürzel</th>';
+            html += '<th>Farbe</th>';
+            html += '<th>Erstellt</th>';
+            html += '<th class="admin-only">Aktionen</th>';
+            html += '</tr></thead><tbody>';
+            
+            customTypes.forEach(type => {
+                html += '<tr>';
+                html += `<td>${escapeHtml(type.name)}</td>`;
+                html += `<td><strong>${escapeHtml(type.code)}</strong></td>`;
+                html += `<td><span style="display: inline-block; padding: 4px 12px; background: ${type.colorCode}; border: 1px solid #ccc; border-radius: 4px;">${type.colorCode}</span></td>`;
+                html += `<td>${formatDate(type.createdAt)}</td>`;
+                html += '<td class="admin-only">';
+                html += `<button onclick="editAbsenceType(${type.id})" class="btn-secondary btn-small">✏️ Bearbeiten</button> `;
+                html += `<button onclick="deleteAbsenceType(${type.id}, '${escapeHtml(type.name).replace(/'/g, "\\'")}')" class="btn-danger btn-small">🗑️ Löschen</button>`;
+                html += '</td>';
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+        } else {
+            html += '<p class="info">Keine benutzerdefinierten Abwesenheitstypen vorhanden. Klicken Sie auf "+ Abwesenheitstyp hinzufügen", um einen zu erstellen.</p>';
+        }
+        
+        content.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading absence types:', error);
+        document.getElementById('absence-types-content').innerHTML = 
+            '<p class="error">Fehler beim Laden der Abwesenheitstypen.</p>';
+    }
+}
+
+// Show absence type modal
+function showAbsenceTypeModal(id = null) {
+    const modal = document.getElementById('absenceTypeModal');
+    const form = document.getElementById('absenceTypeForm');
+    const title = document.getElementById('absenceTypeModalTitle');
+    
+    form.reset();
+    document.getElementById('absenceTypeId').value = '';
+    document.getElementById('absenceTypeColor').value = '#E0E0E0';
+    updateAbsenceTypeColorPreview('#E0E0E0');
+    
+    if (id) {
+        title.textContent = 'Abwesenheitstyp bearbeiten';
+        loadAbsenceTypeForEdit(id);
+    } else {
+        title.textContent = 'Abwesenheitstyp hinzufügen';
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Load absence type for editing
+async function loadAbsenceTypeForEdit(id) {
+    try {
+        const result = await fetch('/api/absencetypes');
+        const absenceTypes = await result.json();
+        const type = absenceTypes.find(t => t.id === id);
+        
+        if (type) {
+            document.getElementById('absenceTypeId').value = type.id;
+            document.getElementById('absenceTypeName').value = type.name;
+            document.getElementById('absenceTypeCode').value = type.code;
+            document.getElementById('absenceTypeColor').value = type.colorCode;
+            updateAbsenceTypeColorPreview(type.colorCode);
+        }
+    } catch (error) {
+        console.error('Error loading absence type:', error);
+        alert('Fehler beim Laden des Abwesenheitstyps');
+    }
+}
+
+// Close absence type modal
+function closeAbsenceTypeModal() {
+    document.getElementById('absenceTypeModal').style.display = 'none';
+}
+
+// Save absence type
+async function saveAbsenceType(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('absenceTypeId').value;
+    const data = {
+        name: document.getElementById('absenceTypeName').value,
+        code: document.getElementById('absenceTypeCode').value.toUpperCase(),
+        colorCode: document.getElementById('absenceTypeColor').value
+    };
+    
+    try {
+        const url = id ? `/api/absencetypes/${id}` : '/api/absencetypes';
+        const method = id ? 'PUT' : 'POST';
+        
+        const result = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (result.ok) {
+            closeAbsenceTypeModal();
+            loadAbsenceTypes();
+            alert(id ? 'Abwesenheitstyp erfolgreich aktualisiert!' : 'Abwesenheitstyp erfolgreich erstellt!');
+        } else {
+            const error = await result.json();
+            alert(error.error || 'Fehler beim Speichern des Abwesenheitstyps');
+        }
+    } catch (error) {
+        console.error('Error saving absence type:', error);
+        alert('Fehler beim Speichern des Abwesenheitstyps');
+    }
+}
+
+// Edit absence type
+function editAbsenceType(id) {
+    showAbsenceTypeModal(id);
+}
+
+// Delete absence type
+async function deleteAbsenceType(id, name) {
+    if (!confirm(`Möchten Sie den Abwesenheitstyp "${name}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const result = await fetch(`/api/absencetypes/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (result.ok) {
+            loadAbsenceTypes();
+            alert('Abwesenheitstyp erfolgreich gelöscht!');
+        } else {
+            const error = await result.json();
+            alert(error.error || 'Fehler beim Löschen des Abwesenheitstyps');
+        }
+    } catch (error) {
+        console.error('Error deleting absence type:', error);
+        alert('Fehler beim Löschen des Abwesenheitstyps');
+    }
+}
+
+// Update color preview
+function updateAbsenceTypeColorPreview(color) {
+    const preview = document.getElementById('absenceTypeColorPreview');
+    if (preview) {
+        preview.style.backgroundColor = color;
+    }
+}
+
+// Add color picker change listener
+document.addEventListener('DOMContentLoaded', () => {
+    const colorInput = document.getElementById('absenceTypeColor');
+    if (colorInput) {
+        colorInput.addEventListener('input', (e) => {
+            updateAbsenceTypeColorPreview(e.target.value);
+        });
+    }
 });

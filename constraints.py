@@ -1191,6 +1191,98 @@ def add_weekend_shift_consistency_constraints(
     return weekend_consistency_penalties
 
 
+def add_team_night_shift_consistency_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str]
+):
+    """
+    SOFT CONSTRAINT: Strongly discourage cross-team night shifts when employee's team is not on night shift.
+    
+    Requirement from practical examples:
+    - Night shifts should preferably stay within teams that are on night shift rotation
+    - Example violations:
+      * Anna Schmidt (Team Alpha, week with late shift) worked night shifts cross-team
+      * Should have been assigned to Maria Lange or Nicole Schröder (Team Gamma, on night shift)
+    
+    Implementation:
+    - For each employee working a cross-team night shift, check if their own team has night shift that week
+    - If own team does NOT have night shift but employee works night shift cross-team, apply penalty
+    - Very high penalty (600 points) to strongly discourage this pattern
+    
+    Returns:
+        List of penalty variables for cross-team night shift violations
+    """
+    night_team_consistency_penalties = []
+    
+    # Very high penalty for cross-team night shifts when own team is not on night shift
+    NIGHT_TEAM_PENALTY = 600
+    
+    # Pre-compute employee-to-team mapping
+    emp_to_team = {}
+    for emp in employees:
+        if emp.team_id:
+            for team in teams:
+                if team.id == emp.team_id:
+                    emp_to_team[emp.id] = team
+                    break
+    
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        team = emp_to_team.get(emp.id)
+        if not team:
+            continue
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # Check if employee's team has night shift this week
+            team_has_night = None
+            if (team.id, week_idx, 'N') in team_shift:
+                team_has_night = team_shift[(team.id, week_idx, 'N')]
+            
+            if not team_has_night:
+                continue  # Skip if we can't determine team's night shift status
+            
+            # Check if employee works cross-team night shifts this week
+            for d in week_dates:
+                cross_team_night_vars = []
+                
+                # Check weekday cross-team night shift
+                if d.weekday() < 5 and (emp.id, d, 'N') in employee_cross_team_shift:
+                    cross_team_night_vars.append(employee_cross_team_shift[(emp.id, d, 'N')])
+                
+                # Check weekend cross-team night shift
+                if d.weekday() >= 5 and (emp.id, d, 'N') in employee_cross_team_weekend:
+                    cross_team_night_vars.append(employee_cross_team_weekend[(emp.id, d, 'N')])
+                
+                if not cross_team_night_vars:
+                    continue
+                
+                # Check if employee works cross-team night shift when own team is NOT on night shift
+                # Violation = (employee works cross-team night shift) AND (team does NOT have night shift)
+                for cross_team_night in cross_team_night_vars:
+                    # Create violation: cross_team_night=1 AND team_has_night=0
+                    violation = model.NewBoolVar(f"night_team_viol_{emp.id}_{d}")
+                    model.AddBoolAnd([cross_team_night, team_has_night.Not()]).OnlyEnforceIf(violation)
+                    model.AddBoolOr([cross_team_night.Not(), team_has_night]).OnlyEnforceIf(violation.Not())
+                    
+                    # Add penalty
+                    penalty = model.NewIntVar(0, NIGHT_TEAM_PENALTY, f"night_team_pen_{emp.id}_{d}")
+                    model.AddMultiplicationEquality(penalty, [violation, NIGHT_TEAM_PENALTY])
+                    night_team_consistency_penalties.append(penalty)
+    
+    return night_team_consistency_penalties
+
+
 def add_consecutive_shifts_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],

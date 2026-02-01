@@ -20,7 +20,8 @@ from constraints import (
     add_weekly_available_employee_constraint,
     add_fairness_objectives,
     add_weekly_shift_type_limit_constraints,
-    add_weekend_shift_consistency_constraints
+    add_weekend_shift_consistency_constraints,
+    add_team_night_shift_consistency_constraints
 )
 
 
@@ -127,6 +128,13 @@ class ShiftPlanningSolver:
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, teams, dates, weeks, shift_codes)
         
+        # Team night shift consistency constraint (discourage cross-team night shifts)
+        print("  - Team night shift consistency constraints (night shifts stay in night shift teams)")
+        night_team_consistency_penalties = add_team_night_shift_consistency_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, teams, dates, weeks, shift_codes)
+        
         # Consecutive shifts constraint (re-enabled as SOFT constraint per @TimUx)
         # Limits consecutive working days and consecutive night shifts
         # Violations are penalized but allowed for feasibility
@@ -216,6 +224,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(weekend_consistency_penalties)} weekend consistency penalties...")
             for penalty_var in weekend_consistency_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (300 per mismatch)
+        
+        # Add team night shift consistency penalties (strongly discourage cross-team night shifts)
+        if night_team_consistency_penalties:
+            print(f"  Adding {len(night_team_consistency_penalties)} team night shift consistency penalties...")
+            for penalty_var in night_team_consistency_penalties:
+                objective_terms.append(penalty_var)  # Already weighted (600 per violation)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # These are shortages, so we want to minimize them directly

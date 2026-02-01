@@ -1116,19 +1116,21 @@ def add_minimum_consecutive_weekday_shifts_constraints(
     """
     SOFT CONSTRAINT: Enforce minimum 2 consecutive days for same shift type during weekdays.
     
-    Requirements:
-    - During weekdays (Mon-Fri), if an employee works a specific shift type, 
-      they must work it for at least 2 consecutive days
+    Requirements (from problem statement):
+    - During weekdays (Mon-Fri), employees must work at least 2 consecutive days 
+      with the same shift type
+    - Having a single day with one shift type surrounded by other shifts or free days is not allowed
     - Weekends (Sat-Sun) can have single-day shifts (exceptions allowed)
     - This prevents patterns like:
       * F on one day, N on next day, S on third day (3 different shifts in 3 days)
-      * F-F-N-N-F (single F isolated between N shifts)
+      * N-N-F-N-N (single F isolated between N shifts)
       * S-S-N-S-S (single N isolated between S shifts)
     
     Implementation:
-    - For each sequence of working days during weekdays, check that each shift type
-      appears for at least 2 consecutive days
-    - Penalize single isolated shift days during weekdays
+    - For each pair of consecutive weekdays where an employee works:
+      * If they work different shift types on consecutive days, apply penalty
+      * This enforces that shift types must be grouped into blocks of at least 2 days
+    - Also detect single isolated days (X-Y-X pattern) for stronger enforcement
     - Weekend days (Sat-Sun) are excluded from this check
     
     Returns:
@@ -1136,8 +1138,10 @@ def add_minimum_consecutive_weekday_shifts_constraints(
     """
     min_consecutive_penalties = []
     
-    # High penalty for single isolated shift days during weekdays
-    SINGLE_DAY_PENALTY = 2000  # Very high penalty to strongly enforce this rule
+    # High penalty for shift type changes on consecutive weekdays
+    SHIFT_CHANGE_PENALTY = 1500  # Very high penalty to enforce minimum 2 consecutive days
+    # Even higher penalty for single isolated days
+    SINGLE_DAY_PENALTY = 2000  # Very high penalty for clear violations
     
     # Pre-compute date-to-week mapping
     date_to_week = {}
@@ -1214,8 +1218,52 @@ def add_minimum_consecutive_weekday_shifts_constraints(
         if not emp.team_id:
             continue
         
-        # Check across week boundaries for continuous sequences
-        # We need to look at 3-day windows to detect single isolated days
+        # PART 1: Check for shift type changes on consecutive weekdays
+        # If employee works on two consecutive weekdays, they should work the same shift
+        for i in range(len(dates) - 1):
+            day1 = dates[i]
+            day2 = dates[i + 1]
+            
+            # Only check if both days are weekdays
+            if day1.weekday() >= 5 or day2.weekday() >= 5:
+                continue
+            
+            # Get shift variables for both days
+            shifts1 = get_shift_vars_for_day(emp.id, day1)
+            shifts2 = get_shift_vars_for_day(emp.id, day2)
+            
+            # Check if employee works different shift types on consecutive days
+            for shift_A in shift_codes:
+                for shift_B in shift_codes:
+                    if shift_A == shift_B:
+                        continue
+                    
+                    # Check if this pattern is possible
+                    if shift_A not in shifts1 or shift_B not in shifts2:
+                        continue
+                    
+                    # Create violation: employee works shift_A on day1 AND shift_B on day2
+                    all_vars = []
+                    all_vars.extend(shifts1[shift_A])
+                    all_vars.extend(shifts2[shift_B])
+                    
+                    # Create violation indicator
+                    violation_var = model.NewBoolVar(
+                        f"consec_change_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{shift_A}_{shift_B}"
+                    )
+                    model.AddBoolAnd(all_vars).OnlyEnforceIf(violation_var)
+                    model.AddBoolOr([v.Not() for v in all_vars]).OnlyEnforceIf(violation_var.Not())
+                    
+                    # Add penalty
+                    penalty_var = model.NewIntVar(
+                        0, SHIFT_CHANGE_PENALTY,
+                        f"consec_change_pen_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{shift_A}_{shift_B}"
+                    )
+                    model.Add(penalty_var == violation_var * SHIFT_CHANGE_PENALTY)
+                    min_consecutive_penalties.append(penalty_var)
+        
+        # PART 2: Check for single isolated days in 3-day windows (stronger penalty)
+        # Pattern: shift_A on day1, shift_B on day2, shift_A on day3 (day2 is isolated)
         for i in range(len(dates) - 2):
             day1 = dates[i]
             day2 = dates[i + 1]

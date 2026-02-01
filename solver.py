@@ -225,7 +225,7 @@ class ShiftPlanningSolver:
         if shift_grouping_penalties:
             print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
             for penalty_var in shift_grouping_penalties:
-                objective_terms.append(penalty_var)  # Already weighted (500 per isolation)
+                objective_terms.append(penalty_var)  # Already weighted (1000 per isolation)
         
         # Add weekly shift type limit penalties (strongly discourage > 2 shift types per week)
         if weekly_shift_type_penalties:

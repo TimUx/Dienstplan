@@ -1093,7 +1093,8 @@ def add_shift_sequence_grouping_constraints(
                                         0, ISOLATION_PENALTY,
                                         f"seq_group_pen_{emp.id}_w{week_idx}_{day_A1.day}_{day_B.day}_{day_A2.day}_{shift_A}_{shift_B}"
                                     )
-                                    model.AddMultiplicationEquality(penalty_var, [violation_var, ISOLATION_PENALTY])
+                                    # penalty_var = violation_var * ISOLATION_PENALTY
+                                    model.Add(penalty_var == violation_var * ISOLATION_PENALTY)
                                     grouping_penalties.append(penalty_var)
     
     return grouping_penalties

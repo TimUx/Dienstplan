@@ -1224,8 +1224,13 @@ def add_minimum_consecutive_weekday_shifts_constraints(
             day1 = dates[i]
             day2 = dates[i + 1]
             
-            # Only check if both days are weekdays
+            # Only check if BOTH days are weekdays (Mon-Fri)
+            # This correctly excludes weekend transitions (Fri->Sat, Sat->Sun, Sun->Mon)
             if day1.weekday() >= 5 or day2.weekday() >= 5:
+                continue
+            
+            # Additionally check they are actually consecutive (should be true in dates list)
+            if (day2 - day1).days != 1:
                 continue
             
             # Get shift variables for both days

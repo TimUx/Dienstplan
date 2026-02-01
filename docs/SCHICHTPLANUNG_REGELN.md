@@ -541,9 +541,10 @@ für jeden Mitarbeiter:
 
 **❌ Verstöße (nicht erlaubt):**
 ```
-Peter Weber: Sa F | So N | Mo S  → 3 verschiedene Schichten an 3 Tagen
-Andreas Wolf: Mo F | Di F | Mi N | Do N | Fr F  → Einzelnes F am Ende isoliert
-Julia Becker: Mo S | Di S | Mi N | Do S | Fr S  → Einzelnes N isoliert
+Peter Weber: Mo F | Di N | Mi S  → 3 verschiedene Schichten an 3 Werktagen
+Andreas Wolf: Mo F | Di F | Mi N | Do N | Fr N  → Nur 2 F's am Anfang, dann Wechsel zu N
+Julia Becker: Mo S | Di S | Mi N | Do S | Fr S  → Einzelnes N isoliert zwischen S
+Robert Franke: Mo S | Di S | Mi F | Do S | Fr S  → Einzelnes F isoliert zwischen S
 ```
 
 **✓ Korrekt:**

@@ -935,18 +935,21 @@ def add_shift_sequence_grouping_constraints(
     teams: List[Team] = None
 ):
     """
-    SOFT CONSTRAINT: Prevent isolated shift types in sequences.
+    SOFT CONSTRAINT: Prevent isolated shift types in sequences of working days.
     
     Requirements:
     - When an employee works multiple shift types in a period, they should be grouped
-    - No single days of one shift type isolated between days of another shift type
-    - Pattern A-A-B-A-A is invalid (B is isolated)
-    - Pattern A-A-A-B-B-B is valid (shifts grouped together)
+    - No single days or small groups of one shift type isolated between days of another shift type
+    - Examples (where "-" represents free day):
+      * INVALID: S S - F S S (working days: S S F S S - F isolated in middle)
+      * INVALID: S - F S S S S (working days: S F S S S S - F isolated at beginning)
+      * VALID: F F F S S S (shifts properly grouped)
+      * VALID: S S S - - F F F (shifts properly grouped, free days don't matter)
     
     Implementation:
-    - For each sequence of consecutive working days, check shift type grouping
-    - Penalize patterns where shift types are not properly grouped
-    - High penalty to strongly discourage violations
+    - Check each week for shift type patterns
+    - Penalize patterns where a shift type appears, then another shift type, then the first type again
+    - This enforces grouping: all days of type A should come before or after all days of type B
     
     Returns:
         List of penalty variables for shift sequence grouping violations
@@ -954,7 +957,7 @@ def add_shift_sequence_grouping_constraints(
     grouping_penalties = []
     
     # High penalty for isolated shift types
-    ISOLATION_PENALTY = 500
+    ISOLATION_PENALTY = 1000  # Increased from 500 to strongly discourage
     
     # Helper to get shift type for a specific day
     def get_shift_type_for_day(emp_id, d):
@@ -1036,75 +1039,62 @@ def add_shift_sequence_grouping_constraints(
         
         return result
     
+    # Check patterns within each week (most common case)
     for emp in employees:
         if not emp.team_id:
             continue
         
-        # Check sequences of 5 consecutive working days (minimum to detect pattern A-A-B-A-A)
-        for i in range(len(dates) - 4):
-            days = [dates[i + j] for j in range(5)]
+        for week_idx, week_dates in enumerate(weeks):
+            # Get shift assignments for each day in the week
+            week_shift_data = []
+            for d in week_dates:
+                shift_data = get_shift_type_for_day(emp.id, d)
+                week_shift_data.append((d, shift_data))
             
-            # Get possible shifts for all five days
-            shift_data = [get_shift_type_for_day(emp.id, d) for d in days]
+            # Now check for problematic patterns within this week
+            # Pattern to detect: shift_A appears, then shift_B appears, then shift_A appears again
+            # This means shifts are not properly grouped
             
-            # Check for pattern: shift_type_A on days 0,1 and 3,4, but shift_type_B on day 2
-            # This indicates A-A-B-A-A pattern (isolated B in middle)
+            # For each pair of shift types
             for shift_A in shift_codes:
                 for shift_B in shift_codes:
                     if shift_A == shift_B:
                         continue
                     
-                    # Check if we have the problematic pattern:
-                    # Day 0: shift_A, Day 1: shift_A, Day 2: shift_B, Day 3: shift_A, Day 4: shift_A
-                    if (shift_A in shift_data[0] and shift_A in shift_data[1] and 
-                        shift_B in shift_data[2] and 
-                        shift_A in shift_data[3] and shift_A in shift_data[4]):
-                        
-                        # Create constraint: penalize if this pattern occurs
-                        all_active = []
-                        all_active.extend(shift_data[0][shift_A])
-                        all_active.extend(shift_data[1][shift_A])
-                        all_active.extend(shift_data[2][shift_B])
-                        all_active.extend(shift_data[3][shift_A])
-                        all_active.extend(shift_data[4][shift_A])
-                        
-                        # Create boolean: is_isolated = (all variables are 1)
-                        is_isolated = model.NewBoolVar(f"isolated_{emp.id}_{i}_{shift_A}_{shift_B}")
-                        model.AddBoolAnd(all_active).OnlyEnforceIf(is_isolated)
-                        model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(is_isolated.Not())
-                        
-                        # Add penalty
-                        penalty_var = model.NewIntVar(0, ISOLATION_PENALTY, f"isolated_pen_{emp.id}_{i}_{shift_A}_{shift_B}")
-                        model.AddMultiplicationEquality(penalty_var, [is_isolated, ISOLATION_PENALTY])
-                        grouping_penalties.append(penalty_var)
-            
-            # Also check for 3-day pattern: A-B-A (isolated B in middle)
-            if i <= len(dates) - 3:
-                days_3 = [dates[i + j] for j in range(3)]
-                shift_data_3 = [get_shift_type_for_day(emp.id, d) for d in days_3]
-                
-                for shift_A in shift_codes:
-                    for shift_B in shift_codes:
-                        if shift_A == shift_B:
-                            continue
-                        
-                        # Check pattern: Day 0: shift_A, Day 1: shift_B, Day 2: shift_A
-                        if (shift_A in shift_data_3[0] and 
-                            shift_B in shift_data_3[1] and 
-                            shift_A in shift_data_3[2]):
-                            
-                            all_active = []
-                            all_active.extend(shift_data_3[0][shift_A])
-                            all_active.extend(shift_data_3[1][shift_B])
-                            all_active.extend(shift_data_3[2][shift_A])
-                            
-                            is_isolated_3 = model.NewBoolVar(f"isolated3_{emp.id}_{i}_{shift_A}_{shift_B}")
-                            model.AddBoolAnd(all_active).OnlyEnforceIf(is_isolated_3)
-                            model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(is_isolated_3.Not())
-                            
-                            penalty_var = model.NewIntVar(0, ISOLATION_PENALTY, f"isolated3_pen_{emp.id}_{i}_{shift_A}_{shift_B}")
-                            model.AddMultiplicationEquality(penalty_var, [is_isolated_3, ISOLATION_PENALTY])
-                            grouping_penalties.append(penalty_var)
+                    # Find all days where each shift could be assigned
+                    days_with_A = [(d, data[shift_A]) for d, data in week_shift_data if shift_A in data]
+                    days_with_B = [(d, data[shift_B]) for d, data in week_shift_data if shift_B in data]
+                    
+                    if len(days_with_A) < 2 or len(days_with_B) < 1:
+                        continue  # Not enough days for a violation pattern
+                    
+                    # Check if there's a day with shift_B that falls between two days with shift_A
+                    for i, (day_A1, vars_A1) in enumerate(days_with_A[:-1]):
+                        for day_B, vars_B in days_with_B:
+                            for day_A2, vars_A2 in days_with_A[i+1:]:
+                                # Check if day_B is between day_A1 and day_A2
+                                if day_A1 < day_B < day_A2:
+                                    # This is a potential violation: A ... B ... A pattern
+                                    # Create constraint: penalize if A1, B, and A2 all occur
+                                    all_active = []
+                                    all_active.extend(vars_A1)
+                                    all_active.extend(vars_B)
+                                    all_active.extend(vars_A2)
+                                    
+                                    # Create boolean: is_violation = (all variables are 1)
+                                    violation_var = model.NewBoolVar(
+                                        f"seq_group_{emp.id}_w{week_idx}_{day_A1.day}_{day_B.day}_{day_A2.day}_{shift_A}_{shift_B}"
+                                    )
+                                    model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
+                                    model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
+                                    
+                                    # Add penalty
+                                    penalty_var = model.NewIntVar(
+                                        0, ISOLATION_PENALTY,
+                                        f"seq_group_pen_{emp.id}_w{week_idx}_{day_A1.day}_{day_B.day}_{day_A2.day}_{shift_A}_{shift_B}"
+                                    )
+                                    model.AddMultiplicationEquality(penalty_var, [violation_var, ISOLATION_PENALTY])
+                                    grouping_penalties.append(penalty_var)
     
     return grouping_penalties
 

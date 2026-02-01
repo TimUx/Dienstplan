@@ -463,12 +463,14 @@ function displayWeekView(data, employees) {
     // Group assignments by team and employee, including absences
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
-    // Get all dates in the range (from backend, already aligned to Monday-Sunday)
-    const dates = getUniqueDates(data.assignments);
-    
-    // If no assignments yet, generate dates from startDate to endDate
-    if (dates.length === 0 && data.startDate && data.endDate) {
-        dates.push(...generateDateRange(data.startDate, data.endDate));
+    // Always generate all dates in the range from startDate to endDate
+    // This ensures all days are shown regardless of whether there are shifts/absences
+    let dates = [];
+    if (data.startDate && data.endDate) {
+        dates = generateDateRange(data.startDate, data.endDate);
+    } else {
+        // Fallback: get unique dates from assignments
+        dates = getUniqueDates(data.assignments);
     }
     
     dates.sort();
@@ -583,12 +585,14 @@ function displayMonthView(data, employees) {
     // Group assignments by team and employee, including absences
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
-    // Get all dates and organize by calendar weeks
-    const dates = getUniqueDates(data.assignments);
-    
-    // If no assignments yet, generate dates from startDate to endDate
-    if (dates.length === 0 && data.startDate && data.endDate) {
-        dates.push(...generateDateRange(data.startDate, data.endDate));
+    // Always generate all dates in the range from startDate to endDate
+    // This ensures all days are shown regardless of whether there are shifts/absences
+    let dates = [];
+    if (data.startDate && data.endDate) {
+        dates = generateDateRange(data.startDate, data.endDate);
+    } else {
+        // Fallback: get unique dates from assignments
+        dates = getUniqueDates(data.assignments);
     }
     
     dates.sort();
@@ -714,12 +718,14 @@ function displayYearView(data, employees) {
     // Group assignments by team and employee, including absences
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
-    // Get all dates and organize by months and weeks
-    const dates = getUniqueDates(data.assignments);
-    
-    // If no assignments yet, generate dates from startDate to endDate
-    if (dates.length === 0 && data.startDate && data.endDate) {
-        dates.push(...generateDateRange(data.startDate, data.endDate));
+    // Always generate all dates in the range from startDate to endDate
+    // This ensures all days are shown regardless of whether there are shifts/absences
+    let dates = [];
+    if (data.startDate && data.endDate) {
+        dates = generateDateRange(data.startDate, data.endDate);
+    } else {
+        // Fallback: get unique dates from assignments
+        dates = getUniqueDates(data.assignments);
     }
     
     dates.sort();

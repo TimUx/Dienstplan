@@ -19,6 +19,11 @@ python-dateutil>=2.8.2
 # Allow NumPy 2.x to avoid conflicts with other packages like opencv
 numpy>=1.26.0
 
+# Pandas performance dependencies (indirect dependency via ortools)
+# Explicitly specify versions to avoid pandas warnings
+numexpr>=2.8.4
+bottleneck>=1.3.6
+
 # Database (already using SQLite which is built-in to Python)
 # No additional package needed for SQLite3
 

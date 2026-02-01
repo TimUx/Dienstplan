@@ -294,6 +294,9 @@ def ensure_absence_types_table(db_path: str):
     cursor = conn.cursor()
     
     try:
+        # Use IMMEDIATE lock to prevent race conditions if multiple instances start simultaneously
+        cursor.execute("BEGIN IMMEDIATE")
+        
         # Check if AbsenceTypes table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='AbsenceTypes'")
         table_exists = cursor.fetchone() is not None
@@ -332,18 +335,21 @@ def ensure_absence_types_table(db_path: str):
             print("[✓] AbsenceTypes table created")
         
         # Check if default absence types exist
-        cursor.execute("SELECT COUNT(*) FROM AbsenceTypes WHERE IsSystemType = 1")
-        system_types_count = cursor.fetchone()[0]
+        # Standard absence types that must always exist
+        standard_types = [
+            ('Urlaub', 'U', '#90EE90', 1),  # Light green for vacation
+            ('Krank / AU', 'AU', '#FFB6C1', 1),  # Light pink for sick leave
+            ('Lehrgang', 'L', '#87CEEB', 1)  # Sky blue for training
+        ]
         
-        if system_types_count < 3:
+        # Check if any standard types are missing
+        cursor.execute("SELECT COUNT(*) FROM AbsenceTypes WHERE Code IN ('U', 'AU', 'L') AND IsSystemType = 1")
+        existing_standard_count = cursor.fetchone()[0]
+        
+        if existing_standard_count < len(standard_types):
             print("[i] Initializing default absence types...")
-            # Insert standard absence types
-            standard_types = [
-                ('Urlaub', 'U', '#90EE90', 1),  # Light green for vacation
-                ('Krank / AU', 'AU', '#FFB6C1', 1),  # Light pink for sick leave
-                ('Lehrgang', 'L', '#87CEEB', 1)  # Sky blue for training
-            ]
             
+            # Insert standard absence types (INSERT OR IGNORE handles duplicates safely)
             cursor.executemany("""
                 INSERT OR IGNORE INTO AbsenceTypes (Name, Code, ColorCode, IsSystemType, CreatedBy)
                 VALUES (?, ?, ?, ?, 'system')
@@ -355,6 +361,8 @@ def ensure_absence_types_table(db_path: str):
     except Exception as e:
         conn.rollback()
         print(f"[!] Error ensuring AbsenceTypes table: {e}", file=sys.stderr)
+        print("[!] Possible causes: database permissions, disk space, or database corruption", file=sys.stderr)
+        print("[!] Please check database file permissions and disk space", file=sys.stderr)
         raise
     finally:
         conn.close()

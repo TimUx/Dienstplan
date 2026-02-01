@@ -339,8 +339,9 @@ def validate_minimum_consecutive_weekday_shifts(
                 
                 # Check for shift type change on consecutive weekdays
                 if shift1 != shift2:
-                    # Check if this is part of a longer sequence (not an isolated single day)
-                    # Look ahead and behind to see if it's truly isolated
+                    # Determine if either day appears as a single-day occurrence of its shift type
+                    # (not part of a longer sequence of the same shift)
+                    # We warn if either day1 or day2 is an isolated single-day shift
                     is_isolated_day1 = True
                     is_isolated_day2 = True
                     

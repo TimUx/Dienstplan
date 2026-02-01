@@ -1280,7 +1280,8 @@ def add_minimum_consecutive_weekday_shifts_constraints(
             shifts3 = get_shift_vars_for_day(emp.id, day3)
             
             # Check for pattern: shift_A on day1, shift_B on day2, shift_A on day3
-            # This means shift_B is isolated (single day)
+            # This is the A-B-A pattern where shift_B is sandwiched between two occurrences of shift_A
+            # Shift_B is isolated (appears only on a single day between other shifts)
             for shift_A in shift_codes:
                 for shift_B in shift_codes:
                     if shift_A == shift_B:

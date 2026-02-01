@@ -462,8 +462,6 @@ def add_staffing_constraints(
                         priority_violation = model.NewIntVar(0, 20, f"priority_violation_{shift}_{d}_weekend")
                         model.AddMinEquality(priority_violation, [unfilled_capacity, cross_team_count])
                         team_priority_violations.append(priority_violation)
-                    model.Add(overstaffing >= 0)
-                    weekend_overstaffing_penalties.append(overstaffing)
             else:
                 # WEEKDAY: Count team members + cross-team workers who work this shift
                 # A member works this shift if:

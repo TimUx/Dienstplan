@@ -344,18 +344,20 @@ def validate_minimum_consecutive_weekday_shifts(
                     is_isolated_day1 = True
                     is_isolated_day2 = True
                     
-                    # Check if day1 has same shift on previous day
+                    # Check if day1 has same shift on previous WEEKDAY
                     if i > 0:
                         prev_assign = emp_assignments[i - 1]
-                        if (assign1.date - prev_assign.date).days == 1:
+                        # Only consider if previous day is also a weekday and consecutive
+                        if (assign1.date - prev_assign.date).days == 1 and prev_assign.date.weekday() < 5:
                             prev_shift = get_shift_type_by_id(prev_assign.shift_type_id).code
                             if prev_shift == shift1:
                                 is_isolated_day1 = False
                     
-                    # Check if day2 has same shift on next day
+                    # Check if day2 has same shift on next WEEKDAY
                     if i + 2 < len(emp_assignments):
                         next_assign = emp_assignments[i + 2]
-                        if (next_assign.date - assign2.date).days == 1:
+                        # Only consider if next day is also a weekday and consecutive
+                        if (next_assign.date - assign2.date).days == 1 and next_assign.date.weekday() < 5:
                             next_shift = get_shift_type_by_id(next_assign.shift_type_id).code
                             if next_shift == shift2:
                                 is_isolated_day2 = False

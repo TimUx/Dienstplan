@@ -1229,10 +1229,6 @@ def add_minimum_consecutive_weekday_shifts_constraints(
             if day1.weekday() >= 5 or day2.weekday() >= 5:
                 continue
             
-            # Additionally check they are actually consecutive (should be true in dates list)
-            if (day2 - day1).days != 1:
-                continue
-            
             # Get shift variables for both days
             shifts1 = get_shift_vars_for_day(emp.id, day1)
             shifts2 = get_shift_vars_for_day(emp.id, day2)
@@ -1317,44 +1313,6 @@ def add_minimum_consecutive_weekday_shifts_constraints(
                     )
                     model.Add(penalty_var == violation_var * SINGLE_DAY_PENALTY)
                     min_consecutive_penalties.append(penalty_var)
-            
-            # Also check for pattern: shift_A on day2 isolated (different shifts on day1 and day3)
-            # This catches cases where day2 is a single isolated shift
-            for shift_A in shift_codes:
-                if shift_A not in shifts2:
-                    continue
-                
-                # Check if there's a shift on day1 and day3 that are different from shift_A
-                for shift_B in shift_codes:
-                    if shift_A == shift_B:
-                        continue
-                    
-                    for shift_C in shift_codes:
-                        if shift_A == shift_C:
-                            continue
-                        
-                        if shift_B not in shifts1 or shift_C not in shifts3:
-                            continue
-                        
-                        # Create violation: shift_B on day1, shift_A on day2, shift_C on day3
-                        # (shift_A is isolated in the middle)
-                        all_vars = []
-                        all_vars.extend(shifts1[shift_B])
-                        all_vars.extend(shifts2[shift_A])
-                        all_vars.extend(shifts3[shift_C])
-                        
-                        violation_var = model.NewBoolVar(
-                            f"min_consec_iso_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{day3.isoformat()}_{shift_B}_{shift_A}_{shift_C}"
-                        )
-                        model.AddBoolAnd(all_vars).OnlyEnforceIf(violation_var)
-                        model.AddBoolOr([v.Not() for v in all_vars]).OnlyEnforceIf(violation_var.Not())
-                        
-                        penalty_var = model.NewIntVar(
-                            0, SINGLE_DAY_PENALTY,
-                            f"min_consec_iso_pen_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{day3.isoformat()}_{shift_B}_{shift_A}_{shift_C}"
-                        )
-                        model.Add(penalty_var == violation_var * SINGLE_DAY_PENALTY)
-                        min_consecutive_penalties.append(penalty_var)
     
     return min_consecutive_penalties
 

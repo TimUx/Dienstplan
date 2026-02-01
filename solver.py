@@ -92,7 +92,8 @@ class ShiftPlanningSolver:
         # STAFFING AND WORKING CONDITIONS
         print("  - Staffing requirements (min hard / max soft, including cross-team)")
         # NEW: Collect separate penalties for weekday/weekend overstaffing and weekday understaffing by shift
-        weekday_overstaffing, weekend_overstaffing, weekday_understaffing_by_shift = add_staffing_constraints(
+        # Also collect team priority violations (cross-team usage when team has capacity)
+        weekday_overstaffing, weekend_overstaffing, weekday_understaffing_by_shift, team_priority_violations = add_staffing_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
             employees, teams, dates, weeks, shift_codes, shift_types)
@@ -226,6 +227,14 @@ class ShiftPlanningSolver:
                 print(f"  Adding {len(understaffing_list)} {shift_name} ({shift_code}) weekday understaffing penalties (weight {weight}x)...")
                 for understaff_var in understaffing_list:
                     objective_terms.append(understaff_var * weight)
+        
+        # NEW: Add team priority violation penalties
+        # Strongly penalize using cross-team workers when own team has unfilled capacity
+        # Weight 10x to ensure team members are preferred over cross-team workers
+        if team_priority_violations:
+            print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight 10x)...")
+            for violation_var in team_priority_violations:
+                objective_terms.append(violation_var * 10)
         
         # NEW: Add shift type preference objective to directly reward F > S > N
         # Count total staff assigned to each shift and apply inverse priority weights

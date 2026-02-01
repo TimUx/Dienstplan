@@ -22,7 +22,8 @@ from constraints import (
     add_weekly_shift_type_limit_constraints,
     add_weekend_shift_consistency_constraints,
     add_team_night_shift_consistency_constraints,
-    add_shift_sequence_grouping_constraints
+    add_shift_sequence_grouping_constraints,
+    add_minimum_consecutive_weekday_shifts_constraints
 )
 
 
@@ -118,6 +119,13 @@ class ShiftPlanningSolver:
         # Shift sequence grouping constraint (prevent isolated shift types)
         print("  - Shift sequence grouping constraints (prevent isolated shift types like S-S-F-S-S)")
         shift_grouping_penalties = add_shift_sequence_grouping_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, dates, weeks, shift_codes, teams)
+        
+        # Minimum consecutive weekday shifts constraint (enforce at least 2 consecutive days for same shift during weekdays)
+        print("  - Minimum consecutive weekday shifts constraints (min 2 consecutive days for same shift Mon-Fri)")
+        min_consecutive_weekday_penalties = add_minimum_consecutive_weekday_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, dates, weeks, shift_codes, teams)
@@ -226,6 +234,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
             for penalty_var in shift_grouping_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (1000 per isolation)
+        
+        # Add minimum consecutive weekday shifts penalties (strongly enforce min 2 consecutive days during weekdays)
+        if min_consecutive_weekday_penalties:
+            print(f"  Adding {len(min_consecutive_weekday_penalties)} minimum consecutive weekday shift penalties...")
+            for penalty_var in min_consecutive_weekday_penalties:
+                objective_terms.append(penalty_var)  # Already weighted (2000 per single-day violation)
         
         # Add weekly shift type limit penalties (strongly discourage > 2 shift types per week)
         if weekly_shift_type_penalties:

@@ -4389,7 +4389,7 @@ async function deleteShiftAssignment() {
 // Quick Entry Modal Functions
 async function showQuickEntryModal(employeeId, dateStr) {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen.');
+        alert('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen. Diese Funktion ist nur für Administratoren und Disponenten verfügbar.');
         return;
     }
 
@@ -4554,10 +4554,11 @@ async function saveQuickEntry() {
                 return;
             }
 
+            // Note: This creates a single-day absence by setting startDate = endDate
             const absenceData = {
                 employeeId: employeeId,
                 startDate: dateValue,
-                endDate: dateValue,  // Single day absence
+                endDate: dateValue,
                 absenceTypeId: parseInt(absenceTypeId),
                 notes: notes || null
             };

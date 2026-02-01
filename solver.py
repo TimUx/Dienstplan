@@ -21,7 +21,8 @@ from constraints import (
     add_fairness_objectives,
     add_weekly_shift_type_limit_constraints,
     add_weekend_shift_consistency_constraints,
-    add_team_night_shift_consistency_constraints
+    add_team_night_shift_consistency_constraints,
+    add_shift_sequence_grouping_constraints
 )
 
 
@@ -110,6 +111,13 @@ class ShiftPlanningSolver:
         print("  - Shift stability constraints (prevent rapid shift changes like N→S→N)")
         from constraints import add_shift_stability_constraints
         shift_hopping_penalties = add_shift_stability_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, dates, weeks, shift_codes, teams)
+        
+        # Shift sequence grouping constraint (prevent isolated shift types)
+        print("  - Shift sequence grouping constraints (prevent isolated shift types like S-S-F-S-S)")
+        shift_grouping_penalties = add_shift_sequence_grouping_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, dates, weeks, shift_codes, teams)
@@ -212,6 +220,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(shift_hopping_penalties)} shift hopping penalties...")
             for penalty_var in shift_hopping_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (200 per hopping pattern)
+        
+        # Add shift grouping penalties (prevent isolated shift types)
+        if shift_grouping_penalties:
+            print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
+            for penalty_var in shift_grouping_penalties:
+                objective_terms.append(penalty_var)  # Already weighted (1000 per isolation)
         
         # Add weekly shift type limit penalties (strongly discourage > 2 shift types per week)
         if weekly_shift_type_penalties:

@@ -513,6 +513,50 @@ für jeden Mitarbeiter, jede Woche:
 
 ---
 
+### 4.7 Minimale Konsekutive Werktags-Schichten
+
+**Ziel:** Während der Woche (Mo-Fr) müssen Mitarbeiter mindestens 2 aufeinanderfolgende Tage die gleiche Schicht haben
+
+**Regel:** 
+- Keine einzelnen isolierten Schichttage während der Woche
+- Wochenenden (Sa-So) sind ausgenommen und können einzelne Schichttage haben
+
+**Penalty-Bewertung:**
+```python
+für jeden Mitarbeiter:
+    # Schichtwechsel an aufeinanderfolgenden Werktagen
+    wenn Werktag_1 = Schicht_A UND Werktag_2 = Schicht_B (A ≠ B):
+        Penalty += 1500
+    
+    # Isolierte einzelne Schichttage (X-Y-X Muster)
+    wenn Werktag_1 = Schicht_A UND Werktag_2 = Schicht_B UND Werktag_3 = Schicht_A:
+        Penalty += 2000
+```
+
+**Gewichtung:** 
+- 1500 Punkte pro Schichtwechsel an aufeinanderfolgenden Werktagen (**SEHR HOCH**)
+- 2000 Punkte pro isoliertem Einzeltag (**SEHR HOCH**)
+
+**Beispiele:**
+
+**❌ Verstöße (nicht erlaubt):**
+```
+Peter Weber: Mo F | Di N | Mi S  → 3 verschiedene Schichten an 3 Werktagen
+Andreas Wolf: Mo F | Di N | Mi F  → Einzelnes N isoliert zwischen F (nur 1 Tag N)
+Julia Becker: Mo S | Di S | Mi N | Do S | Fr S  → Einzelnes N isoliert zwischen S (nur 1 Tag N)
+Robert Franke: Mo S | Di S | Mi F | Do S | Fr S  → Einzelnes F isoliert zwischen S (nur 1 Tag F)
+```
+
+**✓ Korrekt:**
+```
+Max Müller: Mo F | Di F | Mi F | Do N | Fr N  → Min. 2 aufeinanderfolgende Tage pro Schicht
+Lisa Meyer: Sa F | So S  → Wochenende: Einzeltage erlaubt
+```
+
+**Begründung:** Ein einzelner Tag mit einer Schicht macht in der Woche keinen Sinn und erschwert die Planung und Rotation.
+
+---
+
 ## 5. Mindestanforderungen
 
 ### 5.1 Minimale Mitarbeiteranzahl (Gesamt)

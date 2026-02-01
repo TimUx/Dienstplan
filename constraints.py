@@ -1100,6 +1100,224 @@ def add_shift_sequence_grouping_constraints(
     return grouping_penalties
 
 
+def add_minimum_consecutive_weekday_shifts_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    teams: List[Team] = None
+):
+    """
+    SOFT CONSTRAINT: Enforce minimum 2 consecutive days for same shift type during weekdays.
+    
+    Requirements (from problem statement):
+    - During weekdays (Mon-Fri), employees must work at least 2 consecutive days 
+      with the same shift type
+    - Having a single day with one shift type surrounded by other shifts or free days is not allowed
+    - Weekends (Sat-Sun) can have single-day shifts (exceptions allowed)
+    - This prevents patterns like:
+      * F on one day, N on next day, S on third day (3 different shifts in 3 days)
+      * N-N-F-N-N (single F isolated between N shifts)
+      * S-S-N-S-S (single N isolated between S shifts)
+    
+    Implementation:
+    - For each pair of consecutive weekdays where an employee works:
+      * If they work different shift types on consecutive days, apply penalty
+      * This enforces that shift types must be grouped into blocks of at least 2 days
+    - Also detect single isolated days (X-Y-X pattern) for stronger enforcement
+    - Weekend days (Sat-Sun) are excluded from this check
+    
+    Returns:
+        List of penalty variables for minimum consecutive days violations
+    """
+    min_consecutive_penalties = []
+    
+    # High penalty for shift type changes on consecutive weekdays
+    SHIFT_CHANGE_PENALTY = 1500  # Very high penalty to enforce minimum 2 consecutive days
+    # Even higher penalty for single isolated days
+    SINGLE_DAY_PENALTY = 2000  # Very high penalty for clear violations
+    
+    # Pre-compute date-to-week mapping
+    date_to_week = {}
+    for week_idx, week_dates in enumerate(weeks):
+        for d in week_dates:
+            date_to_week[d] = week_idx
+    
+    # Pre-compute employee-to-team mapping
+    emp_to_team = {}
+    if teams:
+        for emp in employees:
+            if emp.team_id:
+                for team in teams:
+                    if team.id == emp.team_id:
+                        emp_to_team[emp.id] = team
+                        break
+    
+    # Helper function to get shift type variables for a specific day
+    def get_shift_vars_for_day(emp_id, d):
+        """Returns dict of shift_code -> list of constraint variables"""
+        result = {}
+        weekday = d.weekday()
+        week_idx = date_to_week.get(d)
+        
+        if week_idx is None:
+            return result
+        
+        # Team shift (weekday)
+        if weekday < 5 and (emp_id, d) in employee_active:
+            team = emp_to_team.get(emp_id)
+            if team:
+                for shift_code in shift_codes:
+                    if (team.id, week_idx, shift_code) in team_shift:
+                        if shift_code not in result:
+                            result[shift_code] = []
+                        result[shift_code].extend([
+                            team_shift[(team.id, week_idx, shift_code)],
+                            employee_active[(emp_id, d)]
+                        ])
+        
+        # Team shift (weekend)
+        elif weekday >= 5 and (emp_id, d) in employee_weekend_shift:
+            team = emp_to_team.get(emp_id)
+            if team:
+                for shift_code in shift_codes:
+                    if (team.id, week_idx, shift_code) in team_shift:
+                        if shift_code not in result:
+                            result[shift_code] = []
+                        result[shift_code].extend([
+                            team_shift[(team.id, week_idx, shift_code)],
+                            employee_weekend_shift[(emp_id, d)]
+                        ])
+        
+        # Cross-team shifts (weekday)
+        if weekday < 5:
+            for shift_code in shift_codes:
+                if (emp_id, d, shift_code) in employee_cross_team_shift:
+                    if shift_code not in result:
+                        result[shift_code] = []
+                    result[shift_code].append(employee_cross_team_shift[(emp_id, d, shift_code)])
+        
+        # Cross-team shifts (weekend)
+        elif weekday >= 5:
+            for shift_code in shift_codes:
+                if (emp_id, d, shift_code) in employee_cross_team_weekend:
+                    if shift_code not in result:
+                        result[shift_code] = []
+                    result[shift_code].append(employee_cross_team_weekend[(emp_id, d, shift_code)])
+        
+        return result
+    
+    # Check each employee's schedule
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        # PART 1: Check for shift type changes on consecutive weekdays
+        # If employee works on two consecutive weekdays, they should work the same shift
+        for i in range(len(dates) - 1):
+            day1 = dates[i]
+            day2 = dates[i + 1]
+            
+            # Only check if BOTH days are weekdays (Mon-Fri)
+            # This correctly excludes weekend transitions (Fri->Sat, Sat->Sun, Sun->Mon)
+            if day1.weekday() >= 5 or day2.weekday() >= 5:
+                continue
+            
+            # Get shift variables for both days
+            shifts1 = get_shift_vars_for_day(emp.id, day1)
+            shifts2 = get_shift_vars_for_day(emp.id, day2)
+            
+            # Check if employee works different shift types on consecutive days
+            for shift_A in shift_codes:
+                for shift_B in shift_codes:
+                    if shift_A == shift_B:
+                        continue
+                    
+                    # Check if this pattern is possible
+                    if shift_A not in shifts1 or shift_B not in shifts2:
+                        continue
+                    
+                    # Create violation: employee works shift_A on day1 AND shift_B on day2
+                    all_vars = []
+                    all_vars.extend(shifts1[shift_A])
+                    all_vars.extend(shifts2[shift_B])
+                    
+                    # Create violation indicator
+                    violation_var = model.NewBoolVar(
+                        f"consec_change_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{shift_A}_{shift_B}"
+                    )
+                    model.AddBoolAnd(all_vars).OnlyEnforceIf(violation_var)
+                    model.AddBoolOr([v.Not() for v in all_vars]).OnlyEnforceIf(violation_var.Not())
+                    
+                    # Add penalty
+                    penalty_var = model.NewIntVar(
+                        0, SHIFT_CHANGE_PENALTY,
+                        f"consec_change_pen_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{shift_A}_{shift_B}"
+                    )
+                    model.Add(penalty_var == violation_var * SHIFT_CHANGE_PENALTY)
+                    min_consecutive_penalties.append(penalty_var)
+        
+        # PART 2: Check for single isolated days in 3-day windows (stronger penalty)
+        # Pattern: shift_A on day1, shift_B on day2, shift_A on day3 (day2 is isolated)
+        for i in range(len(dates) - 2):
+            day1 = dates[i]
+            day2 = dates[i + 1]
+            day3 = dates[i + 2]
+            
+            # Skip if any day is weekend - we only enforce this on weekdays
+            if day1.weekday() >= 5 or day2.weekday() >= 5 or day3.weekday() >= 5:
+                continue
+            
+            # Get shift variables for each day
+            shifts1 = get_shift_vars_for_day(emp.id, day1)
+            shifts2 = get_shift_vars_for_day(emp.id, day2)
+            shifts3 = get_shift_vars_for_day(emp.id, day3)
+            
+            # Check for pattern: shift_A on day1, shift_B on day2, shift_A on day3
+            # This is the A-B-A pattern where shift_B is sandwiched between two occurrences of shift_A
+            # Shift_B is isolated (appears only on a single day between other shifts)
+            for shift_A in shift_codes:
+                for shift_B in shift_codes:
+                    if shift_A == shift_B:
+                        continue
+                    
+                    # Check if this pattern is possible
+                    if shift_A not in shifts1 or shift_B not in shifts2 or shift_A not in shifts3:
+                        continue
+                    
+                    # Create violation: all three conditions must be true
+                    # 1. Employee works shift_A on day1
+                    # 2. Employee works shift_B on day2
+                    # 3. Employee works shift_A on day3
+                    all_vars = []
+                    all_vars.extend(shifts1[shift_A])
+                    all_vars.extend(shifts2[shift_B])
+                    all_vars.extend(shifts3[shift_A])
+                    
+                    # Create violation indicator
+                    violation_var = model.NewBoolVar(
+                        f"min_consec_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{day3.isoformat()}_{shift_A}_{shift_B}"
+                    )
+                    model.AddBoolAnd(all_vars).OnlyEnforceIf(violation_var)
+                    model.AddBoolOr([v.Not() for v in all_vars]).OnlyEnforceIf(violation_var.Not())
+                    
+                    # Add penalty
+                    penalty_var = model.NewIntVar(
+                        0, SINGLE_DAY_PENALTY,
+                        f"min_consec_pen_{emp.id}_{day1.isoformat()}_{day2.isoformat()}_{day3.isoformat()}_{shift_A}_{shift_B}"
+                    )
+                    model.Add(penalty_var == violation_var * SINGLE_DAY_PENALTY)
+                    min_consecutive_penalties.append(penalty_var)
+    
+    return min_consecutive_penalties
+
+
 def add_weekly_shift_type_limit_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],

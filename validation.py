@@ -114,6 +114,7 @@ def validate_shift_plan(
     validate_no_work_when_absent(result, assignments, absences, emp_dict)
     validate_rest_times(result, assignments, emp_dict)
     validate_consecutive_shifts(result, assignments, emp_dict)
+    validate_minimum_consecutive_weekday_shifts(result, assignments, emp_dict)
     validate_working_hours(result, assignments, emp_dict, start_date, end_date, shift_types)
     validate_staffing_requirements(result, assignments_by_date, emp_dict, shift_types)
     validate_special_functions(result, assignments, emp_dict)
@@ -266,6 +267,109 @@ def validate_consecutive_shifts(
                     )
             else:
                 consecutive_nights = 0
+
+
+def validate_minimum_consecutive_weekday_shifts(
+    result: ValidationResult,
+    assignments: List[ShiftAssignment],
+    emp_dict: Dict[int, Employee]
+):
+    """
+    Validate that employees work at least 2 consecutive days with the same shift type during weekdays.
+    
+    During weekdays (Mon-Fri), employees should not have single isolated shift days.
+    Weekends (Sat-Sun) are exempt from this rule.
+    """
+    # Group by employee
+    assignments_by_emp = {}
+    for assignment in assignments:
+        emp_id = assignment.employee_id
+        if emp_id not in assignments_by_emp:
+            assignments_by_emp[emp_id] = []
+        assignments_by_emp[emp_id].append(assignment)
+    
+    for emp_id, emp_assignments in assignments_by_emp.items():
+        emp_assignments.sort(key=lambda x: x.date)
+        emp_name = emp_dict[emp_id].full_name
+        
+        # Check for single isolated shift days during weekdays
+        # Look at 3-day windows
+        for i in range(len(emp_assignments) - 2):
+            assign1 = emp_assignments[i]
+            assign2 = emp_assignments[i + 1]
+            assign3 = emp_assignments[i + 2]
+            
+            # Check if all three days are consecutive
+            if (assign2.date - assign1.date).days == 1 and (assign3.date - assign2.date).days == 1:
+                # Skip if any day is weekend
+                if assign1.date.weekday() >= 5 or assign2.date.weekday() >= 5 or assign3.date.weekday() >= 5:
+                    continue
+                
+                shift1 = get_shift_type_by_id(assign1.shift_type_id).code
+                shift2 = get_shift_type_by_id(assign2.shift_type_id).code
+                shift3 = get_shift_type_by_id(assign3.shift_type_id).code
+                
+                # Check for A-B-A pattern (single B isolated)
+                if shift1 == shift3 and shift1 != shift2:
+                    result.add_warning(
+                        f"{emp_name}: Single isolated {shift2} shift on {assign2.date.strftime('%a %d.%m')} "
+                        f"between {shift1} shifts (violates minimum 2 consecutive days rule)"
+                    )
+                
+                # Check for B-A-C pattern (single A isolated in middle)
+                if shift1 != shift2 and shift2 != shift3 and shift1 != shift3:
+                    result.add_warning(
+                        f"{emp_name}: Single isolated {shift2} shift on {assign2.date.strftime('%a %d.%m')} "
+                        f"between different shifts {shift1} and {shift3} (violates minimum 2 consecutive days rule)"
+                    )
+        
+        # Also check for shift changes on consecutive weekdays
+        for i in range(len(emp_assignments) - 1):
+            assign1 = emp_assignments[i]
+            assign2 = emp_assignments[i + 1]
+            
+            # Check if consecutive days
+            if (assign2.date - assign1.date).days == 1:
+                # Skip if either day is weekend
+                if assign1.date.weekday() >= 5 or assign2.date.weekday() >= 5:
+                    continue
+                
+                shift1 = get_shift_type_by_id(assign1.shift_type_id).code
+                shift2 = get_shift_type_by_id(assign2.shift_type_id).code
+                
+                # Check for shift type change on consecutive weekdays
+                if shift1 != shift2:
+                    # Determine if either day appears as a single-day occurrence of its shift type
+                    # (not part of a longer sequence of the same shift)
+                    # We warn if either day1 or day2 is an isolated single-day shift
+                    is_isolated_day1 = True
+                    is_isolated_day2 = True
+                    
+                    # Check if day1 has same shift on previous WEEKDAY
+                    if i > 0:
+                        prev_assign = emp_assignments[i - 1]
+                        # Only consider if previous day is also a weekday and consecutive
+                        if (assign1.date - prev_assign.date).days == 1 and prev_assign.date.weekday() < 5:
+                            prev_shift = get_shift_type_by_id(prev_assign.shift_type_id).code
+                            if prev_shift == shift1:
+                                is_isolated_day1 = False
+                    
+                    # Check if day2 has same shift on next WEEKDAY
+                    if i + 2 < len(emp_assignments):
+                        next_assign = emp_assignments[i + 2]
+                        # Only consider if next day is also a weekday and consecutive
+                        if (next_assign.date - assign2.date).days == 1 and next_assign.date.weekday() < 5:
+                            next_shift = get_shift_type_by_id(next_assign.shift_type_id).code
+                            if next_shift == shift2:
+                                is_isolated_day2 = False
+                    
+                    # Only warn if either day appears to be isolated (single day of that shift)
+                    if is_isolated_day1 or is_isolated_day2:
+                        result.add_warning(
+                            f"{emp_name}: Shift change from {shift1} to {shift2} on consecutive weekdays "
+                            f"({assign1.date.strftime('%a %d.%m')} → {assign2.date.strftime('%a %d.%m')}), "
+                            f"violates minimum 2 consecutive days rule"
+                        )
 
 
 def validate_working_hours(

@@ -921,6 +921,276 @@ def add_shift_stability_constraints(
     return hopping_penalties
 
 
+def add_weekly_shift_type_limit_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    max_shift_types_per_week: int = 2
+):
+    """
+    SOFT CONSTRAINT: Limit the number of different shift types an employee works in a week.
+    
+    Requirement from practical examples:
+    - Employees should not have more than 2 different shift types in a week
+    - Examples of violations:
+      * Lisa Meyer: S-N-N-F-F-F-F in first week (3 types: S, N, F)
+      * Julia Becker: F-N-N-S-S in one week (3 types: F, N, S)
+    
+    Implementation:
+    - For each employee and each week, count the number of distinct shift types worked
+    - Penalize if more than max_shift_types_per_week (default: 2)
+    - High penalty (500 points per violation) to strongly discourage this
+    
+    Args:
+        max_shift_types_per_week: Maximum number of different shift types allowed per week
+    
+    Returns:
+        List of penalty variables for shift type diversity violations
+    """
+    diversity_penalties = []
+    
+    # High penalty for having too many shift types in a week
+    DIVERSITY_PENALTY = 500
+    
+    # Pre-compute date-to-week mapping
+    date_to_week = {}
+    for week_idx, week_dates in enumerate(weeks):
+        for d in week_dates:
+            date_to_week[d] = week_idx
+    
+    # Pre-compute employee-to-team mapping
+    emp_to_team = {}
+    for emp in employees:
+        if emp.team_id:
+            for team in teams:
+                if team.id == emp.team_id:
+                    emp_to_team[emp.id] = team
+                    break
+    
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # For each shift type, create a boolean: does employee work this shift type this week?
+            shift_type_worked = {}
+            
+            for shift_code in shift_codes:
+                # Create boolean variable: did employee work this shift type at least once this week?
+                has_shift_type = model.NewBoolVar(f"week_shift_type_{emp.id}_{week_idx}_{shift_code}")
+                shift_instances = []
+                
+                for d in week_dates:
+                    # Check team-based shifts (weekday)
+                    if d.weekday() < 5 and (emp.id, d) in employee_active:
+                        team = emp_to_team.get(emp.id)
+                        if team and (team.id, week_idx, shift_code) in team_shift:
+                            # Employee works this shift if: active AND team has this shift
+                            shift_work = model.NewBoolVar(f"team_shift_{emp.id}_{d}_{shift_code}")
+                            model.AddMultiplicationEquality(
+                                shift_work,
+                                [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
+                            )
+                            shift_instances.append(shift_work)
+                    
+                    # Check team-based shifts (weekend)
+                    if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
+                        team = emp_to_team.get(emp.id)
+                        if team and (team.id, week_idx, shift_code) in team_shift:
+                            shift_weekend = model.NewBoolVar(f"team_weekend_{emp.id}_{d}_{shift_code}")
+                            model.AddMultiplicationEquality(
+                                shift_weekend,
+                                [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
+                            )
+                            shift_instances.append(shift_weekend)
+                    
+                    # Check cross-team shifts (weekday)
+                    if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        shift_instances.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    
+                    # Check cross-team shifts (weekend)
+                    if d.weekday() >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        shift_instances.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                
+                # has_shift_type = 1 if any instance of this shift type exists this week
+                if shift_instances:
+                    model.Add(sum(shift_instances) >= 1).OnlyEnforceIf(has_shift_type)
+                    model.Add(sum(shift_instances) == 0).OnlyEnforceIf(has_shift_type.Not())
+                else:
+                    model.Add(has_shift_type == 0)
+                
+                shift_type_worked[shift_code] = has_shift_type
+            
+            # Count total number of different shift types worked this week
+            if shift_type_worked:
+                num_shift_types = model.NewIntVar(0, len(shift_codes), f"num_shift_types_{emp.id}_{week_idx}")
+                model.Add(num_shift_types == sum(shift_type_worked.values()))
+                
+                # Create violation variable: num_shift_types > max_shift_types_per_week
+                violation = model.NewBoolVar(f"shift_diversity_viol_{emp.id}_{week_idx}")
+                model.Add(num_shift_types > max_shift_types_per_week).OnlyEnforceIf(violation)
+                model.Add(num_shift_types <= max_shift_types_per_week).OnlyEnforceIf(violation.Not())
+                
+                # Add penalty
+                penalty = model.NewIntVar(0, DIVERSITY_PENALTY, f"shift_diversity_pen_{emp.id}_{week_idx}")
+                model.AddMultiplicationEquality(penalty, [violation, DIVERSITY_PENALTY])
+                diversity_penalties.append(penalty)
+    
+    return diversity_penalties
+
+
+def add_weekend_shift_consistency_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str]
+):
+    """
+    SOFT CONSTRAINT: Prevent shift type changes within weekends.
+    
+    Requirement from practical examples:
+    - If an employee works on Friday and then on Saturday/Sunday, they should work the same shift type
+    - Examples of violations:
+      * Robert Franke: Early (Friday) → Night (Saturday)
+      * Nicole Schröder: Early (Friday) → Late (Saturday)
+    
+    Implementation:
+    - For each week, check if Friday shift type matches Saturday/Sunday shift types
+    - Penalize mismatches to encourage consistency
+    - Medium-high penalty (300 points per mismatch)
+    
+    Returns:
+        List of penalty variables for weekend shift consistency violations
+    """
+    weekend_consistency_penalties = []
+    
+    # Penalty for shift type changes from Friday to weekend
+    WEEKEND_CONSISTENCY_PENALTY = 300
+    
+    # Pre-compute employee-to-team mapping
+    emp_to_team = {}
+    for emp in employees:
+        if emp.team_id:
+            for team in teams:
+                if team.id == emp.team_id:
+                    emp_to_team[emp.id] = team
+                    break
+    
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        for week_idx, week_dates in enumerate(weeks):
+            # Find Friday, Saturday, and Sunday in this week
+            friday = None
+            saturday = None
+            sunday = None
+            
+            for d in week_dates:
+                if d.weekday() == 4:  # Friday
+                    friday = d
+                elif d.weekday() == 5:  # Saturday
+                    saturday = d
+                elif d.weekday() == 6:  # Sunday
+                    sunday = d
+            
+            if not friday:
+                continue  # No Friday in this week (shouldn't happen with full weeks)
+            
+            # For each shift type, determine if employee works it on Friday
+            friday_shift_vars = {}
+            for shift_code in shift_codes:
+                shift_instances = []
+                
+                # Friday is a weekday, check employee_active
+                if (emp.id, friday) in employee_active:
+                    team = emp_to_team.get(emp.id)
+                    if team and (team.id, week_idx, shift_code) in team_shift:
+                        # Employee works this shift on Friday if: active AND team has this shift
+                        friday_work = model.NewBoolVar(f"friday_{emp.id}_{week_idx}_{shift_code}")
+                        model.AddMultiplicationEquality(
+                            friday_work,
+                            [employee_active[(emp.id, friday)], team_shift[(team.id, week_idx, shift_code)]]
+                        )
+                        shift_instances.append(friday_work)
+                
+                # Check cross-team Friday work
+                if (emp.id, friday, shift_code) in employee_cross_team_shift:
+                    shift_instances.append(employee_cross_team_shift[(emp.id, friday, shift_code)])
+                
+                if shift_instances:
+                    has_friday_shift = model.NewBoolVar(f"has_friday_{emp.id}_{week_idx}_{shift_code}")
+                    model.Add(sum(shift_instances) >= 1).OnlyEnforceIf(has_friday_shift)
+                    model.Add(sum(shift_instances) == 0).OnlyEnforceIf(has_friday_shift.Not())
+                    friday_shift_vars[shift_code] = has_friday_shift
+            
+            # For Saturday and Sunday, check if shift type matches Friday
+            for weekend_day in [saturday, sunday]:
+                if not weekend_day:
+                    continue
+                
+                for shift_code in shift_codes:
+                    weekend_shift_instances = []
+                    
+                    # Weekend day - check employee_weekend_shift
+                    if (emp.id, weekend_day) in employee_weekend_shift:
+                        team = emp_to_team.get(emp.id)
+                        if team and (team.id, week_idx, shift_code) in team_shift:
+                            weekend_work = model.NewBoolVar(f"weekend_{emp.id}_{weekend_day}_{shift_code}")
+                            model.AddMultiplicationEquality(
+                                weekend_work,
+                                [employee_weekend_shift[(emp.id, weekend_day)], team_shift[(team.id, week_idx, shift_code)]]
+                            )
+                            weekend_shift_instances.append(weekend_work)
+                    
+                    # Check cross-team weekend work
+                    if (emp.id, weekend_day, shift_code) in employee_cross_team_weekend:
+                        weekend_shift_instances.append(employee_cross_team_weekend[(emp.id, weekend_day, shift_code)])
+                    
+                    if weekend_shift_instances:
+                        has_weekend_shift = model.NewBoolVar(f"has_weekend_{emp.id}_{weekend_day}_{shift_code}")
+                        model.Add(sum(weekend_shift_instances) >= 1).OnlyEnforceIf(has_weekend_shift)
+                        model.Add(sum(weekend_shift_instances) == 0).OnlyEnforceIf(has_weekend_shift.Not())
+                        
+                        # Check for mismatch: different shift types on Friday vs weekend day
+                        # Violation occurs if:
+                        # - Employee works on both days (Friday and weekend_day)
+                        # - But with different shift types
+                        
+                        # For each OTHER shift type (different from current)
+                        for other_shift_code in shift_codes:
+                            if other_shift_code == shift_code:
+                                continue  # Same shift type - no mismatch
+                            
+                            if other_shift_code in friday_shift_vars:
+                                # Mismatch: Friday has other_shift_code, weekend has shift_code
+                                mismatch = model.NewBoolVar(f"weekend_mismatch_{emp.id}_{weekend_day}_{other_shift_code}_{shift_code}")
+                                model.AddBoolAnd([friday_shift_vars[other_shift_code], has_weekend_shift]).OnlyEnforceIf(mismatch)
+                                model.AddBoolOr([friday_shift_vars[other_shift_code].Not(), has_weekend_shift.Not()]).OnlyEnforceIf(mismatch.Not())
+                                
+                                # Add penalty for mismatch
+                                penalty = model.NewIntVar(0, WEEKEND_CONSISTENCY_PENALTY, f"weekend_pen_{emp.id}_{weekend_day}_{other_shift_code}_{shift_code}")
+                                model.AddMultiplicationEquality(penalty, [mismatch, WEEKEND_CONSISTENCY_PENALTY])
+                                weekend_consistency_penalties.append(penalty)
+    
+    return weekend_consistency_penalties
+
+
 def add_consecutive_shifts_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],

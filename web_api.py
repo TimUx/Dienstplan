@@ -285,6 +285,81 @@ def validate_monthly_date_range(start_date: date, end_date: date) -> tuple[bool,
     return True, ''
 
 
+def ensure_absence_types_table(db_path: str):
+    """
+    Ensure the AbsenceTypes table exists and is populated with default values.
+    This is called at app startup to handle existing databases that may not have this table.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    try:
+        # Check if AbsenceTypes table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='AbsenceTypes'")
+        table_exists = cursor.fetchone() is not None
+        
+        if not table_exists:
+            print("[i] Creating AbsenceTypes table...")
+            # Create the table
+            cursor.execute("""
+                CREATE TABLE AbsenceTypes (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Name TEXT NOT NULL,
+                    Code TEXT NOT NULL UNIQUE,
+                    ColorCode TEXT NOT NULL DEFAULT '#E0E0E0',
+                    IsSystemType INTEGER NOT NULL DEFAULT 0,
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CreatedBy TEXT,
+                    ModifiedAt TEXT,
+                    ModifiedBy TEXT
+                )
+            """)
+            
+            # Add foreign key constraint to Absences table if the column doesn't exist
+            cursor.execute("PRAGMA table_info(Absences)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'AbsenceTypeId' not in columns:
+                print("[i] Adding AbsenceTypeId column to Absences table...")
+                cursor.execute("ALTER TABLE Absences ADD COLUMN AbsenceTypeId INTEGER")
+                
+                # Create index for better performance
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_absences_type 
+                    ON Absences(AbsenceTypeId)
+                """)
+            
+            print("[✓] AbsenceTypes table created")
+        
+        # Check if default absence types exist
+        cursor.execute("SELECT COUNT(*) FROM AbsenceTypes WHERE IsSystemType = 1")
+        system_types_count = cursor.fetchone()[0]
+        
+        if system_types_count < 3:
+            print("[i] Initializing default absence types...")
+            # Insert standard absence types
+            standard_types = [
+                ('Urlaub', 'U', '#90EE90', 1),  # Light green for vacation
+                ('Krank / AU', 'AU', '#FFB6C1', 1),  # Light pink for sick leave
+                ('Lehrgang', 'L', '#87CEEB', 1)  # Sky blue for training
+            ]
+            
+            cursor.executemany("""
+                INSERT OR IGNORE INTO AbsenceTypes (Name, Code, ColorCode, IsSystemType, CreatedBy)
+                VALUES (?, ?, ?, ?, 'system')
+            """, standard_types)
+            
+            print("[✓] Default absence types initialized (U, AU, L)")
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"[!] Error ensuring AbsenceTypes table: {e}", file=sys.stderr)
+        raise
+    finally:
+        conn.close()
+
+
 def create_app(db_path: str = "dienstplan.db") -> Flask:
     """
     Create and configure Flask application.
@@ -306,6 +381,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     
     CORS(app, supports_credentials=True)  # Enable CORS with credentials
+    
+    # Ensure AbsenceTypes table exists (for existing databases)
+    ensure_absence_types_table(db_path)
     
     db = Database(db_path)
     

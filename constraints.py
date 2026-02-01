@@ -1134,10 +1134,11 @@ def add_weekend_shift_consistency_constraints(
                     shift_instances.append(employee_cross_team_shift[(emp.id, friday, shift_code)])
                 
                 if shift_instances:
-                    has_friday_shift = model.NewBoolVar(f"has_friday_{emp.id}_{week_idx}_{shift_code}")
-                    model.Add(sum(shift_instances) >= 1).OnlyEnforceIf(has_friday_shift)
-                    model.Add(sum(shift_instances) == 0).OnlyEnforceIf(has_friday_shift.Not())
-                    friday_shift_vars[shift_code] = has_friday_shift
+                    # Track whether employee works this specific shift type on Friday
+                    friday_works_shift_type = model.NewBoolVar(f"has_friday_{emp.id}_{week_idx}_{shift_code}")
+                    model.Add(sum(shift_instances) >= 1).OnlyEnforceIf(friday_works_shift_type)
+                    model.Add(sum(shift_instances) == 0).OnlyEnforceIf(friday_works_shift_type.Not())
+                    friday_shift_vars[shift_code] = friday_works_shift_type
             
             # For Saturday and Sunday, check if shift type matches Friday
             for weekend_day in [saturday, sunday]:
@@ -1163,9 +1164,10 @@ def add_weekend_shift_consistency_constraints(
                         weekend_shift_instances.append(employee_cross_team_weekend[(emp.id, weekend_day, shift_code)])
                     
                     if weekend_shift_instances:
-                        has_weekend_shift = model.NewBoolVar(f"has_weekend_{emp.id}_{weekend_day}_{shift_code}")
-                        model.Add(sum(weekend_shift_instances) >= 1).OnlyEnforceIf(has_weekend_shift)
-                        model.Add(sum(weekend_shift_instances) == 0).OnlyEnforceIf(has_weekend_shift.Not())
+                        # Track whether employee works this specific shift type on weekend day
+                        weekend_works_shift_type = model.NewBoolVar(f"has_weekend_{emp.id}_{weekend_day}_{shift_code}")
+                        model.Add(sum(weekend_shift_instances) >= 1).OnlyEnforceIf(weekend_works_shift_type)
+                        model.Add(sum(weekend_shift_instances) == 0).OnlyEnforceIf(weekend_works_shift_type.Not())
                         
                         # Check for mismatch: different shift types on Friday vs weekend day
                         # Violation occurs if:
@@ -1180,8 +1182,8 @@ def add_weekend_shift_consistency_constraints(
                             if other_shift_code in friday_shift_vars:
                                 # Mismatch: Friday has other_shift_code, weekend has shift_code
                                 mismatch = model.NewBoolVar(f"weekend_mismatch_{emp.id}_{weekend_day}_{other_shift_code}_{shift_code}")
-                                model.AddBoolAnd([friday_shift_vars[other_shift_code], has_weekend_shift]).OnlyEnforceIf(mismatch)
-                                model.AddBoolOr([friday_shift_vars[other_shift_code].Not(), has_weekend_shift.Not()]).OnlyEnforceIf(mismatch.Not())
+                                model.AddBoolAnd([friday_shift_vars[other_shift_code], weekend_works_shift_type]).OnlyEnforceIf(mismatch)
+                                model.AddBoolOr([friday_shift_vars[other_shift_code].Not(), weekend_works_shift_type.Not()]).OnlyEnforceIf(mismatch.Not())
                                 
                                 # Add penalty for mismatch
                                 penalty = model.NewIntVar(0, WEEKEND_CONSISTENCY_PENALTY, f"weekend_pen_{emp.id}_{weekend_day}_{other_shift_code}_{shift_code}")
@@ -1249,7 +1251,7 @@ def add_team_night_shift_consistency_constraints(
             if (team.id, week_idx, 'N') in team_shift:
                 team_has_night = team_shift[(team.id, week_idx, 'N')]
             
-            if not team_has_night:
+            if team_has_night is None:
                 continue  # Skip if we can't determine team's night shift status
             
             # Check if employee works cross-team night shifts this week

@@ -463,12 +463,14 @@ function displayWeekView(data, employees) {
     // Group assignments by team and employee, including absences
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
-    // Get all dates in the range (from backend, already aligned to Monday-Sunday)
-    const dates = getUniqueDates(data.assignments);
-    
-    // If no assignments yet, generate dates from startDate to endDate
-    if (dates.length === 0 && data.startDate && data.endDate) {
-        dates.push(...generateDateRange(data.startDate, data.endDate));
+    // Always generate all dates in the range from startDate to endDate
+    // This ensures all days are shown regardless of whether there are shifts/absences
+    let dates = [];
+    if (data.startDate && data.endDate) {
+        dates = generateDateRange(data.startDate, data.endDate);
+    } else {
+        // Fallback: get unique dates from assignments
+        dates = getUniqueDates(data.assignments);
     }
     
     dates.sort();
@@ -551,16 +553,24 @@ function displayWeekView(data, employees) {
                 const absence = getAbsenceForDate(employee.absences || [], dateStr);
                 
                 let content = '';
+                let cellClickable = '';
+                
                 if (absence) {
                     // Show absence badge with status-based color coding
                     content = createAbsenceBadge(absence);
-                } else {
+                } else if (shifts.length > 0) {
                     // Show regular shifts
                     content = shifts.map(s => createShiftBadge(s)).join(' ');
+                } else {
+                    // Empty cell - make it clickable if user can plan shifts
+                    if (canPlanShifts()) {
+                        cellClickable = ` onclick="showQuickEntryModal('${employee.id}', '${dateStr}')" style="cursor: pointer;"`;
+                        content = '<span class="empty-cell-placeholder">+</span>';
+                    }
                 }
                 
                 const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
-                html += `<td class="${cellClass}">${content}</td>`;
+                html += `<td class="${cellClass}"${cellClickable}>${content}</td>`;
             });
             
             html += '</tr>';
@@ -575,12 +585,14 @@ function displayMonthView(data, employees) {
     // Group assignments by team and employee, including absences
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
-    // Get all dates and organize by calendar weeks
-    const dates = getUniqueDates(data.assignments);
-    
-    // If no assignments yet, generate dates from startDate to endDate
-    if (dates.length === 0 && data.startDate && data.endDate) {
-        dates.push(...generateDateRange(data.startDate, data.endDate));
+    // Always generate all dates in the range from startDate to endDate
+    // This ensures all days are shown regardless of whether there are shifts/absences
+    let dates = [];
+    if (data.startDate && data.endDate) {
+        dates = generateDateRange(data.startDate, data.endDate);
+    } else {
+        // Fallback: get unique dates from assignments
+        dates = getUniqueDates(data.assignments);
     }
     
     dates.sort();
@@ -673,16 +685,24 @@ function displayMonthView(data, employees) {
                     const absence = getAbsenceForDate(employee.absences || [], dateStr);
                     
                     let content = '';
+                    let cellClickable = '';
+                    
                     if (absence) {
                         // Show absence badge with status-based color coding
                         content = createAbsenceBadge(absence);
-                    } else {
+                    } else if (shifts.length > 0) {
                         // Show regular shifts
                         content = shifts.map(s => createShiftBadge(s)).join(' ');
+                    } else {
+                        // Empty cell - make it clickable if user can plan shifts
+                        if (canPlanShifts()) {
+                            cellClickable = ` onclick="showQuickEntryModal('${employee.id}', '${dateStr}')" style="cursor: pointer;"`;
+                            content = '<span class="empty-cell-placeholder">+</span>';
+                        }
                     }
                     
                     const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
-                    html += `<td class="${cellClass}">${content}</td>`;
+                    html += `<td class="${cellClass}"${cellClickable}>${content}</td>`;
                 });
             });
             
@@ -698,12 +718,14 @@ function displayYearView(data, employees) {
     // Group assignments by team and employee, including absences
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
     
-    // Get all dates and organize by months and weeks
-    const dates = getUniqueDates(data.assignments);
-    
-    // If no assignments yet, generate dates from startDate to endDate
-    if (dates.length === 0 && data.startDate && data.endDate) {
-        dates.push(...generateDateRange(data.startDate, data.endDate));
+    // Always generate all dates in the range from startDate to endDate
+    // This ensures all days are shown regardless of whether there are shifts/absences
+    let dates = [];
+    if (data.startDate && data.endDate) {
+        dates = generateDateRange(data.startDate, data.endDate);
+    } else {
+        // Fallback: get unique dates from assignments
+        dates = getUniqueDates(data.assignments);
     }
     
     dates.sort();
@@ -4360,6 +4382,205 @@ async function deleteShiftAssignment() {
         }
     } catch (error) {
         console.error('Error deleting shift:', error);
+        alert(`Fehler: ${error.message}`);
+    }
+}
+
+// Quick Entry Modal Functions
+async function showQuickEntryModal(employeeId, dateStr) {
+    if (!canPlanShifts()) {
+        alert('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen. Diese Funktion ist nur für Administratoren und Disponenten verfügbar.');
+        return;
+    }
+
+    // Load employees and shift types if not already loaded
+    await loadEmployees();
+    if (allShiftTypes.length === 0) {
+        await loadShiftTypes();
+    }
+
+    // Find employee details
+    const employee = cachedEmployees.find(emp => emp.id === parseInt(employeeId));
+    if (!employee) {
+        alert('Mitarbeiter nicht gefunden.');
+        return;
+    }
+
+    // Set employee and date info
+    document.getElementById('quickEntryEmployeeId').value = employeeId;
+    document.getElementById('quickEntryDateValue').value = dateStr;
+    
+    const employeeName = `${employee.vorname} ${employee.name} (PN: ${employee.personalnummer})`;
+    document.getElementById('quickEntryEmployee').textContent = employeeName;
+    
+    const dateObj = new Date(dateStr);
+    const formattedDate = dateObj.toLocaleDateString('de-DE', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    document.getElementById('quickEntryDate').textContent = formattedDate;
+
+    // Reset form
+    document.getElementById('quickEntryType').value = '';
+    document.getElementById('quickEntryNotes').value = '';
+    document.getElementById('quickEntryShiftGroup').style.display = 'none';
+    document.getElementById('quickEntryAbsenceGroup').style.display = 'none';
+
+    // Populate shift types
+    const shiftTypeSelect = document.getElementById('quickEntryShiftTypeId');
+    shiftTypeSelect.innerHTML = '<option value="">Schichttyp wählen...</option>';
+    allShiftTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type.id;
+        option.textContent = `${type.name} (${type.code})`;
+        shiftTypeSelect.appendChild(option);
+    });
+
+    // Load and populate absence types (excluding vacation)
+    try {
+        const response = await fetch(`${API_BASE}/absencetypes`);
+        if (response.ok) {
+            const absenceTypes = await response.json();
+            const absenceTypeSelect = document.getElementById('quickEntryAbsenceTypeId');
+            absenceTypeSelect.innerHTML = '<option value="">Abwesenheitstyp wählen...</option>';
+            
+            // Filter out vacation type (code 'U') as per requirement
+            absenceTypes.forEach(at => {
+                if (at.code !== 'U') {
+                    const option = document.createElement('option');
+                    option.value = at.id;
+                    option.textContent = `${at.name} (${at.code})`;
+                    absenceTypeSelect.appendChild(option);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading absence types:', error);
+    }
+
+    // Show modal
+    document.getElementById('quickEntryModal').style.display = 'block';
+}
+
+function updateQuickEntryOptions() {
+    const entryType = document.getElementById('quickEntryType').value;
+    
+    const shiftGroup = document.getElementById('quickEntryShiftGroup');
+    const absenceGroup = document.getElementById('quickEntryAbsenceGroup');
+    
+    if (entryType === 'shift') {
+        shiftGroup.style.display = 'block';
+        absenceGroup.style.display = 'none';
+        document.getElementById('quickEntryShiftTypeId').required = true;
+        document.getElementById('quickEntryAbsenceTypeId').required = false;
+    } else if (entryType === 'absence') {
+        shiftGroup.style.display = 'none';
+        absenceGroup.style.display = 'block';
+        document.getElementById('quickEntryShiftTypeId').required = false;
+        document.getElementById('quickEntryAbsenceTypeId').required = true;
+    } else {
+        shiftGroup.style.display = 'none';
+        absenceGroup.style.display = 'none';
+        document.getElementById('quickEntryShiftTypeId').required = false;
+        document.getElementById('quickEntryAbsenceTypeId').required = false;
+    }
+}
+
+function closeQuickEntryModal() {
+    document.getElementById('quickEntryModal').style.display = 'none';
+    document.getElementById('quickEntryType').value = '';
+    document.getElementById('quickEntryNotes').value = '';
+    document.getElementById('quickEntryShiftGroup').style.display = 'none';
+    document.getElementById('quickEntryAbsenceGroup').style.display = 'none';
+}
+
+async function saveQuickEntry() {
+    const entryType = document.getElementById('quickEntryType').value;
+    
+    if (!entryType) {
+        alert('Bitte wählen Sie, ob Sie eine Schicht oder Abwesenheit hinzufügen möchten.');
+        return;
+    }
+
+    const employeeId = parseInt(document.getElementById('quickEntryEmployeeId').value);
+    const dateValue = document.getElementById('quickEntryDateValue').value;
+    const notes = document.getElementById('quickEntryNotes').value;
+
+    try {
+        if (entryType === 'shift') {
+            const shiftTypeId = document.getElementById('quickEntryShiftTypeId').value;
+            if (!shiftTypeId) {
+                alert('Bitte wählen Sie einen Schichttyp.');
+                return;
+            }
+
+            const shiftData = {
+                employeeId: employeeId,
+                date: dateValue,
+                shiftTypeId: parseInt(shiftTypeId),
+                isFixed: false,
+                notes: notes || null
+            };
+
+            const response = await fetch(`${API_BASE}/shifts/assignments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(shiftData)
+            });
+
+            if (response.ok) {
+                alert('Schicht erfolgreich erstellt!');
+                closeQuickEntryModal();
+                loadSchedule();
+            } else if (response.status === 400) {
+                const error = await response.json();
+                if (error.warning) {
+                    if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
+                        alert('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.');
+                    }
+                } else {
+                    alert(`Fehler: ${error.error}`);
+                }
+            } else {
+                alert('Fehler beim Erstellen der Schicht.');
+            }
+        } else if (entryType === 'absence') {
+            const absenceTypeId = document.getElementById('quickEntryAbsenceTypeId').value;
+            if (!absenceTypeId) {
+                alert('Bitte wählen Sie einen Abwesenheitstyp.');
+                return;
+            }
+
+            // Note: This creates a single-day absence by setting startDate = endDate
+            const absenceData = {
+                employeeId: employeeId,
+                startDate: dateValue,
+                endDate: dateValue,
+                absenceTypeId: parseInt(absenceTypeId),
+                notes: notes || null
+            };
+
+            const response = await fetch(`${API_BASE}/absences`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(absenceData)
+            });
+
+            if (response.ok) {
+                alert('Abwesenheit erfolgreich erfasst!');
+                closeQuickEntryModal();
+                loadSchedule();
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Fehler beim Speichern der Abwesenheit.');
+            }
+        }
+    } catch (error) {
+        console.error('Error saving quick entry:', error);
         alert(`Fehler: ${error.message}`);
     }
 }

@@ -1473,6 +1473,52 @@
         </div>
     </div>
 
+    <!-- Quick Entry Modal for empty cells -->
+    <div id="quickEntryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeQuickEntryModal()">&times;</span>
+            <h2>Schicht oder Abwesenheit hinzufügen</h2>
+            <p id="quickEntryInfo">Mitarbeiter: <strong id="quickEntryEmployee"></strong><br>Datum: <strong id="quickEntryDate"></strong></p>
+            
+            <input type="hidden" id="quickEntryEmployeeId">
+            <input type="hidden" id="quickEntryDateValue">
+            
+            <div class="form-group">
+                <label>Was möchten Sie hinzufügen?*</label>
+                <select id="quickEntryType" required onchange="updateQuickEntryOptions()">
+                    <option value="">Bitte wählen...</option>
+                    <option value="shift">Schicht</option>
+                    <option value="absence">Abwesenheit (z.B. AU, L, benutzerdefinierte Typen)</option>
+                </select>
+            </div>
+            
+            <div id="quickEntryShiftGroup" class="form-group" style="display: none;">
+                <label>Schichttyp*</label>
+                <select id="quickEntryShiftTypeId" required>
+                    <option value="">Schichttyp wählen...</option>
+                </select>
+            </div>
+            
+            <div id="quickEntryAbsenceGroup" class="form-group" style="display: none;">
+                <label>Abwesenheitstyp*</label>
+                <select id="quickEntryAbsenceTypeId" required>
+                    <option value="">Abwesenheitstyp wählen...</option>
+                </select>
+                <small>Hinweis: Urlaub (U) muss über die Urlaubsplanung beantragt werden.</small>
+            </div>
+            
+            <div class="form-group">
+                <label>Notizen</label>
+                <textarea id="quickEntryNotes" rows="3" placeholder="Optional: Zusätzliche Informationen"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="closeQuickEntryModal()" class="btn-secondary">Abbrechen</button>
+                <button type="button" onclick="saveQuickEntry()" class="btn-primary">Speichern</button>
+            </div>
+        </div>
+    </div>
+
     <!-- User Management Modal -->
     <div id="userModal" class="modal">
         <div class="modal-content">

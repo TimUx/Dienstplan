@@ -315,7 +315,7 @@ def add_staffing_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     violation_tracker=None
-) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], Dict[str, List[cp_model.IntVar]]]:
+) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], Dict[str, List[cp_model.IntVar]], List[cp_model.IntVar]]:
     """
     HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
@@ -334,14 +334,17 @@ def add_staffing_constraints(
     NEW: Returns separate penalty lists for weekday/weekend to allow differential weighting.
     Also returns weekday understaffing penalties BY SHIFT TYPE to allow priority ordering (F > S > N).
     
+    NEW: Returns team_priority_violations to penalize cross-team usage when team has unfilled capacity.
+    
     Args:
         shift_types: List of ShiftType objects from database (REQUIRED)
         violation_tracker: Optional tracker for recording when max is exceeded
         
     Returns:
         Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, 
-                  weekday_understaffing_by_shift) where weekday_understaffing_by_shift is a dict
-                  mapping shift codes to their understaffing penalty lists
+                  weekday_understaffing_by_shift, team_priority_violations) where:
+                  - weekday_understaffing_by_shift is a dict mapping shift codes to their understaffing penalty lists
+                  - team_priority_violations are penalties for using cross-team when team has capacity
     """
     if not shift_types:
         raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
@@ -364,6 +367,7 @@ def add_staffing_constraints(
     weekday_overstaffing_penalties = []
     weekend_overstaffing_penalties = []
     weekday_understaffing_by_shift = {shift: [] for shift in shift_codes}  # Separate by shift type for priority
+    team_priority_violations = []  # Penalties for using cross-team when team has capacity
     
     for d in dates:
         is_weekend = d.weekday() >= 5
@@ -400,7 +404,8 @@ def add_staffing_constraints(
             if is_weekend:
                 # WEEKEND: Count team members working + cross-team weekend workers
                 # For each team with this shift, count active members
-                assigned = []
+                team_assigned = []  # Track team members separately
+                cross_team_assigned = []  # Track cross-team workers separately
                 
                 for team in teams:
                     if (team.id, week_idx, shift) not in team_shift:
@@ -422,12 +427,15 @@ def add_staffing_constraints(
                             is_on_shift,
                             [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
                         )
-                        assigned.append(is_on_shift)
+                        team_assigned.append(is_on_shift)
                 
                 # ADD: Count cross-team weekend workers for this shift
                 for emp in employees:
                     if (emp.id, d, shift) in employee_cross_team_weekend:
-                        assigned.append(employee_cross_team_weekend[(emp.id, d, shift)])
+                        cross_team_assigned.append(employee_cross_team_weekend[(emp.id, d, shift)])
+                
+                # Combine for total staffing
+                assigned = team_assigned + cross_team_assigned
                 
                 if assigned:
                     total_assigned = sum(assigned)
@@ -438,12 +446,31 @@ def add_staffing_constraints(
                     model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
                     model.Add(overstaffing >= 0)
                     weekend_overstaffing_penalties.append(overstaffing)
+                    
+                    # NEW: Penalize cross-team usage when team has unfilled capacity on weekends too
+                    if team_assigned and cross_team_assigned:
+                        team_count = model.NewIntVar(0, 20, f"team_count_{shift}_{d}_weekend")
+                        cross_team_count = model.NewIntVar(0, 20, f"cross_count_{shift}_{d}_weekend")
+                        model.Add(team_count == sum(team_assigned))
+                        model.Add(cross_team_count == sum(cross_team_assigned))
+                        
+                        # Calculate unfilled team capacity: max - team_count
+                        unfilled_capacity = model.NewIntVar(0, 20, f"unfilled_{shift}_{d}_weekend")
+                        model.Add(unfilled_capacity == staffing[shift]["max"] - team_count)
+                        
+                        # Penalty = min(unfilled_capacity, cross_team_count)
+                        priority_violation = model.NewIntVar(0, 20, f"priority_violation_{shift}_{d}_weekend")
+                        model.AddMinEquality(priority_violation, [unfilled_capacity, cross_team_count])
+                        team_priority_violations.append(priority_violation)
+                    model.Add(overstaffing >= 0)
+                    weekend_overstaffing_penalties.append(overstaffing)
             else:
                 # WEEKDAY: Count team members + cross-team workers who work this shift
                 # A member works this shift if:
                 # 1. Their team has this shift this week
                 # 2. They are active on this day
-                assigned = []
+                team_assigned = []  # Track team members separately
+                cross_team_assigned = []  # Track cross-team workers separately
                 
                 for team in teams:
                     if (team.id, week_idx, shift) not in team_shift:
@@ -463,12 +490,15 @@ def add_staffing_constraints(
                             is_on_shift,
                             [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
                         )
-                        assigned.append(is_on_shift)
+                        team_assigned.append(is_on_shift)
                 
                 # ADD: Count cross-team workers for this shift on this day
                 for emp in employees:
                     if (emp.id, d, shift) in employee_cross_team_shift:
-                        assigned.append(employee_cross_team_shift[(emp.id, d, shift)])
+                        cross_team_assigned.append(employee_cross_team_shift[(emp.id, d, shift)])
+                
+                # Combine for total staffing
+                assigned = team_assigned + cross_team_assigned
                 
                 if assigned:
                     total_assigned = sum(assigned)
@@ -486,8 +516,27 @@ def add_staffing_constraints(
                     model.Add(understaffing >= staffing[shift]["max"] - total_assigned)
                     model.Add(understaffing >= 0)
                     weekday_understaffing_by_shift[shift].append(understaffing)
+                    
+                    # NEW: Penalize cross-team usage when team has unfilled capacity
+                    # If team_assigned < max AND cross_team_assigned > 0, that's a violation
+                    # This encourages filling with team members first
+                    if team_assigned and cross_team_assigned:
+                        team_count = model.NewIntVar(0, 20, f"team_count_{shift}_{d}")
+                        cross_team_count = model.NewIntVar(0, 20, f"cross_count_{shift}_{d}")
+                        model.Add(team_count == sum(team_assigned))
+                        model.Add(cross_team_count == sum(cross_team_assigned))
+                        
+                        # Calculate unfilled team capacity: max - team_count
+                        unfilled_capacity = model.NewIntVar(0, 20, f"unfilled_{shift}_{d}")
+                        model.Add(unfilled_capacity == staffing[shift]["max"] - team_count)
+                        
+                        # Penalty = min(unfilled_capacity, cross_team_count)
+                        # This is the number of cross-team workers that could have been team members
+                        priority_violation = model.NewIntVar(0, 20, f"priority_violation_{shift}_{d}")
+                        model.AddMinEquality(priority_violation, [unfilled_capacity, cross_team_count])
+                        team_priority_violations.append(priority_violation)
     
-    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift
+    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift, team_priority_violations
 
 
 

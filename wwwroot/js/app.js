@@ -2774,8 +2774,6 @@ async function showAddAbsenceModal(type) {
         modalTitle.textContent = 'Arbeitsunfähigkeit (AU) erfassen';
     } else if (type === 'L') {
         modalTitle.textContent = 'Lehrgang erfassen';
-    } else if (type === 'general') {
-        modalTitle.textContent = 'Allgemeine Abwesenheit erfassen';
     } else if (!type || type === 'all') {
         modalTitle.textContent = 'Abwesenheit erfassen';
     }

@@ -1165,7 +1165,7 @@ def add_shift_sequence_grouping_constraints(
         # ADDITIONAL CHECK: Detect A-B-B-A patterns (two consecutive days of shift B between shift A days)
         # This addresses cases like S-F-F-S or S-N-N-S which violate shift grouping
         # Even higher penalty since this is a clear violation of the grouping principle
-        DOUBLE_ISOLATION_PENALTY = 25000  # Highest priority - prevent two consecutive days of wrong shift type
+        DOUBLE_ISOLATION_PENALTY = 50000  # EXTREMELY high priority - prevent two consecutive days of wrong shift type
         
         for shift_A in shift_codes:
             for shift_B in shift_codes:

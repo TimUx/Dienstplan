@@ -1103,6 +1103,61 @@ def add_shift_sequence_grouping_constraints(
                                 )
                                 model.Add(penalty_var == violation_var * ISOLATION_PENALTY)
                                 grouping_penalties.append(penalty_var)
+        
+        # ADDITIONAL CHECK: Strict enforcement for patterns within a 10-day window
+        # This adds an even stronger penalty for short-range violations (same week or adjacent weeks)
+        # to make them nearly impossible to occur
+        ULTRA_HIGH_PENALTY = 20000  # Double the normal penalty for close-range violations
+        
+        for shift_A in shift_codes:
+            for shift_B in shift_codes:
+                if shift_A == shift_B:
+                    continue
+                
+                # Check every consecutive pair of days where the employee could work
+                for i in range(len(period_shift_data)):
+                    for j in range(i + 1, len(period_shift_data)):
+                        day_i, shifts_i = period_shift_data[i]
+                        day_j, shifts_j = period_shift_data[j]
+                        
+                        # Only check pairs within 10 calendar days
+                        if (day_j - day_i).days > 10:
+                            break  # No need to check further since list is sorted
+                        
+                        # Check for A-B pattern (day_i has shift_A, day_j has shift_B)
+                        if shift_A not in shifts_i or shift_B not in shifts_j:
+                            continue
+                        
+                        # Now check if there's any later day within 10 days that has shift_A again
+                        for k in range(j + 1, len(period_shift_data)):
+                            day_k, shifts_k = period_shift_data[k]
+                            
+                            # Check if day_k is within 10 days of day_i
+                            if (day_k - day_i).days > 10:
+                                break
+                            
+                            # Check if day_k has shift_A
+                            if shift_A not in shifts_k:
+                                continue
+                            
+                            # Found A-B-A pattern within 10-day window - apply ultra-high penalty
+                            all_active = []
+                            all_active.extend(shifts_i[shift_A])
+                            all_active.extend(shifts_j[shift_B])
+                            all_active.extend(shifts_k[shift_A])
+                            
+                            violation_var = model.NewBoolVar(
+                                f"seq_ultra_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                            )
+                            model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
+                            model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
+                            
+                            penalty_var = model.NewIntVar(
+                                0, ULTRA_HIGH_PENALTY,
+                                f"seq_ultra_pen_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                            )
+                            model.Add(penalty_var == violation_var * ULTRA_HIGH_PENALTY)
+                            grouping_penalties.append(penalty_var)
     
     return grouping_penalties
 

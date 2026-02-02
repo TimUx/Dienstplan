@@ -958,7 +958,8 @@ def add_shift_sequence_grouping_constraints(
     
     # Very high penalty for isolated shift types - must be higher than other shift stability constraints
     # This is critical to prevent patterns like N-N-N-S-N-N or S-S-F-S-S
-    ISOLATION_PENALTY = 5000  # Significantly increased to ensure this constraint is strongly enforced
+    # Increased even further to ensure this constraint dominates over other soft constraints
+    ISOLATION_PENALTY = 10000  # Dramatically increased to make shift grouping the highest priority
     
     # Helper to get shift type for a specific day
     def get_shift_type_for_day(emp_id, d):
@@ -1145,11 +1146,11 @@ def add_minimum_consecutive_weekday_shifts_constraints(
     min_consecutive_penalties = []
     
     # Very high penalty for shift type changes on consecutive weekdays
-    # Increased from 1500 to 3000 to more strongly enforce the constraint
-    SHIFT_CHANGE_PENALTY = 3000  # Very high penalty to enforce minimum 2 consecutive days
+    # Increased dramatically to make this the top priority constraint
+    SHIFT_CHANGE_PENALTY = 6000  # Extremely high penalty to enforce minimum 2 consecutive days
     # Even higher penalty for single isolated days
-    # Increased from 2000 to 4000 to more strongly prevent A-B-A patterns
-    SINGLE_DAY_PENALTY = 4000  # Extremely high penalty for clear violations
+    # Increased even further to prevent A-B-A patterns at all costs
+    SINGLE_DAY_PENALTY = 8000  # Maximum priority penalty for clear violations
     
     # Pre-compute date-to-week mapping
     date_to_week = {}

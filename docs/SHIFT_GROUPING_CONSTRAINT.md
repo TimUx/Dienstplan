@@ -75,7 +75,7 @@ In the February 2026 schedule, several employees had problematic shift patterns 
 
 **Type**: Soft Constraint (penalized but not forbidden)
 
-**Penalty**: 1000 points per violation
+**Penalty**: 5000 points per violation (significantly increased to ensure strong enforcement)
 
 ### Algorithm
 
@@ -103,7 +103,7 @@ Check: Is Thursday between Tuesday and Friday?
 
 Create constraint:
   IF (Tuesday=S AND Thursday=F AND Friday=S)
-  THEN penalty = 1000
+  THEN penalty = 5000
 ```
 
 ### Code Structure
@@ -140,8 +140,8 @@ def add_shift_sequence_grouping_constraints(
                                 if day_A1 < day_B < day_A2:
                                     # Create penalty constraint
                                     violation_var = model.NewBoolVar(...)
-                                    penalty_var = model.NewIntVar(0, 1000, ...)
-                                    model.Add(penalty_var == violation_var * 1000)
+                                    penalty_var = model.NewIntVar(0, 5000, ...)
+                                    model.Add(penalty_var == violation_var * 5000)
                                     penalties.append(penalty_var)
     
     return penalties
@@ -172,20 +172,20 @@ The constraint is integrated into the main solver in `solver.py`:
    if shift_grouping_penalties:
        print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
        for penalty_var in shift_grouping_penalties:
-           objective_terms.append(penalty_var)  # 1000 per violation
+           objective_terms.append(penalty_var)  # 5000 per violation
    ```
 
 ### Penalty Weight
 
-- **Value**: 1000 points per violation
+- **Value**: 5000 points per violation (significantly increased for strong enforcement)
 - **Relative Priority**:
-  - Higher than shift hopping (200 points)
-  - Higher than weekend consistency (300 points)
-  - Higher than consecutive shifts (300-400 points)
-  - Equal to weekly shift type diversity (500 points)
-  - Lower than night shift consistency (600 points)
+  - **HIGHEST PRIORITY** among soft constraints
+  - Higher than single-day penalty (2000 points)
+  - Higher than minimum consecutive shifts (1500 points)
+  - Higher than night shift consistency (600 points)
+  - Higher than weekly shift type diversity (500 points)
 
-This ensures shift grouping is strongly encouraged while still allowing other important constraints to be satisfied.
+This ensures shift grouping is the most strongly enforced soft constraint, preventing isolated shift patterns even when other constraints are difficult to satisfy.
 
 ## Testing
 

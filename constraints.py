@@ -1161,6 +1161,86 @@ def add_shift_sequence_grouping_constraints(
                             )
                             model.Add(penalty_var == violation_var * ULTRA_HIGH_PENALTY)
                             grouping_penalties.append(penalty_var)
+        
+        # ADDITIONAL CHECK: Detect A-B-B-A patterns (two consecutive days of shift B between shift A days)
+        # This addresses cases like S-F-F-S or S-N-N-S which violate shift grouping
+        # Even higher penalty since this is a clear violation of the grouping principle
+        A_B_B_A_PATTERN_PENALTY = 50000  # EXTREMELY high priority - prevent sandwiched shift patterns
+        
+        for shift_A in shift_codes:
+            for shift_B in shift_codes:
+                if shift_A == shift_B:
+                    continue
+                
+                # Check for A-B-B-A pattern: day_i has shift_A, day_j and day_j1 have shift_B, day_k has shift_A
+                # We need to ensure day_j and day_j1 are consecutive OR near-consecutive calendar days
+                # NOTE: This creates O(n^4) complexity in worst case, but is mitigated by:
+                # - Breaking early when days exceed 10-day window
+                # - Breaking when day_j1 is more than 3 days from day_j
+                # - Only checking days where employee could potentially work
+                for i in range(len(period_shift_data)):
+                    day_i, shifts_i = period_shift_data[i]
+                    
+                    if shift_A not in shifts_i:
+                        continue
+                    
+                    # Look for pairs of days with shift_B (not necessarily adjacent in the list)
+                    for j in range(i + 1, len(period_shift_data)):
+                        day_j, shifts_j = period_shift_data[j]
+                        
+                        # Only check within 10 calendar days from day_i
+                        if (day_j - day_i).days > 10:
+                            break
+                        
+                        # Check if day_j has shift_B
+                        if shift_B not in shifts_j:
+                            continue
+                        
+                        # Look for another day with shift_B that's within 3 calendar days of day_j
+                        for j1_idx in range(j + 1, len(period_shift_data)):
+                            day_j1, shifts_j1 = period_shift_data[j1_idx]
+                            
+                            # Only check if day_j1 is within 3 calendar days of day_j
+                            # This allows for patterns like: Mon(B), Tue(B) or Mon(B), Wed(B) with Tue off
+                            if (day_j1 - day_j).days > 3:
+                                break
+                            
+                            # Check if day_j1 has shift_B
+                            if shift_B not in shifts_j1:
+                                continue
+                            
+                            # Now check if there's a later day with shift_A after these two B days
+                            for k in range(j1_idx + 1, len(period_shift_data)):
+                                day_k, shifts_k = period_shift_data[k]
+                                
+                                # Only check within 10 calendar days from day_i
+                                if (day_k - day_i).days > 10:
+                                    break
+                                
+                                # Check if day_k has shift_A
+                                if shift_A not in shifts_k:
+                                    continue
+                                
+                                # Found A-B-B-A pattern - this is a serious violation
+                                # Pattern: shift_A on day_i, shift_B on day_j, shift_B on day_j1, shift_A on day_k
+                                all_active = []
+                                all_active.extend(shifts_i[shift_A])
+                                all_active.extend(shifts_j[shift_B])
+                                all_active.extend(shifts_j1[shift_B])
+                                all_active.extend(shifts_k[shift_A])
+                                
+                                violation_var = model.NewBoolVar(
+                                    f"a_b_b_a_pattern_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                                )
+                                model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
+                                model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
+                                
+                                penalty_var = model.NewIntVar(
+                                    0, A_B_B_A_PATTERN_PENALTY,
+                                    f"a_b_b_a_penalty_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                                )
+                                model.Add(penalty_var == violation_var * A_B_B_A_PATTERN_PENALTY)
+                                grouping_penalties.append(penalty_var)
     
     return grouping_penalties
 

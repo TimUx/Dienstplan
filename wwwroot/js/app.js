@@ -2723,11 +2723,7 @@ async function showAddAbsenceModal(type) {
         } catch (error) {
             console.error('Error loading absence types:', error);
         }
-        if (type === 'general') {
-            modalTitle.textContent = 'Abwesenheit erfassen';
-        } else {
-            modalTitle.textContent = 'Abwesenheit erfassen';
-        }
+        modalTitle.textContent = 'Abwesenheit erfassen';
     } else {
         // Hide absence type selector for specific types (legacy support)
         document.getElementById('absenceTypeSelectGroup').style.display = 'none';

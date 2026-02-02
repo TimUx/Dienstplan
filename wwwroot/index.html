@@ -206,9 +206,7 @@
                 <!-- Tab Navigation -->
                 <div class="tabs">
                     <button class="tab-btn active" onclick="switchAbsenceTab('vacation')">🏖️ Urlaub</button>
-                    <button class="tab-btn" onclick="switchAbsenceTab('sick')">🏥 Arbeitsunfähigkeit (AU)</button>
-                    <button class="tab-btn" onclick="switchAbsenceTab('training')">🎓 Lehrgang / Schulung</button>
-                    <button class="tab-btn" onclick="switchAbsenceTab('other')">📋 Sonstige Abwesenheiten</button>
+                    <button class="tab-btn" onclick="switchAbsenceTab('general')">📋 Abwesenheiten</button>
                     <button class="tab-btn" onclick="switchAbsenceTab('vacation-periods')">📅 Ferienzeiten</button>
                     <button class="tab-btn admin-only" onclick="switchAbsenceTab('vacation-year-approvals')" id="tab-vacation-year-approvals" style="display:none;">✅ Urlaubsjahresplan Freigabe</button>
                     <button class="tab-btn admin-only" onclick="switchAbsenceTab('absence-types')" id="tab-absence-types" style="display:none;">⚙️ Abwesenheitstypen</button>
@@ -229,45 +227,19 @@
                     </div>
                 </div>
                 
-                <!-- Sick Leave Tab -->
-                <div id="sick-tab" class="tab-content">
-                    <h3>Arbeitsunfähigkeit (AU)</h3>
-                    <p class="info">AU-Meldungen werden ohne Genehmigungsprozess direkt erfasst.</p>
-                    <div class="controls">
-                        <button onclick="showAddAbsenceModal('AU')" class="btn-primary admin-only">+ AU erfassen</button>
-                        <button onclick="loadAbsences('AU')" class="btn-secondary">Alle AU anzeigen</button>
-                    </div>
-                    <div id="sick-absences-content">
-                        <p class="loading">Lade Arbeitsunfähigkeiten...</p>
-                    </div>
-                </div>
-                
-                <!-- Training Tab -->
-                <div id="training-tab" class="tab-content">
-                    <h3>Lehrgang / Schulung / Training</h3>
-                    <p class="info">Lehrgänge und Schulungen werden ohne Genehmigungsprozess direkt erfasst.</p>
-                    <div class="controls">
-                        <button onclick="showAddAbsenceModal('L')" class="btn-primary admin-only">+ Lehrgang erfassen</button>
-                        <button onclick="loadAbsences('L')" class="btn-secondary">Alle Lehrgänge anzeigen</button>
-                    </div>
-                    <div id="training-absences-content">
-                        <p class="loading">Lade Lehrgänge...</p>
-                    </div>
-                </div>
-
-                <!-- Other Absences Tab -->
-                <div id="other-tab" class="tab-content">
-                    <h3>📋 Sonstige Abwesenheiten</h3>
+                <!-- General Absences Tab (AU, L, and custom types) -->
+                <div id="general-tab" class="tab-content">
+                    <h3>📋 Abwesenheiten</h3>
                     <p class="info">
-                        Benutzerdefinierte Abwesenheiten (z.B. Elternzeit, Fortbildung, Sonderurlaub). 
-                        Diese werden wie Standard-Abwesenheiten behandelt: keine Schichtplanung, automatische Springer-Zuweisung.
+                        Alle Abwesenheiten außer Urlaub: Arbeitsunfähigkeit (AU), Lehrgänge, Fortbildungen, und weitere benutzerdefinierte Abwesenheitstypen.
+                        Diese werden ohne Genehmigungsprozess direkt erfasst.
                     </p>
                     <div class="controls">
-                        <button onclick="showAddAbsenceModal('all')" class="btn-primary admin-only">+ Sonstige Abwesenheit erfassen</button>
-                        <button onclick="loadAbsences('all')" class="btn-secondary">Alle anzeigen</button>
+                        <button onclick="showAddAbsenceModal('general')" class="btn-primary admin-only">+ Abwesenheit erfassen</button>
+                        <button onclick="loadAbsences('general')" class="btn-secondary">Alle anzeigen</button>
                     </div>
-                    <div id="other-absences-content">
-                        <p class="loading">Lade sonstige Abwesenheiten...</p>
+                    <div id="general-absences-content">
+                        <p class="loading">Lade Abwesenheiten...</p>
                     </div>
                 </div>
 

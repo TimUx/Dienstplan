@@ -1165,7 +1165,7 @@ def add_shift_sequence_grouping_constraints(
         # ADDITIONAL CHECK: Detect A-B-B-A patterns (two consecutive days of shift B between shift A days)
         # This addresses cases like S-F-F-S or S-N-N-S which violate shift grouping
         # Even higher penalty since this is a clear violation of the grouping principle
-        DOUBLE_ISOLATION_PENALTY = 50000  # EXTREMELY high priority - prevent two consecutive days of wrong shift type
+        A_B_B_A_PATTERN_PENALTY = 50000  # EXTREMELY high priority - prevent sandwiched shift patterns
         
         for shift_A in shift_codes:
             for shift_B in shift_codes:
@@ -1174,6 +1174,10 @@ def add_shift_sequence_grouping_constraints(
                 
                 # Check for A-B-B-A pattern: day_i has shift_A, day_j and day_j1 have shift_B, day_k has shift_A
                 # We need to ensure day_j and day_j1 are consecutive OR near-consecutive calendar days
+                # NOTE: This creates O(n^4) complexity in worst case, but is mitigated by:
+                # - Breaking early when days exceed 10-day window
+                # - Breaking when day_j1 is more than 3 days from day_j
+                # - Only checking days where employee could potentially work
                 for i in range(len(period_shift_data)):
                     day_i, shifts_i = period_shift_data[i]
                     
@@ -1226,16 +1230,16 @@ def add_shift_sequence_grouping_constraints(
                                 all_active.extend(shifts_k[shift_A])
                                 
                                 violation_var = model.NewBoolVar(
-                                    f"seq_double_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                                    f"a_b_b_a_pattern_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
                                 )
                                 model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
                                 model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
                                 
                                 penalty_var = model.NewIntVar(
-                                    0, DOUBLE_ISOLATION_PENALTY,
-                                    f"seq_double_pen_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                                    0, A_B_B_A_PATTERN_PENALTY,
+                                    f"a_b_b_a_penalty_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
                                 )
-                                model.Add(penalty_var == violation_var * DOUBLE_ISOLATION_PENALTY)
+                                model.Add(penalty_var == violation_var * A_B_B_A_PATTERN_PENALTY)
                                 grouping_penalties.append(penalty_var)
     
     return grouping_penalties

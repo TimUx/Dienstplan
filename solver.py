@@ -118,6 +118,7 @@ class ShiftPlanningSolver:
         
         # Shift sequence grouping constraint (prevent isolated shift types)
         print("  - Shift sequence grouping constraints (prevent isolated shift types like S-S-F-S-S)")
+        print("    * Including ultra-high penalties (20000) for A-B-A patterns within 10-day windows")
         shift_grouping_penalties = add_shift_sequence_grouping_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend,
@@ -233,13 +234,13 @@ class ShiftPlanningSolver:
         if shift_grouping_penalties:
             print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
             for penalty_var in shift_grouping_penalties:
-                objective_terms.append(penalty_var)  # Already weighted (5000 per isolation)
+                objective_terms.append(penalty_var)  # Already weighted (10000-20000 per isolation)
         
         # Add minimum consecutive weekday shifts penalties (strongly enforce min 2 consecutive days during weekdays)
         if min_consecutive_weekday_penalties:
             print(f"  Adding {len(min_consecutive_weekday_penalties)} minimum consecutive weekday shift penalties...")
             for penalty_var in min_consecutive_weekday_penalties:
-                objective_terms.append(penalty_var)  # Already weighted (2000 per single-day violation)
+                objective_terms.append(penalty_var)  # Already weighted (6000-8000 per violation)
         
         # Add weekly shift type limit penalties (strongly discourage > 2 shift types per week)
         if weekly_shift_type_penalties:

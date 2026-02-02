@@ -958,7 +958,8 @@ def add_shift_sequence_grouping_constraints(
     
     # Very high penalty for isolated shift types - must be higher than other shift stability constraints
     # This is critical to prevent patterns like N-N-N-S-N-N or S-S-F-S-S
-    ISOLATION_PENALTY = 5000  # Significantly increased to ensure this constraint is strongly enforced
+    # Increased even further to ensure this constraint dominates over other soft constraints
+    ISOLATION_PENALTY = 10000  # Dramatically increased to make shift grouping the highest priority
     
     # Helper to get shift type for a specific day
     def get_shift_type_for_day(emp_id, d):
@@ -1057,8 +1058,11 @@ def add_shift_sequence_grouping_constraints(
             if shift_data:  # If shift_data is not empty, employee could work this day
                 period_shift_data.append((d, shift_data))
         
+        # NOTE: period_shift_data is sorted by date because we iterate through 'dates' which is sorted
+        # This assumption is used in the optimization below where we break early when days are > 10 apart
+        
         # Now check for problematic patterns across all working days
-        # Pattern to detect: shift_A appears, then shift_B appears, then shift_A appears again
+        # Pattern to detect: shift_A appears, then shift B appears, then shift_A appears again
         # This means shifts are not properly grouped
         # KEY FIX: We now only look at POTENTIAL WORKING DAYS, not all calendar days
         
@@ -1102,6 +1106,61 @@ def add_shift_sequence_grouping_constraints(
                                 )
                                 model.Add(penalty_var == violation_var * ISOLATION_PENALTY)
                                 grouping_penalties.append(penalty_var)
+        
+        # ADDITIONAL CHECK: Strict enforcement for patterns within a 10-day window
+        # This adds an even stronger penalty for short-range violations (same week or adjacent weeks)
+        # to make them nearly impossible to occur
+        ULTRA_HIGH_PENALTY = 20000  # Double the normal penalty for close-range violations
+        
+        for shift_A in shift_codes:
+            for shift_B in shift_codes:
+                if shift_A == shift_B:
+                    continue
+                
+                # Check every consecutive pair of days where the employee could work
+                for i in range(len(period_shift_data)):
+                    for j in range(i + 1, len(period_shift_data)):
+                        day_i, shifts_i = period_shift_data[i]
+                        day_j, shifts_j = period_shift_data[j]
+                        
+                        # Only check pairs within 10 calendar days
+                        if (day_j - day_i).days > 10:
+                            break  # No need to check further since list is sorted
+                        
+                        # Check for A-B pattern (day_i has shift_A, day_j has shift_B)
+                        if shift_A not in shifts_i or shift_B not in shifts_j:
+                            continue
+                        
+                        # Now check if there's any later day within 10 days that has shift_A again
+                        for k in range(j + 1, len(period_shift_data)):
+                            day_k, shifts_k = period_shift_data[k]
+                            
+                            # Check if day_k is within 10 days of day_i
+                            if (day_k - day_i).days > 10:
+                                break
+                            
+                            # Check if day_k has shift_A
+                            if shift_A not in shifts_k:
+                                continue
+                            
+                            # Found A-B-A pattern within 10-day window - apply ultra-high penalty
+                            all_active = []
+                            all_active.extend(shifts_i[shift_A])
+                            all_active.extend(shifts_j[shift_B])
+                            all_active.extend(shifts_k[shift_A])
+                            
+                            violation_var = model.NewBoolVar(
+                                f"seq_ultra_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                            )
+                            model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
+                            model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
+                            
+                            penalty_var = model.NewIntVar(
+                                0, ULTRA_HIGH_PENALTY,
+                                f"seq_ultra_pen_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                            )
+                            model.Add(penalty_var == violation_var * ULTRA_HIGH_PENALTY)
+                            grouping_penalties.append(penalty_var)
     
     return grouping_penalties
 
@@ -1145,11 +1204,11 @@ def add_minimum_consecutive_weekday_shifts_constraints(
     min_consecutive_penalties = []
     
     # Very high penalty for shift type changes on consecutive weekdays
-    # Increased from 1500 to 3000 to more strongly enforce the constraint
-    SHIFT_CHANGE_PENALTY = 3000  # Very high penalty to enforce minimum 2 consecutive days
+    # Increased dramatically to make this the top priority constraint
+    SHIFT_CHANGE_PENALTY = 6000  # Extremely high penalty to enforce minimum 2 consecutive days
     # Even higher penalty for single isolated days
-    # Increased from 2000 to 4000 to more strongly prevent A-B-A patterns
-    SINGLE_DAY_PENALTY = 4000  # Extremely high penalty for clear violations
+    # Increased even further to prevent A-B-A patterns at all costs
+    SINGLE_DAY_PENALTY = 8000  # Maximum priority penalty for clear violations
     
     # Pre-compute date-to-week mapping
     date_to_week = {}

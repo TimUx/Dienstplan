@@ -2596,14 +2596,10 @@ function switchShiftManagementTab(subTabName) {
 }
 
 
-// Load Absences (AU, L, general, or all)
+// Load Absences (general or all)
 async function loadAbsences(type) {
     let contentId;
-    if (type === 'AU') {
-        contentId = 'sick-absences-content';
-    } else if (type === 'L') {
-        contentId = 'training-absences-content';
-    } else if (type === 'general') {
+    if (type === 'general') {
         contentId = 'general-absences-content';
     } else {
         contentId = 'other-absences-content';
@@ -2627,10 +2623,6 @@ async function loadAbsences(type) {
             } else if (type === 'all') {
                 // Show all absences (primarily custom types, but can include standard ones)
                 filteredAbsences = absences;
-            } else if (type === 'AU') {
-                filteredAbsences = absences.filter(a => a.typeCode === 'AU' || a.type === 'Krank / AU' || a.type === 'Krank');
-            } else if (type === 'L') {
-                filteredAbsences = absences.filter(a => a.typeCode === 'L' || a.type === 'Lehrgang');
             } else {
                 filteredAbsences = absences;
             }
@@ -2647,11 +2639,7 @@ async function loadAbsences(type) {
 // Display Absences Table
 function displayAbsences(absences, type) {
     let contentId;
-    if (type === 'AU') {
-        contentId = 'sick-absences-content';
-    } else if (type === 'L') {
-        contentId = 'training-absences-content';
-    } else if (type === 'general') {
+    if (type === 'general') {
         contentId = 'general-absences-content';
     } else {
         contentId = 'other-absences-content';
@@ -2661,11 +2649,7 @@ function displayAbsences(absences, type) {
     
     if (absences.length === 0) {
         let typeName;
-        if (type === 'AU') {
-            typeName = 'Arbeitsunfähigkeiten';
-        } else if (type === 'L') {
-            typeName = 'Lehrgänge';
-        } else if (type === 'general') {
+        if (type === 'general') {
             typeName = 'allgemeinen Abwesenheiten';
         } else {
             typeName = 'Abwesenheiten';
@@ -2839,10 +2823,6 @@ async function saveAbsence(event) {
                     const tabId = activeTab.id.replace('-tab', '');
                     if (tabId === 'general') {
                         loadAbsences('general');
-                    } else if (tabId === 'sick') {
-                        loadAbsences('AU');
-                    } else if (tabId === 'training') {
-                        loadAbsences('L');
                     }
                 }
             }

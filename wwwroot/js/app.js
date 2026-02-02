@@ -2596,16 +2596,16 @@ function switchShiftManagementTab(subTabName) {
 }
 
 
-// Load Absences (general or all)
+// Load Absences (general type only - all non-vacation absences)
 async function loadAbsences(type) {
-    let contentId;
-    if (type === 'general') {
-        contentId = 'general-absences-content';
-    } else {
-        contentId = 'other-absences-content';
-    }
+    const contentId = 'general-absences-content';
     
     const content = document.getElementById(contentId);
+    if (!content) {
+        console.error(`Content element not found: ${contentId}`);
+        return;
+    }
+    
     content.innerHTML = '<p class="loading">Lade Abwesenheiten...</p>';
     
     try {
@@ -2615,17 +2615,8 @@ async function loadAbsences(type) {
         
         if (response.ok) {
             const absences = await response.json();
-            // Filter by type
-            let filteredAbsences;
-            if (type === 'general') {
-                // Show all non-vacation absences (AU, L, and custom types, but exclude U/Urlaub)
-                filteredAbsences = absences.filter(a => a.typeCode !== 'U' && a.type !== 'Urlaub');
-            } else if (type === 'all') {
-                // Show all absences (primarily custom types, but can include standard ones)
-                filteredAbsences = absences;
-            } else {
-                filteredAbsences = absences;
-            }
+            // Show all non-vacation absences (AU, L, and custom types, but exclude U/Urlaub)
+            const filteredAbsences = absences.filter(a => a.typeCode !== 'U' && a.type !== 'Urlaub');
             displayAbsences(filteredAbsences, type);
         } else {
             content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
@@ -2638,23 +2629,16 @@ async function loadAbsences(type) {
 
 // Display Absences Table
 function displayAbsences(absences, type) {
-    let contentId;
-    if (type === 'general') {
-        contentId = 'general-absences-content';
-    } else {
-        contentId = 'other-absences-content';
-    }
+    const contentId = 'general-absences-content';
     
     const content = document.getElementById(contentId);
+    if (!content) {
+        console.error(`Content element not found: ${contentId}`);
+        return;
+    }
     
     if (absences.length === 0) {
-        let typeName;
-        if (type === 'general') {
-            typeName = 'allgemeinen Abwesenheiten';
-        } else {
-            typeName = 'Abwesenheiten';
-        }
-        content.innerHTML = `<p>Keine ${typeName} vorhanden.</p>`;
+        content.innerHTML = '<p>Keine allgemeinen Abwesenheiten vorhanden.</p>';
         return;
     }
     
@@ -2662,9 +2646,8 @@ function displayAbsences(absences, type) {
     
     let html = '<table class="data-table"><thead><tr>';
     html += '<th>Mitarbeiter</th>';
-    if (type === 'all' || type === 'general') {
-        html += '<th>Typ</th>';
-    }
+    // Always show type column for general absences to distinguish between AU, L, and custom types
+    html += '<th>Typ</th>';
     html += '<th>Von</th>';
     html += '<th>Bis</th>';
     html += '<th>Notizen</th>';
@@ -2678,11 +2661,9 @@ function displayAbsences(absences, type) {
         html += '<tr>';
         html += `<td>${absence.employeeName || 'Unbekannt'}</td>`;
         
-        // Show type column for 'all' or 'general' view
-        if (type === 'all' || type === 'general') {
-            const typeColor = absence.typeColor || '#E0E0E0';
-            html += `<td><span style="display: inline-block; padding: 2px 8px; background: ${typeColor}; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">${absence.typeCode || absence.type}</span></td>`;
-        }
+        // Always show type column for general absences
+        const typeColor = absence.typeColor || '#E0E0E0';
+        html += `<td><span style="display: inline-block; padding: 2px 8px; background: ${typeColor}; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">${absence.typeCode || absence.type}</span></td>`;
         
         html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
         html += `<td>${new Date(absence.endDate).toLocaleDateString('de-DE')}</td>`;

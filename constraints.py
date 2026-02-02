@@ -1039,21 +1039,31 @@ def add_shift_sequence_grouping_constraints(
         
         return result
     
-    # Check patterns within each week (most common case)
+    # Check patterns across longer periods to catch patterns that span free days
+    # We need to check beyond single weeks to catch patterns like: N - F N N N
+    # where the free day breaks the week boundary or creates gaps
     for emp in employees:
         if not emp.team_id:
             continue
         
-        for week_idx, week_dates in enumerate(weeks):
-            # Get shift assignments for each day in the week
-            week_shift_data = []
-            for d in week_dates:
-                shift_data = get_shift_type_for_day(emp.id, d)
-                week_shift_data.append((d, shift_data))
+        # Check patterns across the entire planning period, not just within weeks
+        # This ensures we catch patterns even when free days create gaps
+        for period_start_idx in range(0, len(dates), 7):  # Check in 2-week sliding windows
+            period_end_idx = min(period_start_idx + 14, len(dates))  # 2-week window
+            period_dates = dates[period_start_idx:period_end_idx]
             
-            # Now check for problematic patterns within this week
+            # Get shift assignments for each day in the period
+            period_shift_data = []
+            for d in period_dates:
+                shift_data = get_shift_type_for_day(emp.id, d)
+                # Only include days where the employee COULD work (has potential shift assignments)
+                if shift_data:  # If shift_data is not empty, employee could work this day
+                    period_shift_data.append((d, shift_data))
+            
+            # Now check for problematic patterns within this period
             # Pattern to detect: shift_A appears, then shift_B appears, then shift_A appears again
             # This means shifts are not properly grouped
+            # KEY FIX: We now only look at POTENTIAL WORKING DAYS, not all calendar days
             
             # For each pair of shift types
             for shift_A in shift_codes:
@@ -1061,9 +1071,9 @@ def add_shift_sequence_grouping_constraints(
                     if shift_A == shift_B:
                         continue
                     
-                    # Find all days where each shift could be assigned
-                    days_with_A = [(d, data[shift_A]) for d, data in week_shift_data if shift_A in data]
-                    days_with_B = [(d, data[shift_B]) for d, data in week_shift_data if shift_B in data]
+                    # Find all working days where each shift could be assigned
+                    days_with_A = [(d, data[shift_A]) for d, data in period_shift_data if shift_A in data]
+                    days_with_B = [(d, data[shift_B]) for d, data in period_shift_data if shift_B in data]
                     
                     if len(days_with_A) < 2 or len(days_with_B) < 1:
                         continue  # Not enough days for a violation pattern
@@ -1083,15 +1093,15 @@ def add_shift_sequence_grouping_constraints(
                                     
                                     # Create boolean: is_violation = (all variables are 1)
                                     violation_var = model.NewBoolVar(
-                                        f"seq_group_{emp.id}_w{week_idx}_{day_A1.day}_{day_B.day}_{day_A2.day}_{shift_A}_{shift_B}"
+                                        f"seq_group_{emp.id}_{day_A1.isoformat()}_{day_B.isoformat()}_{day_A2.isoformat()}_{shift_A}_{shift_B}"
                                     )
                                     model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
                                     model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
                                     
-                                    # Add penalty
+                                    # Add penalty - increased to be even more strict
                                     penalty_var = model.NewIntVar(
                                         0, ISOLATION_PENALTY,
-                                        f"seq_group_pen_{emp.id}_w{week_idx}_{day_A1.day}_{day_B.day}_{day_A2.day}_{shift_A}_{shift_B}"
+                                        f"seq_group_pen_{emp.id}_{day_A1.isoformat()}_{day_B.isoformat()}_{day_A2.isoformat()}_{shift_A}_{shift_B}"
                                     )
                                     # penalty_var = violation_var * ISOLATION_PENALTY
                                     model.Add(penalty_var == violation_var * ISOLATION_PENALTY)
@@ -1218,22 +1228,27 @@ def add_minimum_consecutive_weekday_shifts_constraints(
         if not emp.team_id:
             continue
         
-        # PART 1: Check for shift type changes on consecutive weekdays
-        # If employee works on two consecutive weekdays, they should work the same shift
-        for i in range(len(dates) - 1):
-            day1 = dates[i]
-            day2 = dates[i + 1]
-            
-            # Only check if BOTH days are weekdays (Mon-Fri)
-            # This correctly excludes weekend transitions (Fri->Sat, Sat->Sun, Sun->Mon)
-            if day1.weekday() >= 5 or day2.weekday() >= 5:
+        # PART 1: Check for shift type changes on consecutive WORKING weekdays
+        # If employee works on two consecutive WORKING weekdays, they should work the same shift
+        # KEY FIX: Check consecutive working days, not just consecutive calendar days
+        
+        # Build list of potential working weekdays (Mon-Fri where employee could work)
+        working_weekdays_with_shifts = []
+        for d in dates:
+            # Only weekdays
+            if d.weekday() >= 5:
                 continue
+            shifts = get_shift_vars_for_day(emp.id, d)
+            # Only days where employee could work (has potential shift assignments)
+            if shifts:
+                working_weekdays_with_shifts.append((d, shifts))
+        
+        # Check consecutive WORKING days (not calendar days)
+        for i in range(len(working_weekdays_with_shifts) - 1):
+            day1, shifts1 = working_weekdays_with_shifts[i]
+            day2, shifts2 = working_weekdays_with_shifts[i + 1]
             
-            # Get shift variables for both days
-            shifts1 = get_shift_vars_for_day(emp.id, day1)
-            shifts2 = get_shift_vars_for_day(emp.id, day2)
-            
-            # Check if employee works different shift types on consecutive days
+            # Check if employee works different shift types on these consecutive working days
             for shift_A in shift_codes:
                 for shift_B in shift_codes:
                     if shift_A == shift_B:
@@ -1263,18 +1278,28 @@ def add_minimum_consecutive_weekday_shifts_constraints(
                     model.Add(penalty_var == violation_var * SHIFT_CHANGE_PENALTY)
                     min_consecutive_penalties.append(penalty_var)
         
-        # PART 2: Check for single isolated days in 3-day windows (stronger penalty)
-        # Pattern: shift_A on day1, shift_B on day2, shift_A on day3 (day2 is isolated)
-        for i in range(len(dates) - 2):
-            day1 = dates[i]
-            day2 = dates[i + 1]
-            day3 = dates[i + 2]
-            
-            # Skip if any day is weekend - we only enforce this on weekdays
-            if day1.weekday() >= 5 or day2.weekday() >= 5 or day3.weekday() >= 5:
+        # PART 2: Check for single isolated days among WORKING DAYS (stronger penalty)
+        # Pattern: shift_A on working_day1, shift_B on working_day2, shift_A on working_day3 
+        # (working_day2 is isolated) - KEY FIX: Check working days, not consecutive calendar days
+        
+        # Build list of potential working weekdays (Mon-Fri where employee could work)
+        working_weekdays = []
+        for d in dates:
+            # Only weekdays
+            if d.weekday() >= 5:
                 continue
+            shifts = get_shift_vars_for_day(emp.id, d)
+            # Only days where employee could work (has potential shift assignments)
+            if shifts:
+                working_weekdays.append(d)
+        
+        # Now check 3-day windows among WORKING DAYS only
+        for i in range(len(working_weekdays) - 2):
+            day1 = working_weekdays[i]
+            day2 = working_weekdays[i + 1]
+            day3 = working_weekdays[i + 2]
             
-            # Get shift variables for each day
+            # Get shift variables for each working day
             shifts1 = get_shift_vars_for_day(emp.id, day1)
             shifts2 = get_shift_vars_for_day(emp.id, day2)
             shifts3 = get_shift_vars_for_day(emp.id, day3)

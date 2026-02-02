@@ -956,8 +956,9 @@ def add_shift_sequence_grouping_constraints(
     """
     grouping_penalties = []
     
-    # High penalty for isolated shift types
-    ISOLATION_PENALTY = 1000  # Increased from 500 to strongly discourage
+    # Very high penalty for isolated shift types - must be higher than other shift stability constraints
+    # This is critical to prevent patterns like N-N-N-S-N-N or S-S-F-S-S
+    ISOLATION_PENALTY = 5000  # Significantly increased to ensure this constraint is strongly enforced
     
     # Helper to get shift type for a specific day
     def get_shift_type_for_day(emp_id, d):

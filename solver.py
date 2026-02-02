@@ -233,7 +233,7 @@ class ShiftPlanningSolver:
         if shift_grouping_penalties:
             print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
             for penalty_var in shift_grouping_penalties:
-                objective_terms.append(penalty_var)  # Already weighted (1000 per isolation)
+                objective_terms.append(penalty_var)  # Already weighted (5000 per isolation)
         
         # Add minimum consecutive weekday shifts penalties (strongly enforce min 2 consecutive days during weekdays)
         if min_consecutive_weekday_penalties:

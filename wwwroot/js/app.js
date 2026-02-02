@@ -2518,12 +2518,8 @@ function switchAbsenceTab(tabName) {
     // Load content for the selected tab
     if (tabName === 'vacation') {
         loadVacationRequests('all');
-    } else if (tabName === 'sick') {
-        loadAbsences('AU');
-    } else if (tabName === 'training') {
-        loadAbsences('L');
-    } else if (tabName === 'other') {
-        loadAbsences('all');
+    } else if (tabName === 'general') {
+        loadAbsences('general');
     } else if (tabName === 'vacation-periods') {
         loadVacationPeriods();
     } else if (tabName === 'vacation-year-approvals') {
@@ -2600,13 +2596,15 @@ function switchShiftManagementTab(subTabName) {
 }
 
 
-// Load Absences (AU, L, or all)
+// Load Absences (AU, L, general, or all)
 async function loadAbsences(type) {
     let contentId;
     if (type === 'AU') {
         contentId = 'sick-absences-content';
     } else if (type === 'L') {
         contentId = 'training-absences-content';
+    } else if (type === 'general') {
+        contentId = 'general-absences-content';
     } else {
         contentId = 'other-absences-content';
     }
@@ -2623,7 +2621,10 @@ async function loadAbsences(type) {
             const absences = await response.json();
             // Filter by type
             let filteredAbsences;
-            if (type === 'all') {
+            if (type === 'general') {
+                // Show all non-vacation absences (AU, L, and custom types, but exclude U/Urlaub)
+                filteredAbsences = absences.filter(a => a.typeCode !== 'U' && a.type !== 'Urlaub');
+            } else if (type === 'all') {
                 // Show all absences (primarily custom types, but can include standard ones)
                 filteredAbsences = absences;
             } else if (type === 'AU') {
@@ -2650,6 +2651,8 @@ function displayAbsences(absences, type) {
         contentId = 'sick-absences-content';
     } else if (type === 'L') {
         contentId = 'training-absences-content';
+    } else if (type === 'general') {
+        contentId = 'general-absences-content';
     } else {
         contentId = 'other-absences-content';
     }
@@ -2662,6 +2665,8 @@ function displayAbsences(absences, type) {
             typeName = 'Arbeitsunfähigkeiten';
         } else if (type === 'L') {
             typeName = 'Lehrgänge';
+        } else if (type === 'general') {
+            typeName = 'allgemeinen Abwesenheiten';
         } else {
             typeName = 'Abwesenheiten';
         }
@@ -2673,7 +2678,7 @@ function displayAbsences(absences, type) {
     
     let html = '<table class="data-table"><thead><tr>';
     html += '<th>Mitarbeiter</th>';
-    if (type === 'all') {
+    if (type === 'all' || type === 'general') {
         html += '<th>Typ</th>';
     }
     html += '<th>Von</th>';
@@ -2689,8 +2694,8 @@ function displayAbsences(absences, type) {
         html += '<tr>';
         html += `<td>${absence.employeeName || 'Unbekannt'}</td>`;
         
-        // Show type column for 'all' view
-        if (type === 'all') {
+        // Show type column for 'all' or 'general' view
+        if (type === 'all' || type === 'general') {
             const typeColor = absence.typeColor || '#E0E0E0';
             html += `<td><span style="display: inline-block; padding: 2px 8px; background: ${typeColor}; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">${absence.typeCode || absence.type}</span></td>`;
         }
@@ -2732,8 +2737,8 @@ async function showAddAbsenceModal(type) {
         console.error('Error loading employees:', error);
     }
     
-    // Load absence types for dropdown if showing all types
-    if (!type || type === 'all') {
+    // Load absence types for dropdown if showing all or general types
+    if (!type || type === 'all' || type === 'general') {
         try {
             const response = await fetch(`${API_BASE}/absencetypes`);
             if (response.ok) {
@@ -2741,6 +2746,10 @@ async function showAddAbsenceModal(type) {
                 const select = document.getElementById('absenceTypeIdSelect');
                 select.innerHTML = '<option value="">Abwesenheitstyp wählen...</option>';
                 absenceTypes.forEach(at => {
+                    // Exclude vacation (U) from the dropdown when type is 'general'
+                    if (type === 'general' && (at.code === 'U' || at.name === 'Urlaub')) {
+                        return; // Skip this type
+                    }
                     select.innerHTML += `<option value="${at.id}">${at.name} (${at.code})</option>`;
                 });
                 document.getElementById('absenceTypeSelectGroup').style.display = 'block';
@@ -2749,7 +2758,11 @@ async function showAddAbsenceModal(type) {
         } catch (error) {
             console.error('Error loading absence types:', error);
         }
-        modalTitle.textContent = 'Abwesenheit erfassen';
+        if (type === 'general') {
+            modalTitle.textContent = 'Allgemeine Abwesenheit erfassen';
+        } else {
+            modalTitle.textContent = 'Abwesenheit erfassen';
+        }
     } else {
         // Hide absence type selector for specific types (legacy support)
         document.getElementById('absenceTypeSelectGroup').style.display = 'none';
@@ -2761,12 +2774,14 @@ async function showAddAbsenceModal(type) {
         modalTitle.textContent = 'Arbeitsunfähigkeit (AU) erfassen';
     } else if (type === 'L') {
         modalTitle.textContent = 'Lehrgang erfassen';
+    } else if (type === 'general') {
+        modalTitle.textContent = 'Allgemeine Abwesenheit erfassen';
     } else if (!type || type === 'all') {
         modalTitle.textContent = 'Abwesenheit erfassen';
     }
     
     document.getElementById('absenceForm').reset();
-    if (type && type !== 'all') {
+    if (type && type !== 'all' && type !== 'general') {
         document.getElementById('absenceType').value = type; // Reset clears it, so set again
     }
     document.getElementById('absenceModal').style.display = 'block';
@@ -2824,8 +2839,13 @@ async function saveAbsence(event) {
                 const activeTab = document.querySelector('#absences-view .tab-content.active');
                 if (activeTab) {
                     const tabId = activeTab.id.replace('-tab', '');
-                    if (tabId === 'sick') loadAbsences('AU');
-                    else if (tabId === 'training') loadAbsences('L');
+                    if (tabId === 'general') {
+                        loadAbsences('general');
+                    } else if (tabId === 'sick') {
+                        loadAbsences('AU');
+                    } else if (tabId === 'training') {
+                        loadAbsences('L');
+                    }
                 }
             }
         } else if (response.status === 401) {

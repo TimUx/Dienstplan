@@ -1058,8 +1058,11 @@ def add_shift_sequence_grouping_constraints(
             if shift_data:  # If shift_data is not empty, employee could work this day
                 period_shift_data.append((d, shift_data))
         
+        # NOTE: period_shift_data is sorted by date because we iterate through 'dates' which is sorted
+        # This assumption is used in the optimization below where we break early when days are > 10 apart
+        
         # Now check for problematic patterns across all working days
-        # Pattern to detect: shift_A appears, then shift_B appears, then shift_A appears again
+        # Pattern to detect: shift_A appears, then shift B appears, then shift_A appears again
         # This means shifts are not properly grouped
         # KEY FIX: We now only look at POTENTIAL WORKING DAYS, not all calendar days
         

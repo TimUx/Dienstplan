@@ -75,20 +75,26 @@ In the February 2026 schedule, several employees had problematic shift patterns 
 
 **Type**: Soft Constraint (penalized but not forbidden)
 
-**Penalty**: 5000 points per violation (significantly increased to ensure strong enforcement)
+**Penalty**: 
+- 10000 points per A-B-A violation (base penalty, significantly increased)
+- 20000 points per A-B-A violation within 10-day window (ultra-high penalty for short-range patterns)
 
 ### Algorithm
 
-For each employee and each week:
+For each employee across the entire planning period:
 
-1. Collect all shift assignments for each day in the week
+1. Collect all shift assignments for each day where the employee could work
 2. For each pair of shift types (A, B):
    - Find all days where shift A could be assigned
    - Find all days where shift B could be assigned
 3. Check if any day with shift B falls between two days with shift A
 4. If yes, create a penalty:
    - Violation is active if all three shifts are actually assigned
-   - Penalty = 1000 points
+   - Base penalty = 10000 points
+5. Additionally, for short-range patterns (within 10 calendar days):
+   - Check all A-B-A patterns that occur within a 10-day window
+   - Apply ultra-high penalty = 20000 points
+   - This aggressively prevents patterns within the same week or adjacent weeks
 
 ### Example Detection
 
@@ -103,7 +109,7 @@ Check: Is Thursday between Tuesday and Friday?
 
 Create constraint:
   IF (Tuesday=S AND Thursday=F AND Friday=S)
-  THEN penalty = 5000
+  THEN penalty = 10000 (or 20000 if within 10-day window)
 ```
 
 ### Code Structure
@@ -140,9 +146,12 @@ def add_shift_sequence_grouping_constraints(
                                 if day_A1 < day_B < day_A2:
                                     # Create penalty constraint
                                     violation_var = model.NewBoolVar(...)
-                                    penalty_var = model.NewIntVar(0, 5000, ...)
-                                    model.Add(penalty_var == violation_var * 5000)
+                                    penalty_var = model.NewIntVar(0, 10000, ...)
+                                    model.Add(penalty_var == violation_var * 10000)
                                     penalties.append(penalty_var)
+            
+            # Additional ultra-high penalty for 10-day window patterns
+            # ... (see full implementation in constraints.py)
     
     return penalties
 ```
@@ -167,23 +176,25 @@ The constraint is integrated into the main solver in `solver.py`:
        employees, dates, weeks, shift_codes, teams)
    ```
 
-3. **Add to objective function** (lines 226-230):
+3. **Add to objective function** (lines 232-237):
    ```python
    if shift_grouping_penalties:
        print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
        for penalty_var in shift_grouping_penalties:
-           objective_terms.append(penalty_var)  # 5000 per violation
+           objective_terms.append(penalty_var)  # 10000-20000 per violation
    ```
 
 ### Penalty Weight
 
-- **Value**: 5000 points per violation (significantly increased for strong enforcement)
+- **Base Penalty**: 10000 points per A-B-A violation (anywhere in planning period)
+- **Ultra-High Penalty**: 20000 points per A-B-A violation within 10-day window
 - **Relative Priority**:
-  - **HIGHEST PRIORITY** among soft constraints
-  - Higher than single-day penalty (2000 points)
-  - Higher than minimum consecutive shifts (1500 points)
-  - Higher than night shift consistency (600 points)
-  - Higher than weekly shift type diversity (500 points)
+  - **HIGHEST PRIORITY** among all soft constraints
+  - Much higher than minimum consecutive weekday shifts (6000-8000 points)
+  - Much higher than night shift consistency (600 points)
+  - Much higher than weekly shift type diversity (500 points)
+
+Note: SINGLE_DAY_PENALTY (8000 points) exists as a separate constraint in the minimum consecutive weekday shifts function, which enforces that weekday shifts should have at least 2 consecutive days of the same type.
 
 This ensures shift grouping is the most strongly enforced soft constraint, preventing isolated shift patterns even when other constraints are difficult to satisfy.
 

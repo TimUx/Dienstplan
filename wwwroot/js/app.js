@@ -2638,7 +2638,7 @@ function displayAbsences(absences, type) {
     }
     
     if (absences.length === 0) {
-        content.innerHTML = '<p>Keine allgemeinen Abwesenheiten vorhanden.</p>';
+        content.innerHTML = '<p>Keine Abwesenheiten vorhanden.</p>';
         return;
     }
     
@@ -2724,7 +2724,7 @@ async function showAddAbsenceModal(type) {
             console.error('Error loading absence types:', error);
         }
         if (type === 'general') {
-            modalTitle.textContent = 'Allgemeine Abwesenheit erfassen';
+            modalTitle.textContent = 'Abwesenheit erfassen';
         } else {
             modalTitle.textContent = 'Abwesenheit erfassen';
         }

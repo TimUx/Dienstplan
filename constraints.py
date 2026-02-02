@@ -1257,8 +1257,8 @@ def add_minimum_consecutive_weekday_shifts_constraints(
             
             # CRITICAL FIX: Only check if days are actually consecutive calendar days
             # Skip if there's a gap (e.g., Monday -> Wednesday with Tuesday off)
-            day_diff = (day2 - day1).days
-            if day_diff != 1:
+            calendar_day_diff = (day2 - day1).days
+            if calendar_day_diff != 1:
                 continue
             
             # Check if employee works different shift types on these consecutive working days
@@ -1307,7 +1307,7 @@ def add_minimum_consecutive_weekday_shifts_constraints(
             # Only check if all three days are within the same week (7-day window)
             # This prevents checking patterns across weekly boundaries
             day_span = (day3 - day1).days
-            if day_span > 7:
+            if day_span >= 7:
                 continue
             
             # Check for pattern: shift_A on day1, shift_B on day2, shift_A on day3

@@ -1173,57 +1173,70 @@ def add_shift_sequence_grouping_constraints(
                     continue
                 
                 # Check for A-B-B-A pattern: day_i has shift_A, day_j and day_j1 have shift_B, day_k has shift_A
+                # We need to ensure day_j and day_j1 are consecutive OR near-consecutive calendar days
                 for i in range(len(period_shift_data)):
                     day_i, shifts_i = period_shift_data[i]
                     
                     if shift_A not in shifts_i:
                         continue
                     
-                    # Look for consecutive pairs of days with shift_B
-                    for j in range(i + 1, len(period_shift_data) - 1):
+                    # Look for pairs of days with shift_B (not necessarily adjacent in the list)
+                    for j in range(i + 1, len(period_shift_data)):
                         day_j, shifts_j = period_shift_data[j]
-                        day_j1, shifts_j1 = period_shift_data[j + 1]
                         
                         # Only check within 10 calendar days from day_i
-                        if (day_j1 - day_i).days > 10:
+                        if (day_j - day_i).days > 10:
                             break
                         
-                        # Check if day_j and day_j1 both have shift_B
-                        if shift_B not in shifts_j or shift_B not in shifts_j1:
+                        # Check if day_j has shift_B
+                        if shift_B not in shifts_j:
                             continue
                         
-                        # Now check if there's a later day with shift_A after these two B days
-                        for k in range(j + 2, len(period_shift_data)):
-                            day_k, shifts_k = period_shift_data[k]
+                        # Look for another day with shift_B that's within 3 calendar days of day_j
+                        for j1_idx in range(j + 1, len(period_shift_data)):
+                            day_j1, shifts_j1 = period_shift_data[j1_idx]
                             
-                            # Only check within 10 calendar days from day_i
-                            if (day_k - day_i).days > 10:
+                            # Only check if day_j1 is within 3 calendar days of day_j
+                            # This allows for patterns like: Mon(B), Tue(B) or Mon(B), Wed(B) with Tue off
+                            if (day_j1 - day_j).days > 3:
                                 break
                             
-                            # Check if day_k has shift_A
-                            if shift_A not in shifts_k:
+                            # Check if day_j1 has shift_B
+                            if shift_B not in shifts_j1:
                                 continue
                             
-                            # Found A-B-B-A pattern - this is a serious violation
-                            # Pattern: shift_A on day_i, shift_B on day_j, shift_B on day_j1, shift_A on day_k
-                            all_active = []
-                            all_active.extend(shifts_i[shift_A])
-                            all_active.extend(shifts_j[shift_B])
-                            all_active.extend(shifts_j1[shift_B])
-                            all_active.extend(shifts_k[shift_A])
-                            
-                            violation_var = model.NewBoolVar(
-                                f"seq_double_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
-                            )
-                            model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
-                            model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
-                            
-                            penalty_var = model.NewIntVar(
-                                0, DOUBLE_ISOLATION_PENALTY,
-                                f"seq_double_pen_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
-                            )
-                            model.Add(penalty_var == violation_var * DOUBLE_ISOLATION_PENALTY)
-                            grouping_penalties.append(penalty_var)
+                            # Now check if there's a later day with shift_A after these two B days
+                            for k in range(j1_idx + 1, len(period_shift_data)):
+                                day_k, shifts_k = period_shift_data[k]
+                                
+                                # Only check within 10 calendar days from day_i
+                                if (day_k - day_i).days > 10:
+                                    break
+                                
+                                # Check if day_k has shift_A
+                                if shift_A not in shifts_k:
+                                    continue
+                                
+                                # Found A-B-B-A pattern - this is a serious violation
+                                # Pattern: shift_A on day_i, shift_B on day_j, shift_B on day_j1, shift_A on day_k
+                                all_active = []
+                                all_active.extend(shifts_i[shift_A])
+                                all_active.extend(shifts_j[shift_B])
+                                all_active.extend(shifts_j1[shift_B])
+                                all_active.extend(shifts_k[shift_A])
+                                
+                                violation_var = model.NewBoolVar(
+                                    f"seq_double_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                                )
+                                model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
+                                model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
+                                
+                                penalty_var = model.NewIntVar(
+                                    0, DOUBLE_ISOLATION_PENALTY,
+                                    f"seq_double_pen_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
+                                )
+                                model.Add(penalty_var == violation_var * DOUBLE_ISOLATION_PENALTY)
+                                grouping_penalties.append(penalty_var)
     
     return grouping_penalties
 

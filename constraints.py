@@ -1144,10 +1144,12 @@ def add_minimum_consecutive_weekday_shifts_constraints(
     """
     min_consecutive_penalties = []
     
-    # High penalty for shift type changes on consecutive weekdays
-    SHIFT_CHANGE_PENALTY = 1500  # Very high penalty to enforce minimum 2 consecutive days
+    # Very high penalty for shift type changes on consecutive weekdays
+    # Increased from 1500 to 3000 to more strongly enforce the constraint
+    SHIFT_CHANGE_PENALTY = 3000  # Very high penalty to enforce minimum 2 consecutive days
     # Even higher penalty for single isolated days
-    SINGLE_DAY_PENALTY = 2000  # Very high penalty for clear violations
+    # Increased from 2000 to 4000 to more strongly prevent A-B-A patterns
+    SINGLE_DAY_PENALTY = 4000  # Extremely high penalty for clear violations
     
     # Pre-compute date-to-week mapping
     date_to_week = {}
@@ -1246,12 +1248,18 @@ def add_minimum_consecutive_weekday_shifts_constraints(
         
         # PART 1: Check for shift type changes on consecutive WORKING weekdays
         # If employee works on two consecutive WORKING weekdays, they should work the same shift
-        # KEY FIX: Check consecutive working days, not just consecutive calendar days
+        # KEY FIX: Check consecutive CALENDAR days, not just consecutive list positions
         
-        # Check consecutive WORKING days (not calendar days)
+        # Check consecutive WORKING days (must be calendar-consecutive weekdays)
         for i in range(len(working_weekdays_with_shifts) - 1):
             day1, shifts1 = working_weekdays_with_shifts[i]
             day2, shifts2 = working_weekdays_with_shifts[i + 1]
+            
+            # CRITICAL FIX: Only check if days are actually consecutive calendar days
+            # Skip if there's a gap (e.g., Monday -> Wednesday with Tuesday off)
+            calendar_day_diff = (day2 - day1).days
+            if calendar_day_diff != 1:
+                continue
             
             # Check if employee works different shift types on these consecutive working days
             for shift_A in shift_codes:
@@ -1283,16 +1291,24 @@ def add_minimum_consecutive_weekday_shifts_constraints(
                     model.Add(penalty_var == violation_var * SHIFT_CHANGE_PENALTY)
                     min_consecutive_penalties.append(penalty_var)
         
-        # PART 2: Check for single isolated days among WORKING DAYS (stronger penalty)
+        # PART 2: Check for single isolated days or blocks among WORKING DAYS (stronger penalty)
         # Pattern: shift_A on working_day1, shift_B on working_day2, shift_A on working_day3 
-        # (working_day2 is isolated) - KEY FIX: Check working days, not consecutive calendar days
+        # (working_day2 is isolated) - CRITICAL FIX: Check calendar-consecutive working days
         
-        # Reuse the working weekdays list we already built (no need to rebuild)
-        # Now check 3-day windows among WORKING DAYS only
+        # This catches patterns like N-S-N where S is isolated, considering calendar days
+        # We need to check actual calendar-consecutive working days, not just list positions
+        
+        # Check 3-day windows among working days, but only if they're within a reasonable calendar range
         for i in range(len(working_weekdays_with_shifts) - 2):
             day1, shifts1 = working_weekdays_with_shifts[i]
             day2, shifts2 = working_weekdays_with_shifts[i + 1]
             day3, shifts3 = working_weekdays_with_shifts[i + 2]
+            
+            # Only check if all three days are within the same week (7-day window)
+            # This prevents checking patterns across weekly boundaries
+            day_span = (day3 - day1).days
+            if day_span >= 7:
+                continue
             
             # Check for pattern: shift_A on day1, shift_B on day2, shift_A on day3
             # This is the A-B-A pattern where shift_B is sandwiched between two occurrences of shift_A

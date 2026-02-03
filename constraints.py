@@ -364,18 +364,7 @@ def add_employee_team_linkage_constraints(
             # they must use the SAME shift type
             # This was previously commented as "already handled" but it was NOT enforced!
             if employee_week_shift and cross_team_week_shifts:
-                # For each shift type, if team uses it OR cross-team uses it,
-                # create a combined indicator
-                for shift_code in shift_codes:
-                    team_uses = employee_week_shift.get(shift_code)
-                    cross_uses = cross_team_week_shifts.get(shift_code)
-                    
-                    # If one is used, the other can ONLY be used for the SAME shift type
-                    # In other words: sum(employee_week_shift) + sum(cross_team_week_shifts) <= 1
-                    # This ensures both indicators can't be 1 for different shift types
-                    
-                # Actually, we need a different approach. We need to ensure that
-                # the TOTAL across both team and cross-team is at most ONE shift type.
+                # We need to ensure that the TOTAL across both team and cross-team is at most ONE shift type.
                 # Combine the indicators for each shift type
                 combined_week_shifts = {}
                 for shift_code in shift_codes:
@@ -1173,7 +1162,9 @@ def add_shift_sequence_grouping_constraints(
                     result[shift_code].append(employee_cross_team_shift[(emp_id, d, shift_code)])
         
         # Cross-team shifts (weekend)
-        # BUGFIX: Changed from 'elif' to 'if' so this executes after the weekend team shift block above
+        # BUGFIX: Changed from 'elif' to 'if' - Previously was 'elif weekday >= 5' which would
+        # never execute after the 'elif weekday >= 5' block at line ~1130 (Team shift weekend).
+        # Both blocks can now execute independently based on the weekday condition.
         if weekday >= 5:
             for shift_code in shift_codes:
                 if (emp_id, d, shift_code) in employee_cross_team_weekend:

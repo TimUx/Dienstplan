@@ -439,7 +439,7 @@ def add_staffing_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     violation_tracker=None
-) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], Dict[str, List[cp_model.IntVar]], List[cp_model.IntVar]]:
+) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], Dict[str, List[Tuple[cp_model.IntVar, date]]], List[cp_model.IntVar]]:
     """
     HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
@@ -458,11 +458,13 @@ def add_staffing_constraints(
     2. Reach target work hours per employee
     3. If needed, exceed max on WEEKDAYS first (lower penalty)
     4. If still needed, exceed max on WEEKENDS (higher penalty, even distribution)
+    5. Prefer filling EARLIER dates before LATER dates (temporal distribution)
     
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
     NEW: Returns separate penalty lists for weekday/weekend to allow differential weighting.
     Also returns weekday understaffing penalties BY SHIFT TYPE to allow priority ordering (F > S > N).
+    Understaffing penalties now include date information for temporal weighting.
     
     NEW: Returns team_priority_violations to penalize cross-team usage when team has unfilled capacity.
     
@@ -473,7 +475,7 @@ def add_staffing_constraints(
     Returns:
         Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, 
                   weekday_understaffing_by_shift, team_priority_violations) where:
-                  - weekday_understaffing_by_shift is a dict mapping shift codes to their understaffing penalty lists
+                  - weekday_understaffing_by_shift is a dict mapping shift codes to lists of (penalty_var, date) tuples
                   - team_priority_violations are penalties for using cross-team when team has capacity
     """
     if not shift_types:
@@ -640,10 +642,11 @@ def add_staffing_constraints(
                     
                     # NEW: Add understaffing penalty for weekdays to encourage filling gaps
                     # Store by shift type to allow priority ordering (F > S > N)
+                    # Include date for temporal weighting (prefer earlier dates)
                     understaffing = model.NewIntVar(0, 20, f"understaff_{shift}_{d}_weekday")
                     model.Add(understaffing >= staffing[shift]["max"] - total_assigned)
                     model.Add(understaffing >= 0)
-                    weekday_understaffing_by_shift[shift].append(understaffing)
+                    weekday_understaffing_by_shift[shift].append((understaffing, d))
                     
                     # NEW: Penalize cross-team usage when team has unfilled capacity
                     # If team_assigned < max AND cross_team_assigned > 0, that's a violation

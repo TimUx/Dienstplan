@@ -302,7 +302,9 @@ class ShiftPlanningSolver:
                 objective_terms.append(overstaff_var * WEEKEND_OVERSTAFFING_PENALTY_WEIGHT)
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
+        # AND TEMPORAL BIAS (prefer earlier dates)
         # Priority order: Früh (F) > Spät (S) > Nacht (N)
+        # Temporal order: Earlier dates > Later dates (to avoid clustering shifts at month end)
         # Higher weight = higher priority to fill
         # Use VERY strong differentials to ensure priority overrides other soft constraints
         shift_priority_weights = {
@@ -311,13 +313,31 @@ class ShiftPlanningSolver:
             'N': 5    # Nacht/Night - lowest priority (baseline)
         }
         
+        # Calculate temporal weighting factor
+        # Earlier dates get higher penalties for understaffing, encouraging solver to fill them first
+        # This prevents clustering of shifts at the end of the month
+        total_days = len(dates)
+        
         for shift_code, understaffing_list in weekday_understaffing_by_shift.items():
             if understaffing_list:
-                weight = shift_priority_weights.get(shift_code, 5)  # Default to 5 if shift not in priority map
+                base_weight = shift_priority_weights.get(shift_code, 5)  # Default to 5 if shift not in priority map
                 shift_name = {'F': 'Früh', 'S': 'Spät', 'N': 'Nacht'}.get(shift_code, shift_code)
-                print(f"  Adding {len(understaffing_list)} {shift_name} ({shift_code}) weekday understaffing penalties (weight {weight}x)...")
-                for understaff_var in understaffing_list:
-                    objective_terms.append(understaff_var * weight)
+                print(f"  Adding {len(understaffing_list)} {shift_name} ({shift_code}) weekday understaffing penalties (base weight {base_weight}x with temporal bias)...")
+                
+                for understaff_var, understaff_date in understaffing_list:
+                    # Calculate day index (0-based) within the planning period
+                    day_index = dates.index(understaff_date)
+                    
+                    # Calculate temporal multiplier: ranges from 1.5 (early) to 0.5 (late)
+                    # Formula: 1.5 - (day_index / total_days)
+                    # Day 0: 1.5x, Middle day: 1.0x, Last day: 0.5x
+                    # This makes understaffing early days more expensive than late days
+                    temporal_multiplier = 1.5 - (day_index / total_days)
+                    
+                    # Apply both shift priority weight and temporal multiplier
+                    final_weight = base_weight * temporal_multiplier
+                    
+                    objective_terms.append(understaff_var * int(final_weight))
         
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity

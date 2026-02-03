@@ -8,6 +8,13 @@
 - Updated documentation and UI to reflect version 2.1
 
 ### Bug Fixes (February 2026)
+- **Fixed**: Added weekly shift type consistency constraint (CRITICAL FIX)
+  - Issue: "Erneut wurden einzelnen Schichten zwischen andere Schichten geplant"
+  - Problem: Employees were assigned different shift types within the same week (e.g., F-F-S-S in one week)
+  - Root cause: Missing constraint to enforce team-based model's core principle
+  - Solution: Added constraint ensuring employees work only ONE shift type per week
+  - Impact: Schedules now properly follow F → N → S rotation pattern with no intra-week changes
+  - Details: See INTRA_WEEK_SHIFT_FIX.md for complete analysis and implementation
 - **Fixed**: Rest time constraint penalties increased to prevent S→F and N→F violations
   - Previous penalties (50/500 points) were too low compared to other constraints
   - Solver was preferring rest time violations over other soft constraints

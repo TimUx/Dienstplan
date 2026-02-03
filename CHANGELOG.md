@@ -7,6 +7,14 @@
 - Updated build and release workflows to use v2.1.x versioning scheme
 - Updated documentation and UI to reflect version 2.1
 
+### Bug Fixes (February 2026)
+- **Fixed**: Rest time constraint penalties increased to prevent S→F and N→F violations
+  - Previous penalties (50/500 points) were too low compared to other constraints
+  - Solver was preferring rest time violations over other soft constraints
+  - New penalties: Sunday→Monday 5000 points, Weekdays 50000 points
+  - This ensures rest time violations only occur when absolutely necessary for feasibility
+  - Issue: 7 forbidden transitions found in February schedule (S→F with only 8h rest)
+
 ## Version 2.0 - Python Edition (December 2025)
 
 ### Major Changes

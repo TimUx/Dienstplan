@@ -218,6 +218,7 @@ def add_employee_team_linkage_constraints(
     - Employees cannot work when absent (applies to both regular and cross-team)
     - Cross-team workers must have at most ONE shift per day
     - ALL rest time and transition rules apply to cross-team assignments
+    - CRITICAL: Employees must work the SAME shift type throughout each week (team-based model)
     """
     
     # Provide empty dicts if weekend variables not passed (backward compatibility)
@@ -268,7 +269,103 @@ def add_employee_team_linkage_constraints(
                 for shift_code in shift_codes:
                     if (emp.id, d, shift_code) in employee_cross_team_weekend:
                         model.Add(employee_cross_team_weekend[(emp.id, d, shift_code)] == 0)
+        
+        # CRITICAL FIX: Enforce that employees work the SAME shift type throughout each week
+        # This is the core of the team-based model: team members work the same shift during a week
+        # BUG FIX for issue: "einzelnen Schichten zwischen andere Schichten geplant"
+        # (individual shifts scheduled between other shifts)
+        for week_idx, week_dates in enumerate(weeks):
+            # For each shift type, create a variable indicating if employee works that shift this week
+            employee_week_shift = {}
             
+            for shift_code in shift_codes:
+                # Check if employee's team has this shift this week
+                if (team.id, week_idx, shift_code) not in team_shift:
+                    continue
+                
+                # Create a variable: does employee work this shift type this week?
+                # This will be 1 if employee works ANY day during this week with this shift type
+                week_shift_indicator = model.NewBoolVar(f"emp{emp.id}_week{week_idx}_shift{shift_code}")
+                employee_week_shift[shift_code] = week_shift_indicator
+                
+                # Collect all days in this week where employee could work with this shift
+                work_days_with_this_shift = []
+                
+                for d in week_dates:
+                    if d.weekday() < 5:  # Weekday
+                        if (emp.id, d) in employee_active:
+                            # Create constraint: if team has this shift AND employee is active,
+                            # then employee is working this shift type
+                            is_working_this_shift = model.NewBoolVar(
+                                f"emp{emp.id}_date{d}_shift{shift_code}"
+                            )
+                            model.AddMultiplicationEquality(
+                                is_working_this_shift,
+                                [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
+                            )
+                            work_days_with_this_shift.append(is_working_this_shift)
+                    else:  # Weekend
+                        if (emp.id, d) in employee_weekend_shift:
+                            # Weekend shift
+                            is_working_this_shift_weekend = model.NewBoolVar(
+                                f"emp{emp.id}_date{d}_weekend_shift{shift_code}"
+                            )
+                            model.AddMultiplicationEquality(
+                                is_working_this_shift_weekend,
+                                [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
+                            )
+                            work_days_with_this_shift.append(is_working_this_shift_weekend)
+                
+                # Link the week-level indicator to the day-level work indicators
+                # week_shift_indicator = 1 if ANY of the work days use this shift
+                if work_days_with_this_shift:
+                    # If any day works this shift, the indicator must be 1
+                    for work_var in work_days_with_this_shift:
+                        model.Add(week_shift_indicator >= work_var)
+                    # If no days work this shift, the indicator must be 0
+                    model.Add(week_shift_indicator <= sum(work_days_with_this_shift))
+            
+            # CRITICAL CONSTRAINT: Employee can work AT MOST ONE shift type per week
+            # This enforces the team-based model where all work days in a week use the same shift
+            if employee_week_shift:
+                model.Add(sum(employee_week_shift.values()) <= 1)
+        
+        # Now handle cross-team constraints that must also respect weekly shift consistency
+        # Cross-team workers must also maintain the same shift type throughout a week
+        for week_idx, week_dates in enumerate(weeks):
+            # Track which cross-team shift types the employee uses this week
+            cross_team_week_shifts = {}
+            
+            for shift_code in shift_codes:
+                work_days_cross_team = []
+                
+                for d in week_dates:
+                    if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        work_days_cross_team.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    elif d.weekday() >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        work_days_cross_team.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                
+                if work_days_cross_team:
+                    # Create indicator for this cross-team shift type in this week
+                    cross_shift_indicator = model.NewBoolVar(
+                        f"emp{emp.id}_week{week_idx}_crossteam_{shift_code}"
+                    )
+                    cross_team_week_shifts[shift_code] = cross_shift_indicator
+                    
+                    # Link indicator to actual work days
+                    for work_var in work_days_cross_team:
+                        model.Add(cross_shift_indicator >= work_var)
+                    model.Add(cross_shift_indicator <= sum(work_days_cross_team))
+            
+            # Cross-team workers also can work at most ONE shift type per week
+            if cross_team_week_shifts:
+                model.Add(sum(cross_team_week_shifts.values()) <= 1)
+            
+            # IMPORTANT: If employee works both team shift AND cross-team in same week,
+            # they must be the SAME shift type (already handled by at-most-one-shift-per-day constraint)
+        
+        # For each day (original constraints for single shift per day)
+        for d in dates:
             # CRITICAL: Employee can work at most ONE shift per day
             # Either their team's shift OR one cross-team shift, but not both
             if d.weekday() < 5:  # Weekday

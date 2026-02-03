@@ -424,6 +424,34 @@ class ShiftPlanningSolver:
                     weight = shift_penalty_weights[shift]
                     objective_terms.append(total_assigned * weight)
         
+        # NEW: Add temporal penalty for weekend work (discourage working late-month weekends)
+        # This encourages distributing weekend shifts earlier in the month
+        print("  Adding temporal weekend work penalties (discourage late-month weekends)...")
+        weekend_work_penalties = 0
+        total_days = len(dates)
+        
+        for emp in employees:
+            for d in dates:
+                if d.weekday() < 5:  # Skip weekdays
+                    continue
+                
+                if (emp.id, d) not in employee_weekend_shift:
+                    continue
+                
+                # Calculate temporal weight for this date
+                day_index = dates.index(d)
+                # Temporal multiplier: 0 (early) to 200 (late)
+                # Day 0: 0x penalty, Last day: 200x
+                temporal_weight = 200.0 * (day_index / total_days)
+                
+                if temporal_weight > 0:
+                    # Penalize this employee working this late weekend
+                    # employee_weekend_shift is 1 if working, 0 if not
+                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * int(temporal_weight))
+                    weekend_work_penalties += 1
+        
+        print(f"  Added {weekend_work_penalties} temporal weekend work penalties")
+        
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
             model.Minimize(sum(objective_terms))

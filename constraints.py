@@ -1163,8 +1163,10 @@ def add_shift_sequence_grouping_constraints(
         
         # Cross-team shifts (weekend)
         # BUGFIX: Changed from 'elif' to 'if' - Previously was 'elif weekday >= 5' which would
-        # never execute after the 'elif weekday >= 5' block at line ~1130 (Team shift weekend).
-        # Both blocks can now execute independently based on the weekday condition.
+        # never execute after the 'elif weekday >= 5' block at line 1128 (Team shift weekend).
+        # The team shift weekend block (lines 1128-1154) handles team assignments using employee_weekend_shift.
+        # This cross-team block handles cross-team weekend assignments using employee_cross_team_weekend.
+        # Both blocks need to execute for weekend days to capture both team and cross-team possibilities.
         if weekday >= 5:
             for shift_code in shift_codes:
                 if (emp_id, d, shift_code) in employee_cross_team_weekend:

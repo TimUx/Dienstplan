@@ -29,16 +29,20 @@ from constraints import (
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
 # 1. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
 # 2. Operational constraints (200-20000): Rest time, shift grouping, etc.
-# 3. WEEKEND_OVERSTAFFING (5): Discourage weekend overstaffing more than weekdays
-# 4. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing first when needed for target hours
+# 3. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
+# 4. WEEKDAY_UNDERSTAFFING (20/12/5): Encourage filling weekdays to capacity
+# 5. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
 #
 # PRIORITY EXPLANATION (per requirements):
 # When distributing shifts to reach target hours, weekdays should be filled BEFORE weekends.
-# Therefore: weekday overstaffing penalty (1) < weekend overstaffing penalty (5)
-# This makes the solver prefer exceeding max staffing on weekdays before doing so on weekends.
+# The solver will prefer:
+#   1. Fill weekdays to max capacity (understaffing penalty 20/12/5)
+#   2. Only then overstaff weekends if absolutely needed (penalty 50)
+# Therefore: weekend overstaffing penalty (50) > weekday understaffing penalties (20/12/5)
+# This ensures weekdays are filled to capacity before any weekend overstaffing occurs.
 HOURS_SHORTAGE_PENALTY_WEIGHT = 100
 WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT = 1
-WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 5
+WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 50
 
 
 class ShiftPlanningSolver:
@@ -282,17 +286,18 @@ class ShiftPlanningSolver:
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var * HOURS_SHORTAGE_PENALTY_WEIGHT)
         
-        # Add overstaffing penalties - prioritize weekdays over weekends
-        # Per requirements: Fill weekdays BEFORE weekends when reaching target hours
-        # Lower weight = more acceptable to exceed, so weekday (1) < weekend (5)
+        # Add overstaffing penalties - strongly discourage weekend overstaffing
+        # Per requirements: Fill weekdays to capacity BEFORE overstaffing weekends
+        # Weekend overstaffing (50) must be MORE expensive than weekday understaffing (20/12/5)
+        # This ensures weekdays are filled to max capacity before any weekend overstaffing
         # Weights defined at module level for easy adjustment
         if weekday_overstaffing:
-            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight {WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT}x - prefer weekday overstaffing)...")
+            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight {WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT}x - acceptable if needed)...")
             for overstaff_var in weekday_overstaffing:
                 objective_terms.append(overstaff_var * WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT)
         
         if weekend_overstaffing:
-            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x - avoid weekend overstaffing)...")
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x - STRONGLY avoid)...")
             for overstaff_var in weekend_overstaffing:
                 objective_terms.append(overstaff_var * WEEKEND_OVERSTAFFING_PENALTY_WEIGHT)
         

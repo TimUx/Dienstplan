@@ -26,6 +26,15 @@ from constraints import (
     add_minimum_consecutive_weekday_shifts_constraints
 )
 
+# Soft constraint penalty weights - Priority hierarchy (highest to lowest):
+# 1. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
+# 2. Operational constraints (200-20000): Rest time, shift grouping, etc.
+# 3. WEEKDAY_OVERSTAFFING (2): Minor discouragement
+# 4. WEEKEND_OVERSTAFFING (1): Can exceed max staffing when needed for target hours
+HOURS_SHORTAGE_PENALTY_WEIGHT = 100
+WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT = 2
+WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 1
+
 
 class ShiftPlanningSolver:
     """
@@ -261,25 +270,25 @@ class ShiftPlanningSolver:
                 objective_terms.append(penalty_var)  # Already weighted (600 per violation)
         
         # Add hours shortage objectives (minimize shortage from target hours)
-        # These are shortages, so we want to minimize them directly
+        # HIGHEST PRIORITY: Employees must reach their 192h minimum target
+        # Weight defined at module level as HOURS_SHORTAGE_PENALTY_WEIGHT
         if hours_shortage_objectives:
-            print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties...")
+            print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties (weight {HOURS_SHORTAGE_PENALTY_WEIGHT}x - HIGHEST PRIORITY)...")
             for shortage_var in hours_shortage_objectives:
-                objective_terms.append(shortage_var)  # Positive because we minimize shortage
+                objective_terms.append(shortage_var * HOURS_SHORTAGE_PENALTY_WEIGHT)
         
-        # Add overstaffing penalties with differential weights
-        # CRITICAL: Weekend overstaffing should be HEAVILY penalized (weight 50x)
-        # to prioritize filling weekday gaps before scheduling weekend shifts
-        # Weekday overstaffing is less critical (weight 2x)
+        # Add overstaffing penalties with LOW weights
+        # These are soft constraints that can be violated to meet higher priorities
+        # Weights defined at module level for easy adjustment
         if weekend_overstaffing:
-            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 50x)...")
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x - can exceed for 192h target)...")
             for overstaff_var in weekend_overstaffing:
-                objective_terms.append(overstaff_var * 50)  # Very heavy penalty for weekend overstaffing
+                objective_terms.append(overstaff_var * WEEKEND_OVERSTAFFING_PENALTY_WEIGHT)
         
         if weekday_overstaffing:
-            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight 2x)...")
+            print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight {WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT}x)...")
             for overstaff_var in weekday_overstaffing:
-                objective_terms.append(overstaff_var * 2)  # Light penalty for weekday overstaffing
+                objective_terms.append(overstaff_var * WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT)
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # Priority order: Früh (F) > Spät (S) > Nacht (N)

@@ -2181,20 +2181,19 @@ def add_working_hours_constraints(
     violation_tracker=None
 ) -> List[cp_model.IntVar]:
     """
-    SOFT CONSTRAINT: Working hours target based on proportional calculation INCLUDING cross-team.
+    HARD + SOFT CONSTRAINT: Working hours target based on proportional calculation INCLUDING cross-team.
     
     This constraint ensures that employees:
-    1. SOFT: Target proportional hours (48h/7 × days) - e.g., 212h for 31-day month
+    1. HARD: Minimum 192h/month (24 shifts × 8h) - Required minimum work hours
+       - Ensures employees work at least 24 shifts per month
+       - Only applies to employees without absences
+    2. SOFT: Target proportional hours (48h/7 × days) - e.g., 212h for 31-day month
        - Solver minimizes shortage from target
-       - NO hard minimum - feasibility is prioritized over hours target
        - Violations tracked for admin review
-    2. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration) - HARD
-    3. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
-    4. If an employee works less in one week (without absence), they should compensate in other weeks (SOFT)
-    5. UPDATED: Hours from cross-team assignments count toward employee's total hours
-    
-    CHANGE (per @TimUx): Removed hard 192h minimum to allow feasibility.
-    Target hours are now purely SOFT - system will get as close as possible.
+    3. Do not exceed maximum weekly hours (WeeklyWorkingHours from shift configuration) - HARD
+    4. Absences (U/AU/L) are exceptions - employees are not required to make up hours lost to absences
+    5. If an employee works less in one week (without absence), they should compensate in other weeks (SOFT)
+    6. UPDATED: Hours from cross-team assignments count toward employee's total hours
     
     Returns:
         List of IntVar representing shortage from target hours for soft optimization
@@ -2413,8 +2412,12 @@ def add_working_hours_constraints(
                                              if not any(any(abs.employee_id == emp.id and abs.overlaps_date(d) 
                                                            for abs in absences) for d in week_dates))
             
-            # REMOVED: Hard 192h minimum constraint (per @TimUx request)
-            # Now using ONLY soft target to allow feasibility in difficult cases
+            # HARD CONSTRAINT: Absolute minimum 192h/month (24 shifts × 8h)
+            # This ensures employees work at least 24 shifts per month as required
+            # Only applies to employees without absences
+            # Scaled: 192h × 10 = 1920
+            min_hours_scaled = 1920  # 192h × 10 (scaling factor)
+            model.Add(sum(total_hours_terms) >= min_hours_scaled)
             
             # SOFT CONSTRAINT: Target proportional hours (48h/7 × days)
             # Example: 31 days → 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)

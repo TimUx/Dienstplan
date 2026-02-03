@@ -163,7 +163,7 @@ class ShiftPlanningSolver:
             self.max_consecutive_shifts_weeks,  # Now interpreted as DAYS
             self.max_consecutive_night_shifts_weeks)  # Now interpreted as DAYS
         
-        print("  - Working hours constraints (soft target only, no hard 192h minimum)")
+        print("  - Working hours constraints (HARD: min 192h/month, SOFT: proportional target)")
         hours_shortage_objectives = add_working_hours_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 

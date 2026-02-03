@@ -439,7 +439,7 @@ def add_staffing_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     violation_tracker=None
-) -> Tuple[List[cp_model.IntVar], List[cp_model.IntVar], Dict[str, List[Tuple[cp_model.IntVar, date]]], List[cp_model.IntVar]]:
+) -> Tuple[List[cp_model.IntVar], List[Tuple[cp_model.IntVar, date]], Dict[str, List[Tuple[cp_model.IntVar, date]]], List[cp_model.IntVar]]:
     """
     HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
@@ -459,12 +459,14 @@ def add_staffing_constraints(
     3. If needed, exceed max on WEEKDAYS first (lower penalty)
     4. If still needed, exceed max on WEEKENDS (higher penalty, even distribution)
     5. Prefer filling EARLIER dates before LATER dates (temporal distribution)
+    6. Prefer NOT overstaffing LATER weekends (temporal overstaffing penalty)
     
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
     NEW: Returns separate penalty lists for weekday/weekend to allow differential weighting.
     Also returns weekday understaffing penalties BY SHIFT TYPE to allow priority ordering (F > S > N).
     Understaffing penalties now include date information for temporal weighting.
+    Weekend overstaffing penalties also include date information for temporal weighting.
     
     NEW: Returns team_priority_violations to penalize cross-team usage when team has unfilled capacity.
     
@@ -475,6 +477,7 @@ def add_staffing_constraints(
     Returns:
         Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, 
                   weekday_understaffing_by_shift, team_priority_violations) where:
+                  - weekend_overstaffing_penalties is a list of (penalty_var, date) tuples for temporal weighting
                   - weekday_understaffing_by_shift is a dict mapping shift codes to lists of (penalty_var, date) tuples
                   - team_priority_violations are penalties for using cross-team when team has capacity
     """
@@ -574,10 +577,11 @@ def add_staffing_constraints(
                     # HARD minimum staffing
                     model.Add(total_assigned >= staffing[shift]["min"])
                     # SOFT maximum staffing - create penalty variable for overstaffing
+                    # Include date for temporal weighting (penalize later weekends more)
                     overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekend")
                     model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
                     model.Add(overstaffing >= 0)
-                    weekend_overstaffing_penalties.append(overstaffing)
+                    weekend_overstaffing_penalties.append((overstaffing, d))
                     
                     # NEW: Penalize cross-team usage when team has unfilled capacity on weekends too
                     if team_assigned and cross_team_assigned:

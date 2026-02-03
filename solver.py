@@ -297,9 +297,21 @@ class ShiftPlanningSolver:
                 objective_terms.append(overstaff_var * WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT)
         
         if weekend_overstaffing:
-            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x - STRONGLY avoid)...")
-            for overstaff_var in weekend_overstaffing:
-                objective_terms.append(overstaff_var * WEEKEND_OVERSTAFFING_PENALTY_WEIGHT)
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (base weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x with temporal bias - STRONGLY avoid late month)...")
+            for overstaff_var, overstaff_date in weekend_overstaffing:
+                # Calculate day index (0-based) within the planning period
+                day_index = dates.index(overstaff_date)
+                
+                # Calculate temporal multiplier for OVERSTAFFING: ranges from 0.5 (early) to 2.0 (late)
+                # Formula: 0.5 + 1.5 * (day_index / total_days)
+                # Day 0: 0.5x (less penalty early), Middle: 1.25x, Last day: 2.0x (strong penalty late)
+                # This makes overstaffing late weekends MUCH more expensive than early weekends
+                temporal_multiplier = 0.5 + 1.5 * (day_index / len(dates))
+                
+                # Apply both base weight and temporal multiplier
+                final_weight = WEEKEND_OVERSTAFFING_PENALTY_WEIGHT * temporal_multiplier
+                
+                objective_terms.append(overstaff_var * int(final_weight))
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # AND TEMPORAL BIAS (prefer earlier dates)

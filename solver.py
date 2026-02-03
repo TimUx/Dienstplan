@@ -286,6 +286,9 @@ class ShiftPlanningSolver:
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var * HOURS_SHORTAGE_PENALTY_WEIGHT)
         
+        # Calculate total days once for temporal weighting calculations
+        total_days = len(dates)
+        
         # Add overstaffing penalties - strongly discourage weekend overstaffing
         # Per requirements: Fill weekdays to capacity BEFORE overstaffing weekends
         # Weekend overstaffing (50) must be MORE expensive than weekday understaffing (20/12/5)
@@ -309,9 +312,10 @@ class ShiftPlanningSolver:
                 temporal_multiplier = 0.5 + 1.5 * (day_index / len(dates))
                 
                 # Apply both base weight and temporal multiplier
-                final_weight = WEEKEND_OVERSTAFFING_PENALTY_WEIGHT * temporal_multiplier
+                # Use round() instead of int() to preserve precision
+                final_weight = round(WEEKEND_OVERSTAFFING_PENALTY_WEIGHT * temporal_multiplier)
                 
-                objective_terms.append(overstaff_var * int(final_weight))
+                objective_terms.append(overstaff_var * final_weight)
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # AND TEMPORAL BIAS (prefer earlier dates)
@@ -328,7 +332,7 @@ class ShiftPlanningSolver:
         # Calculate temporal weighting factor
         # Earlier dates get higher penalties for understaffing, encouraging solver to fill them first
         # This prevents clustering of shifts at the end of the month
-        total_days = len(dates)
+        # (total_days already calculated above)
         
         for shift_code, understaffing_list in weekday_understaffing_by_shift.items():
             if understaffing_list:
@@ -347,9 +351,10 @@ class ShiftPlanningSolver:
                     temporal_multiplier = 1.5 - (day_index / total_days)
                     
                     # Apply both shift priority weight and temporal multiplier
-                    final_weight = base_weight * temporal_multiplier
+                    # Use round() instead of int() to preserve precision
+                    final_weight = round(base_weight * temporal_multiplier)
                     
-                    objective_terms.append(understaff_var * int(final_weight))
+                    objective_terms.append(understaff_var * final_weight)
         
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity
@@ -428,7 +433,7 @@ class ShiftPlanningSolver:
         # This encourages distributing weekend shifts earlier in the month
         print("  Adding temporal weekend work penalties (discourage late-month weekends)...")
         weekend_work_penalties = 0
-        total_days = len(dates)
+        # (total_days already calculated above)
         
         for emp in employees:
             for d in dates:
@@ -447,7 +452,8 @@ class ShiftPlanningSolver:
                 if temporal_weight > 0:
                     # Penalize this employee working this late weekend
                     # employee_weekend_shift is 1 if working, 0 if not
-                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * int(temporal_weight))
+                    # Use round() to preserve precision
+                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * round(temporal_weight))
                     weekend_work_penalties += 1
         
         print(f"  Added {weekend_work_penalties} temporal weekend work penalties")

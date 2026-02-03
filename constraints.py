@@ -453,6 +453,12 @@ def add_staffing_constraints(
     to meet higher priority constraints (minimum hours, absences, etc.).
     Overstaffing creates a penalty but doesn't block feasibility.
     
+    PRIORITY (per requirements): When distributing shifts to reach target hours:
+    1. Respect maximum number of employees per shift (soft constraint)
+    2. Reach target work hours per employee
+    3. If needed, exceed max on WEEKDAYS first (lower penalty)
+    4. If still needed, exceed max on WEEKENDS (higher penalty, even distribution)
+    
     UPDATED: Now counts both regular team assignments and cross-team assignments.
     
     NEW: Returns separate penalty lists for weekday/weekend to allow differential weighting.

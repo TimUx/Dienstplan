@@ -329,10 +329,9 @@ def add_employee_team_linkage_constraints(
             # This enforces the team-based model where all work days in a week use the same shift
             if employee_week_shift:
                 model.Add(sum(employee_week_shift.values()) <= 1)
-        
-        # Now handle cross-team constraints that must also respect weekly shift consistency
-        # Cross-team workers must also maintain the same shift type throughout a week
-        for week_idx, week_dates in enumerate(weeks):
+            
+            # Now handle cross-team constraints that must also respect weekly shift consistency
+            # Cross-team workers must also maintain the same shift type throughout a week
             # Track which cross-team shift types the employee uses this week
             cross_team_week_shifts = {}
             
@@ -361,8 +360,47 @@ def add_employee_team_linkage_constraints(
             if cross_team_week_shifts:
                 model.Add(sum(cross_team_week_shifts.values()) <= 1)
             
-            # IMPORTANT: If employee works both team shift AND cross-team in same week,
-            # they must be the SAME shift type (already handled by at-most-one-shift-per-day constraint)
+            # CRITICAL FIX: If employee works both team shift AND cross-team in same week,
+            # they must use the SAME shift type
+            # This was previously commented as "already handled" but it was NOT enforced!
+            if employee_week_shift and cross_team_week_shifts:
+                # For each shift type, if team uses it OR cross-team uses it,
+                # create a combined indicator
+                for shift_code in shift_codes:
+                    team_uses = employee_week_shift.get(shift_code)
+                    cross_uses = cross_team_week_shifts.get(shift_code)
+                    
+                    # If one is used, the other can ONLY be used for the SAME shift type
+                    # In other words: sum(employee_week_shift) + sum(cross_team_week_shifts) <= 1
+                    # This ensures both indicators can't be 1 for different shift types
+                    
+                # Actually, we need a different approach. We need to ensure that
+                # the TOTAL across both team and cross-team is at most ONE shift type.
+                # Combine the indicators for each shift type
+                combined_week_shifts = {}
+                for shift_code in shift_codes:
+                    indicators = []
+                    if shift_code in employee_week_shift:
+                        indicators.append(employee_week_shift[shift_code])
+                    if shift_code in cross_team_week_shifts:
+                        indicators.append(cross_team_week_shifts[shift_code])
+                    
+                    if indicators:
+                        # Create combined indicator: 1 if EITHER team or cross-team uses this shift
+                        combined_indicator = model.NewBoolVar(
+                            f"emp{emp.id}_week{week_idx}_combined_{shift_code}"
+                        )
+                        combined_week_shifts[shift_code] = combined_indicator
+                        
+                        # combined = 1 if ANY of the indicators is 1
+                        for indicator in indicators:
+                            model.Add(combined_indicator >= indicator)
+                        model.Add(combined_indicator <= sum(indicators))
+                
+                # CRITICAL: Employee can work AT MOST ONE shift type per week
+                # (considering both team and cross-team work)
+                if combined_week_shifts:
+                    model.Add(sum(combined_week_shifts.values()) <= 1)
         
         # For each day (original constraints for single shift per day)
         for d in dates:
@@ -1135,7 +1173,8 @@ def add_shift_sequence_grouping_constraints(
                     result[shift_code].append(employee_cross_team_shift[(emp_id, d, shift_code)])
         
         # Cross-team shifts (weekend)
-        elif weekday >= 5:
+        # BUGFIX: Changed from 'elif' to 'if' so this executes after the weekend team shift block above
+        if weekday >= 5:
             for shift_code in shift_codes:
                 if (emp_id, d, shift_code) in employee_cross_team_weekend:
                     if shift_code not in result:

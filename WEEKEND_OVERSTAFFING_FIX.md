@@ -3,7 +3,7 @@
 ## Problem Statement (German)
 
 > Schaue dir bitte den letzt PR an.
-> Hier sollte eigentlich behoben werden, dass die Wochenden zu viele Schichten zugewiedsen werden, während in den Wochen noch tage frei sind.
+> Hier sollte eigentlich behoben werden, dass die Wochenden zu viele Schichten zugewiesen werden, während in den Wochen noch tage frei sind.
 > 
 > Beim aktuellen Schichtplan hat insbesondere das letzte Wochenende wieder zuviele Schichten geplant, obwohl noch genug Wochentage frei sind
 

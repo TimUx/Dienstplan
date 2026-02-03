@@ -261,20 +261,21 @@ class ShiftPlanningSolver:
                 objective_terms.append(penalty_var)  # Already weighted (600 per violation)
         
         # Add hours shortage objectives (minimize shortage from target hours)
-        # These are shortages, so we want to minimize them directly
+        # HIGHEST PRIORITY: Employees must reach their 192h minimum target
+        # Weight 100x ensures this overrides max staffing constraints
         if hours_shortage_objectives:
-            print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties...")
+            print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties (weight 100x - HIGHEST PRIORITY)...")
             for shortage_var in hours_shortage_objectives:
-                objective_terms.append(shortage_var)  # Positive because we minimize shortage
+                objective_terms.append(shortage_var * 100)  # VERY HIGH weight - reaching target is top priority
         
-        # Add overstaffing penalties with differential weights
-        # CRITICAL: Weekend overstaffing should be HEAVILY penalized (weight 50x)
-        # to prioritize filling weekday gaps before scheduling weekend shifts
-        # Weekday overstaffing is less critical (weight 2x)
+        # Add overstaffing penalties with LOW weights
+        # These are soft constraints that can be violated to meet higher priorities
+        # Weekend overstaffing is acceptable when needed to reach 192h target (weight 1x)
+        # Weekday overstaffing is slightly more discouraged (weight 2x)
         if weekend_overstaffing:
-            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 50x)...")
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight 1x - can exceed for 192h target)...")
             for overstaff_var in weekend_overstaffing:
-                objective_terms.append(overstaff_var * 50)  # Very heavy penalty for weekend overstaffing
+                objective_terms.append(overstaff_var * 1)  # Light penalty - can exceed max to reach target hours
         
         if weekday_overstaffing:
             print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight 2x)...")

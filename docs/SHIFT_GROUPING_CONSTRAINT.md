@@ -76,8 +76,9 @@ In the February 2026 schedule, several employees had problematic shift patterns 
 **Type**: Soft Constraint (penalized but not forbidden)
 
 **Penalty**: 
-- 10000 points per A-B-A violation (base penalty, significantly increased)
-- 20000 points per A-B-A violation within 10-day window (ultra-high penalty for short-range patterns)
+- 100000 points per A-B-A violation (base penalty, massively increased to virtually prevent violations)
+- 200000 points per A-B-A violation within 10-day window (ultra-high penalty for short-range patterns)
+- 500000 points per A-B-B-A violation (extremely high penalty for sandwiched shift patterns)
 
 ### Algorithm
 
@@ -109,7 +110,7 @@ Check: Is Thursday between Tuesday and Friday?
 
 Create constraint:
   IF (Tuesday=S AND Thursday=F AND Friday=S)
-  THEN penalty = 10000 (or 20000 if within 10-day window)
+  THEN penalty = 100000 (or 200000 if within 10-day window)
 ```
 
 ### Code Structure
@@ -146,8 +147,8 @@ def add_shift_sequence_grouping_constraints(
                                 if day_A1 < day_B < day_A2:
                                     # Create penalty constraint
                                     violation_var = model.NewBoolVar(...)
-                                    penalty_var = model.NewIntVar(0, 10000, ...)
-                                    model.Add(penalty_var == violation_var * 10000)
+                                    penalty_var = model.NewIntVar(0, 100000, ...)
+                                    model.Add(penalty_var == violation_var * 100000)
                                     penalties.append(penalty_var)
             
             # Additional ultra-high penalty for 10-day window patterns
@@ -181,18 +182,20 @@ The constraint is integrated into the main solver in `solver.py`:
    if shift_grouping_penalties:
        print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
        for penalty_var in shift_grouping_penalties:
-           objective_terms.append(penalty_var)  # 10000-20000 per violation
+           objective_terms.append(penalty_var)  # 100000-500000 per violation
    ```
 
 ### Penalty Weight
 
-- **Base Penalty**: 10000 points per A-B-A violation (anywhere in planning period)
-- **Ultra-High Penalty**: 20000 points per A-B-A violation within 10-day window
+- **Base Penalty**: 100000 points per A-B-A violation (anywhere in planning period)
+- **Ultra-High Penalty**: 200000 points per A-B-A violation within 10-day window
+- **Maximum Penalty**: 500000 points per A-B-B-A violation (sandwiched shift patterns)
 - **Relative Priority**:
   - **HIGHEST PRIORITY** among all soft constraints
-  - Much higher than minimum consecutive weekday shifts (6000-8000 points)
-  - Much higher than night shift consistency (600 points)
-  - Much higher than weekly shift type diversity (500 points)
+  - 10x higher than previous implementation
+  - Massively higher than minimum consecutive weekday shifts (6000-8000 points)
+  - Massively higher than night shift consistency (600 points)
+  - Massively higher than weekly shift type diversity (500 points)
 
 Note: SINGLE_DAY_PENALTY (8000 points) exists as a separate constraint in the minimum consecutive weekday shifts function, which enforces that weekday shifts should have at least 2 consecutive days of the same type.
 

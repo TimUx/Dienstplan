@@ -959,7 +959,7 @@ def add_shift_sequence_grouping_constraints(
     # Very high penalty for isolated shift types - must be higher than other shift stability constraints
     # This is critical to prevent patterns like N-N-N-S-N-N or S-S-F-S-S
     # Increased even further to ensure this constraint dominates over other soft constraints
-    ISOLATION_PENALTY = 10000  # Dramatically increased to make shift grouping the highest priority
+    ISOLATION_PENALTY = 100000  # Dramatically increased to make shift grouping the highest priority (10x increase)
     
     # Helper to get shift type for a specific day
     def get_shift_type_for_day(emp_id, d):
@@ -1110,7 +1110,7 @@ def add_shift_sequence_grouping_constraints(
         # ADDITIONAL CHECK: Strict enforcement for patterns within a 10-day window
         # This adds an even stronger penalty for short-range violations (same week or adjacent weeks)
         # to make them nearly impossible to occur
-        ULTRA_HIGH_PENALTY = 20000  # Double the normal penalty for close-range violations
+        ULTRA_HIGH_PENALTY = 200000  # Double the normal penalty for close-range violations (10x increase)
         
         for shift_A in shift_codes:
             for shift_B in shift_codes:
@@ -1165,7 +1165,7 @@ def add_shift_sequence_grouping_constraints(
         # ADDITIONAL CHECK: Detect A-B-B-A patterns (two consecutive days of shift B between shift A days)
         # This addresses cases like S-F-F-S or S-N-N-S which violate shift grouping
         # Even higher penalty since this is a clear violation of the grouping principle
-        A_B_B_A_PATTERN_PENALTY = 50000  # EXTREMELY high priority - prevent sandwiched shift patterns
+        A_B_B_A_PATTERN_PENALTY = 500000  # EXTREMELY high priority - prevent sandwiched shift patterns (10x increase)
         
         for shift_A in shift_codes:
             for shift_B in shift_codes:

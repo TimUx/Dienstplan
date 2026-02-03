@@ -11,8 +11,8 @@
 > Die Arbeitsweise muss wie folgt laufen:
 > 1. Die Maximale Anzahl Mitarbeiter je Schicht einhalten
 > 2. Die Soll Arbeitsstunden je Mitarbeiter erreichen
-> 3. Wenn Sollarbeitsstunden nicht eingehalten werden können, die Anzahl MAximaler Mitarbeiter von Wochentagen überschreiten und die Woche füllen
-> 4. Wenn Soll Arbeitstunden immer noch nicht erreicht werden, die Anzahl MAximaler Mitarbeiter an Wochenenden überschreiten und die Wochenenden füllen
+> 3. Wenn Sollarbeitsstunden nicht eingehalten werden können, die Anzahl Maximaler Mitarbeiter von Wochentagen überschreiten und die Woche füllen
+> 4. Wenn Soll Arbeitstunden immer noch nicht erreicht werden, die Anzahl Maximaler Mitarbeiter an Wochenenden überschreiten und die Wochenenden füllen
 
 ## Translation
 
@@ -138,7 +138,7 @@ WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 5   # Higher = less acceptable
 #### solver.py (lines 285-296)
 Reordered to apply weekday penalties before weekend penalties in the objective function.
 
-#### constraints.py (lines 443-462)
+#### constraints.py (lines 452-460)
 Updated docstring to document the new priority order.
 
 ## Benefits

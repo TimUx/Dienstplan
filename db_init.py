@@ -600,15 +600,18 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
         # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, max. 10)
         # Works all 7 days: Monday-Sunday
         # Max set to 10 to allow cross-team assignments and flexible hour distribution
-        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Weekend max increased to 8 to ensure all employees can reach 192h target
+        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 10, 2, 8, 1, 1, 1, 1, 1, 1, 1),
         # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, max. 10)
         # Works all 7 days: Monday-Sunday
         # Max set to 10 to allow cross-team assignments and flexible hour distribution
-        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Weekend max increased to 8 to ensure all employees can reach 192h target
+        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 10, 2, 8, 1, 1, 1, 1, 1, 1, 1),
         # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, max. 10)
         # Works all 7 days: Monday-Sunday  
         # Max set to 10 to allow cross-team assignments and flexible hour distribution
-        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Weekend max increased to 8 to ensure all employees can reach 192h target
+        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 10, 2, 8, 1, 1, 1, 1, 1, 1, 1),
         # Additional shifts (Z, BMT, BSB, TD) can be created manually in the UI as needed
     ]
     

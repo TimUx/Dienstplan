@@ -563,8 +563,13 @@ def add_rest_time_constraints(
     - N → F (Nacht 05:45 → Früh 05:45 = 0 hours in same day context)
     
     Implementation:
-    - Sunday→Monday transitions: Small penalty (expected with team rotation)
-    - Other weekday transitions: Large penalty (should be avoided but allowed if necessary)
+    - Sunday→Monday transitions: Medium penalty (5000 points - expected with team rotation)
+    - Other weekday transitions: Very high penalty (50000 points - strongly discouraged)
+    
+    NOTE: Penalty weights have been significantly increased (from 50/500 to 5000/50000) to
+    prevent rest time violations from being preferred over other soft constraints. This ensures
+    that S→F and N→F transitions are only accepted when absolutely necessary for feasibility,
+    not as a convenience to satisfy lower-priority constraints.
     
     Returns:
         List of penalty variables for rest time violations (to be minimized in objective)
@@ -746,13 +751,14 @@ def add_rest_time_constraints(
                         is_sunday_monday = (today.weekday() == 6 and tomorrow.weekday() == 0)
                         
                         if is_sunday_monday:
-                            # Small penalty for Sunday→Monday violations (expected)
-                            # Weight: 50 points per violation
-                            penalty_weight = 50
+                            # Lower penalty for Sunday→Monday violations (expected with team rotation)
+                            # Weight: 5000 points per violation (still discouraged but allowed when necessary)
+                            penalty_weight = 5000
                         else:
-                            # Large penalty for other violations (should be avoided)
-                            # Weight: 500 points per violation
-                            penalty_weight = 500
+                            # Very high penalty for other violations (should be strongly avoided)
+                            # Weight: 50000 points per violation (much higher than other constraints)
+                            # This ensures rest time violations are only accepted when absolutely necessary
+                            penalty_weight = 50000
                         
                         # Add weighted penalty to objective using proper multiplication
                         penalty_var = model.NewIntVar(0, penalty_weight, f"rest_penalty_{emp.id}_{today}_{tomorrow}")

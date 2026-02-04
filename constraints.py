@@ -2341,13 +2341,16 @@ def add_working_hours_constraints(
         # Calculate total hours worked across all weeks
         total_hours_terms = []
         
+        # PERFORMANCE OPTIMIZATION: Pre-compute absent dates for this employee once
+        # This avoids O(dates × absences) complexity in nested loops
+        absent_dates = set()
+        for d in dates:
+            if any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences):
+                absent_dates.add(d)
+        
         # Calculate total days without absences for this employee
         # FIX: Count days instead of weeks to handle partial-week absences correctly
-        days_without_absence = 0
-        for d in dates:
-            is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-            if not is_absent:
-                days_without_absence += 1
+        days_without_absence = len(dates) - len(absent_dates)
         
         # Track weekly target hours (use shift settings from last week with shifts)
         weekly_target_hours = DEFAULT_WEEKLY_HOURS  # Default if no shifts found
@@ -2367,14 +2370,13 @@ def add_working_hours_constraints(
                     weekly_target_hours = shift_weekly_hours[shift_code]
                 
                 # Count all active days (weekday + weekend) for this employee when team has this shift
-                # FIX: Only count days WITHOUT absences
+                # FIX: Only count days WITHOUT absences (using pre-computed absent_dates set)
                 active_days = []
                 
                 # WEEKDAY days
                 for d in week_dates:
-                    # Skip days with absences
-                    is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-                    if is_absent:
+                    # Skip days with absences (O(1) lookup in set)
+                    if d in absent_dates:
                         continue
                     
                     if d.weekday() < 5 and (emp.id, d) in employee_active:
@@ -2382,9 +2384,8 @@ def add_working_hours_constraints(
                 
                 # WEEKEND days (same shift type as team)
                 for d in week_dates:
-                    # Skip days with absences
-                    is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-                    if is_absent:
+                    # Skip days with absences (O(1) lookup in set)
+                    if d in absent_dates:
                         continue
                     
                     if d.weekday() >= 5 and (emp.id, d) in employee_weekend_shift:
@@ -2412,16 +2413,15 @@ def add_working_hours_constraints(
                 total_hours_terms.append(conditional_days * scaled_hours)
             
             # ADD: Count cross-team hours this week for minimum hours calculation
-            # FIX: Only count days WITHOUT absences
+            # FIX: Only count days WITHOUT absences (using pre-computed absent_dates set)
             for shift_code in shift_codes:
                 if shift_code not in shift_hours:
                     continue
                 
                 cross_team_days = []
                 for d in week_dates:
-                    # Skip days with absences
-                    is_absent = any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-                    if is_absent:
+                    # Skip days with absences (O(1) lookup in set)
+                    if d in absent_dates:
                         continue
                     
                     if d.weekday() < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:

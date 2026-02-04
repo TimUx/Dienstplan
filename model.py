@@ -207,13 +207,14 @@ class ShiftPlanningModel:
         - locked_td: Forces TD assignment to specific employee in a week
         - locked_employee_shift: Forces employee to have a specific shift on a date (from previous planning periods)
         """
-        # Apply locked team shift assignments
-        for (team_id, week_idx), shift_code in self.locked_team_shift.items():
-            if (team_id, week_idx, shift_code) in self.team_shift:
-                # Force this team to have this shift in this week
-                # Note: Other shifts for this team/week are implicitly set to 0
-                # by the "exactly one shift per team per week" constraint
-                self.model.Add(self.team_shift[(team_id, week_idx, shift_code)] == 1)
+        # CRITICAL FIX: Don't apply locked_team_shift constraints yet!
+        # We need to first collect team locks from BOTH sources (locked_team_shift AND locked_employee_shift)
+        # and resolve conflicts BEFORE adding any constraints to the model.
+        # Otherwise, we get INFEASIBLE when locked_employee_shift tries to add conflicting team locks.
+        
+        # Start with a copy of the initial locked_team_shift dictionary
+        # This will be updated as we process locked_employee_shift
+        consolidated_team_locks = dict(self.locked_team_shift)
         
         # Apply locked employee shift assignments (from previous planning periods)
         # This prevents double shifts when planning across months
@@ -294,13 +295,13 @@ class ShiftPlanningModel:
                 # Reuse the week_idx computed earlier
                 week_idx = week_idx_for_date
                 
-                # Lock the team to this shift for this week
+                # Collect team lock for this week
                 # Note: We already know this is NOT a boundary week (filtered above at line 278)
                 if (emp.team_id, week_idx, shift_code) in self.team_shift:
-                    # CRITICAL FIX: Check for conflicts BEFORE adding constraint
-                    # Update locked_team_shift BEFORE adding the constraint to prevent race conditions
-                    if (emp.team_id, week_idx) in self.locked_team_shift:
-                        existing_shift = self.locked_team_shift[(emp.team_id, week_idx)]
+                    # CRITICAL FIX: Check for conflicts and update consolidated_team_locks
+                    # DON'T add the constraint yet - we'll do that after processing all sources
+                    if (emp.team_id, week_idx) in consolidated_team_locks:
+                        existing_shift = consolidated_team_locks[(emp.team_id, week_idx)]
                         if existing_shift != shift_code:
                             # Conflict detected: different locked shifts for same team/week
                             # This can happen when multiple employees from the same team have
@@ -309,12 +310,17 @@ class ShiftPlanningModel:
                             print(f"  Existing: {existing_shift}, Attempted: {shift_code} (from employee {emp_id} on {d})")
                             continue  # Skip this lock to avoid infeasibility
                     else:
-                        # No conflict - safe to lock this team/week to this shift
-                        self.locked_team_shift[(emp.team_id, week_idx)] = shift_code
-                    
-                    # Add the constraint only if we didn't skip due to conflict
-                    if self.locked_team_shift.get((emp.team_id, week_idx)) == shift_code:
-                        self.model.Add(self.team_shift[(emp.team_id, week_idx, shift_code)] == 1)
+                        # No conflict - safe to record this team/week lock
+                        consolidated_team_locks[(emp.team_id, week_idx)] = shift_code
+        
+        # CRITICAL FIX: Now apply all consolidated team locks as constraints
+        # This ensures conflicts are resolved BEFORE adding any constraints to the model
+        for (team_id, week_idx), shift_code in consolidated_team_locks.items():
+            if (team_id, week_idx, shift_code) in self.team_shift:
+                # Force this team to have this shift in this week
+                # Note: Other shifts for this team/week are implicitly set to 0
+                # by the "exactly one shift per team per week" constraint
+                self.model.Add(self.team_shift[(team_id, week_idx, shift_code)] == 1)
         
         # Apply locked employee weekend work
         for (emp_id, d), is_working in self.locked_employee_weekend.items():

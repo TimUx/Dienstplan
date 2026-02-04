@@ -278,6 +278,33 @@ class ShiftPlanningModel:
                 # Skip this lock entirely to avoid conflicts
                 continue
             
+            # CRITICAL FIX: Check for team lock conflicts BEFORE adding employee constraints
+            # Find the employee's team to check for conflicts
+            emp = emp_by_id.get(emp_id)
+            has_team_lock_conflict = False
+            
+            if emp and emp.team_id and week_idx_for_date is not None:
+                # Reuse the week_idx computed earlier
+                week_idx = week_idx_for_date
+                
+                # Check if there's already a team lock for this team/week with a different shift
+                if (emp.team_id, week_idx) in consolidated_team_locks:
+                    existing_shift = consolidated_team_locks[(emp.team_id, week_idx)]
+                    if existing_shift != shift_code:
+                        # Conflict detected: different locked shifts for same team/week
+                        # This can happen when multiple employees from the same team have
+                        # different locked shifts within the same week, OR when locked_team_shift
+                        # conflicts with locked_employee_shift
+                        has_team_lock_conflict = True
+                        print(f"WARNING: Skipping conflicting locked shift for team {emp.team_id}, week {week_idx}")
+                        print(f"  Existing: {existing_shift}, Attempted: {shift_code} (from employee {emp_id} on {d})")
+            
+            # Skip this entire employee lock if there's a team lock conflict
+            # This prevents adding employee constraints that would be contradictory to team constraints
+            if has_team_lock_conflict:
+                continue  # Skip both employee-level AND team-level locks for this date
+            
+            # No conflict - safe to add employee-level constraints
             # For weekdays, ensure employee is active on this date
             if d.weekday() < 5:  # Monday to Friday
                 if (emp_id, d) in self.employee_active:
@@ -288,30 +315,15 @@ class ShiftPlanningModel:
                     # Force employee to work on this weekend day
                     self.model.Add(self.employee_weekend_shift[(emp_id, d)] == 1)
             
-            # Additionally, we need to ensure the team has the correct shift for this date
-            # Find the employee's team
-            emp = emp_by_id.get(emp_id)
+            # Additionally, update the consolidated team lock for this employee's team/week
             if emp and emp.team_id and week_idx_for_date is not None:
                 # Reuse the week_idx computed earlier
                 week_idx = week_idx_for_date
                 
-                # Collect team lock for this week
-                # Note: We already know this is NOT a boundary week (filtered above at line 278)
+                # Record team lock for this week (we already checked there's no conflict above)
                 if (emp.team_id, week_idx, shift_code) in self.team_shift:
-                    # CRITICAL FIX: Check for conflicts and update consolidated_team_locks
-                    # DON'T add the constraint yet - we'll do that after processing all sources
-                    if (emp.team_id, week_idx) in consolidated_team_locks:
-                        existing_shift = consolidated_team_locks[(emp.team_id, week_idx)]
-                        if existing_shift != shift_code:
-                            # Conflict detected: different locked shifts for same team/week
-                            # This can happen when multiple employees from the same team have
-                            # different locked shifts within the same week
-                            print(f"WARNING: Skipping conflicting locked shift for team {emp.team_id}, week {week_idx}")
-                            print(f"  Existing: {existing_shift}, Attempted: {shift_code} (from employee {emp_id} on {d})")
-                            continue  # Skip this lock to avoid infeasibility
-                    else:
-                        # No conflict - safe to record this team/week lock
-                        consolidated_team_locks[(emp.team_id, week_idx)] = shift_code
+                    # Safe to record this team/week lock (no conflict)
+                    consolidated_team_locks[(emp.team_id, week_idx)] = shift_code
         
         # CRITICAL FIX: Now apply all consolidated team locks as constraints
         # This ensures conflicts are resolved BEFORE adding any constraints to the model

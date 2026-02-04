@@ -2836,16 +2836,41 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         date_to_week[d] = week_idx
                 
                 # Lock existing team assignments
-                # CRITICAL FIX: Detect and handle conflicting team assignments within the same week
-                # If multiple assignments exist for the same team in the same week with different shifts,
-                # we should NOT lock the team to any shift (let the solver decide) to avoid INFEASIBLE errors
+                # CRITICAL FIX: Only lock team shifts for weeks entirely in adjacent months (not current month)
+                # Weeks that span the boundary between adjacent and current months should NOT be locked
+                # because they may have conflicting shifts (already-planned days vs. to-be-planned days)
+                # 
+                # Example for March 2026:
+                # - Week 0 (Feb 23 - Mar 1): spans boundary, NOT locked
+                # - Weeks 1-4 (entirely in March): current month, NOT locked (will be planned)
+                # - Week 5 (Mar 30 - Apr 5): spans boundary, NOT locked
+                # 
+                # Only weeks entirely in February (before Feb 23) or entirely in April (after Apr 5) 
+                # would be locked, but those don't exist in this extended planning period.
                 
-                # First pass: identify conflicts
+                # Identify weeks that cross the month boundary
+                boundary_weeks = set()
+                for week_idx, week_dates in enumerate(weeks):
+                    # Check if this week contains dates both inside AND outside the main planning month
+                    has_dates_before_month = any(d < start_date for d in week_dates)
+                    has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
+                    has_dates_after_month = any(d > end_date for d in week_dates)
+                    
+                    # If week spans the boundary, don't lock it
+                    if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
+                        boundary_weeks.add(week_idx)
+                        app.logger.info(f"Week {week_idx} spans month boundary - will NOT be locked (dates: {week_dates[0]} to {week_dates[-1]})")
+                
+                # First pass: identify conflicts and boundary weeks
                 conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
                 for team_id, date_str, shift_code in existing_team_assignments:
                     assignment_date = date.fromisoformat(date_str)
                     if assignment_date in date_to_week:
                         week_idx = date_to_week[assignment_date]
+                        
+                        # Skip weeks that cross the month boundary
+                        if week_idx in boundary_weeks:
+                            continue
                         
                         # Check for conflicts
                         if (team_id, week_idx) in locked_team_shift:

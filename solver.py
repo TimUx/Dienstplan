@@ -286,6 +286,9 @@ class ShiftPlanningSolver:
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var * HOURS_SHORTAGE_PENALTY_WEIGHT)
         
+        # Calculate total days once for temporal weighting calculations
+        total_days = len(dates)
+        
         # Add overstaffing penalties - strongly discourage weekend overstaffing
         # Per requirements: Fill weekdays to capacity BEFORE overstaffing weekends
         # Weekend overstaffing (50) must be MORE expensive than weekday understaffing (20/12/5)
@@ -297,12 +300,27 @@ class ShiftPlanningSolver:
                 objective_terms.append(overstaff_var * WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT)
         
         if weekend_overstaffing:
-            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x - STRONGLY avoid)...")
-            for overstaff_var in weekend_overstaffing:
-                objective_terms.append(overstaff_var * WEEKEND_OVERSTAFFING_PENALTY_WEIGHT)
+            print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (base weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x with temporal bias - STRONGLY avoid late month)...")
+            for overstaff_var, overstaff_date in weekend_overstaffing:
+                # Calculate day index (0-based) within the planning period
+                day_index = dates.index(overstaff_date)
+                
+                # Calculate temporal multiplier for OVERSTAFFING: ranges from 0.5 (early) to 2.0 (late)
+                # Formula: 0.5 + 1.5 * (day_index / total_days)
+                # Day 0: 0.5x (less penalty early), Middle: 1.25x, Last day: 2.0x (strong penalty late)
+                # This makes overstaffing late weekends MUCH more expensive than early weekends
+                temporal_multiplier = 0.5 + 1.5 * (day_index / len(dates))
+                
+                # Apply both base weight and temporal multiplier
+                # Use round() instead of int() to preserve precision
+                final_weight = round(WEEKEND_OVERSTAFFING_PENALTY_WEIGHT * temporal_multiplier)
+                
+                objective_terms.append(overstaff_var * final_weight)
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
+        # AND TEMPORAL BIAS (prefer earlier dates)
         # Priority order: Früh (F) > Spät (S) > Nacht (N)
+        # Temporal order: Earlier dates > Later dates (to avoid clustering shifts at month end)
         # Higher weight = higher priority to fill
         # Use VERY strong differentials to ensure priority overrides other soft constraints
         shift_priority_weights = {
@@ -311,13 +329,32 @@ class ShiftPlanningSolver:
             'N': 5    # Nacht/Night - lowest priority (baseline)
         }
         
+        # Calculate temporal weighting factor
+        # Earlier dates get higher penalties for understaffing, encouraging solver to fill them first
+        # This prevents clustering of shifts at the end of the month
+        # (total_days already calculated above)
+        
         for shift_code, understaffing_list in weekday_understaffing_by_shift.items():
             if understaffing_list:
-                weight = shift_priority_weights.get(shift_code, 5)  # Default to 5 if shift not in priority map
+                base_weight = shift_priority_weights.get(shift_code, 5)  # Default to 5 if shift not in priority map
                 shift_name = {'F': 'Früh', 'S': 'Spät', 'N': 'Nacht'}.get(shift_code, shift_code)
-                print(f"  Adding {len(understaffing_list)} {shift_name} ({shift_code}) weekday understaffing penalties (weight {weight}x)...")
-                for understaff_var in understaffing_list:
-                    objective_terms.append(understaff_var * weight)
+                print(f"  Adding {len(understaffing_list)} {shift_name} ({shift_code}) weekday understaffing penalties (base weight {base_weight}x with temporal bias)...")
+                
+                for understaff_var, understaff_date in understaffing_list:
+                    # Calculate day index (0-based) within the planning period
+                    day_index = dates.index(understaff_date)
+                    
+                    # Calculate temporal multiplier: ranges from 1.5 (early) to 0.5 (late)
+                    # Formula: 1.5 - (day_index / total_days)
+                    # Day 0: 1.5x, Middle day: 1.0x, Last day: 0.5x
+                    # This makes understaffing early days more expensive than late days
+                    temporal_multiplier = 1.5 - (day_index / total_days)
+                    
+                    # Apply both shift priority weight and temporal multiplier
+                    # Use round() instead of int() to preserve precision
+                    final_weight = round(base_weight * temporal_multiplier)
+                    
+                    objective_terms.append(understaff_var * final_weight)
         
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity
@@ -391,6 +428,58 @@ class ShiftPlanningSolver:
                     # Apply priority weight (negative = reward, positive = penalty)
                     weight = shift_penalty_weights[shift]
                     objective_terms.append(total_assigned * weight)
+        
+        # NEW: Add temporal penalty for weekend work (discourage working late-month weekends)
+        # This encourages distributing weekend shifts earlier in the month
+        # Apply to BOTH regular team weekend work AND cross-team weekend work
+        print("  Adding temporal weekend work penalties (discourage late-month weekends)...")
+        weekend_work_penalties = 0
+        # (total_days already calculated above)
+        
+        # Penalize regular team weekend assignments
+        for emp in employees:
+            for d in dates:
+                if d.weekday() < 5:  # Skip weekdays
+                    continue
+                
+                if (emp.id, d) not in employee_weekend_shift:
+                    continue
+                
+                # Calculate temporal weight for this date
+                day_index = dates.index(d)
+                # Temporal multiplier: 0 (early) to 1000 (late)
+                # Day 0: 0x penalty, Last day: 1000x
+                # Very strong penalty to ensure late weekend work is avoided
+                temporal_weight = 1000.0 * (day_index / total_days)
+                
+                if temporal_weight > 0:
+                    # Penalize this employee working this late weekend
+                    # employee_weekend_shift is 1 if working, 0 if not
+                    # Use round() to preserve precision
+                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * round(temporal_weight))
+                    weekend_work_penalties += 1
+        
+        # ALSO penalize cross-team weekend assignments with same temporal penalty
+        for emp in employees:
+            for d in dates:
+                if d.weekday() < 5:  # Skip weekdays
+                    continue
+                
+                # Check all possible cross-team weekend assignments for this employee/date
+                for shift in shift_codes:
+                    if (emp.id, d, shift) not in employee_cross_team_weekend:
+                        continue
+                    
+                    # Calculate temporal weight for this date
+                    day_index = dates.index(d)
+                    temporal_weight = 1000.0 * (day_index / total_days)
+                    
+                    if temporal_weight > 0:
+                        # Penalize cross-team weekend work with same temporal penalty
+                        objective_terms.append(employee_cross_team_weekend[(emp.id, d, shift)] * round(temporal_weight))
+                        weekend_work_penalties += 1
+        
+        print(f"  Added {weekend_work_penalties} temporal weekend work penalties")
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:

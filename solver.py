@@ -431,10 +431,12 @@ class ShiftPlanningSolver:
         
         # NEW: Add temporal penalty for weekend work (discourage working late-month weekends)
         # This encourages distributing weekend shifts earlier in the month
+        # Apply to BOTH regular team weekend work AND cross-team weekend work
         print("  Adding temporal weekend work penalties (discourage late-month weekends)...")
         weekend_work_penalties = 0
         # (total_days already calculated above)
         
+        # Penalize regular team weekend assignments
         for emp in employees:
             for d in dates:
                 if d.weekday() < 5:  # Skip weekdays
@@ -445,9 +447,10 @@ class ShiftPlanningSolver:
                 
                 # Calculate temporal weight for this date
                 day_index = dates.index(d)
-                # Temporal multiplier: 0 (early) to 200 (late)
-                # Day 0: 0x penalty, Last day: 200x
-                temporal_weight = 200.0 * (day_index / total_days)
+                # Temporal multiplier: 0 (early) to 1000 (late)
+                # Day 0: 0x penalty, Last day: 1000x
+                # Very strong penalty to ensure late weekend work is avoided
+                temporal_weight = 1000.0 * (day_index / total_days)
                 
                 if temporal_weight > 0:
                     # Penalize this employee working this late weekend
@@ -455,6 +458,26 @@ class ShiftPlanningSolver:
                     # Use round() to preserve precision
                     objective_terms.append(employee_weekend_shift[(emp.id, d)] * round(temporal_weight))
                     weekend_work_penalties += 1
+        
+        # ALSO penalize cross-team weekend assignments with same temporal penalty
+        for emp in employees:
+            for d in dates:
+                if d.weekday() < 5:  # Skip weekdays
+                    continue
+                
+                # Check all possible cross-team weekend assignments for this employee/date
+                for shift in shift_codes:
+                    if (emp.id, d, shift) not in employee_cross_team_weekend:
+                        continue
+                    
+                    # Calculate temporal weight for this date
+                    day_index = dates.index(d)
+                    temporal_weight = 1000.0 * (day_index / total_days)
+                    
+                    if temporal_weight > 0:
+                        # Penalize cross-team weekend work with same temporal penalty
+                        objective_terms.append(employee_cross_team_weekend[(emp.id, d, shift)] * round(temporal_weight))
+                        weekend_work_penalties += 1
         
         print(f"  Added {weekend_work_penalties} temporal weekend work penalties")
         

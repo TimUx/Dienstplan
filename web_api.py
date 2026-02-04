@@ -2836,9 +2836,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         date_to_week[d] = week_idx
                 
                 # Lock existing team assignments
-                # CRITICAL FIX: Only lock team shifts for weeks that are entirely outside the main planning month
-                # Weeks that span the boundary between planned and unplanned months should NOT be locked
-                # because they may have different shifts on different days (planned vs. to-be-planned)
+                # CRITICAL FIX: Only lock team shifts for weeks entirely in adjacent months (not current month)
+                # Weeks that span the boundary between adjacent and current months should NOT be locked
+                # because they may have conflicting shifts (already-planned days vs. to-be-planned days)
+                # 
+                # Example for March 2026:
+                # - Week 0 (Feb 23 - Mar 1): spans boundary, NOT locked
+                # - Weeks 1-4 (entirely in March): current month, NOT locked (will be planned)
+                # - Week 5 (Mar 30 - Apr 5): spans boundary, NOT locked
+                # 
+                # Only weeks entirely in February (before Feb 23) or entirely in April (after Apr 5) 
+                # would be locked, but those don't exist in this extended planning period.
                 
                 # Identify weeks that cross the month boundary
                 boundary_weeks = set()

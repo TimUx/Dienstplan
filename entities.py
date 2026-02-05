@@ -172,6 +172,7 @@ class Team:
     description: Optional[str] = None
     email: Optional[str] = None
     is_virtual: bool = False  # Virtual teams (e.g., "Fire Alarm System") for display only
+    rotation_group_id: Optional[int] = None  # Link to RotationGroup for database-driven rotation
     employees: List[Employee] = field(default_factory=list)
     allowed_shift_type_ids: List[int] = field(default_factory=list)  # Shift types this team can work (from TeamShiftAssignments)
 

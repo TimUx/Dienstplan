@@ -67,7 +67,8 @@ class ShiftPlanningSolver:
         planning_model: ShiftPlanningModel,
         time_limit_seconds: int = 300,
         num_workers: int = 8,
-        global_settings: Dict = None
+        global_settings: Dict = None,
+        db_path: str = "dienstplan.db"
     ):
         """
         Initialize the solver.
@@ -80,12 +81,14 @@ class ShiftPlanningSolver:
                 - max_consecutive_shifts_weeks: Max weeks of same shift (default 6)
                 - max_consecutive_night_shifts_weeks: Max weeks of night shifts (default 3)
                 - min_rest_hours: Min rest hours between shifts (default 11)
+            db_path: Path to database file for loading rotation patterns (default: dienstplan.db)
         """
         self.planning_model = planning_model
         self.time_limit_seconds = time_limit_seconds
         self.num_workers = num_workers
         self.solution = None
         self.status = None
+        self.db_path = db_path
         
         # Store global settings
         if global_settings is None:
@@ -118,8 +121,23 @@ class ShiftPlanningSolver:
         print("  - Team shift assignment (exactly one shift per team per week)")
         add_team_shift_assignment_constraints(model, team_shift, teams, weeks, shift_codes, shift_types)
         
-        print("  - Team rotation (F → N → S pattern)")
-        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types)
+        # Try to load rotation patterns from database
+        rotation_patterns = None
+        try:
+            from data_loader import load_rotation_groups_from_db
+            rotation_patterns = load_rotation_groups_from_db(self.db_path)
+            if rotation_patterns:
+                print(f"  - Team rotation (DATABASE-DRIVEN: {len(rotation_patterns)} rotation pattern(s) loaded)")
+                for group_id, pattern in rotation_patterns.items():
+                    print(f"    • Rotation group {group_id}: {' → '.join(pattern)}")
+            else:
+                print("  - Team rotation (FALLBACK: Using hardcoded F → N → S pattern)")
+        except Exception as e:
+            print(f"  - Team rotation (FALLBACK: Database load failed, using hardcoded F → N → S pattern)")
+            print(f"    Error: {e}")
+            rotation_patterns = None
+        
+        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types, rotation_patterns)
         
         print("  - Employee weekly rotation order (enforce F → N → S transition order)")
         rotation_order_penalties = add_employee_weekly_rotation_order_constraints(

@@ -27,7 +27,9 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             Description TEXT,
             Email TEXT,
             IsVirtual INTEGER NOT NULL DEFAULT 0,
-            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            RotationGroupId INTEGER,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (RotationGroupId) REFERENCES RotationGroups(Id)
         )
     """)
     
@@ -723,6 +725,63 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     print("[OK] Shift type relationships initialized: F -> N -> S rotation")
 
 
+def initialize_default_rotation_groups(db_path: str = "dienstplan.db"):
+    """
+    Initialize default rotation group (Standard F→N→S).
+    
+    This creates a default rotation group for the standard 3-shift system
+    that teams can be assigned to. This enables database-driven rotation patterns
+    instead of hardcoded rotation in the solver.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Check if default rotation group already exists
+    cursor.execute("SELECT Id FROM RotationGroups WHERE Name = 'Standard F→N→S'")
+    existing = cursor.fetchone()
+    
+    if existing:
+        print("[!] Default rotation group already exists")
+        conn.close()
+        return
+    
+    # Check if shift types exist
+    cursor.execute("SELECT Id, Code FROM ShiftTypes WHERE Code IN ('F', 'N', 'S')")
+    shifts = {row[1]: row[0] for row in cursor.fetchall()}
+    
+    if len(shifts) < 3:
+        missing = set(['F', 'N', 'S']) - set(shifts.keys())
+        print(f"[!] Not all shift types found, skipping rotation group initialization. Missing: {', '.join(missing)}")
+        conn.close()
+        return
+    
+    # Create default rotation group
+    cursor.execute("""
+        INSERT INTO RotationGroups (Name, Description, IsActive, CreatedBy)
+        VALUES (?, ?, 1, 'system')
+    """, (
+        "Standard F→N→S",
+        "Standard 3-Schicht-Rotation: Frühdienst → Nachtdienst → Spätdienst"
+    ))
+    rotation_group_id = cursor.lastrowid
+    
+    # Add shifts to rotation group in order: F=1, N=2, S=3
+    rotation_shifts = [
+        (rotation_group_id, shifts['F'], 1, 'system'),  # F = order 1
+        (rotation_group_id, shifts['N'], 2, 'system'),  # N = order 2
+        (rotation_group_id, shifts['S'], 3, 'system'),  # S = order 3
+    ]
+    
+    cursor.executemany("""
+        INSERT INTO RotationGroupShifts (RotationGroupId, ShiftTypeId, RotationOrder, CreatedBy)
+        VALUES (?, ?, ?, ?)
+    """, rotation_shifts)
+    
+    conn.commit()
+    conn.close()
+    print(f"[OK] Default rotation group initialized: 'Standard F→N→S' (ID: {rotation_group_id})")
+
+
 def initialize_absence_types(db_path: str = "dienstplan.db"):
     """
     Initialize standard absence types (U, AU, L).
@@ -762,30 +821,39 @@ def initialize_absence_types(db_path: str = "dienstplan.db"):
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
     """
-    Initialize sample teams.
+    Initialize sample teams with default rotation group.
     
     Note: Team IDs are explicitly set.
+    Teams are linked to the default "Standard F→N→S" rotation group.
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # Get the default rotation group ID
+    cursor.execute("SELECT Id FROM RotationGroups WHERE Name = 'Standard F→N→S'")
+    rotation_group_result = cursor.fetchone()
+    rotation_group_id = rotation_group_result[0] if rotation_group_result else None
+    
+    if not rotation_group_id:
+        print("[!] Warning: Default rotation group not found, teams will not have rotation assigned")
+    
     # Sample teams with explicit IDs
-    # Format: (Id, Name, Description, Email, IsVirtual)
+    # Format: (Id, Name, Description, Email, IsVirtual, RotationGroupId)
     teams = [
-        (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0),
-        (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0),
-        (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0),
+        (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0, rotation_group_id),
+        (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0, rotation_group_id),
+        (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0, rotation_group_id),
     ]
     
-    for team_id, name, description, email, is_virtual in teams:
+    for team_id, name, description, email, is_virtual, rot_group_id in teams:
         cursor.execute("""
-            INSERT OR IGNORE INTO Teams (Id, Name, Description, Email, IsVirtual)
-            VALUES (?, ?, ?, ?, ?)
-        """, (team_id, name, description, email, is_virtual))
+            INSERT OR IGNORE INTO Teams (Id, Name, Description, Email, IsVirtual, RotationGroupId)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (team_id, name, description, email, is_virtual, rot_group_id))
     
     conn.commit()
     conn.close()
-    print("[OK] Sample teams initialized")
+    print("[OK] Sample teams initialized with rotation groups")
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):
@@ -872,11 +940,14 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
     # Initialize shift type relationships (rotation order: F → N → S)
     initialize_shift_type_relationships(db_path)
     
+    # Initialize default rotation groups (NEW: database-driven rotation)
+    initialize_default_rotation_groups(db_path)
+    
     # Initialize standard absence types (U, AU, L)
     initialize_absence_types(db_path)
     
     if with_sample_data:
-        # Initialize sample teams
+        # Initialize sample teams (will be linked to default rotation group)
         initialize_sample_teams(db_path)
         # Initialize sample employees
         initialize_sample_employees(db_path)

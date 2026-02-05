@@ -114,26 +114,44 @@ def add_team_rotation_constraints(
     weeks: List[List[date]],
     shift_codes: List[str],
     locked_team_shift: Dict[Tuple[int, int], str] = None,
-    shift_types: List[ShiftType] = None
+    shift_types: List[ShiftType] = None,
+    rotation_patterns: Dict[int, List[str]] = None
 ):
     """
-    HARD CONSTRAINT: Teams follow fixed rotation pattern F → N → S.
+    HARD CONSTRAINT: Teams follow rotation pattern (database-driven or default F → N → S).
     
-    Each team follows the same rotation cycle with offset based on team ID.
-    Week 0: Team 1=F, Team 2=N, Team 3=S
-    Week 1: Team 1=N, Team 2=S, Team 3=F
-    Week 2: Team 1=S, Team 2=F, Team 3=N
-    Week 3: Team 1=F, Team 2=N, Team 3=S (repeats)
+    Each team follows a rotation cycle with offset based on team ID.
+    
+    If rotation_patterns is provided and a team has a rotation_group_id, 
+    uses the team-specific pattern from the database.
+    Otherwise, falls back to the default hardcoded pattern: F → N → S.
+    
+    Example with F → N → S pattern:
+        Week 0: Team 1=F, Team 2=N, Team 3=S
+        Week 1: Team 1=N, Team 2=S, Team 3=F
+        Week 2: Team 1=S, Team 2=F, Team 3=N
+        Week 3: Team 1=F, Team 2=N, Team 3=S (repeats)
     
     Manual overrides (locked assignments) take precedence over rotation.
     
-    IMPORTANT: Only applies to teams that have F, N, and S in their allowed shifts.
+    IMPORTANT: Only applies to teams that have the rotation shifts in their allowed shifts.
     Teams with other shift configurations (e.g., only TD/BMT/BSB) are skipped.
+    
+    Args:
+        model: CP-SAT model
+        team_shift: Decision variables for team shifts
+        teams: List of teams
+        weeks: List of weeks (each week is a list of dates)
+        shift_codes: List of shift codes
+        locked_team_shift: Dict of locked team shifts
+        shift_types: List of shift types
+        rotation_patterns: Dict mapping rotation_group_id to list of shift codes (from database)
     """
-    if "F" not in shift_codes or "N" not in shift_codes or "S" not in shift_codes:
-        return  # Cannot enforce rotation if shifts are missing
+    # Default fallback pattern if no database pattern available
+    DEFAULT_ROTATION = ["F", "N", "S"]
     
     locked_team_shift = locked_team_shift or {}
+    rotation_patterns = rotation_patterns or {}
     
     # Build shift type ID to code mapping
     shift_id_to_code = {}
@@ -141,36 +159,40 @@ def add_team_rotation_constraints(
         for st in shift_types:
             shift_id_to_code[st.id] = st.code
     
-    # Find shift type IDs for F, N, S
-    f_id = n_id = s_id = None
-    for st_id, st_code in shift_id_to_code.items():
-        if st_code == "F":
-            f_id = st_id
-        elif st_code == "N":
-            n_id = st_id
-        elif st_code == "S":
-            s_id = st_id
-    
-    # Define the rotation cycle
-    rotation = ["F", "N", "S"]
-    
-    # For each team, assign shifts based on rotation
+    # For each team, assign shifts based on rotation pattern
     sorted_teams = sorted(teams, key=lambda t: t.id)
     
     for team_idx, team in enumerate(sorted_teams):
-        # Check if team has all three rotation shifts (F, N, S) in allowed shifts
-        # If team has allowed_shift_type_ids configured, check them
-        if team.allowed_shift_type_ids:
-            has_f = f_id in team.allowed_shift_type_ids if f_id else False
-            has_n = n_id in team.allowed_shift_type_ids if n_id else False
-            has_s = s_id in team.allowed_shift_type_ids if s_id else False
+        # Get rotation pattern for this team
+        # Priority: 1) Database pattern for team's rotation group, 2) Default hardcoded pattern
+        rotation = DEFAULT_ROTATION  # Start with default
+        
+        if team.rotation_group_id and team.rotation_group_id in rotation_patterns:
+            # Team has a rotation group assigned and it's in the database
+            rotation = rotation_patterns[team.rotation_group_id]
+        
+        # Verify all shifts in rotation are available
+        missing_shifts = [s for s in rotation if s not in shift_codes]
+        if missing_shifts:
+            print(f"[!] Warning: Team '{team.name}' rotation pattern {rotation} contains unavailable shifts: {missing_shifts}. Skipping rotation constraint for this team.")
+            continue
+        
+        # Check if team has all rotation shifts in allowed shifts (if configured)
+        if team.allowed_shift_type_ids and shift_id_to_code:
+            # Build set of allowed shift codes for this team
+            allowed_shift_codes = set()
+            for st_id in team.allowed_shift_type_ids:
+                if st_id in shift_id_to_code:
+                    allowed_shift_codes.add(shift_id_to_code[st_id])
             
-            if not (has_f and has_n and has_s):
-                # Team doesn't have all three shifts - skip rotation constraint
+            # Check if all rotation shifts are allowed
+            rotation_set = set(rotation)
+            if not rotation_set.issubset(allowed_shift_codes):
+                # Team doesn't have all rotation shifts - skip rotation constraint
                 # Team will be constrained by add_team_shift_assignment_constraints instead
                 continue
         
-        # Team participates in F→N→S rotation
+        # Team participates in rotation
         for week_idx in range(len(weeks)):
             # Check if this assignment is locked (manual override)
             if (team.id, week_idx) in locked_team_shift:

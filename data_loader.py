@@ -87,6 +87,69 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     return employees, teams, absences
 
 
+def load_rotation_groups_from_db(db_path: str) -> Dict[int, List[str]]:
+    """
+    Load rotation patterns from RotationGroups and RotationGroupShifts tables.
+    
+    Returns a dictionary mapping rotation_group_id to a list of shift codes 
+    in their rotation order.
+    
+    Example return value:
+        {
+            1: ["F", "N", "S"],      # Standard rotation
+            2: ["F", "S"],            # Two-shift rotation
+            3: ["N", "S", "F"]        # Different starting point
+        }
+    
+    Args:
+        db_path: Path to the SQLite database
+        
+    Returns:
+        Dict mapping rotation_group_id to list of shift codes in rotation order
+    """
+    import sqlite3
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    rotation_patterns = {}
+    
+    try:
+        # Get all active rotation groups
+        cursor.execute("""
+            SELECT Id, Name 
+            FROM RotationGroups 
+            WHERE IsActive = 1
+        """)
+        rotation_groups = cursor.fetchall()
+        
+        for group_id, group_name in rotation_groups:
+            # Get shifts for this rotation group in order
+            cursor.execute("""
+                SELECT st.Code
+                FROM RotationGroupShifts rgs
+                JOIN ShiftTypes st ON st.Id = rgs.ShiftTypeId
+                WHERE rgs.RotationGroupId = ?
+                ORDER BY rgs.RotationOrder ASC
+            """, (group_id,))
+            
+            shifts = [row[0] for row in cursor.fetchall()]
+            
+            if shifts:  # Only add if group has shifts
+                rotation_patterns[group_id] = shifts
+            else:
+                print(f"[!] Warning: Rotation group '{group_name}' (ID: {group_id}) has no shifts configured")
+        
+    except sqlite3.Error as e:
+        print(f"[!] Error loading rotation groups from database: {e}")
+        # Return empty dict on error - fallback to hardcoded pattern will be used
+        return {}
+    finally:
+        conn.close()
+    
+    return rotation_patterns
+
+
 def load_global_settings(db_path: str) -> Dict:
     """
     Load global shift planning settings from the database.

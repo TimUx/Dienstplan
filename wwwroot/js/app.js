@@ -5919,23 +5919,22 @@ function makeRotationShiftsSortable() {
             // Find the best position to insert based on mouse Y coordinate
             const allSortables = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
             let targetElement = null;
-            let minDistance = Number.POSITIVE_INFINITY;
             
-            allSortables.forEach(sortableItem => {
+            // Find the first element whose center is below the cursor
+            for (const sortableItem of allSortables) {
                 const rect = sortableItem.getBoundingClientRect();
                 const itemCenter = rect.top + rect.height / 2;
-                const distanceFromMouse = Math.abs(e.clientY - itemCenter);
                 
-                if (e.clientY < itemCenter && distanceFromMouse < minDistance) {
-                    minDistance = distanceFromMouse;
+                if (e.clientY < itemCenter) {
                     targetElement = sortableItem;
+                    break;
                 }
-            });
+            }
             
             if (targetElement) {
                 container.insertBefore(dragging, targetElement);
             } else {
-                // Insert before form-group or at the end
+                // Insert before '.form-group' element or at the end
                 const formGroupElement = container.querySelector('.form-group');
                 if (formGroupElement) {
                     container.insertBefore(dragging, formGroupElement);

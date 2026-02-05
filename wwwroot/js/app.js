@@ -21,6 +21,16 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Helper function to escape strings for use in JavaScript inline event handlers
+function escapeJsString(text) {
+    if (!text) return '';
+    return text.replace(/\\/g, '\\\\')
+               .replace(/'/g, "\\'")
+               .replace(/"/g, '\\"')
+               .replace(/\n/g, '\\n')
+               .replace(/\r/g, '\\r');
+}
+
 // Helper function to sanitize color codes to prevent CSS injection
 function sanitizeColorCode(colorCode) {
     if (!colorCode) return '#CCCCCC'; // Default gray color
@@ -5944,7 +5954,7 @@ function displayRotationGroups(groups) {
         html += `<td>${statusBadge}</td>`;
         html += '<td class="actions">';
         html += `<button onclick="editRotationGroup(${group.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
-        html += `<button onclick="deleteRotationGroup(${group.id}, '${escapeHtml(group.name)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
+        html += `<button onclick="deleteRotationGroup(${group.id}, '${escapeJsString(group.name)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
         html += '</td>';
         html += '</tr>';
     });
@@ -6033,7 +6043,7 @@ async function loadAvailableShiftsForRotation(selectedShifts = []) {
             html += '<div class="form-group" style="margin-top: 20px;"><label>Weitere Schichten hinzufügen:</label></div>';
             availableShifts.forEach(shift => {
                 html += '<div class="checkbox-item">';
-                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" onchange="addShiftToRotation(${shift.id}, '${escapeHtml(shift.code)}', '${escapeHtml(shift.name)}', '${sanitizeColorCode(shift.colorCode)}')">`;
+                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" onchange="addShiftToRotation(${shift.id}, '${escapeJsString(shift.code)}', '${escapeJsString(shift.name)}', '${sanitizeColorCode(shift.colorCode)}')">`;
                 html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
                 html += '</label></div>';
             });
@@ -6113,7 +6123,7 @@ function removeShiftFromRotation(button) {
     const newCheckbox = document.createElement('div');
     newCheckbox.className = 'checkbox-item';
     newCheckbox.innerHTML = `
-        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" onchange="addShiftToRotation(${shiftId}, '${escapeHtml(shiftCode)}', '${escapeHtml(shiftName)}', '${safeColorCode}')">
+        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" onchange="addShiftToRotation(${shiftId}, '${escapeJsString(shiftCode)}', '${escapeJsString(shiftName)}', '${safeColorCode}')">
         <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span> ${escapeHtml(shiftName)}
         </label>
     `;

@@ -332,15 +332,41 @@ class ShiftPlanningSolver:
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # AND TEMPORAL BIAS (prefer earlier dates)
-        # Priority order: Früh (F) > Spät (S) > Nacht (N)
+        # Priority order is calculated dynamically based on max_staff values from database
+        # Shifts with higher max_staff get higher priority (more people to assign)
         # Temporal order: Earlier dates > Later dates (to avoid clustering shifts at month end)
         # Higher weight = higher priority to fill
         # Use VERY strong differentials to ensure priority overrides other soft constraints
-        shift_priority_weights = {
-            'F': 20,  # Früh/Early - highest priority (4x night)
-            'S': 12,  # Spät/Late - medium priority (2.4x night)
-            'N': 5    # Nacht/Night - lowest priority (baseline)
-        }
+        
+        # DYNAMIC CALCULATION: Build priority weights based on max_staff_weekday from database
+        # This ensures the distribution respects the configured shift capacity ratios
+        # For example: if F has max 8 and S has max 6, F gets proportionally higher priority
+        shift_priority_weights = {}
+        min_weight = 5  # Baseline minimum weight for any shift
+        
+        # Find the shift with the smallest max_staff to use as baseline
+        max_staff_values = {}
+        for st in shift_types:
+            if st.code in shift_codes:
+                max_staff_values[st.code] = st.max_staff_weekday
+        
+        if max_staff_values:
+            min_max_staff = min(max_staff_values.values())
+            # Calculate weights proportional to max_staff, with min_weight as baseline
+            # Example: if min_max_staff=6 and a shift has max_staff=8, weight = 5 * (8/6) ≈ 6.67
+            # This creates proper priority ratios: F(8) gets higher weight than S(6)
+            for shift_code, max_staff in max_staff_values.items():
+                # Scale proportionally, maintaining strong differentials
+                # Multiply by 2 to ensure sufficient separation between shifts
+                shift_priority_weights[shift_code] = round(min_weight * (max_staff / min_max_staff) * 2)
+            print(f"  Calculated dynamic shift priority weights based on max_staff: {shift_priority_weights}")
+        else:
+            # Fallback to original hardcoded weights if no shift types available
+            shift_priority_weights = {
+                'F': 20,  # Früh/Early - highest priority (4x night)
+                'S': 12,  # Spät/Late - medium priority (2.4x night)
+                'N': 5    # Nacht/Night - lowest priority (baseline)
+            }
         
         # Calculate temporal weighting factor
         # Earlier dates get higher penalties for understaffing, encouraging solver to fill them first
@@ -372,22 +398,40 @@ class ShiftPlanningSolver:
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity
         # Weight 50x to ensure team members are preferred over cross-team workers
-        # This weight MUST be higher than all understaffing penalties (F=20, S=12, N=5)
+        # This weight MUST be higher than all understaffing penalties (which are dynamically calculated)
         # to guarantee team cohesion takes priority over shift filling optimization
         if team_priority_violations:
             print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight 50x)...")
             for violation_var in team_priority_violations:
                 objective_terms.append(violation_var * 50)
         
-        # NEW: Add shift type preference objective to directly reward F > S > N
+        # NEW: Add shift type preference objective based on max_staff ratios
         # Count total staff assigned to each shift and apply inverse priority weights
-        # Lower priority shifts get small penalties to discourage their use when alternatives exist
-        print("  Adding shift type preference objectives (F > S > N)...")
-        shift_penalty_weights = {
-            'F': -3,  # Früh/Early - REWARD (negative penalty = bonus)
-            'S': 1,   # Spät/Late - slight penalty (less preferred than F)
-            'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
-        }
+        # Shifts with higher max_staff get rewarded (negative penalty = bonus)
+        # Shifts with lower max_staff get penalized to discourage overuse
+        print("  Adding shift type preference objectives (proportional to max_staff)...")
+        shift_penalty_weights = {}
+        
+        # Calculate penalty/reward weights based on max_staff values
+        # Shifts with higher max_staff get negative weights (rewards)
+        # Shifts with lower max_staff get positive weights (penalties)
+        if max_staff_values:
+            max_of_max_staff = max(max_staff_values.values())
+            for shift_code, max_staff in max_staff_values.items():
+                # Scale from -3 (highest max_staff, most rewarded) to +3 (lowest max_staff, most penalized)
+                # Formula: 3 * (1 - 2 * max_staff / max_of_max_staff)
+                # If max_staff = max_of_max_staff: 3 * (1 - 2) = -3 (reward)
+                # If max_staff = max_of_max_staff/2: 3 * (1 - 1) = 0 (neutral)
+                # If max_staff < max_of_max_staff/2: positive (penalty)
+                shift_penalty_weights[shift_code] = round(3 * (1 - 2 * max_staff / max_of_max_staff))
+            print(f"    Shift penalty/reward weights (negative=reward): {shift_penalty_weights}")
+        else:
+            # Fallback to original hardcoded weights
+            shift_penalty_weights = {
+                'F': -3,  # Früh/Early - REWARD (negative penalty = bonus)
+                'S': 1,   # Spät/Late - slight penalty (less preferred than F)
+                'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
+            }
         
         for d in dates:
             if d.weekday() >= 5:  # Skip weekends

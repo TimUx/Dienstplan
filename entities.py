@@ -294,6 +294,36 @@ class VacationPeriod:
         return self.start_date <= check_date <= self.end_date
 
 
+@dataclass
+class RotationGroup:
+    """
+    Represents a shift rotation group.
+    A rotation group contains multiple shifts and defines their rotation pattern.
+    """
+    id: int
+    name: str  # e.g., "3-Schicht-System", "2-Schicht-System"
+    description: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    modified_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    modified_by: Optional[str] = None
+
+
+@dataclass
+class RotationGroupShift:
+    """
+    Represents a shift type assignment to a rotation group.
+    Defines which shifts belong to a rotation group and their order.
+    """
+    id: int
+    rotation_group_id: int
+    shift_type_id: int
+    rotation_order: int  # Order in the rotation (1, 2, 3, ...)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None
+
+
 # Predefined shift types for the system - FALLBACK VALUES ONLY
 # These are used only when the database doesn't have ShiftTypes configured.
 # The primary source of truth is the ShiftType configuration in the database.

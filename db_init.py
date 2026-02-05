@@ -265,6 +265,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     """)
     
     # ShiftTypeRelationships table (defines which shifts are related and their order)
+    # DEPRECATED: Use RotationGroups instead for new implementations
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ShiftTypeRelationships (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -276,6 +277,35 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             FOREIGN KEY (ShiftTypeId) REFERENCES ShiftTypes(Id) ON DELETE CASCADE,
             FOREIGN KEY (RelatedShiftTypeId) REFERENCES ShiftTypes(Id) ON DELETE CASCADE,
             UNIQUE(ShiftTypeId, RelatedShiftTypeId)
+        )
+    """)
+    
+    # RotationGroups table (defines shift rotation groups with rotation rules)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS RotationGroups (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Description TEXT,
+            IsActive INTEGER NOT NULL DEFAULT 1,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CreatedBy TEXT,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+    
+    # RotationGroupShifts table (many-to-many: which shifts belong to which rotation group)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS RotationGroupShifts (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            RotationGroupId INTEGER NOT NULL,
+            ShiftTypeId INTEGER NOT NULL,
+            RotationOrder INTEGER NOT NULL,
+            CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CreatedBy TEXT,
+            FOREIGN KEY (RotationGroupId) REFERENCES RotationGroups(Id) ON DELETE CASCADE,
+            FOREIGN KEY (ShiftTypeId) REFERENCES ShiftTypes(Id) ON DELETE CASCADE,
+            UNIQUE(RotationGroupId, ShiftTypeId)
         )
     """)
     
@@ -467,6 +497,16 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_shifttyperelationships_shift 
         ON ShiftTypeRelationships(ShiftTypeId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rotationgroupshifts_group 
+        ON RotationGroupShifts(RotationGroupId)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rotationgroupshifts_shift 
+        ON RotationGroupShifts(ShiftTypeId)
     """)
     
     cursor.execute("""

@@ -154,6 +154,7 @@
                         <!-- Sub-tabs for Shift Management -->
                         <div class="tabs sub-tabs">
                             <button class="tab-btn active" onclick="switchShiftManagementTab('types')">📋 Schichttypen</button>
+                            <button class="tab-btn" onclick="switchShiftManagementTab('rotation-groups')">🔄 Rotationsgruppen</button>
                             <button class="tab-btn" onclick="switchShiftManagementTab('settings')">⚙️ Einstellungen</button>
                         </div>
                         
@@ -166,6 +167,23 @@
                             </div>
                             <div id="shift-types-management-content">
                                 <p class="loading">Lade Schichttypen...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Rotation Groups Sub-tab -->
+                        <div id="shift-rotation-groups-content-tab" class="tab-content">
+                            <h4>Schichtrotationsgruppen</h4>
+                            <p>Definieren Sie Rotationsgruppen, die mehrere Schichten beinhalten und deren Rotationsreihenfolge festlegen.</p>
+                            <div class="info-box info">
+                                <p>ℹ️ <strong>Rotationsgruppen</strong> ermöglichen es, mehrere Schichten zu einer Gruppe zusammenzufassen und deren Rotationsreihenfolge zentral zu definieren.</p>
+                                <p>Beispiel: Eine "3-Schicht-Rotation" könnte die Schichten F (Früh) → N (Nacht) → S (Spät) beinhalten.</p>
+                            </div>
+                            <div class="controls">
+                                <button onclick="showRotationGroupModal()" class="btn-primary">+ Rotationsgruppe hinzufügen</button>
+                                <button onclick="loadRotationGroups()" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="rotation-groups-content">
+                                <p class="loading">Lade Rotationsgruppen...</p>
                             </div>
                         </div>
                         
@@ -1199,6 +1217,42 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeShiftTypeRelationshipsModal()" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rotation Group Modal -->
+    <div id="rotationGroupModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeRotationGroupModal()">&times;</span>
+            <h2 id="rotationGroupModalTitle">Rotationsgruppe erstellen</h2>
+            <form id="rotationGroupForm" onsubmit="saveRotationGroup(event)">
+                <input type="hidden" id="rotationGroupId">
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="rotationGroupName" required placeholder="z.B. 3-Schicht-System">
+                </div>
+                <div class="form-group">
+                    <label>Beschreibung</label>
+                    <textarea id="rotationGroupDescription" rows="3" placeholder="Optional: Beschreibung der Rotationsgruppe"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="rotationGroupIsActive" checked>
+                        Aktiv
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Schichten in Rotationsreihenfolge*</label>
+                    <small>Ziehen Sie die Schichten in die gewünschte Rotationsreihenfolge.</small>
+                    <div id="rotationGroupShiftsList" class="sortable-list">
+                        <p class="loading">Lade Schichten...</p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="closeRotationGroupModal()" class="btn-secondary">Abbrechen</button>
                     <button type="submit" class="btn-primary">Speichern</button>
                 </div>
             </form>

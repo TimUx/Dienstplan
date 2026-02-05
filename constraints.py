@@ -223,9 +223,9 @@ def add_employee_weekly_rotation_order_constraints(
     - S → N (skips F)
     
     This constraint applies to both regular team shifts and cross-team assignments.
-    According to requirements: "Bevor dieser Rythmus unterbrochen wird, soll ein 
+    According to requirements: "Bevor dieser Rhythmus unterbrochen wird, soll ein 
     Mitarbeiter lieber 2-3 mal die gleiche Schicht machen um wieder in den normalen 
-    Rythmus zu kommen" - employees should rather repeat the same shift 2-3 times 
+    Rhythmus zu kommen" - employees should rather repeat the same shift 2-3 times 
     than break the rotation order.
     
     Implementation:

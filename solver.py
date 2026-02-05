@@ -67,7 +67,8 @@ class ShiftPlanningSolver:
         planning_model: ShiftPlanningModel,
         time_limit_seconds: int = 300,
         num_workers: int = 8,
-        global_settings: Dict = None
+        global_settings: Dict = None,
+        db_path: str = "dienstplan.db"
     ):
         """
         Initialize the solver.
@@ -80,12 +81,14 @@ class ShiftPlanningSolver:
                 - max_consecutive_shifts_weeks: Max weeks of same shift (default 6)
                 - max_consecutive_night_shifts_weeks: Max weeks of night shifts (default 3)
                 - min_rest_hours: Min rest hours between shifts (default 11)
+            db_path: Path to database file for loading rotation patterns (default: dienstplan.db)
         """
         self.planning_model = planning_model
         self.time_limit_seconds = time_limit_seconds
         self.num_workers = num_workers
         self.solution = None
         self.status = None
+        self.db_path = db_path
         
         # Store global settings
         if global_settings is None:
@@ -122,7 +125,7 @@ class ShiftPlanningSolver:
         rotation_patterns = None
         try:
             from data_loader import load_rotation_groups_from_db
-            rotation_patterns = load_rotation_groups_from_db("dienstplan.db")
+            rotation_patterns = load_rotation_groups_from_db(self.db_path)
             if rotation_patterns:
                 print(f"  - Team rotation (DATABASE-DRIVEN: {len(rotation_patterns)} rotation pattern(s) loaded)")
                 for group_id, pattern in rotation_patterns.items():

@@ -371,11 +371,13 @@ class ShiftPlanningSolver:
         
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity
-        # Weight 10x to ensure team members are preferred over cross-team workers
+        # Weight 50x to ensure team members are preferred over cross-team workers
+        # This weight MUST be higher than all understaffing penalties (F=20, S=12, N=5)
+        # to guarantee team cohesion takes priority over shift filling optimization
         if team_priority_violations:
-            print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight 10x)...")
+            print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight 50x)...")
             for violation_var in team_priority_violations:
-                objective_terms.append(violation_var * 10)
+                objective_terms.append(violation_var * 50)
         
         # NEW: Add shift type preference objective to directly reward F > S > N
         # Count total staff assigned to each shift and apply inverse priority weights

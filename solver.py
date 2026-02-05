@@ -11,6 +11,7 @@ from model import ShiftPlanningModel
 from constraints import (
     add_team_shift_assignment_constraints,
     add_team_rotation_constraints,
+    add_employee_weekly_rotation_order_constraints,
     add_employee_team_linkage_constraints,
     add_staffing_constraints,
     add_rest_time_constraints,
@@ -108,6 +109,12 @@ class ShiftPlanningSolver:
         
         print("  - Team rotation (F → N → S pattern)")
         add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types)
+        
+        print("  - Employee weekly rotation order (enforce F → N → S transition order)")
+        rotation_order_penalties = add_employee_weekly_rotation_order_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, teams, dates, weeks, shift_codes)
         
         print("  - Employee-team linkage (derive employee activity from team shifts)")
         add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences, employee_weekend_shift, employee_cross_team_weekend)
@@ -241,6 +248,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(rest_violation_penalties)} rest time violation penalties...")
             for penalty_var in rest_violation_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (50 or 500 per violation)
+        
+        # Add rotation order violation penalties (VERY STRONGLY discourage breaking F → N → S order)
+        if rotation_order_penalties:
+            print(f"  Adding {len(rotation_order_penalties)} rotation order violation penalties...")
+            for penalty_var in rotation_order_penalties:
+                objective_terms.append(penalty_var)  # Already weighted (10000 per violation)
         
         # Add shift hopping penalties (discourage rapid shift changes)
         if shift_hopping_penalties:

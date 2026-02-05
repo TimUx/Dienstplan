@@ -37,10 +37,12 @@ ADD COLUMN MaxConsecutiveDays INTEGER NOT NULL DEFAULT 6
 
 ### Default Values
 
-- **Frühschicht (F)**: 6 consecutive days
-- **Spätschicht (S)**: 6 consecutive days  
-- **Nachtschicht (N)**: 3 consecutive days
-- **Other shifts**: 6 consecutive days (default)
+- **Frühschicht (F)**: 6 consecutive days (works all 7 days)
+- **Spätschicht (S)**: 6 consecutive days (works all 7 days)
+- **Nachtschicht (N)**: 3 consecutive days (works all 7 days, but needs more rest)
+- **Zwischendienst (ZD)**: 6 consecutive days (if configured)
+- **BMT/BSB shifts**: 5 consecutive days (weekday-only shifts, Monday-Friday)
+- **Other custom shifts**: 6 consecutive days (default)
 
 ## Migration
 

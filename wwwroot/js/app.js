@@ -3719,6 +3719,7 @@ async function loadShiftTypeForEdit(shiftTypeId) {
         document.getElementById('shiftTypeMaxStaffWeekday').value = shiftType.maxStaffWeekday || 5;
         document.getElementById('shiftTypeMinStaffWeekend').value = shiftType.minStaffWeekend || 2;
         document.getElementById('shiftTypeMaxStaffWeekend').value = shiftType.maxStaffWeekend || 3;
+        document.getElementById('shiftTypeMaxConsecutiveDays').value = shiftType.maxConsecutiveDays || 6;
         document.getElementById('shiftTypeIsActive').checked = shiftType.isActive !== false;
     } catch (error) {
         console.error('Error loading shift type:', error);
@@ -3743,6 +3744,7 @@ async function saveShiftType(event) {
     const maxStaffWeekday = parseInt(document.getElementById('shiftTypeMaxStaffWeekday').value);
     const minStaffWeekend = parseInt(document.getElementById('shiftTypeMinStaffWeekend').value);
     const maxStaffWeekend = parseInt(document.getElementById('shiftTypeMaxStaffWeekend').value);
+    const maxConsecutiveDays = parseInt(document.getElementById('shiftTypeMaxConsecutiveDays').value);
     
     // Validate staffing requirements
     if (minStaffWeekday > maxStaffWeekday) {
@@ -3751,6 +3753,10 @@ async function saveShiftType(event) {
     }
     if (minStaffWeekend > maxStaffWeekend) {
         alert('Fehler: Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke.');
+        return;
+    }
+    if (maxConsecutiveDays < 1 || maxConsecutiveDays > 10) {
+        alert('Fehler: Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen.');
         return;
     }
     
@@ -3773,6 +3779,7 @@ async function saveShiftType(event) {
         maxStaffWeekday: maxStaffWeekday,
         minStaffWeekend: minStaffWeekend,
         maxStaffWeekend: maxStaffWeekend,
+        maxConsecutiveDays: maxConsecutiveDays,
         isActive: document.getElementById('shiftTypeIsActive').checked
     };
     

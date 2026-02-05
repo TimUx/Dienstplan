@@ -1310,7 +1310,7 @@ In der Schichtverwaltung sehen Sie eine Tabelle mit allen verfügbaren Schichtty
 - **Arbeitstage**: Welche Wochentage (Mo-So)
 - **Farbe**: Farbcode für die Darstellung
 - **Status**: Aktiv/Inaktiv
-- **Aktionen**: Bearbeiten, Löschen, Teams, Reihenfolge
+- **Aktionen**: Bearbeiten, Löschen, Teams
 
 #### Neuen Schichttyp erstellen
 
@@ -1357,19 +1357,6 @@ Definieren Sie, welche Teams für welche Schichttypen qualifiziert sind:
 3. Klicken Sie auf **Speichern**
 
 **Anwendungsfall:** BMT-Schichten nur für qualifizierte Teams, reguläre Schichten (F/S/N) für alle Teams.
-
-#### Schicht-Reihenfolge festlegen
-
-Definieren Sie die bevorzugte Rotation zwischen Schichttypen:
-
-1. Klicken Sie auf **🔗 Reihenfolge** neben dem Schichttyp
-2. Ziehen Sie verwandte Schichten in die gewünschte Reihenfolge (Drag & Drop)
-3. Fügen Sie weitere Schichten über Checkboxen hinzu
-4. Klicken Sie auf **Speichern**
-
-**Beispiel:** Früh → Nacht → Spät (typische Rotation)
-
-**Hinweis:** Diese Reihenfolge wird vom Planungsalgorithmus als Präferenz berücksichtigt.
 
 ### System-Einstellungen
 

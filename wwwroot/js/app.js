@@ -3727,7 +3727,6 @@ function displayShiftTypes(shiftTypes) {
         html += '<td class="actions">';
         html += `<button onclick="editShiftType(${shift.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
         html += `<button onclick="showShiftTypeTeamsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">👥 Teams</button> `;
-        html += `<button onclick="showShiftTypeRelationshipsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">🔗 Reihenfolge</button> `;
         html += `<button onclick="deleteShiftType(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
         html += '</td>';
         html += '</tr>';
@@ -3990,177 +3989,6 @@ async function saveShiftTypeTeams(event) {
     }
 }
 
-// Shift Type Relationships Functions
-async function showShiftTypeRelationshipsModal(shiftTypeId, shiftCode) {
-    const modal = document.getElementById('shiftTypeRelationshipsModal');
-    const title = document.getElementById('shiftTypeRelationshipsModalTitle');
-    
-    title.textContent = `Schichtreihenfolge für "${shiftCode}" festlegen`;
-    document.getElementById('shiftTypeRelationshipsId').value = shiftTypeId;
-    
-    modal.style.display = 'block';
-    
-    await loadShiftTypeRelationships(shiftTypeId);
-}
-
-async function loadShiftTypeRelationships(shiftTypeId) {
-    try {
-        // Load all shift types
-        const allShiftsResponse = await fetch(`${API_BASE}/shifttypes`, {
-            credentials: 'include'
-        });
-        
-        if (!allShiftsResponse.ok) {
-            throw new Error('Failed to load shift types');
-        }
-        
-        const allShifts = await allShiftsResponse.json();
-        const otherShifts = allShifts.filter(s => s.id != shiftTypeId);
-        
-        // Load existing relationships
-        const relResponse = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/relationships`, {
-            credentials: 'include'
-        });
-        
-        if (!relResponse.ok) {
-            throw new Error('Failed to load relationships');
-        }
-        
-        const relationships = await relResponse.json();
-        const relatedIds = relationships.map(r => r.id);
-        
-        // Display sortable list
-        const container = document.getElementById('shiftTypeRelationshipsList');
-        let html = '';
-        
-        // First add existing relationships in order
-        relationships.forEach(rel => {
-            html += '<div class="sortable-item" data-shift-id="' + rel.id + '">';
-            html += '<span class="drag-handle">☰</span>';
-            html += `<span class="shift-badge" style="background-color: ${rel.colorCode}">${escapeHtml(rel.code)}</span>`;
-            html += `<span>${escapeHtml(rel.name)}</span>`;
-            html += '</div>';
-        });
-        
-        // Then add unrelated shifts as checkboxes
-        const unrelatedShifts = otherShifts.filter(s => !relatedIds.includes(s.id));
-        if (unrelatedShifts.length > 0) {
-            html += '<div class="form-group" style="margin-top: 20px;"><label>Weitere Schichten hinzufügen:</label></div>';
-            unrelatedShifts.forEach(shift => {
-                html += '<div class="checkbox-item">';
-                html += `<label><input type="checkbox" name="related-shift-${shift.id}" value="${shift.id}">`;
-                html += `<span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
-                html += '</label></div>';
-            });
-        }
-        
-        container.innerHTML = html || '<p>Keine weiteren Schichten verfügbar.</p>';
-        
-        // Make sortable (simple drag and drop)
-        makeSortable();
-    } catch (error) {
-        console.error('Error loading shift type relationships:', error);
-        document.getElementById('shiftTypeRelationshipsList').innerHTML = '<p class="error">Fehler beim Laden der Beziehungen.</p>';
-    }
-}
-
-function makeSortable() {
-    const container = document.getElementById('shiftTypeRelationshipsList');
-    const items = container.querySelectorAll('.sortable-item');
-    
-    items.forEach(item => {
-        item.draggable = true;
-        
-        item.addEventListener('dragstart', (e) => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', item.innerHTML);
-            item.classList.add('dragging');
-        });
-        
-        item.addEventListener('dragend', () => {
-            item.classList.remove('dragging');
-        });
-        
-        item.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            
-            const dragging = container.querySelector('.dragging');
-            const afterElement = getDragAfterElement(container, e.clientY);
-            
-            if (afterElement == null) {
-                container.appendChild(dragging);
-            } else {
-                container.insertBefore(dragging, afterElement);
-            }
-        });
-    });
-}
-
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
-    
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-        } else {
-            return closest;
-        }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
-function closeShiftTypeRelationshipsModal() {
-    document.getElementById('shiftTypeRelationshipsModal').style.display = 'none';
-}
-
-async function saveShiftTypeRelationships(event) {
-    event.preventDefault();
-    
-    const shiftTypeId = document.getElementById('shiftTypeRelationshipsId').value;
-    const container = document.getElementById('shiftTypeRelationshipsList');
-    
-    // Get sorted items
-    const sortedItems = container.querySelectorAll('.sortable-item');
-    const relationships = Array.from(sortedItems).map((item, index) => ({
-        shiftTypeId: parseInt(item.dataset.shiftId),
-        displayOrder: index + 1
-    }));
-    
-    // Get newly selected items
-    const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
-    checkboxes.forEach((cb, index) => {
-        relationships.push({
-            shiftTypeId: parseInt(cb.value),
-            displayOrder: relationships.length + 1
-        });
-    });
-    
-    try {
-        const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/relationships`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ relationships })
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            alert('Schichtreihenfolge erfolgreich gespeichert!');
-            closeShiftTypeRelationshipsModal();
-        } else {
-            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
-        }
-    } catch (error) {
-        console.error('Error saving shift type relationships:', error);
-        alert('Fehler beim Speichern der Schichtreihenfolge.');
-    }
-}
 
 // Helper function to escape HTML
 function escapeHtml(text) {
@@ -5894,7 +5722,6 @@ function displayShiftTypesManagement(shiftTypes) {
         html += '<td class="actions">';
         html += `<button onclick="editShiftType(${shift.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
         html += `<button onclick="showShiftTypeTeamsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">👥 Teams</button> `;
-        html += `<button onclick="showShiftTypeRelationshipsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">🔗 Reihenfolge</button> `;
         html += `<button onclick="deleteShiftType(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
         html += '</td>';
         html += '</tr>';

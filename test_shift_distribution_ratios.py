@@ -164,7 +164,10 @@ def test_shift_distribution_respects_max_staff_ratios():
     print("\n✓ PASS: Shift distribution follows F >= S >= N ordering")
     
     # Check that the ratios are approximately correct (within 20% tolerance)
-    # This is a soft check because the solver has many competing constraints
+    # NOTE: This is a soft check because the solver has many competing constraints
+    # (team cohesion, rotation order, rest time, shift grouping, etc.) that may prevent
+    # achieving exact distribution ratios. The important requirement is the ORDERING (F >= S >= N),
+    # not the exact ratio. A 20% deviation is acceptable given operational constraints.
     if shift_counts['N'] > 0:
         actual_f_to_n = shift_counts['F'] / shift_counts['N']
         actual_s_to_n = shift_counts['S'] / shift_counts['N']

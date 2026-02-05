@@ -265,7 +265,10 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     """)
     
     # ShiftTypeRelationships table (defines which shifts are related and their order)
-    # DEPRECATED: Use RotationGroups instead for new implementations
+    # DEPRECATED: Use RotationGroups instead for new implementations.
+    # Migration strategy: This table will be maintained for backward compatibility.
+    # New features should use RotationGroups. A future migration script will convert
+    # existing ShiftTypeRelationships to RotationGroups when all features are migrated.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ShiftTypeRelationships (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,

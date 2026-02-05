@@ -21,6 +21,31 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Helper function to sanitize color codes to prevent CSS injection
+function sanitizeColorCode(colorCode) {
+    if (!colorCode) return '#CCCCCC'; // Default gray color
+    
+    // Allow hex colors (#RGB or #RRGGBB)
+    if (/^#[0-9A-Fa-f]{3}$|^#[0-9A-Fa-f]{6}$/.test(colorCode)) {
+        return colorCode;
+    }
+    
+    // Allow named CSS colors (basic set)
+    const validColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown', 'gray', 'grey', 'black', 'white'];
+    if (validColors.includes(colorCode.toLowerCase())) {
+        return colorCode.toLowerCase();
+    }
+    
+    // Allow rgb/rgba format
+    if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+)?\s*\)$/.test(colorCode)) {
+        return colorCode;
+    }
+    
+    // Default to gray if invalid
+    console.warn('Invalid color code:', colorCode);
+    return '#CCCCCC';
+}
+
 // Helper function to format import result with error details
 function formatImportResult(result) {
     let errorDetails = '';
@@ -5909,7 +5934,7 @@ function displayRotationGroups(groups) {
         
         // Build shift rotation display
         const shiftRotation = group.shifts.map(shift => 
-            `<span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span>`
+            `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span>`
         ).join(' → ');
         
         html += '<tr>';
@@ -5993,7 +6018,7 @@ async function loadAvailableShiftsForRotation(selectedShifts = []) {
             selectedShifts.forEach(shift => {
                 html += '<div class="sortable-item" data-shift-id="' + shift.id + '">';
                 html += '<span class="drag-handle">☰</span>';
-                html += `<span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span>`;
+                html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span>`;
                 html += `<span>${escapeHtml(shift.name)}</span>`;
                 html += `<button type="button" class="btn-small btn-danger" onclick="removeShiftFromRotation(this)">✖</button>`;
                 html += '</div>';
@@ -6008,8 +6033,8 @@ async function loadAvailableShiftsForRotation(selectedShifts = []) {
             html += '<div class="form-group" style="margin-top: 20px;"><label>Weitere Schichten hinzufügen:</label></div>';
             availableShifts.forEach(shift => {
                 html += '<div class="checkbox-item">';
-                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" onchange="addShiftToRotation(${shift.id}, '${escapeHtml(shift.code)}', '${escapeHtml(shift.name)}', '${shift.colorCode}')">`;
-                html += `<span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
+                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" onchange="addShiftToRotation(${shift.id}, '${escapeHtml(shift.code)}', '${escapeHtml(shift.name)}', '${sanitizeColorCode(shift.colorCode)}')">`;
+                html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
                 html += '</label></div>';
             });
         }
@@ -6031,13 +6056,16 @@ function addShiftToRotation(shiftId, shiftCode, shiftName, colorCode) {
     const container = document.getElementById('rotationGroupShiftsList');
     const formGroup = container.querySelector('.form-group');
     
+    // Sanitize colorCode before use
+    const safeColorCode = sanitizeColorCode(colorCode);
+    
     // Create new sortable item
     const newItem = document.createElement('div');
     newItem.className = 'sortable-item';
     newItem.setAttribute('data-shift-id', shiftId);
     newItem.innerHTML = `
         <span class="drag-handle">☰</span>
-        <span class="shift-badge" style="background-color: ${colorCode}">${escapeHtml(shiftCode)}</span>
+        <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span>
         <span>${escapeHtml(shiftName)}</span>
         <button type="button" class="btn-small btn-danger" onclick="removeShiftFromRotation(this)">✖</button>
     `;
@@ -6064,6 +6092,9 @@ function removeShiftFromRotation(button) {
     const colorCode = shiftBadge.style.backgroundColor;
     const shiftCode = shiftBadge.textContent;
     
+    // Sanitize the color code
+    const safeColorCode = sanitizeColorCode(colorCode);
+    
     // Remove the sortable item
     item.remove();
     
@@ -6082,8 +6113,8 @@ function removeShiftFromRotation(button) {
     const newCheckbox = document.createElement('div');
     newCheckbox.className = 'checkbox-item';
     newCheckbox.innerHTML = `
-        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" onchange="addShiftToRotation(${shiftId}, '${escapeHtml(shiftCode)}', '${escapeHtml(shiftName)}', '${colorCode}')">
-        <span class="shift-badge" style="background-color: ${colorCode}">${escapeHtml(shiftCode)}</span> ${escapeHtml(shiftName)}
+        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" onchange="addShiftToRotation(${shiftId}, '${escapeHtml(shiftCode)}', '${escapeHtml(shiftName)}', '${safeColorCode}')">
+        <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span> ${escapeHtml(shiftName)}
         </label>
     `;
     

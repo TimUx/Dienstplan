@@ -5914,17 +5914,33 @@ function makeRotationShiftsSortable() {
             e.dataTransfer.dropEffect = 'move';
             
             const dragging = container.querySelector('.dragging');
-            const afterElement = getDragAfterElement(container, e.clientY);
+            if (!dragging) return;
             
-            if (afterElement == null) {
-                const checkboxItems = container.querySelector('.form-group');
-                if (checkboxItems) {
-                    container.insertBefore(dragging, checkboxItems);
+            // Find the best position to insert based on mouse Y coordinate
+            const allSortables = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
+            let targetElement = null;
+            
+            // Find the first element whose center is below the cursor
+            for (const sortableItem of allSortables) {
+                const rect = sortableItem.getBoundingClientRect();
+                const itemCenter = rect.top + rect.height / 2;
+                
+                if (e.clientY < itemCenter) {
+                    targetElement = sortableItem;
+                    break;
+                }
+            }
+            
+            if (targetElement) {
+                container.insertBefore(dragging, targetElement);
+            } else {
+                // Insert before '.form-group' element or at the end
+                const formGroupElement = container.querySelector('.form-group');
+                if (formGroupElement) {
+                    container.insertBefore(dragging, formGroupElement);
                 } else {
                     container.appendChild(dragging);
                 }
-            } else {
-                container.insertBefore(dragging, afterElement);
             }
         });
     });

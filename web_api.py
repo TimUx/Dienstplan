@@ -2431,6 +2431,249 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
     
     # ============================================================================
+    # ROTATION GROUPS ENDPOINTS
+    # ============================================================================
+    
+    @app.route('/api/rotationgroups', methods=['GET'])
+    def get_rotation_groups():
+        """Get all rotation groups"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Id, Name, Description, IsActive, CreatedAt, CreatedBy, ModifiedAt, ModifiedBy
+                FROM RotationGroups
+                ORDER BY Name
+            """)
+            
+            groups = []
+            for row in cursor.fetchall():
+                # Get shifts for this group
+                cursor.execute("""
+                    SELECT st.Id, st.Code, st.Name, st.ColorCode, rgs.RotationOrder
+                    FROM RotationGroupShifts rgs
+                    INNER JOIN ShiftTypes st ON rgs.ShiftTypeId = st.Id
+                    WHERE rgs.RotationGroupId = ?
+                    ORDER BY rgs.RotationOrder
+                """, (row['Id'],))
+                
+                shifts = []
+                for shift_row in cursor.fetchall():
+                    shifts.append({
+                        'id': shift_row['Id'],
+                        'code': shift_row['Code'],
+                        'name': shift_row['Name'],
+                        'colorCode': shift_row['ColorCode'],
+                        'rotationOrder': shift_row['RotationOrder']
+                    })
+                
+                groups.append({
+                    'id': row['Id'],
+                    'name': row['Name'],
+                    'description': row['Description'],
+                    'isActive': bool(row['IsActive']),
+                    'shifts': shifts,
+                    'createdAt': row['CreatedAt'],
+                    'createdBy': row['CreatedBy'],
+                    'modifiedAt': row['ModifiedAt'],
+                    'modifiedBy': row['ModifiedBy']
+                })
+            
+            conn.close()
+            return jsonify(groups)
+            
+        except Exception as e:
+            app.logger.error(f"Get rotation groups error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+    
+    @app.route('/api/rotationgroups', methods=['POST'])
+    @require_role('Admin')
+    def create_rotation_group():
+        """Create new rotation group (Admin only)"""
+        try:
+            data = request.get_json()
+            name = data.get('name')
+            description = data.get('description', '')
+            is_active = data.get('isActive', True)
+            shifts = data.get('shifts', [])  # [{shiftTypeId, rotationOrder}]
+            
+            if not name:
+                return jsonify({'error': 'Name ist erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Insert rotation group
+            cursor.execute("""
+                INSERT INTO RotationGroups (Name, Description, IsActive, CreatedBy)
+                VALUES (?, ?, ?, ?)
+            """, (name, description, 1 if is_active else 0, session.get('user_email', 'system')))
+            
+            group_id = cursor.lastrowid
+            
+            # Insert shifts
+            for shift in shifts:
+                cursor.execute("""
+                    INSERT INTO RotationGroupShifts (RotationGroupId, ShiftTypeId, RotationOrder, CreatedBy)
+                    VALUES (?, ?, ?, ?)
+                """, (group_id, shift['shiftTypeId'], shift['rotationOrder'], session.get('user_email', 'system')))
+            
+            # Log audit entry
+            changes = json.dumps({'name': name, 'shifts': shifts}, ensure_ascii=False)
+            log_audit(conn, 'RotationGroup', group_id, 'Created', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'id': group_id}), 201
+            
+        except Exception as e:
+            app.logger.error(f"Create rotation group error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+    
+    @app.route('/api/rotationgroups/<int:id>', methods=['GET'])
+    def get_rotation_group(id):
+        """Get single rotation group by ID"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Id, Name, Description, IsActive, CreatedAt, CreatedBy, ModifiedAt, ModifiedBy
+                FROM RotationGroups
+                WHERE Id = ?
+            """, (id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return jsonify({'error': 'Rotationsgruppe nicht gefunden'}), 404
+            
+            # Get shifts for this group
+            cursor.execute("""
+                SELECT st.Id, st.Code, st.Name, st.ColorCode, rgs.RotationOrder
+                FROM RotationGroupShifts rgs
+                INNER JOIN ShiftTypes st ON rgs.ShiftTypeId = st.Id
+                WHERE rgs.RotationGroupId = ?
+                ORDER BY rgs.RotationOrder
+            """, (id,))
+            
+            shifts = []
+            for shift_row in cursor.fetchall():
+                shifts.append({
+                    'id': shift_row['Id'],
+                    'code': shift_row['Code'],
+                    'name': shift_row['Name'],
+                    'colorCode': shift_row['ColorCode'],
+                    'rotationOrder': shift_row['RotationOrder']
+                })
+            
+            group = {
+                'id': row['Id'],
+                'name': row['Name'],
+                'description': row['Description'],
+                'isActive': bool(row['IsActive']),
+                'shifts': shifts,
+                'createdAt': row['CreatedAt'],
+                'createdBy': row['CreatedBy'],
+                'modifiedAt': row['ModifiedAt'],
+                'modifiedBy': row['ModifiedBy']
+            }
+            
+            conn.close()
+            return jsonify(group)
+            
+        except Exception as e:
+            app.logger.error(f"Get rotation group error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+    
+    @app.route('/api/rotationgroups/<int:id>', methods=['PUT'])
+    @require_role('Admin')
+    def update_rotation_group(id):
+        """Update rotation group (Admin only)"""
+        try:
+            data = request.get_json()
+            name = data.get('name')
+            description = data.get('description', '')
+            is_active = data.get('isActive', True)
+            shifts = data.get('shifts', [])  # [{shiftTypeId, rotationOrder}]
+            
+            if not name:
+                return jsonify({'error': 'Name ist erforderlich'}), 400
+            
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if group exists
+            cursor.execute("SELECT Id FROM RotationGroups WHERE Id = ?", (id,))
+            if not cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Rotationsgruppe nicht gefunden'}), 404
+            
+            # Update rotation group
+            cursor.execute("""
+                UPDATE RotationGroups
+                SET Name = ?, Description = ?, IsActive = ?, ModifiedAt = CURRENT_TIMESTAMP, ModifiedBy = ?
+                WHERE Id = ?
+            """, (name, description, 1 if is_active else 0, session.get('user_email', 'system'), id))
+            
+            # Delete existing shifts
+            cursor.execute("DELETE FROM RotationGroupShifts WHERE RotationGroupId = ?", (id,))
+            
+            # Insert new shifts
+            for shift in shifts:
+                cursor.execute("""
+                    INSERT INTO RotationGroupShifts (RotationGroupId, ShiftTypeId, RotationOrder, CreatedBy)
+                    VALUES (?, ?, ?, ?)
+                """, (id, shift['shiftTypeId'], shift['rotationOrder'], session.get('user_email', 'system')))
+            
+            # Log audit entry
+            changes = json.dumps({'name': name, 'shifts': shifts}, ensure_ascii=False)
+            log_audit(conn, 'RotationGroup', id, 'Updated', changes)
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Update rotation group error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+    
+    @app.route('/api/rotationgroups/<int:id>', methods=['DELETE'])
+    @require_role('Admin')
+    def delete_rotation_group(id):
+        """Delete rotation group (Admin only)"""
+        try:
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Check if group exists
+            cursor.execute("SELECT Name FROM RotationGroups WHERE Id = ?", (id,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return jsonify({'error': 'Rotationsgruppe nicht gefunden'}), 404
+            
+            group_name = row['Name']
+            
+            # Delete rotation group (cascade will delete shifts)
+            cursor.execute("DELETE FROM RotationGroups WHERE Id = ?", (id,))
+            
+            # Log audit entry
+            log_audit(conn, 'RotationGroup', id, 'Deleted', json.dumps({'name': group_name}, ensure_ascii=False))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True})
+            
+        except Exception as e:
+            app.logger.error(f"Delete rotation group error: {str(e)}")
+            return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+    
+    # ============================================================================
     # GLOBAL SETTINGS ENDPOINTS
     # ============================================================================
     

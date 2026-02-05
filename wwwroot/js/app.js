@@ -21,6 +21,41 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Helper function to escape strings for use in JavaScript inline event handlers
+function escapeJsString(text) {
+    if (!text) return '';
+    return text.replace(/\\/g, '\\\\')
+               .replace(/'/g, "\\'")
+               .replace(/"/g, '\\"')
+               .replace(/\n/g, '\\n')
+               .replace(/\r/g, '\\r');
+}
+
+// Helper function to sanitize color codes to prevent CSS injection
+function sanitizeColorCode(colorCode) {
+    if (!colorCode) return '#CCCCCC'; // Default gray color
+    
+    // Allow hex colors (#RGB or #RRGGBB)
+    if (/^#[0-9A-Fa-f]{3}$|^#[0-9A-Fa-f]{6}$/.test(colorCode)) {
+        return colorCode;
+    }
+    
+    // Allow named CSS colors (basic set)
+    const validColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown', 'gray', 'grey', 'black', 'white'];
+    if (validColors.includes(colorCode.toLowerCase())) {
+        return colorCode.toLowerCase();
+    }
+    
+    // Allow rgb/rgba format
+    if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+)?\s*\)$/.test(colorCode)) {
+        return colorCode;
+    }
+    
+    // Default to gray if invalid
+    console.warn('Invalid color code:', colorCode);
+    return '#CCCCCC';
+}
+
 // Helper function to format import result with error details
 function formatImportResult(result) {
     let errorDetails = '';
@@ -2581,6 +2616,9 @@ function switchShiftManagementTab(subTabName) {
     if (subTabName === 'types') {
         document.getElementById('shift-types-content-tab').classList.add('active');
         loadShiftTypesManagement();
+    } else if (subTabName === 'rotation-groups') {
+        document.getElementById('shift-rotation-groups-content-tab').classList.add('active');
+        loadRotationGroups();
     } else if (subTabName === 'settings') {
         document.getElementById('shift-settings-content-tab').classList.add('active');
         loadGlobalSettings();
@@ -5865,6 +5903,364 @@ function displayShiftTypesManagement(shiftTypes) {
     html += '</tbody></table>';
     container.innerHTML = html;
 }
+
+// ============================================================================
+// ROTATION GROUPS MANAGEMENT FUNCTIONS
+// ============================================================================
+
+async function loadRotationGroups() {
+    try {
+        const response = await fetch(`${API_BASE}/rotationgroups`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load rotation groups');
+        }
+        
+        const groups = await response.json();
+        displayRotationGroups(groups);
+    } catch (error) {
+        console.error('Error loading rotation groups:', error);
+        document.getElementById('rotation-groups-content').innerHTML = '<p class="error">Fehler beim Laden der Rotationsgruppen.</p>';
+    }
+}
+
+function displayRotationGroups(groups) {
+    const container = document.getElementById('rotation-groups-content');
+    
+    if (groups.length === 0) {
+        container.innerHTML = '<p class="info">Keine Rotationsgruppen vorhanden. Klicken Sie auf "+ Rotationsgruppe hinzufügen" um eine neue Gruppe anzulegen.</p>';
+        return;
+    }
+    
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Name</th><th>Beschreibung</th><th>Schichtrotation</th><th>Status</th><th>Aktionen</th>';
+    html += '</tr></thead><tbody>';
+    
+    groups.forEach(group => {
+        const isActive = group.isActive !== false;
+        const statusBadge = isActive ? '<span class="badge badge-success">Aktiv</span>' : '<span class="badge badge-secondary">Inaktiv</span>';
+        
+        // Build shift rotation display
+        const shiftRotation = group.shifts.map(shift => 
+            `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span>`
+        ).join(' → ');
+        
+        html += '<tr>';
+        html += `<td><strong>${escapeHtml(group.name)}</strong></td>`;
+        html += `<td>${group.description ? escapeHtml(group.description) : '<em>Keine Beschreibung</em>'}</td>`;
+        html += `<td>${shiftRotation || '<em>Keine Schichten</em>'}</td>`;
+        html += `<td>${statusBadge}</td>`;
+        html += '<td class="actions">';
+        html += `<button onclick="editRotationGroup(${group.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
+        html += `<button onclick="deleteRotationGroup(${group.id}, '${escapeJsString(group.name)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
+        html += '</td>';
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function showRotationGroupModal(groupId = null) {
+    const modal = document.getElementById('rotationGroupModal');
+    const title = document.getElementById('rotationGroupModalTitle');
+    
+    // Reset form
+    document.getElementById('rotationGroupForm').reset();
+    document.getElementById('rotationGroupId').value = '';
+    document.getElementById('rotationGroupIsActive').checked = true;
+    
+    if (groupId) {
+        title.textContent = 'Rotationsgruppe bearbeiten';
+        await loadRotationGroupForEdit(groupId);
+    } else {
+        title.textContent = 'Rotationsgruppe erstellen';
+        await loadAvailableShiftsForRotation();
+    }
+    
+    modal.style.display = 'block';
+}
+
+async function loadRotationGroupForEdit(groupId) {
+    try {
+        const response = await fetch(`${API_BASE}/rotationgroups/${groupId}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load rotation group');
+        }
+        
+        const group = await response.json();
+        
+        // Populate form
+        document.getElementById('rotationGroupId').value = group.id;
+        document.getElementById('rotationGroupName').value = group.name;
+        document.getElementById('rotationGroupDescription').value = group.description || '';
+        document.getElementById('rotationGroupIsActive').checked = group.isActive;
+        
+        // Load and display shifts
+        await loadAvailableShiftsForRotation(group.shifts);
+    } catch (error) {
+        console.error('Error loading rotation group:', error);
+        alert('Fehler beim Laden der Rotationsgruppe.');
+    }
+}
+
+async function loadAvailableShiftsForRotation(selectedShifts = []) {
+    try {
+        const response = await fetch(`${API_BASE}/shifttypes`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load shift types');
+        }
+        
+        const allShifts = await response.json();
+        const container = document.getElementById('rotationGroupShiftsList');
+        let html = '';
+        
+        // First add selected shifts in order
+        if (selectedShifts.length > 0) {
+            selectedShifts.forEach(shift => {
+                html += '<div class="sortable-item" data-shift-id="' + shift.id + '">';
+                html += '<span class="drag-handle">☰</span>';
+                html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span>`;
+                html += `<span>${escapeHtml(shift.name)}</span>`;
+                html += `<button type="button" class="btn-small btn-danger" onclick="removeShiftFromRotation(this)">✖</button>`;
+                html += '</div>';
+            });
+        }
+        
+        // Then add available shifts as checkboxes
+        const selectedIds = selectedShifts.map(s => s.id);
+        const availableShifts = allShifts.filter(s => !selectedIds.includes(s.id));
+        
+        if (availableShifts.length > 0) {
+            html += '<div class="form-group" style="margin-top: 20px;"><label>Weitere Schichten hinzufügen:</label></div>';
+            availableShifts.forEach(shift => {
+                html += '<div class="checkbox-item">';
+                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" onchange="addShiftToRotation(${shift.id}, '${escapeJsString(shift.code)}', '${escapeJsString(shift.name)}', '${sanitizeColorCode(shift.colorCode)}')">`;
+                html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
+                html += '</label></div>';
+            });
+        }
+        
+        container.innerHTML = html || '<p>Keine Schichten verfügbar.</p>';
+        
+        // Make sortable
+        makeRotationShiftsSortable();
+    } catch (error) {
+        console.error('Error loading shifts:', error);
+        document.getElementById('rotationGroupShiftsList').innerHTML = '<p class="error">Fehler beim Laden der Schichten.</p>';
+    }
+}
+
+function addShiftToRotation(shiftId, shiftCode, shiftName, colorCode) {
+    const checkbox = document.querySelector(`input[name="available-shift-${shiftId}"]`);
+    if (!checkbox.checked) return;
+    
+    const container = document.getElementById('rotationGroupShiftsList');
+    const formGroup = container.querySelector('.form-group');
+    
+    // Sanitize colorCode before use
+    const safeColorCode = sanitizeColorCode(colorCode);
+    
+    // Create new sortable item
+    const newItem = document.createElement('div');
+    newItem.className = 'sortable-item';
+    newItem.setAttribute('data-shift-id', shiftId);
+    newItem.innerHTML = `
+        <span class="drag-handle">☰</span>
+        <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span>
+        <span>${escapeHtml(shiftName)}</span>
+        <button type="button" class="btn-small btn-danger" onclick="removeShiftFromRotation(this)">✖</button>
+    `;
+    
+    // Insert before form group if it exists, otherwise append to container
+    if (formGroup) {
+        container.insertBefore(newItem, formGroup);
+    } else {
+        container.appendChild(newItem);
+    }
+    
+    // Remove checkbox
+    checkbox.parentElement.parentElement.remove();
+    
+    // Update sortable
+    makeRotationShiftsSortable();
+}
+
+function removeShiftFromRotation(button) {
+    const item = button.parentElement;
+    const shiftId = item.getAttribute('data-shift-id');
+    const shiftBadge = item.querySelector('.shift-badge');
+    const shiftName = item.querySelector('span:nth-child(3)').textContent;
+    const colorCode = shiftBadge.style.backgroundColor;
+    const shiftCode = shiftBadge.textContent;
+    
+    // Sanitize the color code
+    const safeColorCode = sanitizeColorCode(colorCode);
+    
+    // Remove the sortable item
+    item.remove();
+    
+    // Add back to available shifts
+    const container = document.getElementById('rotationGroupShiftsList');
+    let checkboxGroup = container.querySelector('.form-group');
+    
+    if (!checkboxGroup) {
+        checkboxGroup = document.createElement('div');
+        checkboxGroup.className = 'form-group';
+        checkboxGroup.style.marginTop = '20px';
+        checkboxGroup.innerHTML = '<label>Weitere Schichten hinzufügen:</label>';
+        container.appendChild(checkboxGroup);
+    }
+    
+    const newCheckbox = document.createElement('div');
+    newCheckbox.className = 'checkbox-item';
+    newCheckbox.innerHTML = `
+        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" onchange="addShiftToRotation(${shiftId}, '${escapeJsString(shiftCode)}', '${escapeJsString(shiftName)}', '${safeColorCode}')">
+        <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span> ${escapeHtml(shiftName)}
+        </label>
+    `;
+    
+    container.appendChild(newCheckbox);
+}
+
+function makeRotationShiftsSortable() {
+    const container = document.getElementById('rotationGroupShiftsList');
+    const items = container.querySelectorAll('.sortable-item');
+    
+    items.forEach(item => {
+        item.draggable = true;
+        
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', item.innerHTML);
+            item.classList.add('dragging');
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+        });
+        
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const dragging = container.querySelector('.dragging');
+            const afterElement = getDragAfterElement(container, e.clientY);
+            
+            if (afterElement == null) {
+                const checkboxItems = container.querySelector('.form-group');
+                if (checkboxItems) {
+                    container.insertBefore(dragging, checkboxItems);
+                } else {
+                    container.appendChild(dragging);
+                }
+            } else {
+                container.insertBefore(dragging, afterElement);
+            }
+        });
+    });
+}
+
+async function saveRotationGroup(event) {
+    event.preventDefault();
+    
+    const groupId = document.getElementById('rotationGroupId').value;
+    const name = document.getElementById('rotationGroupName').value;
+    const description = document.getElementById('rotationGroupDescription').value;
+    const isActive = document.getElementById('rotationGroupIsActive').checked;
+    
+    // Collect shifts in order
+    const sortableItems = document.querySelectorAll('#rotationGroupShiftsList .sortable-item');
+    const shifts = [];
+    sortableItems.forEach((item, index) => {
+        shifts.push({
+            shiftTypeId: parseInt(item.getAttribute('data-shift-id')),
+            rotationOrder: index + 1
+        });
+    });
+    
+    if (shifts.length === 0) {
+        alert('Bitte fügen Sie mindestens eine Schicht zur Rotationsgruppe hinzu.');
+        return;
+    }
+    
+    const data = {
+        name: name,
+        description: description,
+        isActive: isActive,
+        shifts: shifts
+    };
+    
+    try {
+        const url = groupId ? `${API_BASE}/rotationgroups/${groupId}` : `${API_BASE}/rotationgroups`;
+        const method = groupId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Fehler beim Speichern');
+        }
+        
+        closeRotationGroupModal();
+        loadRotationGroups();
+        alert(groupId ? 'Rotationsgruppe erfolgreich aktualisiert!' : 'Rotationsgruppe erfolgreich erstellt!');
+    } catch (error) {
+        console.error('Error saving rotation group:', error);
+        alert('Fehler beim Speichern: ' + error.message);
+    }
+}
+
+async function editRotationGroup(groupId) {
+    await showRotationGroupModal(groupId);
+}
+
+async function deleteRotationGroup(groupId, groupName) {
+    if (!confirm(`Möchten Sie die Rotationsgruppe "${groupName}" wirklich löschen?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/rotationgroups/${groupId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Fehler beim Löschen');
+        }
+        
+        loadRotationGroups();
+        alert('Rotationsgruppe erfolgreich gelöscht!');
+    } catch (error) {
+        console.error('Error deleting rotation group:', error);
+        alert('Fehler beim Löschen: ' + error.message);
+    }
+}
+
+function closeRotationGroupModal() {
+    document.getElementById('rotationGroupModal').style.display = 'none';
+}
+
+// ============================================================================
+// GLOBAL SETTINGS MANAGEMENT FUNCTIONS
+// ============================================================================
 
 // Global Settings Management Functions
 async function loadGlobalSettings() {

@@ -30,20 +30,31 @@ from constraints import (
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
 # 1. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
 # 2. Operational constraints (200-20000): Rest time, shift grouping, etc.
-# 3. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
-# 4. WEEKDAY_UNDERSTAFFING (20/12/5): Encourage filling weekdays to capacity
-# 5. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
+# 3. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
+# 4. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
+# 5. WEEKDAY_UNDERSTAFFING (dynamic 12-30): Encourage filling weekdays to capacity (scaled by max_staff)
+# 6. SHIFT_PREFERENCE (±15): Reward high-capacity shifts, penalize low-capacity shifts
+# 7. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
 #
 # PRIORITY EXPLANATION (per requirements):
 # When distributing shifts to reach target hours, weekdays should be filled BEFORE weekends.
 # The solver will prefer:
-#   1. Fill weekdays to max capacity (understaffing penalty 20/12/5)
+#   1. Fill weekdays to max capacity (understaffing penalty 12-30, dynamic)
 #   2. Only then overstaff weekends if absolutely needed (penalty 50)
-# Therefore: weekend overstaffing penalty (50) > weekday understaffing penalties (20/12/5)
+# Therefore: weekend overstaffing penalty (50) > weekday understaffing penalties (12-30)
 # This ensures weekdays are filled to capacity before any weekend overstaffing occurs.
+#
+# SHIFT DISTRIBUTION (dynamic based on max_staff from database):
+# Understaffing weights and shift preferences are calculated proportionally to max_staff
+# to ensure shifts with higher capacity get more assignments (F > S > N typically)
 HOURS_SHORTAGE_PENALTY_WEIGHT = 100
+TEAM_PRIORITY_VIOLATION_WEIGHT = 50  # Must be higher than understaffing weights
 WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT = 1
 WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 50
+# Dynamic weights calculated from shift types:
+UNDERSTAFFING_BASE_WEIGHT = 5  # Baseline, scaled by (max_staff / min_max_staff) * multiplier
+UNDERSTAFFING_WEIGHT_MULTIPLIER = 2.5  # Ensures separation without exceeding team priority (50)
+SHIFT_PREFERENCE_BASE_WEIGHT = 15  # Must be < team priority (50) to avoid override
 
 
 class ShiftPlanningSolver:
@@ -332,15 +343,46 @@ class ShiftPlanningSolver:
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # AND TEMPORAL BIAS (prefer earlier dates)
-        # Priority order: Früh (F) > Spät (S) > Nacht (N)
+        # Priority order is calculated dynamically based on max_staff values from database
+        # Shifts with higher max_staff get higher priority (more people to assign)
         # Temporal order: Earlier dates > Later dates (to avoid clustering shifts at month end)
         # Higher weight = higher priority to fill
         # Use VERY strong differentials to ensure priority overrides other soft constraints
-        shift_priority_weights = {
-            'F': 20,  # Früh/Early - highest priority (4x night)
-            'S': 12,  # Spät/Late - medium priority (2.4x night)
-            'N': 5    # Nacht/Night - lowest priority (baseline)
-        }
+        
+        # DYNAMIC CALCULATION: Build priority weights based on max_staff_weekday from database
+        # This ensures the distribution respects the configured shift capacity ratios
+        # For example: if F has max 8 and S has max 6, F gets proportionally higher priority
+        shift_priority_weights = {}
+        
+        # Find the shift with the smallest max_staff to use as baseline
+        max_staff_values = {}
+        for st in shift_types:
+            if st.code in shift_codes:
+                max_staff_values[st.code] = st.max_staff_weekday
+        
+        if max_staff_values:
+            min_max_staff = min(max_staff_values.values())
+            # Calculate weights proportional to max_staff, with UNDERSTAFFING_BASE_WEIGHT as baseline
+            # Scale by (max_staff / min_max_staff) * UNDERSTAFFING_WEIGHT_MULTIPLIER
+            # Example: if min_max_staff=4 and a shift has max_staff=8:
+            #   weight = 5 * (8/4) * 2.5 = 25
+            # This creates proper priority ratios: F(8) gets higher weight than S(6)
+            # The multiplier (2.5) ensures sufficient separation while staying below
+            # TEAM_PRIORITY_VIOLATION_WEIGHT (50) to preserve team cohesion
+            #
+            # SAFETY: Cap weights to stay below team priority to maintain documented hierarchy
+            max_allowed_weight = TEAM_PRIORITY_VIOLATION_WEIGHT - 1
+            for shift_code, max_staff in max_staff_values.items():
+                calculated_weight = UNDERSTAFFING_BASE_WEIGHT * (max_staff / min_max_staff) * UNDERSTAFFING_WEIGHT_MULTIPLIER
+                shift_priority_weights[shift_code] = min(round(calculated_weight), max_allowed_weight)
+            print(f"  Calculated dynamic shift priority weights based on max_staff: {shift_priority_weights}")
+        else:
+            # Fallback to original hardcoded weights if no shift types available
+            shift_priority_weights = {
+                'F': 20,  # Früh/Early - highest priority (4x night)
+                'S': 12,  # Spät/Late - medium priority (2.4x night)
+                'N': 5    # Nacht/Night - lowest priority (baseline)
+            }
         
         # Calculate temporal weighting factor
         # Earlier dates get higher penalties for understaffing, encouraging solver to fill them first
@@ -371,23 +413,45 @@ class ShiftPlanningSolver:
         
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity
-        # Weight 50x to ensure team members are preferred over cross-team workers
-        # This weight MUST be higher than all understaffing penalties (F=20, S=12, N=5)
+        # Weight defined at module level as TEAM_PRIORITY_VIOLATION_WEIGHT
+        # This weight MUST be higher than all understaffing penalties (which are dynamically calculated)
         # to guarantee team cohesion takes priority over shift filling optimization
         if team_priority_violations:
-            print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight 50x)...")
+            print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight {TEAM_PRIORITY_VIOLATION_WEIGHT}x)...")
             for violation_var in team_priority_violations:
-                objective_terms.append(violation_var * 50)
+                objective_terms.append(violation_var * TEAM_PRIORITY_VIOLATION_WEIGHT)
         
-        # NEW: Add shift type preference objective to directly reward F > S > N
+        # NEW: Add shift type preference objective based on max_staff ratios
         # Count total staff assigned to each shift and apply inverse priority weights
-        # Lower priority shifts get small penalties to discourage their use when alternatives exist
-        print("  Adding shift type preference objectives (F > S > N)...")
-        shift_penalty_weights = {
-            'F': -3,  # Früh/Early - REWARD (negative penalty = bonus)
-            'S': 1,   # Spät/Late - slight penalty (less preferred than F)
-            'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
-        }
+        # Shifts with higher max_staff get rewarded (negative penalty = bonus)
+        # Shifts with lower max_staff get penalized to discourage overuse
+        print("  Adding shift type preference objectives (proportional to max_staff)...")
+        shift_penalty_weights = {}
+        
+        # Calculate penalty/reward weights based on max_staff values
+        # Shifts with higher max_staff get negative weights (rewards)
+        # Shifts with lower max_staff get positive weights (penalties)
+        # Weight magnitude defined as SHIFT_PREFERENCE_BASE_WEIGHT to balance with team priority
+        if max_staff_values:
+            max_of_max_staff = max(max_staff_values.values())
+            for shift_code, max_staff in max_staff_values.items():
+                # Formula: SHIFT_PREFERENCE_BASE_WEIGHT * (1 - 2 * max_staff / max_of_max_staff)
+                # Range: [-SHIFT_PREFERENCE_BASE_WEIGHT, +SHIFT_PREFERENCE_BASE_WEIGHT]
+                # If max_staff = max_of_max_staff: 15 * (1 - 2) = -15 (maximum reward)
+                # If max_staff = max_of_max_staff/2: 15 * (1 - 1) = 0 (neutral)
+                # If max_staff → 0: approaches +15 (maximum penalty, though unrealistic)
+                # This balances shift preference with team cohesion (TEAM_PRIORITY_VIOLATION_WEIGHT = 50)
+                shift_penalty_weights[shift_code] = round(
+                    SHIFT_PREFERENCE_BASE_WEIGHT * (1 - 2 * max_staff / max_of_max_staff)
+                )
+            print(f"    Shift penalty/reward weights (negative=reward): {shift_penalty_weights}")
+        else:
+            # Fallback to original hardcoded weights
+            shift_penalty_weights = {
+                'F': -3,  # Früh/Early - REWARD (negative penalty = bonus)
+                'S': 1,   # Spät/Late - slight penalty (less preferred than F)
+                'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
+            }
         
         for d in dates:
             if d.weekday() >= 5:  # Skip weekends

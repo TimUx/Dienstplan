@@ -3670,72 +3670,6 @@ async function deleteVacationPeriod(periodId, periodName) {
 // SHIFT TYPE MANAGEMENT FUNCTIONS
 // ============================================================================
 
-async function loadShiftTypesAdmin() {
-    try {
-        const response = await fetch(`${API_BASE}/shifttypes`, {
-            credentials: 'include'
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to load shift types');
-        }
-        
-        const shiftTypes = await response.json();
-        displayShiftTypes(shiftTypes);
-    } catch (error) {
-        console.error('Error loading shift types:', error);
-        document.getElementById('shift-types-content').innerHTML = '<p class="error">Fehler beim Laden der Schichttypen.</p>';
-    }
-}
-
-function displayShiftTypes(shiftTypes) {
-    const container = document.getElementById('shift-types-content');
-    
-    if (shiftTypes.length === 0) {
-        container.innerHTML = '<p class="info">Keine Schichttypen vorhanden. Klicken Sie auf "+ Schichttyp hinzufügen" um einen neuen Schichttyp anzulegen.</p>';
-        return;
-    }
-    
-    let html = '<table class="data-table"><thead><tr>';
-    html += '<th>Kürzel</th><th>Name</th><th>Zeiten</th><th>Tagesstunden</th><th>Wochenstunden</th><th>Arbeitstage</th><th>Farbe</th><th>Status</th><th>Aktionen</th>';
-    html += '</tr></thead><tbody>';
-    
-    shiftTypes.forEach(shift => {
-        const isActive = shift.isActive !== false;
-        const statusBadge = isActive ? '<span class="badge badge-success">Aktiv</span>' : '<span class="badge badge-secondary">Inaktiv</span>';
-        
-        // Build working days display
-        const days = [];
-        if (shift.worksMonday) days.push('Mo');
-        if (shift.worksTuesday) days.push('Di');
-        if (shift.worksWednesday) days.push('Mi');
-        if (shift.worksThursday) days.push('Do');
-        if (shift.worksFriday) days.push('Fr');
-        if (shift.worksSaturday) days.push('Sa');
-        if (shift.worksSunday) days.push('So');
-        const workDays = days.length > 0 ? days.join(', ') : 'Keine';
-        
-        html += '<tr>';
-        html += `<td><span class="shift-badge" style="background-color: ${shift.colorCode}">${escapeHtml(shift.code)}</span></td>`;
-        html += `<td>${escapeHtml(shift.name)}</td>`;
-        html += `<td>${shift.startTime} - ${shift.endTime}</td>`;
-        html += `<td>${shift.durationHours}h</td>`;
-        html += `<td>${shift.weeklyWorkingHours || 40.0}h</td>`;
-        html += `<td><small>${workDays}</small></td>`;
-        html += `<td><div class="color-preview" style="background-color: ${shift.colorCode}"></div></td>`;
-        html += `<td>${statusBadge}</td>`;
-        html += '<td class="actions">';
-        html += `<button onclick="editShiftType(${shift.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
-        html += `<button onclick="showShiftTypeTeamsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">👥 Teams</button> `;
-        html += `<button onclick="deleteShiftType(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
-        html += '</td>';
-        html += '</tr>';
-    });
-    
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
 function showShiftTypeModal(shiftTypeId = null) {
     const modal = document.getElementById('shiftTypeModal');
     const title = document.getElementById('shiftTypeModalTitle');
@@ -3860,7 +3794,7 @@ async function saveShiftType(event) {
         if (response.ok) {
             alert(shiftTypeId ? 'Schichttyp erfolgreich aktualisiert!' : 'Schichttyp erfolgreich erstellt!');
             closeShiftTypeModal();
-            loadShiftTypesAdmin();
+            loadShiftTypesManagement();
         } else {
             alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
         }
@@ -3885,7 +3819,7 @@ async function deleteShiftType(shiftTypeId, shiftCode) {
         
         if (response.ok) {
             alert('Schichttyp erfolgreich gelöscht!');
-            loadShiftTypesAdmin();
+            loadShiftTypesManagement();
         } else {
             alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
         }

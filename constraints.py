@@ -196,6 +196,217 @@ def add_team_rotation_constraints(
                 model.Add(team_shift[(team.id, week_idx, assigned_shift)] == 1)
 
 
+def add_employee_weekly_rotation_order_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str]
+):
+    """
+    SOFT CONSTRAINT: Enforce F → N → S rotation order for employees across weeks.
+    
+    The rotation order F → N → S means:
+    - F can only be followed by N (or repeat F)
+    - N can only be followed by S (or repeat N)
+    - S can only be followed by F (or repeat S, wrapping around)
+    
+    Invalid transitions that violate the order:
+    - F → S (skips N)
+    - N → F (skips S)
+    - S → N (skips F)
+    
+    This constraint applies to both regular team shifts and cross-team assignments.
+    According to requirements: "Bevor dieser Rhythmus unterbrochen wird, soll ein 
+    Mitarbeiter lieber 2-3 mal die gleiche Schicht machen um wieder in den normalen 
+    Rhythmus zu kommen" - employees should rather repeat the same shift 2-3 times 
+    than break the rotation order.
+    
+    Implementation:
+    - For each employee, track which shift type they work each week
+    - Check week-to-week transitions and penalize invalid ones
+    - Very high penalty (10000) to strongly discourage violations
+    
+    Returns:
+        List of penalty variables for rotation order violations
+    """
+    rotation_order_penalties = []
+    
+    # Very high penalty to strongly discourage rotation order violations
+    ROTATION_ORDER_VIOLATION_PENALTY = 10000
+    
+    # Define valid transitions in the F → N → S order
+    # Each shift can transition to the next in sequence or stay the same
+    VALID_NEXT_SHIFTS = {
+        "F": ["F", "N"],  # F can go to N or stay F
+        "N": ["N", "S"],  # N can go to S or stay N
+        "S": ["S", "F"],  # S can go to F (wrap) or stay S
+    }
+    
+    # Only check standard rotation shifts
+    rotation_shifts = ["F", "N", "S"]
+    if not all(shift in shift_codes for shift in rotation_shifts):
+        return rotation_order_penalties  # Cannot enforce if shifts are missing
+    
+    # For each employee, determine which shift they work each week
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        
+        # Find employee's team
+        team = None
+        for t in teams:
+            if t.id == emp.team_id:
+                team = t
+                break
+        
+        if not team:
+            continue
+        
+        # Track employee's shift type for each week
+        # We need to determine if employee works F, N, or S each week
+        # This includes both their team's shift and any cross-team assignments
+        for week_idx in range(len(weeks) - 1):  # Check transitions between consecutive weeks
+            current_week = weeks[week_idx]
+            next_week = weeks[week_idx + 1]
+            
+            # Determine which shift types the employee works in current week
+            current_week_shifts = {}
+            for shift_code in rotation_shifts:
+                # Check if employee works this shift type during current week
+                works_shift_days = []
+                
+                for d in current_week:
+                    weekday = d.weekday()
+                    
+                    # Regular team shift (weekday)
+                    if weekday < 5 and (emp.id, d) in employee_active:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            # Employee works if team has shift AND employee is active
+                            works_shift_days.append(
+                                model.NewBoolVar(f"emp{emp.id}_w{week_idx}_d{d.day}_{shift_code}_regular")
+                            )
+                            model.AddMultiplicationEquality(
+                                works_shift_days[-1],
+                                [team_shift[(team.id, week_idx, shift_code)], employee_active[(emp.id, d)]]
+                            )
+                    
+                    # Regular team shift (weekend)
+                    elif weekday >= 5 and (emp.id, d) in employee_weekend_shift:
+                        if (team.id, week_idx, shift_code) in team_shift:
+                            works_shift_days.append(
+                                model.NewBoolVar(f"emp{emp.id}_w{week_idx}_d{d.day}_{shift_code}_weekend")
+                            )
+                            model.AddMultiplicationEquality(
+                                works_shift_days[-1],
+                                [team_shift[(team.id, week_idx, shift_code)], employee_weekend_shift[(emp.id, d)]]
+                            )
+                    
+                    # Cross-team shift (weekday)
+                    if weekday < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        works_shift_days.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    
+                    # Cross-team shift (weekend)
+                    elif weekday >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        works_shift_days.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                
+                # Create indicator: employee works this shift type at least once this week
+                if works_shift_days:
+                    shift_indicator = model.NewBoolVar(f"emp{emp.id}_week{week_idx}_{shift_code}_indicator")
+                    # shift_indicator = 1 if sum(works_shift_days) > 0
+                    model.Add(sum(works_shift_days) >= 1).OnlyEnforceIf(shift_indicator)
+                    model.Add(sum(works_shift_days) == 0).OnlyEnforceIf(shift_indicator.Not())
+                    current_week_shifts[shift_code] = shift_indicator
+            
+            # Determine which shift types the employee works in next week
+            next_week_shifts = {}
+            for shift_code in rotation_shifts:
+                works_shift_days = []
+                
+                for d in next_week:
+                    weekday = d.weekday()
+                    
+                    # Regular team shift (weekday)
+                    if weekday < 5 and (emp.id, d) in employee_active:
+                        if (team.id, week_idx + 1, shift_code) in team_shift:
+                            works_shift_days.append(
+                                model.NewBoolVar(f"emp{emp.id}_w{week_idx+1}_d{d.day}_{shift_code}_regular")
+                            )
+                            model.AddMultiplicationEquality(
+                                works_shift_days[-1],
+                                [team_shift[(team.id, week_idx + 1, shift_code)], employee_active[(emp.id, d)]]
+                            )
+                    
+                    # Regular team shift (weekend)
+                    elif weekday >= 5 and (emp.id, d) in employee_weekend_shift:
+                        if (team.id, week_idx + 1, shift_code) in team_shift:
+                            works_shift_days.append(
+                                model.NewBoolVar(f"emp{emp.id}_w{week_idx+1}_d{d.day}_{shift_code}_weekend")
+                            )
+                            model.AddMultiplicationEquality(
+                                works_shift_days[-1],
+                                [team_shift[(team.id, week_idx + 1, shift_code)], employee_weekend_shift[(emp.id, d)]]
+                            )
+                    
+                    # Cross-team shift (weekday)
+                    if weekday < 5 and (emp.id, d, shift_code) in employee_cross_team_shift:
+                        works_shift_days.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                    
+                    # Cross-team shift (weekend)
+                    elif weekday >= 5 and (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        works_shift_days.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                
+                # Create indicator: employee works this shift type at least once next week
+                if works_shift_days:
+                    shift_indicator = model.NewBoolVar(f"emp{emp.id}_week{week_idx+1}_{shift_code}_indicator")
+                    model.Add(sum(works_shift_days) >= 1).OnlyEnforceIf(shift_indicator)
+                    model.Add(sum(works_shift_days) == 0).OnlyEnforceIf(shift_indicator.Not())
+                    next_week_shifts[shift_code] = shift_indicator
+            
+            # Now check all possible transitions and penalize invalid ones
+            for from_shift in rotation_shifts:
+                if from_shift not in current_week_shifts:
+                    continue
+                
+                for to_shift in rotation_shifts:
+                    if to_shift not in next_week_shifts:
+                        continue
+                    
+                    # Check if this transition is valid
+                    if to_shift not in VALID_NEXT_SHIFTS[from_shift]:
+                        # Invalid transition - create violation indicator
+                        violation = model.NewBoolVar(
+                            f"emp{emp.id}_week{week_idx}_to_{week_idx+1}_{from_shift}_to_{to_shift}_violation"
+                        )
+                        
+                        # violation = 1 if (current_week has from_shift AND next_week has to_shift)
+                        # This is equivalent to: violation = current_week_shifts[from_shift] AND next_week_shifts[to_shift]
+                        model.AddMultiplicationEquality(
+                            violation,
+                            [current_week_shifts[from_shift], next_week_shifts[to_shift]]
+                        )
+                        
+                        # Add penalty for this violation
+                        penalty_var = model.NewIntVar(
+                            0, 
+                            ROTATION_ORDER_VIOLATION_PENALTY, 
+                            f"emp{emp.id}_week{week_idx}_to_{week_idx+1}_{from_shift}_to_{to_shift}_penalty"
+                        )
+                        model.AddMultiplicationEquality(
+                            penalty_var,
+                            [violation, ROTATION_ORDER_VIOLATION_PENALTY]
+                        )
+                        rotation_order_penalties.append(penalty_var)
+    
+    return rotation_order_penalties
+
+
 def add_employee_team_linkage_constraints(
     model: cp_model.CpModel,
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],

@@ -353,12 +353,12 @@ class ShiftPlanningSolver:
         if max_staff_values:
             min_max_staff = min(max_staff_values.values())
             # Calculate weights proportional to max_staff, with min_weight as baseline
-            # Example: if min_max_staff=6 and a shift has max_staff=8, weight = 5 * (8/6) ≈ 6.67
+            # Example: if min_max_staff=4 and a shift has max_staff=8, weight = 5 * (8/4) * 2.5 ≈ 25
             # This creates proper priority ratios: F(8) gets higher weight than S(6)
+            # Multiply by 2.5 to ensure sufficient separation while not overriding team priority (50x)
             for shift_code, max_staff in max_staff_values.items():
                 # Scale proportionally, maintaining strong differentials
-                # Multiply by 2 to ensure sufficient separation between shifts
-                shift_priority_weights[shift_code] = round(min_weight * (max_staff / min_max_staff) * 2)
+                shift_priority_weights[shift_code] = round(min_weight * (max_staff / min_max_staff) * 2.5)
             print(f"  Calculated dynamic shift priority weights based on max_staff: {shift_priority_weights}")
         else:
             # Fallback to original hardcoded weights if no shift types available
@@ -418,12 +418,14 @@ class ShiftPlanningSolver:
         if max_staff_values:
             max_of_max_staff = max(max_staff_values.values())
             for shift_code, max_staff in max_staff_values.items():
-                # Scale from -3 (highest max_staff, most rewarded) to +3 (lowest max_staff, most penalized)
-                # Formula: 3 * (1 - 2 * max_staff / max_of_max_staff)
-                # If max_staff = max_of_max_staff: 3 * (1 - 2) = -3 (reward)
-                # If max_staff = max_of_max_staff/2: 3 * (1 - 1) = 0 (neutral)
+                # Scale from -15 (highest max_staff, most rewarded) to +15 (lowest max_staff, most penalized)
+                # Balanced at 15 to have meaningful effect without overriding team priority (50x)
+                # Formula: 15 * (1 - 2 * max_staff / max_of_max_staff)
+                # If max_staff = max_of_max_staff: 15 * (1 - 2) = -15 (reward)
+                # If max_staff = max_of_max_staff/2: 15 * (1 - 1) = 0 (neutral)
                 # If max_staff < max_of_max_staff/2: positive (penalty)
-                shift_penalty_weights[shift_code] = round(3 * (1 - 2 * max_staff / max_of_max_staff))
+                # This balances shift preference with team cohesion (team priority = 50x)
+                shift_penalty_weights[shift_code] = round(15 * (1 - 2 * max_staff / max_of_max_staff))
             print(f"    Shift penalty/reward weights (negative=reward): {shift_penalty_weights}")
         else:
             # Fallback to original hardcoded weights

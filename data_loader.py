@@ -222,7 +222,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
         SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
                MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
                WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
-               WorksSaturday, WorksSunday
+               WorksSaturday, WorksSunday, MaxConsecutiveDays
         FROM ShiftTypes
         WHERE IsActive = 1
         ORDER BY Id
@@ -261,6 +261,12 @@ def load_from_database(db_path: str = "dienstplan.db"):
             works_monday = works_tuesday = works_wednesday = True
             works_thursday = works_friday = works_saturday = works_sunday = True
         
+        try:
+            max_consecutive_days = row['MaxConsecutiveDays']
+        except (KeyError, IndexError):
+            # Default: 6 for most shifts, but will be migrated from GlobalSettings
+            max_consecutive_days = 6
+        
         shift_type = ShiftType(
             id=row['Id'],
             code=row['Code'],
@@ -280,7 +286,8 @@ def load_from_database(db_path: str = "dienstplan.db"):
             works_thursday=works_thursday,
             works_friday=works_friday,
             works_saturday=works_saturday,
-            works_sunday=works_sunday
+            works_sunday=works_sunday,
+            max_consecutive_days=max_consecutive_days
         )
         shift_types.append(shift_type)
     

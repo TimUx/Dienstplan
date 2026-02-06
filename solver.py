@@ -28,8 +28,8 @@ from constraints import (
 )
 
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
-# 1. DAILY_SHIFT_RATIO (200): Enforce shift ordering based on max_staff (F >= S >= N on weekdays) - HIGHEST
-# 2. Operational constraints (200-20000): Rest time, shift grouping, etc.
+# 1. Operational constraints (200-20000): Rest time, shift grouping, etc. - CRITICAL for safety/compliance
+# 2. DAILY_SHIFT_RATIO (200): Enforce shift ordering based on max_staff (F >= S >= N on weekdays)
 # 3. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
 # 4. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
 # 5. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
@@ -38,13 +38,14 @@ from constraints import (
 # 8. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
 #
 # PRIORITY EXPLANATION (per requirements):
-# Shift ordering based on max_staff capacity is the HIGHEST priority to ensure proper distribution.
+# Shift ordering based on max_staff capacity is high priority to ensure proper distribution.
 # The solver will prefer:
-#   1. Maintain correct shift ordering (highest capacity shift gets most workers) - CRITICAL
-#   2. Meet operational constraints (rest time, shift grouping, etc.)
-#   3. Reach target hours for employees
+#   1. Respect operational constraints (rest time, shift grouping, etc.) - CRITICAL
+#   2. Maintain correct shift ordering (highest capacity shift gets most workers)
+#   3. Meet target hours for employees
 #   4. Fill weekdays to max capacity
-# This ensures that shifts are always distributed according to their configured capacities.
+# This ensures that shifts are distributed according to their configured capacities
+# while maintaining operational safety and compliance.
 #
 # SHIFT DISTRIBUTION (dynamic based on max_staff from database):
 # Daily ratio constraints ensure F >= S >= N (or other orderings based on max_staff)
@@ -334,7 +335,7 @@ class ShiftPlanningSolver:
         if daily_ratio_violations:
             print(f"  Adding {len(daily_ratio_violations)} daily shift ratio penalties (enforce capacity-based ordering)...")
             for penalty_var in daily_ratio_violations:
-                objective_terms.append(penalty_var)  # Already weighted (200 per violation - HIGHEST PRIORITY)
+                objective_terms.append(penalty_var)  # Already weighted (200 per violation - higher than hours shortage)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # HIGHEST PRIORITY: Employees must reach their 192h minimum target

@@ -992,9 +992,10 @@ def add_daily_shift_ratio_constraints(
     # Sort shifts by max_staff (descending) to determine expected ordering
     sorted_shifts = sorted(shift_max_staff.items(), key=lambda x: x[1], reverse=True)
     
-    # Weight for ratio violations - should be HIGHEST priority to ensure proper shift distribution
-    # Must be MUCH HIGHER than HOURS_SHORTAGE (100) to force correct ordering
-    # Set to 200 to ensure shift ordering always takes precedence
+    # Weight for ratio violations - HIGH priority to ensure proper shift distribution
+    # Set to 200 to prioritize shift ordering over hours shortage (100) but below
+    # critical operational constraints (rest time 5000+, shift grouping 20000+)
+    # This ensures shifts are distributed according to capacity while maintaining safety
     RATIO_VIOLATION_WEIGHT = 200
     
     ratio_violation_penalties = []

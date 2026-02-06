@@ -1937,6 +1937,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         
         shift_types = []
         for row in cursor.fetchall():
+            # Handle MaxConsecutiveDays for backward compatibility
+            try:
+                max_consecutive_days = row['MaxConsecutiveDays']
+            except (KeyError, IndexError):
+                max_consecutive_days = 6  # Default value
+            
             shift_types.append({
                 'id': row['Id'],
                 'code': row['Code'],
@@ -1957,7 +1963,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'minStaffWeekday': row['MinStaffWeekday'],
                 'maxStaffWeekday': row['MaxStaffWeekday'],
                 'minStaffWeekend': row['MinStaffWeekend'],
-                'maxStaffWeekend': row['MaxStaffWeekend']
+                'maxStaffWeekend': row['MaxStaffWeekend'],
+                'maxConsecutiveDays': max_consecutive_days
             })
         
         conn.close()
@@ -1981,11 +1988,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             max_staff_weekday = data.get('maxStaffWeekday', 5)
             min_staff_weekend = data.get('minStaffWeekend', 2)
             max_staff_weekend = data.get('maxStaffWeekend', 3)
+            max_consecutive_days = data.get('maxConsecutiveDays', 6)
             
             if min_staff_weekday > max_staff_weekday:
                 return jsonify({'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}), 400
             if min_staff_weekend > max_staff_weekend:
                 return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
+            if max_consecutive_days < 1 or max_consecutive_days > 10:
+                return jsonify({'error': 'Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen'}), 400
             
             conn = db.get_connection()
             cursor = conn.cursor()
@@ -2001,8 +2011,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 INSERT INTO ShiftTypes (Code, Name, StartTime, EndTime, DurationHours, ColorCode, IsActive,
                                       WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
                                       WorksSaturday, WorksSunday, WeeklyWorkingHours, 
-                                      MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend, CreatedBy)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend, 
+                                      MaxConsecutiveDays, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data.get('code'),
                 data.get('name'),
@@ -2022,6 +2033,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 max_staff_weekday,
                 min_staff_weekend,
                 max_staff_weekend,
+                max_consecutive_days,
                 session.get('user_email', 'system')
             ))
             
@@ -2076,6 +2088,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'maxStaffWeekend': row['MaxStaffWeekend']
         }
         
+        # Handle MaxConsecutiveDays for backward compatibility
+        try:
+            shift_type['maxConsecutiveDays'] = row['MaxConsecutiveDays']
+        except (KeyError, IndexError):
+            shift_type['maxConsecutiveDays'] = 6  # Default value
+        
         conn.close()
         return jsonify(shift_type)
     
@@ -2109,6 +2127,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             max_staff_weekday = data.get('maxStaffWeekday', get_row_value(old_row, 'MaxStaffWeekday', 5))
             min_staff_weekend = data.get('minStaffWeekend', get_row_value(old_row, 'MinStaffWeekend', 2))
             max_staff_weekend = data.get('maxStaffWeekend', get_row_value(old_row, 'MaxStaffWeekend', 3))
+            max_consecutive_days = data.get('maxConsecutiveDays', get_row_value(old_row, 'MaxConsecutiveDays', 6))
             
             if min_staff_weekday > max_staff_weekday:
                 conn.close()
@@ -2116,6 +2135,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if min_staff_weekend > max_staff_weekend:
                 conn.close()
                 return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
+            if max_consecutive_days < 1 or max_consecutive_days > 10:
+                conn.close()
+                return jsonify({'error': 'Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen'}), 400
             
             # Update shift type
             cursor.execute("""
@@ -2125,7 +2147,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     WorksMonday = ?, WorksTuesday = ?, WorksWednesday = ?, WorksThursday = ?, WorksFriday = ?,
                     WorksSaturday = ?, WorksSunday = ?, WeeklyWorkingHours = ?,
                     MinStaffWeekday = ?, MaxStaffWeekday = ?, MinStaffWeekend = ?, MaxStaffWeekend = ?,
-                    ModifiedAt = ?, ModifiedBy = ?
+                    MaxConsecutiveDays = ?, ModifiedAt = ?, ModifiedBy = ?
                 WHERE Id = ?
             """, (
                 data.get('code', old_row['Code']),
@@ -2147,6 +2169,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 max_staff_weekday,
                 min_staff_weekend,
                 max_staff_weekend,
+                max_consecutive_days,
                 datetime.utcnow().isoformat(),
                 session.get('user_email', 'system'),
                 id
@@ -2644,29 +2667,34 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         try:
             data = request.get_json()
             
-            max_consecutive_shifts = data.get('maxConsecutiveShifts', 6)
-            max_consecutive_night_shifts = data.get('maxConsecutiveNightShifts', 3)
-            min_rest_hours = data.get('minRestHoursBetweenShifts', 11)
-            
-            # Validation
-            if max_consecutive_shifts < 1 or max_consecutive_shifts > 10:
-                return jsonify({'error': 'Maximale aufeinanderfolgende Schichten muss zwischen 1 und 10 liegen'}), 400
-            if max_consecutive_night_shifts < 1 or max_consecutive_night_shifts > max_consecutive_shifts:
-                return jsonify({'error': 'Maximale Nachtschichten darf nicht größer sein als maximale Schichten'}), 400
-            if min_rest_hours < 8 or min_rest_hours > 24:
-                return jsonify({'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}), 400
+            # Note: maxConsecutiveShifts and maxConsecutiveNightShifts are deprecated
+            # These settings are now configured per shift type in the ShiftTypes table
+            # We keep them in the database for backward compatibility but don't expose them in the UI
             
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Update or insert settings
+            # Load existing values for deprecated fields
+            cursor.execute("SELECT MaxConsecutiveShifts, MaxConsecutiveNightShifts FROM GlobalSettings WHERE Id = 1")
+            existing = cursor.fetchone()
+            
+            # Use existing values for deprecated fields, or defaults if not found
+            max_consecutive_shifts = existing['MaxConsecutiveShifts'] if existing else 6
+            max_consecutive_night_shifts = existing['MaxConsecutiveNightShifts'] if existing else 3
+            
+            # Only update minRestHoursBetweenShifts from the request
+            min_rest_hours = data.get('minRestHoursBetweenShifts', 11)
+            
+            # Validation
+            if min_rest_hours < 8 or min_rest_hours > 24:
+                return jsonify({'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}), 400
+            
+            # Update or insert settings (keeping deprecated fields as-is)
             cursor.execute("""
                 INSERT INTO GlobalSettings 
                 (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts, ModifiedAt, ModifiedBy)
                 VALUES (1, ?, ?, ?, ?, ?)
                 ON CONFLICT(Id) DO UPDATE SET
-                    MaxConsecutiveShifts = excluded.MaxConsecutiveShifts,
-                    MaxConsecutiveNightShifts = excluded.MaxConsecutiveNightShifts,
                     MinRestHoursBetweenShifts = excluded.MinRestHoursBetweenShifts,
                     ModifiedAt = excluded.ModifiedAt,
                     ModifiedBy = excluded.ModifiedBy
@@ -2680,8 +2708,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Log audit entry
             changes = json.dumps({
-                'maxConsecutiveShifts': max_consecutive_shifts,
-                'maxConsecutiveNightShifts': max_consecutive_night_shifts,
                 'minRestHoursBetweenShifts': min_rest_hours
             }, ensure_ascii=False)
             log_audit(conn, 'GlobalSettings', 1, 'Updated', changes)

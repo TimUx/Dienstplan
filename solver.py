@@ -78,9 +78,8 @@ class ShiftPlanningSolver:
             time_limit_seconds: Maximum time for solver (default 5 minutes)
             num_workers: Number of parallel workers for solver
             global_settings: Dict with global settings from database (optional)
-                - max_consecutive_shifts_weeks: Max weeks of same shift (default 6)
-                - max_consecutive_night_shifts_weeks: Max weeks of night shifts (default 3)
                 - min_rest_hours: Min rest hours between shifts (default 11)
+                Note: Max consecutive shift settings are now per-shift-type (see ShiftType.max_consecutive_days)
             db_path: Path to database file for loading rotation patterns (default: dienstplan.db)
         """
         self.planning_model = planning_model
@@ -93,8 +92,8 @@ class ShiftPlanningSolver:
         # Store global settings
         if global_settings is None:
             global_settings = {}
-        self.max_consecutive_shifts_weeks = global_settings.get('max_consecutive_shifts_weeks', 6)
-        self.max_consecutive_night_shifts_weeks = global_settings.get('max_consecutive_night_shifts_weeks', 3)
+        # Note: max_consecutive_shifts_weeks and max_consecutive_night_shifts_weeks are deprecated
+        # These settings are now configured per shift type (ShiftType.max_consecutive_days)
         self.min_rest_hours = global_settings.get('min_rest_hours', 11)
     
     def add_all_constraints(self):
@@ -207,15 +206,13 @@ class ShiftPlanningSolver:
             employees, teams, dates, weeks, shift_codes)
         
         # Consecutive shifts constraint (re-enabled as SOFT constraint per @TimUx)
-        # Limits consecutive working days and consecutive night shifts
+        # Limits consecutive working days per shift type
         # Violations are penalized but allowed for feasibility
-        print("  - Consecutive shifts constraints (soft - max consecutive days)")
+        print("  - Consecutive shifts constraints (soft - max consecutive days per shift type)")
         consecutive_violation_penalties = add_consecutive_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend, 
-            td_vars, employees, teams, dates, weeks, shift_codes,
-            self.max_consecutive_shifts_weeks,  # Now interpreted as DAYS
-            self.max_consecutive_night_shifts_weeks)  # Now interpreted as DAYS
+            td_vars, employees, teams, dates, weeks, shift_codes, shift_types)
         
         print("  - Working hours constraints (HARD: min 192h/month, SOFT: proportional target)")
         hours_shortage_objectives = add_working_hours_constraints(

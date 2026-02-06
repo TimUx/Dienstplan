@@ -86,6 +86,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             MaxStaffWeekday INTEGER NOT NULL DEFAULT 5,
             MinStaffWeekend INTEGER NOT NULL DEFAULT 2,
             MaxStaffWeekend INTEGER NOT NULL DEFAULT 3,
+            MaxConsecutiveDays INTEGER NOT NULL DEFAULT 6,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             ModifiedAt TEXT,
             CreatedBy TEXT,
@@ -632,7 +633,8 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     
     # Format: (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours, 
     #          MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
-    #          WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday)
+    #          WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday,
+    #          MaxConsecutiveDays)
     # All three shifts work Monday-Sunday (all 7 days) - represented by 1 for each day
     # Note: IDs are assigned based on legacy system compatibility (F=1, S=2, N=3), not rotation order
     # The rotation order F→N→S is defined separately in initialize_shift_type_relationships()
@@ -641,19 +643,23 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     # can reach their monthly minimum target hours (e.g., 192h minimum for 48h/week).
     # Employees can work MORE than minimum hours but not less.
     # With 3 teams of 5 employees (15 total), max=10 accommodates flexible distribution.
+    # MaxConsecutiveDays: F/S have 6 days, N has 3 days (migrated from GlobalSettings)
     shift_types = [
         # Frühschicht: 05:45–13:45 Uhr (Mo–Fr mind. 4 Personen, max. 10)
         # Works all 7 days: Monday-Sunday
         # Max set to 10 to allow cross-team assignments and flexible hour distribution
-        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Max consecutive days: 6 (default)
+        (1, "F", "Frühschicht", "05:45", "13:45", 8.0, "#4CAF50", 48.0, 4, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1, 6),
         # Nachtschicht: 21:45–05:45 Uhr (Mo–Fr mind. 3 Personen, max. 10)
         # Works all 7 days: Monday-Sunday
         # Max set to 10 to allow cross-team assignments and flexible hour distribution
-        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Max consecutive days: 3 (night shifts need more rest)
+        (3, "N", "Nachtschicht", "21:45", "05:45", 8.0, "#2196F3", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1, 3),
         # Spätschicht: 13:45–21:45 Uhr (Mo–Fr mind. 3 Personen, max. 10)
         # Works all 7 days: Monday-Sunday  
         # Max set to 10 to allow cross-team assignments and flexible hour distribution
-        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1),
+        # Max consecutive days: 6 (default)
+        (2, "S", "Spätschicht", "13:45", "21:45", 8.0, "#FF9800", 48.0, 3, 10, 2, 5, 1, 1, 1, 1, 1, 1, 1, 6),
         # Additional shifts (Z, BMT, BSB, TD) can be created manually in the UI as needed
     ]
     
@@ -662,8 +668,9 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
             INSERT OR IGNORE INTO ShiftTypes 
             (Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
              MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
-             WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday, WorksSaturday, WorksSunday,
+             MaxConsecutiveDays)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, shift_type)
     
     conn.commit()

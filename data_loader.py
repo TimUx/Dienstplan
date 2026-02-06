@@ -156,9 +156,12 @@ def load_global_settings(db_path: str) -> Dict:
     
     Returns:
         Dict with global settings including:
-        - max_consecutive_shifts_weeks: Maximum consecutive weeks of same shift (F/S)
-        - max_consecutive_night_shifts_weeks: Maximum consecutive weeks of night shifts
-        - min_rest_hours: Minimum rest hours between shifts
+        - max_consecutive_shifts_weeks: DEPRECATED - Now configured per shift type (ShiftType.max_consecutive_days)
+        - max_consecutive_night_shifts_weeks: DEPRECATED - Now configured per shift type (ShiftType.max_consecutive_days)
+        - min_rest_hours: Minimum rest hours between shifts (still used globally)
+    
+    Note: The max_consecutive_* values are kept for backward compatibility but are no longer
+    used by the shift planning algorithm. Use ShiftType.max_consecutive_days instead.
     """
     import sqlite3
     
@@ -222,7 +225,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
         SELECT Id, Code, Name, StartTime, EndTime, DurationHours, ColorCode, WeeklyWorkingHours,
                MinStaffWeekday, MaxStaffWeekday, MinStaffWeekend, MaxStaffWeekend,
                WorksMonday, WorksTuesday, WorksWednesday, WorksThursday, WorksFriday,
-               WorksSaturday, WorksSunday
+               WorksSaturday, WorksSunday, MaxConsecutiveDays
         FROM ShiftTypes
         WHERE IsActive = 1
         ORDER BY Id
@@ -261,6 +264,12 @@ def load_from_database(db_path: str = "dienstplan.db"):
             works_monday = works_tuesday = works_wednesday = True
             works_thursday = works_friday = works_saturday = works_sunday = True
         
+        try:
+            max_consecutive_days = row['MaxConsecutiveDays']
+        except (KeyError, IndexError):
+            # Default: 6 for most shifts, but will be migrated from GlobalSettings
+            max_consecutive_days = 6
+        
         shift_type = ShiftType(
             id=row['Id'],
             code=row['Code'],
@@ -280,7 +289,8 @@ def load_from_database(db_path: str = "dienstplan.db"):
             works_thursday=works_thursday,
             works_friday=works_friday,
             works_saturday=works_saturday,
-            works_sunday=works_sunday
+            works_sunday=works_sunday,
+            max_consecutive_days=max_consecutive_days
         )
         shift_types.append(shift_type)
     

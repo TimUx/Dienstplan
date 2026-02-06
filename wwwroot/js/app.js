@@ -3462,17 +3462,6 @@ async function testEmailSettings() {
     }
 }
 
-function saveGlobalSettings() {
-    const maxConsecutiveShifts = document.getElementById('setting-max-consecutive-shifts').value;
-    const maxConsecutiveNights = document.getElementById('setting-max-consecutive-nights').value;
-    
-    // Store in localStorage for now (in production, these would be saved to a backend configuration)
-    localStorage.setItem('maxConsecutiveShifts', maxConsecutiveShifts);
-    localStorage.setItem('maxConsecutiveNights', maxConsecutiveNights);
-    
-    alert(`Einstellungen gespeichert:\n• Max aufeinanderfolgende Schichten: ${maxConsecutiveShifts}\n• Max aufeinanderfolgende Nachtschichten: ${maxConsecutiveNights}\n\nHinweis: Arbeitszeitgrenzen werden jetzt dynamisch aus den Schichteinstellungen berechnet.`);
-}
-
 // ===========================
 // Vacation Periods (Ferienzeiten) Functions
 // ===========================
@@ -3719,6 +3708,7 @@ async function loadShiftTypeForEdit(shiftTypeId) {
         document.getElementById('shiftTypeMaxStaffWeekday').value = shiftType.maxStaffWeekday || 5;
         document.getElementById('shiftTypeMinStaffWeekend').value = shiftType.minStaffWeekend || 2;
         document.getElementById('shiftTypeMaxStaffWeekend').value = shiftType.maxStaffWeekend || 3;
+        document.getElementById('shiftTypeMaxConsecutiveDays').value = shiftType.maxConsecutiveDays || 6;
         document.getElementById('shiftTypeIsActive').checked = shiftType.isActive !== false;
     } catch (error) {
         console.error('Error loading shift type:', error);
@@ -3743,6 +3733,7 @@ async function saveShiftType(event) {
     const maxStaffWeekday = parseInt(document.getElementById('shiftTypeMaxStaffWeekday').value);
     const minStaffWeekend = parseInt(document.getElementById('shiftTypeMinStaffWeekend').value);
     const maxStaffWeekend = parseInt(document.getElementById('shiftTypeMaxStaffWeekend').value);
+    const maxConsecutiveDays = parseInt(document.getElementById('shiftTypeMaxConsecutiveDays').value);
     
     // Validate staffing requirements
     if (minStaffWeekday > maxStaffWeekday) {
@@ -3751,6 +3742,10 @@ async function saveShiftType(event) {
     }
     if (minStaffWeekend > maxStaffWeekend) {
         alert('Fehler: Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke.');
+        return;
+    }
+    if (maxConsecutiveDays < 1 || maxConsecutiveDays > 10) {
+        alert('Fehler: Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen.');
         return;
     }
     
@@ -3773,6 +3768,7 @@ async function saveShiftType(event) {
         maxStaffWeekday: maxStaffWeekday,
         minStaffWeekend: minStaffWeekend,
         maxStaffWeekend: maxStaffWeekend,
+        maxConsecutiveDays: maxConsecutiveDays,
         isActive: document.getElementById('shiftTypeIsActive').checked
     };
     
@@ -6073,21 +6069,12 @@ function displayGlobalSettings(settings) {
     html += '<p>ℹ️ Diese Einstellungen gelten für die automatische Schichtplanung und Validierung.</p>';
     html += '</div>';
     
+    html += '<div class="info-box warning">';
+    html += '<p>📌 <strong>Hinweis:</strong> Die maximale Anzahl aufeinanderfolgender Schichten wird jetzt pro Schichttyp konfiguriert.<br>';
+    html += 'Bitte gehen Sie zu <strong>Verwaltung → Schichten</strong>, um diese Einstellungen für jeden Schichttyp einzeln festzulegen.</p>';
+    html += '</div>';
+    
     html += '<form id="global-settings-form" onsubmit="saveGlobalSettings(event)">';
-    
-    html += '<div class="form-group">';
-    html += '<label for="maxConsecutiveShifts">Maximale aufeinanderfolgende Schichten:</label>';
-    html += `<input type="number" id="maxConsecutiveShifts" name="maxConsecutiveShifts" 
-             value="${settings.maxConsecutiveShifts || 6}" min="1" max="10" ${readonly} required>`;
-    html += '<small>Standard: 6 Schichten (inkl. Wochenenden)</small>';
-    html += '</div>';
-    
-    html += '<div class="form-group">';
-    html += '<label for="maxConsecutiveNightShifts">Maximale aufeinanderfolgende Nachtschichten:</label>';
-    html += `<input type="number" id="maxConsecutiveNightShifts" name="maxConsecutiveNightShifts" 
-             value="${settings.maxConsecutiveNightShifts || 3}" min="1" max="10" ${readonly} required>`;
-    html += '<small>Standard: 3 Nachtschichten</small>';
-    html += '</div>';
     
     html += '<div class="form-group">';
     html += '<label for="minRestHoursBetweenShifts">Gesetzliche Ruhezeit zwischen Schichten (Stunden):</label>';
@@ -6130,8 +6117,6 @@ async function saveGlobalSettings(event) {
     const formData = new FormData(form);
     
     const settings = {
-        maxConsecutiveShifts: parseInt(formData.get('maxConsecutiveShifts')),
-        maxConsecutiveNightShifts: parseInt(formData.get('maxConsecutiveNightShifts')),
         minRestHoursBetweenShifts: parseInt(formData.get('minRestHoursBetweenShifts'))
     };
     

@@ -97,6 +97,7 @@ class ShiftType:
     works_friday: bool = True  # Works on Friday
     works_saturday: bool = False  # Works on Saturday
     works_sunday: bool = False  # Works on Sunday
+    max_consecutive_days: int = 6  # Maximum consecutive days this shift type can be worked
     
     def works_on_date(self, d: date) -> bool:
         """Check if this shift type works on the given date"""
@@ -329,13 +330,14 @@ class RotationGroupShift:
 # These are used only when the database doesn't have ShiftTypes configured.
 # The primary source of truth is the ShiftType configuration in the database.
 # Max staff values set high to allow maximum flexibility for cross-team assignments.
+# Max consecutive days: 6 for regular shifts, 3 for night shifts, 5 for weekday-only shifts (BMT/BSB)
 STANDARD_SHIFT_TYPES = [
-    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 48.0, 4, 20, 2, 20, True, True, True, True, True, True, True),
-    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 48.0, 3, 20, 2, 20, True, True, True, True, True, True, True),
-    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 48.0, 3, 20, 2, 20, True, True, True, True, True, True, True),
-    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0, 3, 20, 2, 20, True, True, True, True, True, False, False),
-    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0, 1, 20, 0, 20, True, True, True, True, True, False, False),
-    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0, 1, 20, 0, 20, True, True, True, True, True, False, False),
+    ShiftType(1, "F", "Frühdienst", "05:45", "13:45", "#FFD700", 8.0, 48.0, 4, 20, 2, 20, True, True, True, True, True, True, True, 6),
+    ShiftType(2, "S", "Spätdienst", "13:45", "21:45", "#FF6347", 8.0, 48.0, 3, 20, 2, 20, True, True, True, True, True, True, True, 6),
+    ShiftType(3, "N", "Nachtdienst", "21:45", "05:45", "#4169E1", 8.0, 48.0, 3, 20, 2, 20, True, True, True, True, True, True, True, 3),
+    ShiftType(4, "ZD", "Zwischendienst", "08:00", "16:00", "#90EE90", 8.0, 40.0, 3, 20, 2, 20, True, True, True, True, True, False, False, 6),
+    ShiftType(5, "BMT", "Brandmeldetechniker", "06:00", "14:00", "#FFA500", 8.0, 40.0, 1, 20, 0, 20, True, True, True, True, True, False, False, 5),  # 5 days (Mon-Fri only)
+    ShiftType(6, "BSB", "Brandschutzbeauftragter", "07:00", "16:30", "#9370DB", 9.5, 40.0, 1, 20, 0, 20, True, True, True, True, True, False, False, 5),  # 5 days (Mon-Fri only)
 ]
 
 

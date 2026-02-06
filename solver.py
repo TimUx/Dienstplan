@@ -53,8 +53,8 @@ WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT = 1
 WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 50
 # Dynamic weights calculated from shift types:
 UNDERSTAFFING_BASE_WEIGHT = 5  # Baseline, scaled by (max_staff / min_max_staff) * multiplier
-UNDERSTAFFING_WEIGHT_MULTIPLIER = 2.5  # Ensures separation without exceeding team priority (50)
-SHIFT_PREFERENCE_BASE_WEIGHT = 15  # Must be < team priority (50) to avoid override
+UNDERSTAFFING_WEIGHT_MULTIPLIER = 4.5  # Ensures separation without exceeding team priority (50)
+SHIFT_PREFERENCE_BASE_WEIGHT = 25  # Must be < team priority (50) to avoid override
 
 
 class ShiftPlanningSolver:

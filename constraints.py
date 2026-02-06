@@ -938,6 +938,229 @@ def add_staffing_constraints(
     return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift, team_priority_violations
 
 
+def add_cross_shift_capacity_enforcement(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    shift_types: List[ShiftType]
+) -> List[cp_model.IntVar]:
+    """
+    SOFT CONSTRAINT: Prevent overstaffing lower-capacity shifts when higher-capacity shifts have space.
+    
+    According to requirements: "Solange in den anderen Schichten laut Maximale Mitarbeiter Option 
+    noch Plätze frei sind, soll die Maximale Grenze der N Schicht nicht überschritten werden."
+    
+    Translation: "As long as there are still free slots in other shifts according to the maximum 
+    employee option, the maximum limit of the N shift should not be exceeded."
+    
+    This constraint adds a VERY HIGH penalty when:
+    - Shift A (with lower max_staff) is overstaffed
+    - AND Shift B (with higher max_staff) has unfilled capacity
+    
+    The penalty must be higher than HOURS_SHORTAGE (100) to ensure employees are assigned
+    to higher-capacity shifts first before overstaffing lower-capacity shifts.
+    
+    Example with F(max=8), S(max=6), N(max=3):
+    - If N has 4 workers (overstaffed by 1) and F has 7 workers (1 slot free), 
+      this creates a violation penalty
+    - If N has 4 workers (overstaffed by 1) but F and S are both full, no penalty
+    
+    Args:
+        shift_types: List of ShiftType objects from database (REQUIRED)
+        
+    Returns:
+        List of penalty variables for cross-shift capacity violations
+    """
+    if not shift_types:
+        raise ValueError("shift_types parameter is required")
+    
+    # Build staffing lookup from shift_types
+    staffing_weekday = {}
+    staffing_weekend = {}
+    for st in shift_types:
+        if st.code in shift_codes:
+            staffing_weekday[st.code] = {
+                "min": st.min_staff_weekday,
+                "max": st.max_staff_weekday
+            }
+            staffing_weekend[st.code] = {
+                "min": st.min_staff_weekend,
+                "max": st.max_staff_weekend
+            }
+    
+    # Sort shifts by max_staff to determine capacity ordering
+    shifts_by_capacity_weekday = sorted(
+        [(code, staffing_weekday[code]["max"]) for code in shift_codes if code in staffing_weekday],
+        key=lambda x: x[1],
+        reverse=True  # Highest capacity first
+    )
+    
+    shifts_by_capacity_weekend = sorted(
+        [(code, staffing_weekend[code]["max"]) for code in shift_codes if code in staffing_weekend],
+        key=lambda x: x[1],
+        reverse=True
+    )
+    
+    capacity_violation_penalties = []
+    
+    for d in dates:
+        is_weekend = d.weekday() >= 5
+        staffing = staffing_weekend if is_weekend else staffing_weekday
+        shifts_by_capacity = shifts_by_capacity_weekend if is_weekend else shifts_by_capacity_weekday
+        
+        # Find which week this date belongs to
+        week_idx = None
+        for w_idx, week_dates in enumerate(weeks):
+            if d in week_dates:
+                week_idx = w_idx
+                break
+        
+        if week_idx is None:
+            continue
+        
+        # For each pair of shifts where shift_high has higher capacity than shift_low
+        for i, (shift_low, max_low) in enumerate(shifts_by_capacity):
+            for j in range(i):  # Only compare with shifts that have higher or equal capacity
+                shift_high, max_high = shifts_by_capacity[j]
+                
+                if max_high <= max_low:
+                    continue  # Only enforce when there's a clear capacity difference
+                
+                # Check if this shift works on this day
+                shift_type_low = None
+                shift_type_high = None
+                for st in shift_types:
+                    if st.code == shift_low:
+                        shift_type_low = st
+                    if st.code == shift_high:
+                        shift_type_high = st
+                
+                # Skip if either shift doesn't work on this day
+                if shift_type_low and not shift_type_low.works_on_date(d):
+                    continue
+                if shift_type_high and not shift_type_high.works_on_date(d):
+                    continue
+                
+                # Count workers for shift_low
+                assigned_low = []
+                if is_weekend:
+                    # Weekend counting
+                    for team in teams:
+                        if (team.id, week_idx, shift_low) not in team_shift:
+                            continue
+                        for emp in employees:
+                            if emp.team_id != team.id:
+                                continue
+                            if (emp.id, d) not in employee_weekend_shift:
+                                continue
+                            is_on_shift = model.NewBoolVar(f"emp{emp.id}_onshift{shift_low}_d{d}_check")
+                            model.AddMultiplicationEquality(
+                                is_on_shift,
+                                [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift_low)]]
+                            )
+                            assigned_low.append(is_on_shift)
+                    # Add cross-team weekend workers
+                    for emp in employees:
+                        if (emp.id, d, shift_low) in employee_cross_team_weekend:
+                            assigned_low.append(employee_cross_team_weekend[(emp.id, d, shift_low)])
+                else:
+                    # Weekday counting
+                    for team in teams:
+                        if (team.id, week_idx, shift_low) not in team_shift:
+                            continue
+                        for emp in employees:
+                            if emp.team_id != team.id:
+                                continue
+                            if (emp.id, d) not in employee_active:
+                                continue
+                            is_on_shift = model.NewBoolVar(f"emp{emp.id}_onshift{shift_low}_d{d}_check")
+                            model.AddMultiplicationEquality(
+                                is_on_shift,
+                                [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_low)]]
+                            )
+                            assigned_low.append(is_on_shift)
+                    # Add cross-team workers
+                    for emp in employees:
+                        if (emp.id, d, shift_low) in employee_cross_team_shift:
+                            assigned_low.append(employee_cross_team_shift[(emp.id, d, shift_low)])
+                
+                # Count workers for shift_high
+                assigned_high = []
+                if is_weekend:
+                    # Weekend counting
+                    for team in teams:
+                        if (team.id, week_idx, shift_high) not in team_shift:
+                            continue
+                        for emp in employees:
+                            if emp.team_id != team.id:
+                                continue
+                            if (emp.id, d) not in employee_weekend_shift:
+                                continue
+                            is_on_shift = model.NewBoolVar(f"emp{emp.id}_onshift{shift_high}_d{d}_check")
+                            model.AddMultiplicationEquality(
+                                is_on_shift,
+                                [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift_high)]]
+                            )
+                            assigned_high.append(is_on_shift)
+                    # Add cross-team weekend workers
+                    for emp in employees:
+                        if (emp.id, d, shift_high) in employee_cross_team_weekend:
+                            assigned_high.append(employee_cross_team_weekend[(emp.id, d, shift_high)])
+                else:
+                    # Weekday counting
+                    for team in teams:
+                        if (team.id, week_idx, shift_high) not in team_shift:
+                            continue
+                        for emp in employees:
+                            if emp.team_id != team.id:
+                                continue
+                            if (emp.id, d) not in employee_active:
+                                continue
+                            is_on_shift = model.NewBoolVar(f"emp{emp.id}_onshift{shift_high}_d{d}_check")
+                            model.AddMultiplicationEquality(
+                                is_on_shift,
+                                [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_high)]]
+                            )
+                            assigned_high.append(is_on_shift)
+                    # Add cross-team workers
+                    for emp in employees:
+                        if (emp.id, d, shift_high) in employee_cross_team_shift:
+                            assigned_high.append(employee_cross_team_shift[(emp.id, d, shift_high)])
+                
+                if not assigned_low or not assigned_high:
+                    continue
+                
+                # Calculate overstaffing in shift_low
+                count_low = model.NewIntVar(0, 20, f"count_{shift_low}_{d}_capacity_check")
+                model.Add(count_low == sum(assigned_low))
+                overstaffing_low = model.NewIntVar(0, 20, f"overstaff_{shift_low}_{d}_capacity_check")
+                model.Add(overstaffing_low >= count_low - staffing[shift_low]["max"])
+                model.Add(overstaffing_low >= 0)
+                
+                # Calculate understaffing in shift_high
+                count_high = model.NewIntVar(0, 20, f"count_{shift_high}_{d}_capacity_check")
+                model.Add(count_high == sum(assigned_high))
+                understaffing_high = model.NewIntVar(0, 20, f"understaff_{shift_high}_{d}_capacity_check")
+                model.Add(understaffing_high >= staffing[shift_high]["max"] - count_high)
+                model.Add(understaffing_high >= 0)
+                
+                # Violation = min(overstaffing_low, understaffing_high)
+                # This is the number of workers in shift_low that could have been in shift_high
+                violation = model.NewIntVar(0, 20, f"capacity_violation_{shift_low}_vs_{shift_high}_{d}")
+                model.AddMinEquality(violation, [overstaffing_low, understaffing_high])
+                capacity_violation_penalties.append(violation)
+    
+    return capacity_violation_penalties
+
+
 def add_daily_shift_ratio_constraints(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],

@@ -24,31 +24,40 @@ from constraints import (
     add_weekend_shift_consistency_constraints,
     add_team_night_shift_consistency_constraints,
     add_shift_sequence_grouping_constraints,
-    add_minimum_consecutive_weekday_shifts_constraints
+    add_minimum_consecutive_weekday_shifts_constraints,
+    add_cross_shift_capacity_enforcement
 )
 
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
 # 1. Operational constraints (200-20000): Rest time, shift grouping, etc. - CRITICAL for safety/compliance
 # 2. DAILY_SHIFT_RATIO (200): Enforce shift ordering based on max_staff (F >= S >= N on weekdays)
-# 3. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
-# 4. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
-# 5. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
-# 6. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
-# 7. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
-# 8. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
+# 3. CROSS_SHIFT_CAPACITY (150): Prevent overstaffing low-capacity shifts when high-capacity have space
+#                                 Ensures N shift doesn't overflow when F/S have available slots
+# 4. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
+# 5. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
+# 6. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
+# 7. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
+# 8. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
+# 9. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
 #
 # PRIORITY EXPLANATION (per requirements):
-# Shift ordering based on max_staff capacity is high priority to ensure proper distribution.
+# Cross-shift capacity enforcement is prioritized above hours shortage to ensure:
+#   "Solange in den anderen Schichten laut Maximale Mitarbeiter Option noch Plätze frei sind,
+#    soll die Maximale Grenze der N Schicht nicht überschritten werden."
+# Translation: As long as other shifts have free slots, the N shift maximum must not be exceeded.
+#
 # The solver will prefer:
 #   1. Respect operational constraints (rest time, shift grouping, etc.) - CRITICAL
 #   2. Maintain correct shift ordering (highest capacity shift gets most workers)
-#   3. Meet target hours for employees
-#   4. Fill weekdays to max capacity
-# This ensures that shifts are distributed according to their configured capacities
-# while maintaining operational safety and compliance.
+#   3. Prevent overstaffing N when F/S have capacity (NEW FIX)
+#   4. Meet target hours for employees
+#   5. Fill weekdays to max capacity
+# This ensures shifts are distributed according to configured capacities while maintaining
+# operational safety and compliance.
 #
 # SHIFT DISTRIBUTION (dynamic based on max_staff from database):
 # Daily ratio constraints ensure F >= S >= N (or other orderings based on max_staff)
+# Cross-shift capacity enforcement prevents exceeding N max when F/S have space
 # Understaffing weights and shift preferences are calculated proportionally to max_staff
 # to ensure shifts with higher capacity get more assignments (F > S > N typically)
 HOURS_SHORTAGE_PENALTY_WEIGHT = 100
@@ -62,6 +71,9 @@ UNDERSTAFFING_WEIGHT_MULTIPLIER = 4.5  # Ensures sufficient separation to respec
                                         # Calibrated to achieve ~1.78:1.22:1.0 ratio with 8:6:4 max_staff
 SHIFT_PREFERENCE_BASE_WEIGHT = 25  # Additional incentive for high-capacity shifts (reward/penalty)
                                     # Must stay < TEAM_PRIORITY (50) to preserve team cohesion
+CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT = 150  # NEW: Penalty for overstaffing low-capacity shifts when 
+                                              # high-capacity shifts have space. MUST be higher than 
+                                              # HOURS_SHORTAGE (100) to prevent N overflow when F/S have capacity
 
 
 class ShiftPlanningSolver:
@@ -161,6 +173,12 @@ class ShiftPlanningSolver:
         weekday_overstaffing, weekend_overstaffing, weekday_understaffing_by_shift, team_priority_violations = add_staffing_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
+            employees, teams, dates, weeks, shift_codes, shift_types)
+        
+        print("  - Cross-shift capacity enforcement (prevent N overflow when F/S have capacity)")
+        cross_shift_capacity_violations = add_cross_shift_capacity_enforcement(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
             employees, teams, dates, weeks, shift_codes, shift_types)
         
         print("  - Daily shift ratio constraints (ensure F >= S on weekdays)")
@@ -336,6 +354,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(daily_ratio_violations)} daily shift ratio penalties (enforce capacity-based ordering)...")
             for penalty_var in daily_ratio_violations:
                 objective_terms.append(penalty_var)  # Already weighted (200 per violation - higher than hours shortage)
+        
+        # Add cross-shift capacity violation penalties (prevent overstaffing low-capacity shifts when high-capacity have space)
+        if cross_shift_capacity_violations:
+            print(f"  Adding {len(cross_shift_capacity_violations)} cross-shift capacity violation penalties (weight {CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT}x)...")
+            for penalty_var in cross_shift_capacity_violations:
+                objective_terms.append(penalty_var * CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # HIGHEST PRIORITY: Employees must reach their 192h minimum target

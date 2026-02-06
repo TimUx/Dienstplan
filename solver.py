@@ -31,25 +31,33 @@ from constraints import (
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
 # 1. Operational constraints (200-20000): Rest time, shift grouping, etc. - CRITICAL for safety/compliance
 # 2. DAILY_SHIFT_RATIO (200): Enforce shift ordering based on max_staff (F >= S >= N on weekdays)
-# 3. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
-# 4. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
-# 5. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
-# 6. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
-# 7. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
-# 8. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
+# 3. CROSS_SHIFT_CAPACITY (150): Prevent overstaffing low-capacity shifts when high-capacity have space
+#                                 Ensures N shift doesn't overflow when F/S have available slots
+# 4. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
+# 5. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
+# 6. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
+# 7. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
+# 8. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
+# 9. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
 #
 # PRIORITY EXPLANATION (per requirements):
-# Shift ordering based on max_staff capacity is high priority to ensure proper distribution.
+# Cross-shift capacity enforcement is prioritized above hours shortage to ensure:
+#   "Solange in den anderen Schichten laut Maximale Mitarbeiter Option noch Plätze frei sind,
+#    soll die Maximale Grenze der N Schicht nicht überschritten werden."
+# Translation: As long as other shifts have free slots, the N shift maximum must not be exceeded.
+#
 # The solver will prefer:
 #   1. Respect operational constraints (rest time, shift grouping, etc.) - CRITICAL
 #   2. Maintain correct shift ordering (highest capacity shift gets most workers)
-#   3. Meet target hours for employees
-#   4. Fill weekdays to max capacity
-# This ensures that shifts are distributed according to their configured capacities
-# while maintaining operational safety and compliance.
+#   3. Prevent overstaffing N when F/S have capacity (NEW FIX)
+#   4. Meet target hours for employees
+#   5. Fill weekdays to max capacity
+# This ensures shifts are distributed according to configured capacities while maintaining
+# operational safety and compliance.
 #
 # SHIFT DISTRIBUTION (dynamic based on max_staff from database):
 # Daily ratio constraints ensure F >= S >= N (or other orderings based on max_staff)
+# Cross-shift capacity enforcement prevents exceeding N max when F/S have space
 # Understaffing weights and shift preferences are calculated proportionally to max_staff
 # to ensure shifts with higher capacity get more assignments (F > S > N typically)
 HOURS_SHORTAGE_PENALTY_WEIGHT = 100

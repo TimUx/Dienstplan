@@ -156,9 +156,12 @@ def load_global_settings(db_path: str) -> Dict:
     
     Returns:
         Dict with global settings including:
-        - max_consecutive_shifts_weeks: Maximum consecutive weeks of same shift (F/S)
-        - max_consecutive_night_shifts_weeks: Maximum consecutive weeks of night shifts
-        - min_rest_hours: Minimum rest hours between shifts
+        - max_consecutive_shifts_weeks: DEPRECATED - Now configured per shift type (ShiftType.max_consecutive_days)
+        - max_consecutive_night_shifts_weeks: DEPRECATED - Now configured per shift type (ShiftType.max_consecutive_days)
+        - min_rest_hours: Minimum rest hours between shifts (still used globally)
+    
+    Note: The max_consecutive_* values are kept for backward compatibility but are no longer
+    used by the shift planning algorithm. Use ShiftType.max_consecutive_days instead.
     """
     import sqlite3
     

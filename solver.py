@@ -161,6 +161,13 @@ class ShiftPlanningSolver:
             employee_cross_team_shift, employee_cross_team_weekend, 
             employees, teams, dates, weeks, shift_codes, shift_types)
         
+        print("  - Daily shift ratio constraints (ensure F >= S on weekdays)")
+        from constraints import add_daily_shift_ratio_constraints
+        daily_ratio_violations = add_daily_shift_ratio_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, teams, dates, weeks, shift_codes, shift_types)
+        
         print("  - Rest time constraints (11h min, soft penalties for violations)")
         rest_violation_penalties = add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
                                  employee_cross_team_shift, employee_cross_team_weekend, 
@@ -321,6 +328,12 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(night_team_consistency_penalties)} team night shift consistency penalties...")
             for penalty_var in night_team_consistency_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (600 per violation)
+        
+        # Add daily shift ratio penalties (enforce F >= S on weekdays)
+        if daily_ratio_violations:
+            print(f"  Adding {len(daily_ratio_violations)} daily shift ratio penalties (F >= S on weekdays)...")
+            for penalty_var in daily_ratio_violations:
+                objective_terms.append(penalty_var)  # Already weighted (75 per violation)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # HIGHEST PRIORITY: Employees must reach their 192h minimum target

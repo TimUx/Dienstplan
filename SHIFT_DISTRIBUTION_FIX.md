@@ -223,8 +223,60 @@ No migration needed. The change is backward compatible:
 **Diagnosis**: Weights might be too low
 **Solution**: Increase `UNDERSTAFFING_WEIGHT_MULTIPLIER` (but keep < 50/base)
 
+### Issue: S shifts exceed F shifts on specific days
+**Diagnosis**: Global weights only control overall distribution, not per-day ratios  
+**Solution**: Daily shift ratio constraint enforces F >= S on each weekday (see below)
+
+## Daily Shift Ratio Constraint (Added 2026-02-06)
+
+### Problem
+PR #178 increased global weights to achieve overall F > S > N distribution. However, on individual days, S shifts could still exceed F shifts because the weights were only soft constraints applied globally, not enforced per-day.
+
+**Example issue:**
+- Days 15-22: Multiple days had S >= F (violating the max_staff ratio)
+- Day 15: F=0, S=7
+- Days 16-19: F=S (equal counts)
+- Days 20-22: S > F
+
+### Solution
+Added `add_daily_shift_ratio_constraints()` in `constraints.py` to enforce F >= S on each weekday.
+
+**Implementation:**
+```python
+# For each weekday (Mon-Fri):
+# - Count workers in F shifts (team + cross-team)
+# - Count workers in S shifts (team + cross-team)
+# - Create violation = max(0, S_count - F_count)
+# - Add penalty = violation * 75 to objective
+
+# Penalty weight: 75
+# - Higher than TEAM_PRIORITY (50)
+# - Lower than HOURS_SHORTAGE (100)
+# - Ensures F >= S without overriding critical constraints
+```
+
+**Results:**
+- ✅ All weekdays now have F >= S
+- ✅ No days with S > F violations
+- ✅ Some days may have F == S (acceptable edge case)
+
+**Test:**
+- `test_daily_shift_ratio.py`: Verifies F >= S on all weekdays
+
+### Weight Hierarchy (Updated)
+```
+1. HOURS_SHORTAGE (100) - HIGHEST
+2. Major operational constraints (200-20000)
+3. Daily shift ratio (75) - NEW: Ensures F >= S per day
+4. TEAM_PRIORITY (50)
+5. Understaffing weights (22-45, dynamic)
+6. Shift preferences (±25)
+7. Other soft constraints
+```
+
 ## References
 
 - Original issue report: Problem statement in PR description
 - Implementation: `solver.py` lines 30-57, 360-380, 441-456
-- Tests: `test_shift_distribution_ratios.py`, `test_team_priority.py`
+- Daily ratio constraint: `constraints.py` lines 910-1038, `solver.py` lines 164-169
+- Tests: `test_shift_distribution_ratios.py`, `test_team_priority.py`, `test_daily_shift_ratio.py`

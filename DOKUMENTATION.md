@@ -30,10 +30,8 @@ Neu im System? Starten Sie hier:
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|--------------|------------|
-| **[System-Übersicht](docs/SYSTEM_UEBERSICHT.md)** | ⭐ Vollständige Darstellung des Schichtplanungssystems | Alle |
-| **[Schichtplanungs-Regeln](docs/SCHICHTPLANUNG_REGELN.md)** | Alle Regeln, Abhängigkeiten & Mindestanforderungen | Admins |
-| **[System-Diagramme](docs/SYSTEM_DIAGRAMME.md)** | Visuelle Darstellung (Architektur, Abläufe, Diagramme) | Admins |
-| **[Januar 2026 Beispiel](docs/JANUAR_2026_BEISPIEL.md)** | Vollständiger Beispiel-Schichtplan | Admins |
+| **[Schichtplanungs-Regeln (DE)](SCHICHTPLANUNGS_REGELN.md)** | ⭐ Alle Regeln, Abhängigkeiten & Prioritäten | Admins |
+| **[Shift Planning Rules (EN)](SHIFT_PLANNING_RULES_EN.md)** | ⭐ All rules, dependencies & priorities | Admins |
 | **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** | CLI-Befehle und API-Nutzung | Admins |
 | **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** | Details zum OR-Tools Solver | Admins |
 | **[Beispieldaten](docs/SAMPLE_DATA.md)** | Testdaten und API-Beispiele | Admins, Entwickler |
@@ -54,14 +52,11 @@ Neu im System? Starten Sie hier:
 ### Sie möchten...
 
 #### ...das Schichtplanungssystem vollständig verstehen?
-→ **[System-Übersicht](docs/SYSTEM_UEBERSICHT.md)** (⭐ Hauptdokument)
-→ **[Schichtplanungs-Regeln](docs/SCHICHTPLANUNG_REGELN.md)** (Alle Regeln & Abhängigkeiten)
-
-#### ...visuelle Darstellungen sehen?
-→ **[System-Diagramme](docs/SYSTEM_DIAGRAMME.md)** (Architektur, Abläufe, Rotationen)
+→ **[Schichtplanungs-Regeln (Deutsch)](SCHICHTPLANUNGS_REGELN.md)** (⭐ Hauptdokument)
+→ **[Shift Planning Rules (English)](SHIFT_PLANNING_RULES_EN.md)** (⭐ Main document)
 
 #### ...ein praktisches Beispiel sehen?
-→ **[Januar 2026 Beispiel](docs/JANUAR_2026_BEISPIEL.md)** (Vollständiger Schichtplan)
+→ **[Beispieldaten](docs/SAMPLE_DATA.md)** (Testdaten und Beispiele)
 
 #### ...das System zum ersten Mal installieren?
 → **[Schnellstart-Anleitung](docs/QUICKSTART.md)**

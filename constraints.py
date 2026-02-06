@@ -637,25 +637,21 @@ def add_employee_team_linkage_constraints(
                         if other_shift_code == shift_code:
                             continue  # Same shift is OK
                         
-                        # Check if employee can work the other shift cross-team
-                        has_cross_team_vars = False
+                        # Collect all cross-team weekday variables for this other shift type
                         cross_team_weekday_vars = []
                         
                         for d in week_dates:
                             if d.weekday() < 5:  # Weekday only
                                 if (emp.id, d, other_shift_code) in employee_cross_team_shift:
-                                    has_cross_team_vars = True
                                     cross_team_weekday_vars.append(
                                         employee_cross_team_shift[(emp.id, d, other_shift_code)]
                                     )
                         
-                        if has_cross_team_vars and cross_team_weekday_vars:
+                        if cross_team_weekday_vars:
                             # HARD CONSTRAINT: If team works shift_code this week,
                             # employee CANNOT work other_shift_code via cross-team on weekdays
-                            # team_shift[team, week, shift_code] = 1 => sum(cross_team[emp, weekday, other_shift]) = 0
-                            # Equivalent to: sum(cross_team) <= (1 - team_shift) * len(cross_team_vars)
-                            # Or: team_shift + sum(cross_team) <= 1 (if we ensure only one cross-team var can be 1)
-                            # Simpler: if team_shift = 1, then each cross_team = 0
+                            # Implementation: When team_shift[team, week, shift_code] = 1,
+                            # force all cross_team[emp, weekday, other_shift_code] = 0
                             for cross_var in cross_team_weekday_vars:
                                 model.Add(cross_var == 0).OnlyEnforceIf(team_shift[(team.id, week_idx, shift_code)])
         

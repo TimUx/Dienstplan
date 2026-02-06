@@ -1,0 +1,666 @@
+================================================================================
+DIENSTPLAN SYSTEM INFORMATION EXPORT
+================================================================================
+Export Date: 2026-02-06 16:50:17
+Database: example.db
+================================================================================
+
+
+--------------------------------------------------------------------------------
+SECTION: DATABASE SCHEMA
+--------------------------------------------------------------------------------
+
+Total Tables: 24
+
+Table: AbsenceTypes
+  Columns (9):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Name: TEXT NOT NULL
+    - Code: TEXT NOT NULL
+    - ColorCode: TEXT NOT NULL DEFAULT '#E0E0E0'
+    - IsSystemType: INTEGER NOT NULL DEFAULT 0
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+    - ModifiedAt: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 3
+
+Table: Absences
+  Columns (9):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - EmployeeId: INTEGER NOT NULL
+    - Type: INTEGER NOT NULL
+    - AbsenceTypeId: INTEGER NULL
+    - StartDate: TEXT NOT NULL
+    - EndDate: TEXT NOT NULL
+    - Notes: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+  Row Count: 0
+
+Table: AdminNotifications
+  Columns (16):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Type: TEXT NOT NULL
+    - Severity: TEXT NOT NULL DEFAULT 'WARNING'
+    - Title: TEXT NOT NULL
+    - Message: TEXT NOT NULL
+    - ShiftDate: TEXT NULL
+    - ShiftCode: TEXT NULL
+    - TeamId: INTEGER NULL
+    - EmployeeId: INTEGER NULL
+    - AbsenceId: INTEGER NULL
+    - RequiredStaff: INTEGER NULL
+    - ActualStaff: INTEGER NULL
+    - IsRead: INTEGER NOT NULL DEFAULT 0
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - ReadAt: TEXT NULL
+    - ReadBy: TEXT NULL
+  Row Count: 0
+
+Table: AspNetRoles
+  Columns (3):
+    - Id: TEXT NULL [PRIMARY KEY]
+    - Name: TEXT NOT NULL
+    - NormalizedName: TEXT NOT NULL
+  Row Count: 2
+
+Table: AspNetUserRoles
+  Columns (2):
+    - UserId: TEXT NOT NULL [PRIMARY KEY]
+    - RoleId: TEXT NOT NULL [PRIMARY KEY]
+  Row Count: 1
+
+Table: AspNetUsers
+  Columns (10):
+    - Id: TEXT NULL [PRIMARY KEY]
+    - Email: TEXT NOT NULL
+    - NormalizedEmail: TEXT NOT NULL
+    - PasswordHash: TEXT NOT NULL
+    - SecurityStamp: TEXT NOT NULL
+    - FullName: TEXT NULL
+    - EmployeeId: INTEGER NULL
+    - LockoutEnd: TEXT NULL
+    - AccessFailedCount: INTEGER NOT NULL DEFAULT 0
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  Row Count: 0
+
+Table: AuditLogs
+  Columns (8):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Timestamp: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - UserId: TEXT NULL
+    - UserName: TEXT NULL
+    - EntityName: TEXT NOT NULL
+    - EntityId: TEXT NOT NULL
+    - Action: TEXT NOT NULL
+    - Changes: TEXT NULL
+  Row Count: 0
+
+Table: EmailSettings
+  Columns (14):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - SmtpHost: TEXT NULL
+    - SmtpPort: INTEGER NULL DEFAULT 587
+    - UseSsl: INTEGER NOT NULL DEFAULT 1
+    - RequiresAuthentication: INTEGER NOT NULL DEFAULT 1
+    - Username: TEXT NULL
+    - Password: TEXT NULL
+    - SenderEmail: TEXT NULL
+    - SenderName: TEXT NULL
+    - ReplyToEmail: TEXT NULL
+    - IsEnabled: INTEGER NOT NULL DEFAULT 0
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - ModifiedAt: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 0
+
+Table: Employees
+  Columns (21):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Vorname: TEXT NOT NULL
+    - Name: TEXT NOT NULL
+    - Personalnummer: TEXT NOT NULL
+    - Email: TEXT NULL
+    - NormalizedEmail: TEXT NULL
+    - PasswordHash: TEXT NULL
+    - SecurityStamp: TEXT NULL
+    - LockoutEnd: TEXT NULL
+    - AccessFailedCount: INTEGER NOT NULL DEFAULT 0
+    - Geburtsdatum: TEXT NULL
+    - Funktion: TEXT NULL
+    - IsSpringer: INTEGER NOT NULL DEFAULT 0
+    - IsFerienjobber: INTEGER NOT NULL DEFAULT 0
+    - IsBrandmeldetechniker: INTEGER NOT NULL DEFAULT 0
+    - IsBrandschutzbeauftragter: INTEGER NOT NULL DEFAULT 0
+    - IsTdQualified: INTEGER NOT NULL DEFAULT 0
+    - IsTeamLeader: INTEGER NOT NULL DEFAULT 0
+    - IsActive: INTEGER NOT NULL DEFAULT 1
+    - TeamId: INTEGER NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  Row Count: 18
+
+Table: GlobalSettings
+  Columns (6):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - MaxConsecutiveShifts: INTEGER NOT NULL DEFAULT 6
+    - MaxConsecutiveNightShifts: INTEGER NOT NULL DEFAULT 3
+    - MinRestHoursBetweenShifts: INTEGER NOT NULL DEFAULT 11
+    - ModifiedAt: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 1
+
+Table: PasswordResetTokens
+  Columns (7):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - EmployeeId: INTEGER NOT NULL
+    - Token: TEXT NOT NULL
+    - ExpiresAt: TEXT NOT NULL
+    - IsUsed: INTEGER NOT NULL DEFAULT 0
+    - UsedAt: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  Row Count: 0
+
+Table: RotationGroupShifts
+  Columns (6):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - RotationGroupId: INTEGER NOT NULL
+    - ShiftTypeId: INTEGER NOT NULL
+    - RotationOrder: INTEGER NOT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+  Row Count: 3
+
+Table: RotationGroups
+  Columns (8):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Name: TEXT NOT NULL
+    - Description: TEXT NULL
+    - IsActive: INTEGER NOT NULL DEFAULT 1
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+    - ModifiedAt: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 1
+
+Table: ShiftAssignments
+  Columns (12):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - EmployeeId: INTEGER NOT NULL
+    - ShiftTypeId: INTEGER NOT NULL
+    - Date: TEXT NOT NULL
+    - IsManual: INTEGER NOT NULL DEFAULT 0
+    - IsSpringerAssignment: INTEGER NOT NULL DEFAULT 0
+    - IsFixed: INTEGER NOT NULL DEFAULT 0
+    - Notes: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+    - ModifiedAt: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 0
+
+Table: ShiftExchanges
+  Columns (10):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - ShiftAssignmentId: INTEGER NOT NULL
+    - OfferingEmployeeId: INTEGER NOT NULL
+    - RequestingEmployeeId: INTEGER NULL
+    - Status: TEXT NOT NULL DEFAULT 'Angeboten'
+    - OfferingReason: TEXT NULL
+    - DisponentNotes: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - ProcessedAt: TEXT NULL
+    - ProcessedBy: TEXT NULL
+  Row Count: 0
+
+Table: ShiftPlanApprovals
+  Columns (9):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Year: INTEGER NOT NULL
+    - Month: INTEGER NOT NULL
+    - IsApproved: INTEGER NOT NULL DEFAULT 0
+    - ApprovedAt: TEXT NULL
+    - ApprovedBy: INTEGER NULL
+    - ApprovedByName: TEXT NULL
+    - Notes: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  Row Count: 0
+
+Table: ShiftTypeRelationships
+  Columns (6):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - ShiftTypeId: INTEGER NOT NULL
+    - RelatedShiftTypeId: INTEGER NOT NULL
+    - DisplayOrder: INTEGER NOT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+  Row Count: 6
+
+Table: ShiftTypes
+  Columns (25):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Code: TEXT NOT NULL
+    - Name: TEXT NOT NULL
+    - StartTime: TEXT NOT NULL
+    - EndTime: TEXT NOT NULL
+    - DurationHours: REAL NOT NULL
+    - ColorCode: TEXT NULL
+    - IsActive: INTEGER NOT NULL DEFAULT 1
+    - WorksMonday: INTEGER NOT NULL DEFAULT 1
+    - WorksTuesday: INTEGER NOT NULL DEFAULT 1
+    - WorksWednesday: INTEGER NOT NULL DEFAULT 1
+    - WorksThursday: INTEGER NOT NULL DEFAULT 1
+    - WorksFriday: INTEGER NOT NULL DEFAULT 1
+    - WorksSaturday: INTEGER NOT NULL DEFAULT 0
+    - WorksSunday: INTEGER NOT NULL DEFAULT 0
+    - WeeklyWorkingHours: REAL NOT NULL DEFAULT 40.0
+    - MinStaffWeekday: INTEGER NOT NULL DEFAULT 3
+    - MaxStaffWeekday: INTEGER NOT NULL DEFAULT 5
+    - MinStaffWeekend: INTEGER NOT NULL DEFAULT 2
+    - MaxStaffWeekend: INTEGER NOT NULL DEFAULT 3
+    - MaxConsecutiveDays: INTEGER NOT NULL DEFAULT 6
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - ModifiedAt: TEXT NULL
+    - CreatedBy: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 3
+
+Table: TeamShiftAssignments
+  Columns (5):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - TeamId: INTEGER NOT NULL
+    - ShiftTypeId: INTEGER NOT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+  Row Count: 0
+
+Table: Teams
+  Columns (7):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Name: TEXT NOT NULL
+    - Description: TEXT NULL
+    - Email: TEXT NULL
+    - IsVirtual: INTEGER NOT NULL DEFAULT 0
+    - RotationGroupId: INTEGER NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  Row Count: 3
+
+Table: VacationPeriods
+  Columns (9):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Name: TEXT NOT NULL
+    - StartDate: TEXT NOT NULL
+    - EndDate: TEXT NOT NULL
+    - ColorCode: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+    - ModifiedAt: TEXT NULL
+    - ModifiedBy: TEXT NULL
+  Row Count: 0
+
+Table: VacationRequests
+  Columns (11):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - EmployeeId: INTEGER NOT NULL
+    - StartDate: TEXT NOT NULL
+    - EndDate: TEXT NOT NULL
+    - Status: TEXT NOT NULL DEFAULT 'InBearbeitung'
+    - Notes: TEXT NULL
+    - DisponentResponse: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - CreatedBy: TEXT NULL
+    - ProcessedAt: TEXT NULL
+    - ProcessedBy: TEXT NULL
+  Row Count: 0
+
+Table: VacationYearApprovals
+  Columns (8):
+    - Id: INTEGER NULL [PRIMARY KEY]
+    - Year: INTEGER NOT NULL
+    - IsApproved: INTEGER NOT NULL DEFAULT 0
+    - ApprovedAt: TEXT NULL
+    - ApprovedBy: TEXT NULL
+    - Notes: TEXT NULL
+    - CreatedAt: TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    - ModifiedAt: TEXT NULL
+  Row Count: 0
+
+Table: sqlite_sequence
+  Columns (2):
+    - name:  NULL
+    - seq:  NULL
+  Row Count: 7
+
+
+--------------------------------------------------------------------------------
+SECTION: GLOBAL SETTINGS
+--------------------------------------------------------------------------------
+
+Global Shift Planning Configuration:
+  Max Consecutive Shifts (weeks): 6
+  Max Consecutive Night Shifts (weeks): 3
+  Min Rest Hours Between Shifts: 11
+
+NOTE: Max consecutive settings are DEPRECATED.
+      Now configured per shift type (ShiftType.MaxConsecutiveDays)
+
+--------------------------------------------------------------------------------
+SECTION: EMAIL SETTINGS
+--------------------------------------------------------------------------------
+
+No email settings found in database.
+
+--------------------------------------------------------------------------------
+SECTION: SHIFT TYPES
+--------------------------------------------------------------------------------
+
+Total Shift Types: 3
+
+Shift Type [1]: Frühschicht (F) - ACTIVE
+  Time: 05:45 - 13:45 (8.0h)
+  Color: #4CAF50
+  Weekly Working Hours: 48.0h
+  Work Days: Mo, Tu, We, Th, Fr, Sa, Su
+  Weekday Staff: Min 4, Max 10
+  Weekend Staff: Min 2, Max 5
+  Max Consecutive Days: 6
+  Created: 2026-02-06 16:50:12
+
+Shift Type [2]: Spätschicht (S) - ACTIVE
+  Time: 13:45 - 21:45 (8.0h)
+  Color: #FF9800
+  Weekly Working Hours: 48.0h
+  Work Days: Mo, Tu, We, Th, Fr, Sa, Su
+  Weekday Staff: Min 3, Max 10
+  Weekend Staff: Min 2, Max 5
+  Max Consecutive Days: 6
+  Created: 2026-02-06 16:50:12
+
+Shift Type [3]: Nachtschicht (N) - ACTIVE
+  Time: 21:45 - 05:45 (8.0h)
+  Color: #2196F3
+  Weekly Working Hours: 48.0h
+  Work Days: Mo, Tu, We, Th, Fr, Sa, Su
+  Weekday Staff: Min 3, Max 10
+  Weekend Staff: Min 2, Max 5
+  Max Consecutive Days: 3
+  Created: 2026-02-06 16:50:12
+
+
+--------------------------------------------------------------------------------
+SECTION: TEAMS
+--------------------------------------------------------------------------------
+
+Total Teams: 3
+
+Team [1]: Team Alpha
+  Description: Erste Schichtgruppe
+  Email: team.alpha@fritzwinter.de
+  Rotation Group ID: 1
+  Employees: 5
+
+Team [2]: Team Beta
+  Description: Zweite Schichtgruppe
+  Email: team.beta@fritzwinter.de
+  Rotation Group ID: 1
+  Employees: 5
+
+Team [3]: Team Gamma
+  Description: Dritte Schichtgruppe
+  Email: team.gamma@fritzwinter.de
+  Rotation Group ID: 1
+  Employees: 5
+
+
+--------------------------------------------------------------------------------
+SECTION: EMPLOYEES
+--------------------------------------------------------------------------------
+
+Total Employees: 18
+
+--- No Team ---
+
+Employee [1]: Admin Administrator - ACTIVE
+  Personnel Number: ADMIN001
+  Email: admin@fritzwinter.de
+  Function: Administrator
+  Authentication: Configured
+
+Employee [17]: Laura Bauer - ACTIVE
+  Personnel Number: SF001
+  Email: laura.bauer@fritzwinter.de
+  Birth Date: 1990-08-17
+  Function: Brandschutzbeauftragter
+  Qualifications: BSB (Brandschutzbeauftragter)
+  Authentication: Not configured
+
+Employee [18]: Christian Neumann - ACTIVE
+  Personnel Number: SF002
+  Email: christian.neumann@fritzwinter.de
+  Birth Date: 1987-11-16
+  Function: Brandmeldetechniker
+  Qualifications: BMT (Brandmeldetechniker)
+  Authentication: Not configured
+
+--- Team Alpha ---
+
+Employee [6]: Robert Franke - ACTIVE
+  Personnel Number: S001
+  Email: robert.franke@fritzwinter.de
+  Birth Date: 1985-05-08
+  Function: Springer
+  Qualifications: Springer (Substitute)
+  Authentication: Not configured
+
+Employee [5]: Lisa Meyer - ACTIVE
+  Personnel Number: PN004
+  Email: lisa.meyer@fritzwinter.de
+  Birth Date: 1992-05-18
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [2]: Max Müller - ACTIVE
+  Personnel Number: PN001
+  Email: max.mueller@fritzwinter.de
+  Birth Date: 1985-03-15
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [3]: Anna Schmidt - ACTIVE
+  Personnel Number: PN002
+  Email: anna.schmidt@fritzwinter.de
+  Birth Date: 1990-07-22
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [4]: Peter Weber - ACTIVE
+  Personnel Number: PN003
+  Email: peter.weber@fritzwinter.de
+  Birth Date: 1988-11-03
+  Function: Techniker
+  Authentication: Not configured
+
+--- Team Beta ---
+
+Employee [7]: Julia Becker - ACTIVE
+  Personnel Number: PN006
+  Email: julia.becker@fritzwinter.de
+  Birth Date: 1991-01-10
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [9]: Sarah Hoffmann - ACTIVE
+  Personnel Number: PN008
+  Email: sarah.hoffmann@fritzwinter.de
+  Birth Date: 1989-12-08
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [10]: Daniel Koch - ACTIVE
+  Personnel Number: PN009
+  Email: daniel.koch@fritzwinter.de
+  Birth Date: 1993-04-25
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [8]: Michael Schulz - ACTIVE
+  Personnel Number: PN007
+  Email: michael.schulz@fritzwinter.de
+  Birth Date: 1986-06-14
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [11]: Thomas Zimmermann - ACTIVE
+  Personnel Number: S002
+  Email: thomas.zimmermann@fritzwinter.de
+  Birth Date: 1986-12-11
+  Function: Springer
+  Qualifications: Springer (Substitute)
+  Authentication: Not configured
+
+--- Team Gamma ---
+
+Employee [13]: Stefanie Klein - ACTIVE
+  Personnel Number: PN012
+  Email: stefanie.klein@fritzwinter.de
+  Birth Date: 1992-10-05
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [16]: Maria Lange - ACTIVE
+  Personnel Number: S003
+  Email: maria.lange@fritzwinter.de
+  Birth Date: 1990-09-24
+  Function: Springer
+  Qualifications: Springer (Substitute)
+  Authentication: Not configured
+
+Employee [12]: Markus Richter - ACTIVE
+  Personnel Number: PN011
+  Email: markus.richter@fritzwinter.de
+  Birth Date: 1984-02-20
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [15]: Nicole Schröder - ACTIVE
+  Personnel Number: PN014
+  Email: nicole.schroeder@fritzwinter.de
+  Birth Date: 1991-03-29
+  Function: Techniker
+  Authentication: Not configured
+
+Employee [14]: Andreas Wolf - ACTIVE
+  Personnel Number: PN013
+  Email: andreas.wolf@fritzwinter.de
+  Birth Date: 1988-07-12
+  Function: Techniker
+  Authentication: Not configured
+
+
+--------------------------------------------------------------------------------
+SECTION: ABSENCES
+--------------------------------------------------------------------------------
+
+Total Absences: 0
+
+
+--------------------------------------------------------------------------------
+SECTION: ABSENCE TYPES
+--------------------------------------------------------------------------------
+
+Total Absence Types: 3
+
+[SYSTEM] Krank / AU (AU)
+  Color: #FFB6C1
+  Created: 2026-02-06 16:50:12
+
+[SYSTEM] Lehrgang (L)
+  Color: #87CEEB
+  Created: 2026-02-06 16:50:12
+
+[SYSTEM] Urlaub (U)
+  Color: #90EE90
+  Created: 2026-02-06 16:50:12
+
+
+--------------------------------------------------------------------------------
+SECTION: VACATION REQUESTS
+--------------------------------------------------------------------------------
+
+Total Vacation Requests: 0
+
+
+--------------------------------------------------------------------------------
+SECTION: VACATION PERIODS
+--------------------------------------------------------------------------------
+
+Total Vacation Periods: 0
+
+
+
+--------------------------------------------------------------------------------
+SECTION: SHIFT ASSIGNMENTS
+--------------------------------------------------------------------------------
+
+Total Shift Assignments: 0
+Showing: Latest 0 assignments
+
+
+Statistics by Shift Type:
+
+--------------------------------------------------------------------------------
+SECTION: ROTATION GROUPS
+--------------------------------------------------------------------------------
+
+Total Active Rotation Groups: 1
+
+Rotation Group [1]: Standard F→N→S
+  Description: Standard 3-Schicht-Rotation: Frühdienst → Nachtdienst → Spätdienst
+  Rotation Pattern: F -> N -> S
+  Shifts (3):
+    1. F - Frühschicht
+    2. N - Nachtschicht
+    3. S - Spätschicht
+  Used by 3 team(s)
+
+
+--------------------------------------------------------------------------------
+SECTION: TEAM-SHIFT ASSIGNMENTS
+--------------------------------------------------------------------------------
+
+Total Team-Shift Assignments: 0
+
+
+--------------------------------------------------------------------------------
+SECTION: SHIFT EXCHANGES
+--------------------------------------------------------------------------------
+
+Total Shift Exchanges: 0
+
+
+--------------------------------------------------------------------------------
+SECTION: STATISTICS
+--------------------------------------------------------------------------------
+
+Employee Statistics:
+  Active Employees: 18
+  Inactive Employees: 0
+  Total: 18
+
+Team Statistics:
+  Regular Teams: 3
+  Virtual Teams: 0
+  Total: 3
+
+Shift Assignment Statistics:
+  Total Assignments: 0
+
+Absence Statistics:
+  Total Absences: 0
+  Current Absences: None
+
+Vacation Request Statistics:
+
+================================================================================
+END OF EXPORT
+================================================================================

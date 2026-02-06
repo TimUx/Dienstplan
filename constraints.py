@@ -2512,7 +2512,11 @@ def add_consecutive_shifts_constraints(
                         model.Add(sum(shift_vars) == 0).OnlyEnforceIf(is_shift.Not())
                         shift_indicators.append(is_shift)
                     else:
-                        shift_indicators.append(0)
+                        # Create a BoolVar constrained to 0 instead of appending literal 0
+                        # This ensures all elements in shift_indicators are BoolVars for proper CP-SAT constraint handling
+                        zero_var = model.NewBoolVar(f"zero_{shift_code}_{emp.id}_{date_idx}")
+                        model.Add(zero_var == 0)
+                        shift_indicators.append(zero_var)
                 
                 # Violation if ALL (max_consecutive_days + 1) days have this shift type
                 # If employee switches to different shift type on day (max + 1), no violation

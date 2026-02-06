@@ -623,6 +623,37 @@ def add_employee_team_linkage_constraints(
                 # (considering both team and cross-team work)
                 if combined_week_shifts:
                     model.Add(sum(combined_week_shifts.values()) <= 1)
+            
+            # FIX FOR BUG: Enforce that cross-team work cannot override team rotation on weekdays
+            # Cross-team assignments should only be used to supplement team work, not replace it
+            # On weekdays: if team has a shift this week AND employee works cross-team,
+            # then employee must work the SAME shift type as their team
+            # This prevents employees from skipping their team's rotation to work different shifts
+            for shift_code in shift_codes:
+                # If team has this shift type this week
+                if (team.id, week_idx, shift_code) in team_shift:
+                    # For each OTHER shift type
+                    for other_shift_code in shift_codes:
+                        if other_shift_code == shift_code:
+                            continue  # Same shift is OK
+                        
+                        # Collect all cross-team weekday variables for this other shift type
+                        cross_team_weekday_vars = []
+                        
+                        for d in week_dates:
+                            if d.weekday() < 5:  # Weekday only
+                                if (emp.id, d, other_shift_code) in employee_cross_team_shift:
+                                    cross_team_weekday_vars.append(
+                                        employee_cross_team_shift[(emp.id, d, other_shift_code)]
+                                    )
+                        
+                        if cross_team_weekday_vars:
+                            # HARD CONSTRAINT: If team works shift_code this week,
+                            # employee CANNOT work other_shift_code via cross-team on weekdays
+                            # Implementation: When team_shift[team, week, shift_code] = 1,
+                            # force all cross_team[emp, weekday, other_shift_code] = 0
+                            for cross_var in cross_team_weekday_vars:
+                                model.Add(cross_var == 0).OnlyEnforceIf(team_shift[(team.id, week_idx, shift_code)])
         
         # For each day (original constraints for single shift per day)
         for d in dates:

@@ -953,13 +953,14 @@ def add_daily_shift_ratio_constraints(
     shift_types: List[ShiftType]
 ) -> List[cp_model.IntVar]:
     """
-    SOFT CONSTRAINT: Ensure F shifts have at least as many workers as S shifts on weekdays.
+    SOFT CONSTRAINT: Ensure shifts are staffed proportionally to their max_staff capacity on weekdays.
     
-    This constraint enforces the capacity ratio from max_staff settings on a per-day basis.
-    With F(max=8) and S(max=6), we want F >= S on each weekday.
+    This constraint enforces the capacity ordering from max_staff settings on a per-day basis.
+    For example, with F(max=8), S(max=6), N(max=3), we want F >= S >= N on each weekday.
     
-    Implementation: On each weekday (Mon-Fri), count workers in F and S shifts.
-    Create a violation variable when S > F, with a penalty.
+    Implementation: On each weekday (Mon-Fri), count workers in each shift type.
+    For each pair of shifts where shift_a has higher max_staff than shift_b,
+    create a violation variable when shift_b > shift_a, with a penalty.
     
     The penalty is high enough to matter but lower than critical operational constraints:
     - Lower than HOURS_SHORTAGE (100)
@@ -978,16 +979,24 @@ def add_daily_shift_ratio_constraints(
     if not shift_types:
         raise ValueError("shift_types parameter is required")
     
-    # Check if F and S shifts exist in the configuration
-    has_f = any(st.code == 'F' for st in shift_types)
-    has_s = any(st.code == 'S' for st in shift_types)
+    # Build mapping from shift code to max_staff_weekday
+    shift_max_staff = {}
+    for st in shift_types:
+        if st.code in shift_codes:
+            shift_max_staff[st.code] = st.max_staff_weekday
     
-    if not (has_f and has_s):
-        # If F or S doesn't exist, skip this constraint
+    if len(shift_max_staff) < 2:
+        # Need at least 2 shifts to create ratio constraints
         return []
     
-    # Weight for ratio violations - should be high priority but not override hours shortage
-    RATIO_VIOLATION_WEIGHT = 75
+    # Sort shifts by max_staff (descending) to determine expected ordering
+    sorted_shifts = sorted(shift_max_staff.items(), key=lambda x: x[1], reverse=True)
+    
+    # Weight for ratio violations - HIGH priority to ensure proper shift distribution
+    # Set to 200 to prioritize shift ordering over hours shortage (100) but below
+    # critical operational constraints (rest time 5000+, shift grouping 20000+)
+    # This ensures shifts are distributed according to capacity while maintaining safety
+    RATIO_VIOLATION_WEIGHT = 200
     
     ratio_violation_penalties = []
     
@@ -1006,19 +1015,18 @@ def add_daily_shift_ratio_constraints(
         if week_idx is None:
             continue
         
-        # Count workers in F shift
-        f_workers = []
-        s_workers = []
+        # Count workers for each shift type on this day
+        shift_worker_counts = {}
         
-        for shift in ['F', 'S']:
-            if shift not in shift_codes:
+        for shift_code in shift_max_staff.keys():
+            if shift_code not in shift_codes:
                 continue
             
             workers = []
             
             # Count team members assigned to this shift
             for team in teams:
-                if (team.id, week_idx, shift) not in team_shift:
+                if (team.id, week_idx, shift_code) not in team_shift:
                     continue
                 
                 for emp in employees:
@@ -1029,42 +1037,48 @@ def add_daily_shift_ratio_constraints(
                         continue
                     
                     # Employee works this shift if team has shift AND employee is active
-                    is_on_shift = model.NewBoolVar(f"ratio_emp{emp.id}_onshift{shift}_date{d}")
+                    is_on_shift = model.NewBoolVar(f"ratio_emp{emp.id}_onshift{shift_code}_date{d}")
                     model.AddMultiplicationEquality(
                         is_on_shift,
-                        [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
+                        [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
                     )
                     workers.append(is_on_shift)
             
             # Count cross-team workers
             for emp in employees:
-                if (emp.id, d, shift) in employee_cross_team_shift:
-                    workers.append(employee_cross_team_shift[(emp.id, d, shift)])
+                if (emp.id, d, shift_code) in employee_cross_team_shift:
+                    workers.append(employee_cross_team_shift[(emp.id, d, shift_code)])
             
-            if shift == 'F':
-                f_workers = workers
-            else:
-                s_workers = workers
+            if workers:
+                count_var = model.NewIntVar(0, len(employees), f"{shift_code}_count_{d}")
+                model.Add(count_var == sum(workers))
+                shift_worker_counts[shift_code] = count_var
         
-        # If both shifts have workers, enforce F >= S
-        if f_workers and s_workers:
-            f_count = model.NewIntVar(0, len(employees), f"f_count_{d}")
-            s_count = model.NewIntVar(0, len(employees), f"s_count_{d}")
-            model.Add(f_count == sum(f_workers))
-            model.Add(s_count == sum(s_workers))
+        # For each pair of shifts where shift_a should have more workers than shift_b,
+        # create a penalty if shift_b > shift_a
+        for i in range(len(sorted_shifts)):
+            shift_a_code, shift_a_max = sorted_shifts[i]
             
-            # Create violation variable: violation = max(0, S - F)
-            # If S > F, violation = S - F (positive)
-            # If S <= F, violation = 0
-            violation = model.NewIntVar(0, len(employees), f"ratio_violation_{d}")
-            model.Add(violation >= s_count - f_count)
-            model.Add(violation >= 0)
+            if shift_a_code not in shift_worker_counts:
+                continue
             
-            # Create weighted penalty variable
-            penalty = model.NewIntVar(0, len(employees) * RATIO_VIOLATION_WEIGHT, f"ratio_penalty_{d}")
-            model.Add(penalty == violation * RATIO_VIOLATION_WEIGHT)
-            
-            ratio_violation_penalties.append(penalty)
+            for j in range(i + 1, len(sorted_shifts)):
+                shift_b_code, shift_b_max = sorted_shifts[j]
+                
+                if shift_b_code not in shift_worker_counts:
+                    continue
+                
+                # shift_a has higher max_staff than shift_b, so we want shift_a >= shift_b
+                # Create violation = max(0, shift_b - shift_a)
+                violation = model.NewIntVar(0, len(employees), f"ratio_violation_{shift_a_code}_vs_{shift_b_code}_{d}")
+                model.Add(violation >= shift_worker_counts[shift_b_code] - shift_worker_counts[shift_a_code])
+                model.Add(violation >= 0)
+                
+                # Create weighted penalty variable
+                penalty = model.NewIntVar(0, len(employees) * RATIO_VIOLATION_WEIGHT, f"ratio_penalty_{shift_a_code}_vs_{shift_b_code}_{d}")
+                model.Add(penalty == violation * RATIO_VIOLATION_WEIGHT)
+                
+                ratio_violation_penalties.append(penalty)
     
     return ratio_violation_penalties
 

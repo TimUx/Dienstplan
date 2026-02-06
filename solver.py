@@ -28,27 +28,29 @@ from constraints import (
 )
 
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
-# 1. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
-# 2. Operational constraints (200-20000): Rest time, shift grouping, etc.
-# 3. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
-# 4. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
-# 5. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
-# 6. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
-# 7. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
+# 1. Operational constraints (200-20000): Rest time, shift grouping, etc. - CRITICAL for safety/compliance
+# 2. DAILY_SHIFT_RATIO (200): Enforce shift ordering based on max_staff (F >= S >= N on weekdays)
+# 3. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
+# 4. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
+# 5. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
+# 6. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
+# 7. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
+# 8. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
 #
 # PRIORITY EXPLANATION (per requirements):
-# When distributing shifts to reach target hours, weekdays should be filled BEFORE weekends.
+# Shift ordering based on max_staff capacity is high priority to ensure proper distribution.
 # The solver will prefer:
-#   1. Fill weekdays to max capacity (understaffing penalty 18-45, dynamic)
-#   2. Only then overstaff weekends if absolutely needed (penalty 50)
-# Therefore: weekend overstaffing penalty (50) > weekday understaffing penalties (18-45)
-# This ensures weekdays are filled to capacity before any weekend overstaffing occurs.
+#   1. Respect operational constraints (rest time, shift grouping, etc.) - CRITICAL
+#   2. Maintain correct shift ordering (highest capacity shift gets most workers)
+#   3. Meet target hours for employees
+#   4. Fill weekdays to max capacity
+# This ensures that shifts are distributed according to their configured capacities
+# while maintaining operational safety and compliance.
 #
 # SHIFT DISTRIBUTION (dynamic based on max_staff from database):
+# Daily ratio constraints ensure F >= S >= N (or other orderings based on max_staff)
 # Understaffing weights and shift preferences are calculated proportionally to max_staff
 # to ensure shifts with higher capacity get more assignments (F > S > N typically)
-# Calibrated to achieve target ratios: with F:S:N max_staff of 8:6:4, achieves approximately
-# F:S:N assignment ratio of 1.78:1.22:1.00 (target: 2.0:1.5:1.0, within acceptable tolerance)
 HOURS_SHORTAGE_PENALTY_WEIGHT = 100
 TEAM_PRIORITY_VIOLATION_WEIGHT = 50  # Must be higher than understaffing weights
 WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT = 1
@@ -329,11 +331,11 @@ class ShiftPlanningSolver:
             for penalty_var in night_team_consistency_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (600 per violation)
         
-        # Add daily shift ratio penalties (enforce F >= S on weekdays)
+        # Add daily shift ratio penalties (enforce shift ordering based on max_staff capacity)
         if daily_ratio_violations:
-            print(f"  Adding {len(daily_ratio_violations)} daily shift ratio penalties (F >= S on weekdays)...")
+            print(f"  Adding {len(daily_ratio_violations)} daily shift ratio penalties (enforce capacity-based ordering)...")
             for penalty_var in daily_ratio_violations:
-                objective_terms.append(penalty_var)  # Already weighted (75 per violation)
+                objective_terms.append(penalty_var)  # Already weighted (200 per violation - higher than hours shortage)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # HIGHEST PRIORITY: Employees must reach their 192h minimum target

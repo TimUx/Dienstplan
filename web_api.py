@@ -2751,6 +2751,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     end_date = date(start_date.year + 1, 1, 1) - timedelta(days=1)
                 else:
                     end_date = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
+                
+                # Expand to complete calendar weeks (ISO 8601: Monday-Sunday)
+                # Find Monday of the week containing start_date (first day of month)
+                start_weekday = start_date.weekday()  # Monday=0, Sunday=6
+                start_date = start_date - timedelta(days=start_weekday)
+                
+                # Find Sunday of the week containing end_date (last day of month)
+                end_weekday = end_date.weekday()  # Monday=0, Sunday=6
+                if end_weekday < 6:  # If not Sunday already
+                    end_date = end_date + timedelta(days=(6 - end_weekday))
             elif view == 'year':
                 end_date = date(start_date.year, 12, 31)
             else:
@@ -5673,6 +5683,67 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'averageShiftsPerEmployee': row['AvgShiftsPerEmployee']
             })
         
+        # Employee shift details with weekend counts
+        # Note: Only includes employees with valid shift assignments in the date range
+        # First, get shift type counts per employee
+        cursor.execute("""
+            SELECT e.Id, e.Vorname, e.Name,
+                   st.Code as ShiftCode,
+                   st.Name as ShiftName,
+                   COUNT(sa.Id) as DaysWorked
+            FROM Employees e
+            LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
+                AND sa.Date >= ? AND sa.Date <= ?
+            LEFT JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            WHERE st.Code IS NOT NULL  -- Only include valid shift assignments
+            GROUP BY e.Id, e.Vorname, e.Name, st.Code, st.Name
+            ORDER BY e.Vorname, e.Name, st.Code
+        """, (start_date.isoformat(), end_date.isoformat()))
+        
+        # Build employee shift details map
+        employee_shift_details = {}
+        for row in cursor.fetchall():
+            emp_id = row['Id']
+            if emp_id not in employee_shift_details:
+                employee_shift_details[emp_id] = {
+                    'employeeId': emp_id,
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'shiftTypes': {},
+                    'totalSaturdays': 0,
+                    'totalSundays': 0
+                }
+            
+            shift_code = row['ShiftCode']
+            employee_shift_details[emp_id]['shiftTypes'][shift_code] = {
+                'name': row['ShiftName'],
+                'days': row['DaysWorked']
+            }
+        
+        # Now get weekend counts separately per employee (to avoid double counting)
+        # Uses DISTINCT to count unique weekend dates, not individual shift assignments
+        cursor.execute("""
+            SELECT e.Id,
+                   COUNT(DISTINCT CASE WHEN strftime('%w', sa.Date) = '6' THEN sa.Date END) as Saturdays,
+                   COUNT(DISTINCT CASE WHEN strftime('%w', sa.Date) = '0' THEN sa.Date END) as Sundays
+            FROM Employees e
+            LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
+                AND sa.Date >= ? AND sa.Date <= ?
+            WHERE sa.Id IS NOT NULL  -- Only employees with shift assignments
+            GROUP BY e.Id
+        """, (start_date.isoformat(), end_date.isoformat()))
+        
+        for row in cursor.fetchall():
+            emp_id = row['Id']
+            if emp_id in employee_shift_details:
+                employee_shift_details[emp_id]['totalSaturdays'] = row['Saturdays']
+                employee_shift_details[emp_id]['totalSundays'] = row['Sundays']
+        
+        # Convert to list and sort by employee name
+        employee_shift_details_list = sorted(
+            employee_shift_details.values(),
+            key=lambda x: x['employeeName']
+        )
+        
         conn.close()
         
         return jsonify({
@@ -5681,7 +5752,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'employeeWorkHours': employee_work_hours,
             'teamShiftDistribution': team_shift_distribution,
             'employeeAbsenceDays': employee_absence_days,
-            'teamWorkload': team_workload
+            'teamWorkload': team_workload,
+            'employeeShiftDetails': employee_shift_details_list
         })
     
     # ============================================================================

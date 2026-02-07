@@ -3220,6 +3220,19 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     # It was loaded as a locked constraint and should not be duplicated
                     skipped_locked += 1
                     continue
+                
+                # CRITICAL: Check if assignment already exists (safety against double shifts)
+                # With unique constraint on (EmployeeId, Date), this prevents database errors
+                cursor.execute("""
+                    SELECT Id FROM ShiftAssignments 
+                    WHERE EmployeeId = ? AND Date = ?
+                """, (assignment.employee_id, assignment.date.isoformat()))
+                
+                if cursor.fetchone():
+                    # Assignment already exists - skip to prevent duplicate
+                    skipped_locked += 1
+                    continue
+                
                 cursor.execute("""
                     INSERT INTO ShiftAssignments 
                     (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)

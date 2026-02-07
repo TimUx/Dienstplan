@@ -62,11 +62,9 @@ def validate_shift_plan(
     start_date: date,
     end_date: date,
     teams: List = None,
-    special_functions: Dict[Tuple[int, date], str] = None,
     complete_schedule: Dict[Tuple[int, date], str] = None,
     locked_team_shift: Dict[Tuple[int, int], str] = None,
     locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
-    locked_td: Dict[Tuple[int, int], bool] = None,
     shift_types: List = None
 ) -> ValidationResult:
     """
@@ -79,11 +77,9 @@ def validate_shift_plan(
         start_date: Start date of planning period
         end_date: End date of planning period
         teams: List of teams (optional, for enhanced weekend validation)
-        special_functions: Dict of special functions like TD (optional)
         complete_schedule: Complete schedule dict (optional, for checking all employees)
         locked_team_shift: Locked team shift assignments (optional, for checking manual overrides)
         locked_employee_weekend: Locked employee weekend assignments (optional)
-        locked_td: Locked TD assignments (optional)
         shift_types: List of shift types with staffing requirements (optional)
         
     Returns:
@@ -129,9 +125,9 @@ def validate_shift_plan(
         validate_td_assignments(result, special_functions, employees, start_date, end_date)
     
     # NEW: Validate locked assignments are respected
-    if locked_team_shift or locked_employee_weekend or locked_td:
-        validate_locked_assignments(result, assignments, special_functions, 
-                                    locked_team_shift, locked_employee_weekend, locked_td,
+    if locked_team_shift or locked_employee_weekend:
+        validate_locked_assignments(result, assignments, 
+                                    locked_team_shift, locked_employee_weekend,
                                     employees, teams, start_date, end_date)
     
     # Validate weekend team consistency
@@ -837,10 +833,8 @@ def validate_td_assignments(
 def validate_locked_assignments(
     result: ValidationResult,
     assignments: List[ShiftAssignment],
-    special_functions: Dict[Tuple[int, date], str],
     locked_team_shift: Dict[Tuple[int, int], str],
     locked_employee_weekend: Dict[Tuple[int, date], bool],
-    locked_td: Dict[Tuple[int, int], bool],
     employees: List[Employee],
     teams: List,
     start_date: date,
@@ -852,7 +846,6 @@ def validate_locked_assignments(
     When administrators or dispatchers lock assignments:
     - locked_team_shift: Team must have the specified shift in that week
     - locked_employee_weekend: Employee must work/not work on that weekend day
-    - locked_td: Employee must have/not have TD in that week
     """
     # Generate weeks
     dates = []
@@ -918,34 +911,6 @@ def validate_locked_assignments(
             elif not expected_working and is_working:
                 result.add_violation(
                     f"LOCKED WEEKEND VIOLATED: {emp.full_name} should NOT work on {d} but does"
-                )
-    
-    # Validate locked TD
-    if locked_td and special_functions:
-        for (emp_id, week_idx), expected_td in locked_td.items():
-            if week_idx >= len(weeks):
-                continue
-            
-            emp = next((e for e in employees if e.id == emp_id), None)
-            if not emp:
-                continue
-            
-            week_dates = weeks[week_idx]
-            weekday_dates = [d for d in week_dates if d.weekday() < 5]
-            
-            # Check if employee has TD this week
-            has_td = any(
-                (emp_id, d) in special_functions and special_functions[(emp_id, d)] == "TD"
-                for d in weekday_dates
-            )
-            
-            if expected_td and not has_td:
-                result.add_violation(
-                    f"LOCKED TD VIOLATED: {emp.full_name} should have TD in week {week_idx} but doesn't"
-                )
-            elif not expected_td and has_td:
-                result.add_violation(
-                    f"LOCKED TD VIOLATED: {emp.full_name} should NOT have TD in week {week_idx} but does"
                 )
 
 

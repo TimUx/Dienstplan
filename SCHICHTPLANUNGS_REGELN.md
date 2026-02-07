@@ -18,10 +18,9 @@ Dieses Dokument beschreibt alle Regeln, Abhängigkeiten und Prioritäten des aut
 | H4 | **Verbotene Übergänge** | Verhinderung unzureichender Ruhezeiten (Soft Constraint: Gewicht 50.000/5.000) | **S→F** (nur 8h Ruhe)<br>**N→F** (0h Ruhe)<br>Basierend auf Schicht-Endzeiten, nicht Rotationsgruppen | constraints.py:1309-1536 |
 | H5 | **Keine Schichten bei Abwesenheit** | Keine Schichtzuweisung während Urlaub/Krankheit (U/AU/L) | Alle Schicht-Variablen = 0 während Abwesenheit | constraints.py:1200 |
 | H6 | **Maximal eine Schicht pro Tag** | Mitarbeiter kann nur eigene Team-Schicht ODER Cross-Team-Schicht arbeiten | `team_shift[emp] + cross_team_shift[emp] ≤ 1` | constraints.py:650 |
-| H7 | **TD-Beschränkung** | ⚠️ **VERALTET** - TD/BMT/BSB sollten als reguläre Schichttypen verwaltet werden | `sum(td_assignments[emp][week]) ≤ 1`<br>*Hinweis: Diese Regel ist optional und kann durch reguläre Schichttypenverwaltung ersetzt werden* | constraints.py:3067-3145 |
-| H8 | **Mindeststunden pro Monat** | Mitarbeiter müssen Mindeststunden erreichen (192h/Monat) | `total_hours >= 192h` (hart)<br>Ziel: `(weekly_hours/7) × Arbeitstage` (weich)<br>**Kein hartes wöchentliches Maximum** | constraints.py:2790-3064 |
-| H9 | **Team-Schicht-Erlaubnis** | Teams dürfen nur zugewiesene Schichttypen arbeiten | Basiert auf `TeamShiftAssignments` Konfiguration | constraints.py:50-108 |
-| H10 | **Rotation-Gruppen** | *(Siehe H2 - zusammengeführt)* | Datenbankgesteuert über `RotationGroups` und `RotationGroupShifts` Tabellen | constraints.py:110-219 |
+| H7 | **Mindeststunden pro Monat** | Mitarbeiter müssen Mindeststunden erreichen (192h/Monat) | `total_hours >= 192h` (hart)<br>Ziel: `(weekly_hours/7) × Arbeitstage` (weich)<br>**Kein hartes wöchentliches Maximum** | constraints.py:2790-3064 |
+| H8 | **Team-Schicht-Erlaubnis** | Teams dürfen nur zugewiesene Schichttypen arbeiten | Basiert auf `TeamShiftAssignments` Konfiguration | constraints.py:50-108 |
+| H9 | **Rotation-Gruppen** | *(Siehe H2 - zusammengeführt)* | Datenbankgesteuert über `RotationGroups` und `RotationGroupShifts` Tabellen | constraints.py:110-219 |
 
 ---
 
@@ -194,10 +193,9 @@ flowchart TD
     H3 --> H4[HARD 4: Mindestbesetzung<br/>Min staff requirements]
     H4 --> H5[HARD 5: Abwesenheiten<br/>Keine Schichten bei U/AU/L]
     H5 --> H6[HARD 6: Max 1 Schicht/Tag<br/>Own OR Cross-Team]
-    H6 --> H7[HARD 7: TD Beschränkung<br/>Max 1/Woche]
-    H7 --> H8[HARD 8: Max Wochenstunden<br/>48h Limit]
+    H6 --> H7[HARD 7: Max Wochenstunden<br/>48h Limit]
     
-    H8 --> Lock[Wende Locked Shifts an<br/>Manuelle Übersteuerungen]
+    H7 --> Lock[Wende Locked Shifts an<br/>Manuelle Übersteuerungen]
     
     Lock --> S1[SOFT: Sequenz-Gruppierung<br/>500.000]
     S1 --> S2[SOFT: Schicht-Isolation<br/>100.000]
@@ -230,7 +228,6 @@ flowchart TD
     style H5 fill:#ff6b6b
     style H6 fill:#ff6b6b
     style H7 fill:#ff6b6b
-    style H8 fill:#ff6b6b
     style S1 fill:#ffd93d
     style S2 fill:#ffd93d
     style S3 fill:#ffd93d

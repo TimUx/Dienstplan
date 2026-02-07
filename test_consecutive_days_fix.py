@@ -67,7 +67,6 @@ def test_consecutive_night_shifts_violation():
     team_shift = {}
     employee_cross_team_shift = {}
     employee_cross_team_weekend = {}
-    td_vars = {}
     
     # Week 1: Team has F shift, employee is active on weekdays
     for day in week1:
@@ -102,7 +101,7 @@ def test_consecutive_night_shifts_violation():
     
     penalties = add_consecutive_shifts_constraints(
         model, employee_active, employee_weekend_shift, team_shift,
-        employee_cross_team_shift, employee_cross_team_weekend, td_vars,
+        employee_cross_team_shift, employee_cross_team_weekend,
         employees, teams, dates, weeks, shift_codes, shift_types
     )
     
@@ -225,7 +224,7 @@ def test_mixed_shift_scenario():
     
     penalties = add_consecutive_shifts_constraints(
         model, employee_active, employee_weekend_shift, team_shift,
-        employee_cross_team_shift, employee_cross_team_weekend, td_vars,
+        employee_cross_team_shift, employee_cross_team_weekend,
         employees, teams, dates, weeks, shift_codes, shift_types
     )
     

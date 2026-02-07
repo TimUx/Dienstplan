@@ -491,6 +491,8 @@ function displaySchedule(data, employees) {
         content.innerHTML = displayMonthView(data, employees);
     } else if (viewType === 'year') {
         content.innerHTML = displayYearView(data, employees);
+        // Auto-scroll to current month after rendering
+        setTimeout(scrollYearViewToCurrentMonth, 200);
     }
 }
 
@@ -905,27 +907,26 @@ function displayYearView(data, employees) {
     
     html += '</tbody></table></div>';
     
-    // Add script to auto-scroll to current month
-    const currentMonthNum = new Date().getMonth();
-    html += `<script>
-        (function() {
-            setTimeout(function() {
-                const container = document.getElementById('year-view-container');
-                if (container) {
-                    const monthStartCells = container.querySelectorAll('th[data-month="${currentMonthNum}"]');
-                    if (monthStartCells.length > 0) {
-                        const firstCell = monthStartCells[0];
-                        const cellLeft = firstCell.offsetLeft;
-                        const containerWidth = container.clientWidth;
-                        // Scroll so the current month is centered (if possible)
-                        container.scrollLeft = cellLeft - (containerWidth / 4);
-                    }
-                }
-            }, 100);
-        })();
-    </script>`;
-    
     return html;
+}
+
+/**
+ * Scroll the year view to show the current month
+ */
+function scrollYearViewToCurrentMonth() {
+    const container = document.getElementById('year-view-container');
+    if (!container) return;
+    
+    const currentMonth = new Date().getMonth();
+    const monthStartCells = container.querySelectorAll(`th[data-month="${currentMonth}"]`);
+    
+    if (monthStartCells.length > 0 && container.scrollWidth > container.clientWidth) {
+        const firstCell = monthStartCells[0];
+        const cellLeft = firstCell.offsetLeft;
+        const containerWidth = container.clientWidth;
+        // Scroll so the current month is visible on the left side with some padding
+        container.scrollLeft = Math.max(0, cellLeft - 100);
+    }
 }
 
 // Helper functions

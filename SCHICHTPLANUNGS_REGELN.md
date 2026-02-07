@@ -369,6 +369,53 @@ Bevorzugt bei Zuweisungen:
 
 ---
 
+## 🔐 Sonderfälle und Ausnahmen
+
+### Grenzwochen-Behandlung (Boundary Weeks)
+
+**Problem**: Wenn Schichtkonfigurationen (z.B. Maximale Mitarbeiter pro Schicht) zwischen Planungsperioden geändert werden, können bereits geplante Zuweisungen die neuen Constraints verletzen.
+
+**Beispiel**:
+- Februar 2026 wurde geplant, als N-Schicht max=5 war
+- N-Schicht max wurde später auf 3 reduziert
+- März 2026 Planung erweitert zurück bis 23. Februar (Grenzwoche)
+- Bestehende Zuweisungen vom 23. Feb haben 5 Mitarbeiter auf N-Schicht
+- System versucht alte Zuweisungen (5) UND neue Limits (3) zu respektieren → **INFEASIBLE**
+
+**Lösung** (implementiert in `web_api.py`, Zeilen 2943-2986):
+
+1. **Grenzwochen-Erkennung**: Identifiziert Wochen, die Monatsgrenzen überspannen
+   - Woche enthält Daten VOR dem Planungsmonat UND innerhalb des Monats
+   - Woche enthält Daten innerhalb des Monats UND NACH dem Monat
+
+2. **Überspringe Mitarbeiter-Locks**: Mitarbeiterzuweisungen in Grenzwochen werden NICHT gelockt
+   - Erlaubt komplette Neuplanung mit aktueller Konfiguration
+   - Verhindert Konflikte durch veraltete Zuweisungen
+   - Team-Locks werden ebenfalls übersprungen (bereits existierende Logik)
+
+3. **Bewahre Nicht-Grenzwochen**: Zuweisungen außerhalb von Grenzwochen bleiben gelockt
+   - Nur Wochen, die Grenzen überspannen, werden neu geplant
+   - Sichert Kontinuität wo möglich
+
+**Beispiel für März 2026**:
+```
+Planungszeitraum: 1. März - 31. März
+Erweitert: 23. Februar (Mo) - 5. April (So)
+
+- Woche 0 (23. Feb - 1. März): Grenzwoche → Mitarbeiter-Locks ÜBERSPRUNGEN
+- Wochen 1-4 (2. März - 29. März): Aktueller Monat → Wird geplant
+- Woche 5 (30. März - 5. April): Grenzwoche → Mitarbeiter-Locks ÜBERSPRUNGEN
+```
+
+**Vorteil**: System kann sich an Konfigurationsänderungen anpassen ohne manuelle Eingriffe
+
+**Wichtig**: Diese Lösung ändert KEINE Kern-Constraints:
+- ✅ 192h Mindeststunden bleiben HART (wie zuvor)
+- ✅ Alle anderen Constraints unverändert
+- ✅ Nur Locking-Verhalten in Grenzwochen betroffen
+
+---
+
 ## 📚 Verwandte Dokumentation
 
 - **ALGORITHMUS_BESTAETIGUNG.md**: Algorithmus-Verifikation und Testzusammenfassung
@@ -382,6 +429,7 @@ Bevorzugt bei Zuweisungen:
 
 | Version | Datum | Änderungen |
 |---------|-------|-----------|
+| 1.1 | 2026-02-07 | Grenzwochen-Behandlung für Konfigurationsänderungen hinzugefügt |
 | 1.0 | 2026-02-06 | Initiale Erstellung der Regel-Dokumentation |
 
 ---

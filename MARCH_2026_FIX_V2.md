@@ -1,5 +1,9 @@
 # Fix for March 2026 Planning INFEASIBLE Error
 
+> **Note**: This fix has been integrated into the main rules documentation.  
+> See: **SCHICHTPLANUNGS_REGELN.md** (German) and **SHIFT_PLANNING_RULES_EN.md** (English)  
+> Section: "🔐 Sonderfälle und Ausnahmen / Special Cases and Exceptions - Boundary Week Handling"
+
 ## Problem Statement
 
 When planning March 2026, the system encountered an INFEASIBLE error after February 2026 was successfully planned.

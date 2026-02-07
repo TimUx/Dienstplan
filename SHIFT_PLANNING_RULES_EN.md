@@ -372,6 +372,53 @@ Prefers for assignments:
 
 ---
 
+## 🔐 Special Cases and Exceptions
+
+### Boundary Week Handling
+
+**Problem**: When shift configurations (e.g., maximum staff per shift) are changed between planning periods, existing assignments may violate the new constraints.
+
+**Example**:
+- February 2026 was planned when N shift max=5
+- N shift max was later reduced to 3
+- March 2026 planning extends back to February 23 (boundary week)
+- Existing assignments from Feb 23 have 5 workers on N shift
+- System tries to respect old assignments (5) AND new limits (3) → **INFEASIBLE**
+
+**Solution** (implemented in `web_api.py`, lines 2943-2986):
+
+1. **Boundary Week Detection**: Identifies weeks spanning month boundaries
+   - Week contains dates BEFORE the planning month AND within the month
+   - Week contains dates within the month AND AFTER the month
+
+2. **Skip Employee Locks**: Employee assignments in boundary weeks are NOT locked
+   - Allows complete re-planning with current configuration
+   - Prevents conflicts from outdated assignments
+   - Team locks are also skipped (existing logic)
+
+3. **Preserve Non-Boundary Weeks**: Assignments outside boundary weeks remain locked
+   - Only weeks spanning boundaries are re-planned
+   - Ensures continuity where possible
+
+**Example for March 2026**:
+```
+Planning period: March 1 - March 31
+Extended: February 23 (Mon) - April 5 (Sun)
+
+- Week 0 (Feb 23 - Mar 1): Boundary week → Employee locks SKIPPED
+- Weeks 1-4 (Mar 2 - Mar 29): Current month → Will be planned
+- Week 5 (Mar 30 - Apr 5): Boundary week → Employee locks SKIPPED
+```
+
+**Benefit**: System can adapt to configuration changes without manual intervention
+
+**Important**: This solution does NOT change any core constraints:
+- ✅ 192h minimum hours remain HARD (as before)
+- ✅ All other constraints unchanged
+- ✅ Only locking behavior in boundary weeks affected
+
+---
+
 ## 📚 Related Documentation
 
 - **ALGORITHMUS_BESTAETIGUNG.md**: Algorithm verification and test summary
@@ -385,6 +432,7 @@ Prefers for assignments:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026-02-07 | Added boundary week handling for configuration changes |
 | 1.0 | 2026-02-06 | Initial creation of rules documentation |
 
 ---

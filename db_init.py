@@ -439,6 +439,13 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         ON ShiftAssignments(EmployeeId, Date)
     """)
     
+    # CRITICAL: Unique constraint to prevent double shift assignments on same day
+    # An employee can only have ONE shift per day
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_shiftassignments_unique_employee_date
+        ON ShiftAssignments(EmployeeId, Date)
+    """)
+    
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_absences_employee_date 
         ON Absences(EmployeeId, StartDate, EndDate)

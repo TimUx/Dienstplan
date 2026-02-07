@@ -942,6 +942,108 @@ def add_staffing_constraints(
     return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift, team_priority_violations
 
 
+def add_total_weekend_staffing_limit(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    max_total_weekend_staff: int = 12
+) -> List[Tuple[cp_model.IntVar, date]]:
+    """
+    SOFT CONSTRAINT: Limit total number of employees working on weekends across ALL shifts.
+    
+    While individual shifts have their own MaxStaffWeekend limits, this constraint
+    addresses the requirement that the TOTAL number of employees on any weekend day
+    should not exceed a certain limit (default 12).
+    
+    This is important because with 3 shifts (F, S, N) each having MaxStaffWeekend=5,
+    the theoretical maximum is 15 employees on a weekend day, which is too many.
+    
+    According to requirements: "Ein Maximum von 12 Mitarbeitern an Wochenenden sollte 
+    nicht überschritten werden. Dies sollte als Soft Kriterium mit erhöhter Priorität 
+    umgesetzt werden."
+    
+    Translation: "A maximum of 12 employees on weekends should not be exceeded. 
+    This should be implemented as a soft criterion with increased priority."
+    
+    This creates a penalty for each employee beyond the max_total_weekend_staff limit.
+    The penalty should be higher than HOURS_SHORTAGE (100) to ensure it's prioritized.
+    
+    Args:
+        max_total_weekend_staff: Maximum total employees allowed on weekend days (default 12)
+        
+    Returns:
+        List of (penalty_var, date) tuples for total weekend overstaffing
+    """
+    total_weekend_overstaffing_penalties = []
+    
+    for d in dates:
+        # Only apply to weekends (Saturday=5, Sunday=6)
+        if d.weekday() < 5:
+            continue
+        
+        # Find which week this date belongs to
+        week_idx = None
+        for w_idx, week_dates in enumerate(weeks):
+            if d in week_dates:
+                week_idx = w_idx
+                break
+        
+        if week_idx is None:
+            continue
+        
+        # Count ALL employees working on this weekend day across all shifts
+        all_weekend_workers = []
+        
+        # Count team members working on weekend
+        for team in teams:
+            for shift in shift_codes:
+                if (team.id, week_idx, shift) not in team_shift:
+                    continue
+                
+                # Count members of this team working on this weekend day
+                for emp in employees:
+                    if emp.team_id != team.id:
+                        continue
+                    
+                    if (emp.id, d) not in employee_weekend_shift:
+                        continue
+                    
+                    # This employee works if: team has this shift AND employee is working weekend
+                    is_working = model.NewBoolVar(f"total_weekend_{emp.id}_{d}_{shift}")
+                    model.AddMultiplicationEquality(
+                        is_working,
+                        [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
+                    )
+                    all_weekend_workers.append(is_working)
+        
+        # Add cross-team weekend workers
+        for emp in employees:
+            for shift in shift_codes:
+                if (emp.id, d, shift) in employee_cross_team_weekend:
+                    all_weekend_workers.append(employee_cross_team_weekend[(emp.id, d, shift)])
+        
+        if all_weekend_workers:
+            total_working = sum(all_weekend_workers)
+            
+            # Create penalty variable for exceeding total limit
+            # Maximum penalty is capped at 20 (assumes max 32 employees working)
+            overstaffing = model.NewIntVar(0, 20, f"total_weekend_overstaff_{d}")
+            model.Add(overstaffing >= total_working - max_total_weekend_staff)
+            model.Add(overstaffing >= 0)
+            
+            total_weekend_overstaffing_penalties.append((overstaffing, d))
+    
+    return total_weekend_overstaffing_penalties
+
+
 def add_cross_shift_capacity_enforcement(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],

@@ -24,20 +24,26 @@ from constraints import (
     add_team_night_shift_consistency_constraints,
     add_shift_sequence_grouping_constraints,
     add_minimum_consecutive_weekday_shifts_constraints,
-    add_cross_shift_capacity_enforcement
+    add_cross_shift_capacity_enforcement,
+    add_total_weekend_staffing_limit
 )
 
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
 # 1. Operational constraints (200-20000): Rest time, shift grouping, etc. - CRITICAL for safety/compliance
 # 2. DAILY_SHIFT_RATIO (200): Enforce shift ordering based on max_staff (F >= S >= N on weekdays)
-# 3. CROSS_SHIFT_CAPACITY (150): Prevent overstaffing low-capacity shifts when high-capacity have space
+# 3. TOTAL_WEEKEND_LIMIT (150): Limit total weekend employees to max 12 (NEW)
+# 4. CROSS_SHIFT_CAPACITY (150): Prevent overstaffing low-capacity shifts when high-capacity have space
 #                                 Ensures N shift doesn't overflow when F/S have available slots
-# 4. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
-# 5. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
-# 6. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing
-# 7. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
-# 8. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
-# 9. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
+# 5. HOURS_SHORTAGE (100): Employees MUST reach 192h monthly target
+# 6. TEAM_PRIORITY (50): Keep teams together, avoid cross-team when team has capacity
+# 7. WEEKEND_OVERSTAFFING (50): Strongly discourage weekend overstaffing per shift
+# 8. WEEKDAY_UNDERSTAFFING (dynamic 18-45): Encourage filling weekdays to capacity (scaled by max_staff)
+# 9. SHIFT_PREFERENCE (±25): Reward high-capacity shifts, penalize low-capacity shifts
+# 10. WEEKDAY_OVERSTAFFING (1): Allow weekday overstaffing if needed for target hours
+#
+# NEW: TOTAL_WEEKEND_LIMIT enforces the requirement "Ein Maximum von 12 Mitarbeitern an 
+# Wochenenden sollte nicht überschritten werden" (max 12 employees on weekends total).
+# This is separate from per-shift weekend limits and has very high priority (150).
 #
 # PRIORITY EXPLANATION (per requirements):
 # Cross-shift capacity enforcement is prioritized above hours shortage to ensure:
@@ -48,9 +54,10 @@ from constraints import (
 # The solver will prefer:
 #   1. Respect operational constraints (rest time, shift grouping, etc.) - CRITICAL
 #   2. Maintain correct shift ordering (highest capacity shift gets most workers)
-#   3. Prevent overstaffing N when F/S have capacity (NEW FIX)
-#   4. Meet target hours for employees
-#   5. Fill weekdays to max capacity
+#   3. Limit total weekend employees to 12 (NEW)
+#   4. Prevent overstaffing N when F/S have capacity
+#   5. Meet target hours for employees
+#   6. Fill weekdays to max capacity
 # This ensures shifts are distributed according to configured capacities while maintaining
 # operational safety and compliance.
 #
@@ -63,6 +70,7 @@ HOURS_SHORTAGE_PENALTY_WEIGHT = 100
 TEAM_PRIORITY_VIOLATION_WEIGHT = 50  # Must be higher than understaffing weights
 WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT = 1
 WEEKEND_OVERSTAFFING_PENALTY_WEIGHT = 50
+TOTAL_WEEKEND_LIMIT_PENALTY_WEIGHT = 150  # NEW: Limit total weekend employees to 12
 # Dynamic weights calculated from shift types:
 UNDERSTAFFING_BASE_WEIGHT = 5  # Baseline, scaled by (max_staff / min_max_staff) * multiplier
 UNDERSTAFFING_WEIGHT_MULTIPLIER = 4.5  # Ensures sufficient separation to respect max_staff ratios
@@ -173,6 +181,12 @@ class ShiftPlanningSolver:
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
             employees, teams, dates, weeks, shift_codes, shift_types)
+        
+        print("  - Total weekend staffing limit (max 12 employees across all shifts)")
+        total_weekend_overstaffing = add_total_weekend_staffing_limit(
+            model, employee_active, employee_weekend_shift, 
+            employee_cross_team_shift, employee_cross_team_weekend, team_shift,
+            employees, teams, dates, weeks, shift_codes, max_total_weekend_staff=12)
         
         print("  - Cross-shift capacity enforcement (prevent N overflow when F/S have capacity)")
         cross_shift_capacity_violations = add_cross_shift_capacity_enforcement(
@@ -394,6 +408,15 @@ class ShiftPlanningSolver:
                 final_weight = round(WEEKEND_OVERSTAFFING_PENALTY_WEIGHT * temporal_multiplier)
                 
                 objective_terms.append(overstaff_var * final_weight)
+        
+        # Add TOTAL weekend staffing limit penalties (NEW: max 12 employees across all shifts)
+        # This has VERY HIGH priority (150) - higher than hours shortage (100)
+        # This ensures weekends never exceed 12 total employees unless absolutely critical
+        if total_weekend_overstaffing:
+            print(f"  Adding {len(total_weekend_overstaffing)} total weekend staffing limit penalties (weight {TOTAL_WEEKEND_LIMIT_PENALTY_WEIGHT}x - CRITICAL limit)...")
+            for overstaff_var, overstaff_date in total_weekend_overstaffing:
+                # Apply high priority weight to enforce max 12 total employees on weekends
+                objective_terms.append(overstaff_var * TOTAL_WEEKEND_LIMIT_PENALTY_WEIGHT)
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # AND TEMPORAL BIAS (prefer earlier dates)

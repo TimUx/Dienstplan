@@ -644,23 +644,37 @@ function displayMonthView(data, employees) {
     const monthName = firstDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
     
     let html = `<div class="month-header"><h3>Monat: ${monthName}</h3></div>`;
-    html += '<table class="calendar-table month-view"><thead><tr>';
-    html += '<th class="team-column">Team / Mitarbeiter</th>';
+    html += '<table class="calendar-table month-view"><thead>';
     
-    // Add all weeks horizontally - each week shows all its days
+    // First row: Week numbers
+    html += '<tr>';
+    html += '<th class="team-column">KW</th>';
+    weekGroups.forEach(week => {
+        html += `<th class="week-number-header" colspan="${week.days.length}">KW ${week.weekNumber}</th>`;
+    });
+    html += '</tr>';
+    
+    // Second row: Day names and numbers
+    html += '<tr>';
+    html += '<th class="team-column">Team / Mitarbeiter</th>';
     weekGroups.forEach(week => {
         week.days.forEach(day => {
             const date = new Date(day);
             const dayName = date.toLocaleDateString('de-DE', { weekday: 'short' });
             const dayNum = date.getDate();
+            const monthNum = date.getMonth() + 1;
             const isSunday = date.getDay() === 0;
             const isHoliday = isHessianHoliday(date);
             const columnClass = (isSunday || isHoliday) ? 'date-column sunday-column' : 'date-column';
-            html += `<th class="${columnClass}">${dayName} ${dayNum}</th>`;
+            // Show month number for dates from other months (grey out)
+            const isOtherMonth = date.getMonth() !== firstDate.getMonth();
+            const dateClass = isOtherMonth ? ' other-month' : '';
+            html += `<th class="${columnClass}${dateClass}">${dayName}<br>${dayNum}.${String(monthNum).padStart(2, '0')}</th>`;
         });
     });
+    html += '</tr>';
     
-    html += '</tr></thead><tbody>';
+    html += '</thead><tbody>';
     
     // Add vacation periods row (Ferienzeiten) at the very top
     if (data.vacationPeriods && data.vacationPeriods.length > 0) {
@@ -769,111 +783,148 @@ function displayYearView(data, employees) {
         return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
     }
     
-    // Group dates by month
-    const monthGroups = groupDatesByMonth(dates);
-    
     // Get year from first date for main header
     const firstDate = new Date(dates[0]);
     const year = firstDate.getFullYear();
     
-    let html = `<div class="month-header"><h3>Jahr: ${year}</h3></div>`;
-    html += '<div class="year-view-container">';
+    // Group dates by calendar week (similar to month view)
+    const weekGroups = groupDatesByWeek(dates);
     
-    // Create a table for each month
-    monthGroups.forEach(month => {
-        const monthDate = new Date(month.dates[0]);
-        const monthName = monthDate.toLocaleDateString('de-DE', { month: 'long' });
-        
-        html += `<div class="month-section">`;
-        html += `<div class="month-header"><h3>${monthName}</h3></div>`;
-        html += '<table class="calendar-table year-view"><thead><tr>';
-        html += '<th class="team-column">Team / Mitarbeiter</th>';
-        
-        // Add week columns - all weeks for the month horizontally
-        month.weeks.forEach(week => {
-            html += `<th class="week-column">KW ${week}</th>`;
-        });
-        
-        html += '</tr></thead><tbody>';
-        
-        // Add vacation periods row (Ferienzeiten) at the very top of each month
-        if (data.vacationPeriods && data.vacationPeriods.length > 0) {
-            html += '<tr class="vacation-period-row">';
-            html += '<td class="vacation-period-label"><strong>🏖️ Ferien</strong></td>';
+    let html = `<div class="month-header"><h3>Jahr: ${year}</h3></div>`;
+    html += '<div class="year-view-horizontal-container" id="year-view-container">';
+    html += '<table class="calendar-table year-view-horizontal"><thead>';
+    
+    // First row: Week numbers
+    html += '<tr>';
+    html += '<th class="team-column sticky-column">KW</th>';
+    weekGroups.forEach(week => {
+        html += `<th class="week-number-header" colspan="${week.days.length}">KW ${week.weekNumber}</th>`;
+    });
+    html += '</tr>';
+    
+    // Second row: Day names and numbers with month separators
+    html += '<tr>';
+    html += '<th class="team-column sticky-column">Team / Mitarbeiter</th>';
+    let currentMonth = -1;
+    weekGroups.forEach(week => {
+        week.days.forEach((day, dayIndex) => {
+            const date = new Date(day);
+            const dayName = date.toLocaleDateString('de-DE', { weekday: 'short' });
+            const dayNum = date.getDate();
+            const monthNum = date.getMonth();
+            const isSunday = date.getDay() === 0;
+            const isHoliday = isHessianHoliday(date);
             
-            month.weeks.forEach(weekNum => {
-                const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
-                const activePeriods = [];
-                
-                weekDates.forEach(dateStr => {
-                    const date = new Date(dateStr);
-                    data.vacationPeriods.forEach(period => {
-                        const startDate = new Date(period.startDate);
-                        const endDate = new Date(period.endDate);
-                        if (date >= startDate && date <= endDate && !activePeriods.find(p => p.id === period.id)) {
-                            activePeriods.push(period);
-                        }
-                    });
+            // Check if this is the first day of a new month
+            const isMonthStart = (monthNum !== currentMonth);
+            if (isMonthStart) {
+                currentMonth = monthNum;
+            }
+            
+            const columnClass = (isSunday || isHoliday) ? 'date-column sunday-column' : 'date-column';
+            const monthStartClass = isMonthStart ? ' month-start' : '';
+            html += `<th class="${columnClass}${monthStartClass}" data-month="${monthNum}">${dayName}<br>${dayNum}.</th>`;
+        });
+    });
+    html += '</tr>';
+    
+    html += '</thead><tbody>';
+    
+    // Add vacation periods row (Ferienzeiten) at the very top
+    if (data.vacationPeriods && data.vacationPeriods.length > 0) {
+        html += '<tr class="vacation-period-row">';
+        html += '<td class="vacation-period-label sticky-column"><strong>🏖️ Ferien</strong></td>';
+        
+        weekGroups.forEach(week => {
+            week.days.forEach(dateStr => {
+                const date = new Date(dateStr);
+                const activePeriods = data.vacationPeriods.filter(period => {
+                    const startDate = new Date(period.startDate);
+                    const endDate = new Date(period.endDate);
+                    return date >= startDate && date <= endDate;
                 });
                 
                 let content = '';
                 if (activePeriods.length > 0) {
-                    // Show just an indicator for year view
-                    content = '<div class="vacation-period-indicator" title="' + activePeriods.map(p => escapeHtml(p.name)).join(', ') + '">🏖️</div>';
+                    // Show compact vacation period indicator for year view
+                    const shortName = activePeriods[0].name.substring(0, 3);
+                    content = `<div class="vacation-period-badge-tiny" style="background-color: ${activePeriods[0].colorCode};" title="${activePeriods.map(p => escapeHtml(p.name)).join(', ')}">${escapeHtml(shortName)}</div>`;
                 }
                 
-                html += `<td class="vacation-period-cell">${content}</td>`;
-            });
-            
-            html += '</tr>';
-        }
-        
-        // Add rows for each team and employee
-        teamGroups.forEach(team => {
-            // Team header row
-            html += `<tr class="team-row"><td colspan="${month.weeks.length + 1}" class="team-header">${team.teamName}</td></tr>`;
-            
-            // Employee rows
-            team.employees.forEach(employee => {
-                html += '<tr class="employee-row">';
-                html += `<td class="employee-name">  - ${employee.name}${employee.isTeamLeader ? ' ⭐' : ''}</td>`;
-                
-                // Add shift cells for each week
-                month.weeks.forEach(weekNum => {
-                    const weekDates = month.dates.filter(d => getWeekNumber(new Date(d)) === weekNum);
-                    const shifts = [];
-                    let hasAbsence = false;
-                    let absenceForDisplay = null;
-                    
-                    weekDates.forEach(dateStr => {
-                        // Check for absence first
-                        const absence = getAbsenceForDate(employee.absences || [], dateStr);
-                        if (absence) {
-                            hasAbsence = true;
-                            absenceForDisplay = absence;  // Store the absence for display
-                        } else if (employee.shifts[dateStr]) {
-                            shifts.push(...employee.shifts[dateStr]);
-                        }
-                    });
-                    
-                    let content = '';
-                    if (hasAbsence && absenceForDisplay) {
-                        content = createAbsenceBadge(absenceForDisplay);
-                    } else {
-                        content = shifts.map(s => createShiftBadge(s)).join(' ');
-                    }
-                    
-                    html += `<td class="shift-cell">${content}</td>`;
-                });
-                
-                html += '</tr>';
+                const isSunday = date.getDay() === 0;
+                const isHoliday = isHessianHoliday(date);
+                const cellClass = (isSunday || isHoliday) ? 'vacation-period-cell sunday-cell' : 'vacation-period-cell';
+                html += `<td class="${cellClass}">${content}</td>`;
             });
         });
         
-        html += '</tbody></table></div>';
+        html += '</tr>';
+    }
+    
+    // Add rows for each team and employee
+    teamGroups.forEach(team => {
+        // Calculate total number of days across all weeks
+        const totalDays = weekGroups.reduce((sum, w) => sum + w.days.length, 0);
+        // Team header row
+        html += `<tr class="team-row"><td colspan="${totalDays + 1}" class="team-header sticky-column">${team.teamName}</td></tr>`;
+        
+        // Employee rows
+        team.employees.forEach(employee => {
+            html += '<tr class="employee-row">';
+            html += `<td class="employee-name sticky-column">  - ${employee.name}${employee.isTeamLeader ? ' ⭐' : ''}</td>`;
+            
+            // Add shift cells for all days across all weeks
+            weekGroups.forEach(week => {
+                week.days.forEach(dateStr => {
+                    const date = new Date(dateStr);
+                    const isSunday = date.getDay() === 0;
+                    const isHoliday = isHessianHoliday(date);
+                    const shifts = employee.shifts[dateStr] || [];
+                    
+                    // Check if employee has absence on this date
+                    const absence = getAbsenceForDate(employee.absences || [], dateStr);
+                    
+                    let content = '';
+                    
+                    if (absence) {
+                        // Show compact absence badge for year view
+                        content = `<span class="absence-badge-tiny" title="${escapeHtml(absence.type)}">${getAbsenceCode(absence.type)}</span>`;
+                    } else if (shifts.length > 0) {
+                        // Show compact shift badges for year view
+                        content = shifts.map(s => `<span class="shift-badge-tiny" style="background-color: ${s.colorCode};" title="${escapeHtml(s.shiftName)}">${escapeHtml(s.shiftCode)}</span>`).join(' ');
+                    }
+                    
+                    const cellClass = (isSunday || isHoliday) ? 'shift-cell sunday-cell' : 'shift-cell';
+                    html += `<td class="${cellClass}">${content}</td>`;
+                });
+            });
+            
+            html += '</tr>';
+        });
     });
     
-    html += '</div>';
+    html += '</tbody></table></div>';
+    
+    // Add script to auto-scroll to current month
+    const currentMonthNum = new Date().getMonth();
+    html += `<script>
+        (function() {
+            setTimeout(function() {
+                const container = document.getElementById('year-view-container');
+                if (container) {
+                    const monthStartCells = container.querySelectorAll('th[data-month="${currentMonthNum}"]');
+                    if (monthStartCells.length > 0) {
+                        const firstCell = monthStartCells[0];
+                        const cellLeft = firstCell.offsetLeft;
+                        const containerWidth = container.clientWidth;
+                        // Scroll so the current month is centered (if possible)
+                        container.scrollLeft = cellLeft - (containerWidth / 4);
+                    }
+                }
+            }, 100);
+        })();
+    </script>`;
+    
     return html;
 }
 

@@ -2751,6 +2751,16 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     end_date = date(start_date.year + 1, 1, 1) - timedelta(days=1)
                 else:
                     end_date = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
+                
+                # Expand to complete calendar weeks (ISO 8601: Monday-Sunday)
+                # Find Monday of the week containing start_date (first day of month)
+                start_weekday = start_date.weekday()  # Monday=0, Sunday=6
+                start_date = start_date - timedelta(days=start_weekday)
+                
+                # Find Sunday of the week containing end_date (last day of month)
+                end_weekday = end_date.weekday()  # Monday=0, Sunday=6
+                if end_weekday < 6:  # If not Sunday already
+                    end_date = end_date + timedelta(days=(6 - end_weekday))
             elif view == 'year':
                 end_date = date(start_date.year, 12, 31)
             else:

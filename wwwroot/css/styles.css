@@ -1275,6 +1275,26 @@ body.disponent button.admin-only.admin-strict {
     min-width: 50px;
 }
 
+/* Week number header styling */
+.week-number-header {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    padding: 8px 4px;
+    text-align: center;
+    border: 1px solid #ddd;
+}
+
+/* Style for dates from other months */
+.date-column.other-month {
+    background-color: #f5f5f5;
+    color: #999;
+}
+
+.shift-cell .other-month {
+    background-color: #fafafa;
+}
+
 .month-header {
     text-align: center;
     margin: 20px 0 10px 0;
@@ -1286,6 +1306,73 @@ body.disponent button.admin-only.admin-strict {
 }
 
 /* Year View Specific */
+.year-view-horizontal-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    margin: 20px 0;
+    max-width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.year-view-horizontal {
+    font-size: 0.75rem;
+    min-width: max-content;
+}
+
+.year-view-horizontal .date-column {
+    min-width: 35px;
+    max-width: 35px;
+    padding: 4px 2px;
+}
+
+.year-view-horizontal .sticky-column {
+    position: sticky;
+    left: 0;
+    background-color: white;
+    z-index: 10;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+.year-view-horizontal .team-header {
+    background-color: var(--bg-color);
+}
+
+/* Month start separator */
+.date-column.month-start {
+    border-left: 3px solid var(--primary-color);
+}
+
+/* Compact badges for year view */
+.shift-badge-tiny,
+.absence-badge-tiny {
+    display: inline-block;
+    padding: 2px 4px;
+    font-size: 0.65rem;
+    border-radius: 3px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.shift-badge-tiny {
+    color: white;
+}
+
+.absence-badge-tiny {
+    background-color: #ff9800;
+    color: white;
+}
+
+.vacation-period-badge-tiny {
+    display: inline-block;
+    padding: 1px 3px;
+    font-size: 0.6rem;
+    border-radius: 2px;
+    font-weight: bold;
+    color: white;
+}
+
+/* Old year view styles - kept for backwards compatibility */
 .year-view-container {
     margin: 20px 0;
 }

@@ -3038,23 +3038,12 @@ def add_working_hours_constraints(
         # Apply minimum hours constraints if employee has days without absences
         # FIX: Use days_without_absence (calculated above) instead of weeks_without_absences
         if total_hours_terms and days_without_absence > 0:
-            # SOFT CONSTRAINT: Absolute minimum 192h/month (24 shifts × 8h)
-            # Changed from HARD to SOFT to handle cases where physical constraints
-            # (e.g., team size 5 but N shift max 3) make 192h unachievable.
-            # Very high penalty (100000) ensures this is almost always met,
-            # but allows feasibility when impossible due to capacity limits.
+            # HARD CONSTRAINT: Absolute minimum 192h/month (24 shifts × 8h)
+            # This ensures employees work at least 24 shifts per month as required
+            # Only applies to employees without full-month absences
             # Scaled: 192h × 10 = 1920
             min_hours_scaled = 1920  # 192h × 10 (scaling factor)
-            
-            # Create shortage variable for minimum hours
-            min_hours_shortage = model.NewIntVar(0, min_hours_scaled, 
-                                                   f"emp{emp.id}_min_hours_shortage")
-            model.Add(min_hours_shortage >= min_hours_scaled - sum(total_hours_terms))
-            model.Add(min_hours_shortage >= 0)
-            
-            # Add to soft objectives with VERY HIGH penalty
-            # This ensures 192h is enforced unless physically impossible
-            soft_objectives.append(min_hours_shortage * 100)
+            model.Add(sum(total_hours_terms) >= min_hours_scaled)
             
             # SOFT CONSTRAINT: Target proportional hours (48h/7 × days)
             # Example: 31 days → 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)

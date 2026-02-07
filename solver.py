@@ -1473,16 +1473,17 @@ if __name__ == "__main__":
     end = start + timedelta(days=13)  # 2 weeks
     
     print("Creating model...")
-    planning_model = create_shift_planning_model(employees, teams, start, end, absences)
+    planning_model = create_shift_planning_model(employees, teams, start, end, absences, shift_types=STANDARD_SHIFT_TYPES)
     planning_model.print_model_statistics()
     
     print("\nSolving...")
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if result:
-        assignments, complete_schedule = result
+        assignments, special_functions, complete_schedule = result
         print(f"\n✓ Solution found!")
         print(f"  - Total assignments: {len(assignments)}")
+        print(f"  - Special functions: {len(special_functions)}")
         print(f"  - Complete schedule entries: {len(complete_schedule)}")
     else:
         print("\n✗ No solution found!")

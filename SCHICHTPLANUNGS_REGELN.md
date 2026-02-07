@@ -264,14 +264,15 @@ flowchart TD
 
 ### Schichttyp-spezifische Einstellungen
 
+Das System basiert auf einem **3-Schicht-Rotationssystem** mit den folgenden Hauptschichten:
+
 | Schichttyp | Max aufeinanderfolgende Tage | Arbeitstage | Wochenstunden | Besonderheiten |
 |------------|----------------------------|-------------|---------------|----------------|
 | **F (Früh)** | 6 | Mo-So | 48h | Höchste Kapazität, bevorzugt |
 | **S (Spät)** | 6 | Mo-So | 48h | Mittlere Kapazität |
 | **N (Nacht)** | 3 | Mo-So | 48h | Niedrigste Kapazität, nur wenn nötig |
-| **ZD (Zwischendienst)** | 6 | Mo-Fr | 40h | Wochentags-only |
-| **BMT (Brandmeldetechniker)** | 5 | Mo-Fr | 40h | TD-Typ, qualifiziert |
-| **BSB (Brandschutzbeauftragter)** | 5 | Mo-Fr | 40h (9,5h/Tag) | TD-Typ, qualifiziert |
+
+**Hinweis**: Zusätzliche Schichttypen können bei Bedarf manuell über die Benutzeroberfläche erstellt werden. Das Kern-System ist jedoch auf die drei oben genannten Schichten ausgelegt, die in einem F → N → S Rotationsmuster organisiert sind.
 
 ### Rotationsgruppen-Konfiguration
 
@@ -428,6 +429,7 @@ Erweitert: 23. Februar (Mo) - 5. April (So)
 
 | Version | Datum | Änderungen |
 |---------|-------|-----------|
+| 1.3 | 2026-02-07 | **Dokumentations-Aktualisierung**: Entfernung veralteter Schichttypen (ZD, BMT, BSB) aus der Tabelle. Diese Legacy-Typen stammen aus sehr frühen Versionen und sind nicht Teil des aktuellen 3-Schicht-Rotationssystems (F, S, N). |
 | 1.2 | 2026-02-07 | **Korrektur**: 192h Constraint von HART auf WEICH korrigiert (wie in PR #122 ursprünglich implementiert). Dynamische Berechnung basierend auf `(weekly_hours/7) × Kalendertage` wiederhergestellt. |
 | 1.1 | 2026-02-07 | Grenzwochen-Behandlung für Konfigurationsänderungen hinzugefügt |
 | 1.0 | 2026-02-06 | Initiale Erstellung der Regel-Dokumentation |

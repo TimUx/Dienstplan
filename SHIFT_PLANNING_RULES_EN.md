@@ -266,14 +266,15 @@ flowchart TD
 
 ### Shift Type-Specific Settings
 
+The system is based on a **3-shift rotation system** with the following main shifts:
+
 | Shift Type | Max Consecutive Days | Work Days | Weekly Hours | Special Notes |
 |------------|---------------------|-----------|--------------|---------------|
 | **F (Early)** | 6 | Mon-Sun | 48h | Highest capacity, preferred |
 | **S (Late)** | 6 | Mon-Sun | 48h | Medium capacity |
 | **N (Night)** | 3 | Mon-Sun | 48h | Lowest capacity, only when needed |
-| **ZD (Intermediate)** | 6 | Mon-Fri | 40h | Weekdays-only |
-| **BMT (Fire Alarm Tech)** | 5 | Mon-Fri | 40h | TD-type, qualified |
-| **BSB (Fire Safety Officer)** | 5 | Mon-Fri | 40h (9.5h/day) | TD-type, qualified |
+
+**Note**: Additional shift types can be manually created through the user interface as needed. However, the core system is designed around the three shifts listed above, organized in an F → N → S rotation pattern.
 
 ### Rotation Group Configuration
 
@@ -430,6 +431,7 @@ Extended: February 23 (Mon) - April 5 (Sun)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3 | 2026-02-07 | **Documentation Update**: Removed outdated shift types (ZD, BMT, BSB) from the table. These legacy types are from very early versions and are not part of the current 3-shift rotation system (F, S, N). |
 | 1.2 | 2026-02-07 | **Correction**: 192h constraint corrected from HARD back to SOFT (as originally implemented in PR #122). Dynamic calculation based on `(weekly_hours/7) × calendar_days` restored. |
 | 1.1 | 2026-02-07 | Added boundary week handling for configuration changes |
 | 1.0 | 2026-02-06 | Initial creation of rules documentation |

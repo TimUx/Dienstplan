@@ -78,18 +78,17 @@ def run_cli_planning(
         print("\n[X] No solution found!")
         return 1
     
-    assignments, special_functions, complete_schedule = result
+    assignments, complete_schedule = result
     print(f"\n[OK] Solution found!")
     print(f"  - Total assignments: {len(assignments)}")
-    print(f"  - Special functions: {len(special_functions)}")
     print(f"  - Complete schedule entries: {len(complete_schedule)}")
     
     # Validate
     print("\nValidating solution...")
     validation_result = validate_shift_plan(
         assignments, employees, absences, start_date, end_date, teams,
-        special_functions, complete_schedule, 
-        locked_team_shift=None, locked_employee_weekend=None, locked_td=None, 
+        complete_schedule, 
+        locked_team_shift=None, locked_employee_weekend=None, 
         shift_types=shift_types
     )
     validation_result.print_report()

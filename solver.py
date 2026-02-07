@@ -17,7 +17,6 @@ from constraints import (
     add_rest_time_constraints,
     add_consecutive_shifts_constraints,
     add_working_hours_constraints,
-    add_td_constraints,
     add_weekly_available_employee_constraint,
     add_fairness_objectives,
     add_weekly_shift_type_limit_constraints,
@@ -121,7 +120,7 @@ class ShiftPlanningSolver:
         """
         model = self.planning_model.get_model()
         (team_shift, employee_active, employee_weekend_shift, 
-         employee_cross_team_shift, employee_cross_team_weekend, td_vars) = self.planning_model.get_variables()
+         employee_cross_team_shift, employee_cross_team_weekend) = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -244,13 +243,13 @@ class ShiftPlanningSolver:
         consecutive_violation_penalties = add_consecutive_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend, 
-            td_vars, employees, teams, dates, weeks, shift_codes, shift_types)
+            employees, teams, dates, weeks, shift_codes, shift_types)
         
         print("  - Working hours constraints (HARD: min 192h/month, SOFT: proportional target)")
         hours_shortage_objectives = add_working_hours_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
-            td_vars, employees, teams, dates, weeks, shift_codes, shift_types, absences)
+            employees, teams, dates, weeks, shift_codes, shift_types, absences)
         
         # BLOCK SCHEDULING FOR CROSS-TEAM
         print("  - Weekly block constraints (Mon-Fri blocks for cross-team assignments)")
@@ -265,10 +264,6 @@ class ShiftPlanningSolver:
             model, employee_active, employee_weekend_shift, team_shift,
             employees, teams, dates, weeks, shift_codes, absences)
         
-        # SPECIAL FUNCTIONS
-        print("  - TD constraints (Tagdienst = organizational marker)")
-        add_td_constraints(model, employee_active, td_vars, employees, dates, weeks, absences)
-        
         # DISABLED: Weekly available employee constraint - conflicts with configured weekly_working_hours requirement
         # The constraint forces at least 1 employee to have 0 working days per week,
         # which prevents employees from reaching their target hours (e.g., 48h/week = 6 days)
@@ -280,9 +275,9 @@ class ShiftPlanningSolver:
         # SOFT CONSTRAINTS (OPTIMIZATION)
         print("  - Fairness objectives (per-employee, year-long, including block scheduling)")
         objective_terms = add_fairness_objectives(
-            model, employee_active, employee_weekend_shift, team_shift, 
-            employee_cross_team_shift, employee_cross_team_weekend, 
-            td_vars, employees, teams, dates, weeks, shift_codes,
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, teams, dates, weeks, shift_codes,
             self.planning_model.ytd_weekend_counts,
             self.planning_model.ytd_night_counts,
             self.planning_model.ytd_holiday_counts
@@ -1018,23 +1013,22 @@ class ShiftPlanningSolver:
         
         return True
     
-    def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]:
+    def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
         """
         Extract shift assignments from the TEAM-BASED solution with CROSS-TEAM support.
         
         Returns:
-            Tuple of (shift_assignments, special_functions, complete_schedule)
+            Tuple of (shift_assignments, complete_schedule)
             where:
             - shift_assignments: List of ShiftAssignment objects (includes cross-team assignments)
-            - special_functions: dict mapping (employee_id, date) to "TD"
             - complete_schedule: dict mapping (employee_id, date) to shift_code or "OFF"
                                 This ensures ALL employees appear for ALL days
         """
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            return [], {}, {}
+            return [], {}
         
         (team_shift, employee_active, employee_weekend_shift, 
-         employee_cross_team_shift, employee_cross_team_weekend, td_vars) = self.planning_model.get_variables()
+         employee_cross_team_shift, employee_cross_team_weekend) = self.planning_model.get_variables()
         employees = self.planning_model.employees
         teams = self.planning_model.teams
         dates = self.planning_model.dates
@@ -1207,27 +1201,10 @@ class ShiftPlanningSolver:
                                 if try_add_assignment(emp.id, shift_type_id, d, "Cross-team weekend assignment"):
                                     break  # Only one shift per day
         
-        # Extract TD assignments
-        special_functions = {}
-        
-        for emp in employees:
-            if not emp.can_do_td:
-                continue
-            
-            for week_idx, week_dates in enumerate(weeks):
-                if (emp.id, week_idx) not in td_vars:
-                    continue
-                
-                if self.solution.Value(td_vars[(emp.id, week_idx)]) == 1:
-                    # Mark TD for all weekdays in this week
-                    for d in week_dates:
-                        if d.weekday() < 5:  # Monday to Friday
-                            special_functions[(emp.id, d)] = "TD"
-        
         # Build complete schedule: every employee for every day
         # This ensures ALL employees appear in the output, even without shifts
         # 
-        # CRITICAL: Absences (U, AU, L) ALWAYS take priority over shifts and TD
+        # CRITICAL: Absences (U, AU, L) ALWAYS take priority over shifts
         # This is mandated by requirement #1 in the problem statement:
         # "Absence codes (U, AU, L) ALWAYS override regular shifts and TD"
         # 
@@ -1251,12 +1228,7 @@ class ShiftPlanningSolver:
                     complete_schedule[(emp.id, d)] = absence.get_code()
                     continue
                 
-                # PRIORITY 2: Check if employee has TD on this day
-                if (emp.id, d) in special_functions:
-                    complete_schedule[(emp.id, d)] = "TD"
-                    continue
-                
-                # PRIORITY 3: Check if employee has a shift assignment
+                # PRIORITY 2: Check if employee has a shift assignment
                 has_assignment = False
                 for assignment in assignments:
                     if assignment.employee_id == emp.id and assignment.date == d:
@@ -1267,16 +1239,15 @@ class ShiftPlanningSolver:
                             has_assignment = True
                             break
                 
-                # PRIORITY 4: No assignment - mark as OFF
+                # PRIORITY 3: No assignment - mark as OFF
                 if not has_assignment:
                     complete_schedule[(emp.id, d)] = "OFF"
         
-        return assignments, special_functions, complete_schedule
+        return assignments, complete_schedule
     
     def print_planning_summary(
         self,
         assignments: List[ShiftAssignment],
-        special_functions: Dict[Tuple[int, date], str],
         complete_schedule: Dict[Tuple[int, date], str]
     ):
         """
@@ -1335,11 +1306,6 @@ class ShiftPlanningSolver:
             shift_type = next((st for st in shift_types if st.code == shift_code), None)
             shift_name = shift_type.name if shift_type else shift_code
             print(f"  {shift_code} ({shift_name}): {count} Schichten")
-        
-        # Count TD assignments
-        td_count = len(set(emp_id for (emp_id, d), func in special_functions.items() if func == "TD"))
-        if td_count > 0:
-            print(f"  TD (Tagdienst): {td_count} Zuweisungen über {total_weeks} Wochen")
         
         # Calculate required and actual hours per employee
         print(f"\nMonatliche Arbeitsstunden je Mitarbeiter:")
@@ -1445,11 +1411,10 @@ def solve_shift_planning(
         global_settings: Dict with global settings from database (optional)
         
     Returns:
-        Tuple of (shift_assignments, special_functions, complete_schedule) if solution found, None otherwise
+        Tuple of (shift_assignments, complete_schedule) if solution found, None otherwise
         where:
         - shift_assignments: List of ShiftAssignment objects for employees who work
-        - special_functions: dict mapping (employee_id, date) to "TD" for day duty assignments
-        - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"/"TD"
+        - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"
                             ensuring ALL employees appear for ALL days
     
     Note: When None is returned (no solution found), diagnostic information is printed to stdout.
@@ -1460,10 +1425,10 @@ def solve_shift_planning(
     
     if solver.solve():
         result = solver.extract_solution()
-        assignments, special_functions, complete_schedule = result
+        assignments, complete_schedule = result
         
         # Print comprehensive planning summary
-        solver.print_planning_summary(assignments, special_functions, complete_schedule)
+        solver.print_planning_summary(assignments, complete_schedule)
         
         return result
     else:
@@ -1509,10 +1474,9 @@ if __name__ == "__main__":
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if result:
-        assignments, special_functions, complete_schedule = result
+        assignments, complete_schedule = result
         print(f"\n✓ Solution found!")
         print(f"  - Total assignments: {len(assignments)}")
-        print(f"  - TD assignments: {len(special_functions)}")
         print(f"  - Complete schedule entries: {len(complete_schedule)}")
     else:
         print("\n✗ No solution found!")

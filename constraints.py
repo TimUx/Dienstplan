@@ -2642,7 +2642,6 @@ def add_consecutive_shifts_constraints(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
-    td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -2781,7 +2780,6 @@ def add_working_hours_constraints(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
-    td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -3068,98 +3066,6 @@ def add_working_hours_constraints(
     return soft_objectives
 
 
-def add_td_constraints(
-    model: cp_model.CpModel,
-    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
-    td_vars: Dict[Tuple[int, int], cp_model.IntVar],
-    employees: List[Employee],
-    dates: List[date],
-    weeks: List[List[date]],
-    absences: List[Absence]
-):
-    """
-    ⚠️ DEPRECATED / OPTIONAL: TD (Tagdienst) assignment constraint.
-    
-    NOTE: Per user feedback, TD/BMT/BSB should be managed as regular shift types
-    in the shift management system, subject to all other shift rules, rather than
-    having special handling. This constraint is maintained for backward compatibility
-    but may be removed in future versions.
-    
-    If your system requires TD shifts, consider:
-    1. Creating TD/BMT/BSB as regular shift types in ShiftType management
-    2. Assigning them to teams via TeamShiftAssignments
-    3. Letting them follow normal rotation and staffing rules
-    
-    Original behavior:
-    TD combines BMT (Brandmeldetechniker) and BSB (Brandschutzbeauftragter).
-    
-    Rules:
-    - Exactly 1 TD per week (Monday-Friday)
-    - TD replaces regular shift work for that employee
-    - TD is NOT a separate shift, just an organizational marker
-    - Cannot assign TD when employee is absent
-    
-    When TD is assigned to an employee for a week:
-    - That employee does NOT work regular shifts that week
-    - TD is marked as special function, not a shift assignment
-    
-    Feasibility Note:
-    - If no TD-qualified employees are available (all absent), the constraint
-      becomes "at most 1" instead of "exactly 1" to avoid infeasibility
-    - In production, the system should alert administrators when this happens
-    """
-    for week_idx, week_dates in enumerate(weeks):
-        # Only assign TD on weekdays
-        weekday_dates = [d for d in week_dates if d.weekday() < 5]
-        
-        if not weekday_dates:
-            continue
-        
-        # Get TD-qualified employees who are NOT absent this week
-        available_for_td = []
-        for emp in employees:
-            if not emp.can_do_td:
-                continue
-            
-            # Check if absent any day this week
-            is_absent_this_week = any(
-                any(abs.employee_id == emp.id and abs.overlaps_date(d) for abs in absences)
-                for d in weekday_dates
-            )
-            
-            if not is_absent_this_week and (emp.id, week_idx) in td_vars:
-                available_for_td.append(td_vars[(emp.id, week_idx)])
-        
-        # At most 1 TD per week (prefer exactly 1, but allow 0 when needed for staffing)
-        if available_for_td:
-            if len(available_for_td) > 0:
-                # Allow 0 or 1 TD per week - flexibility for constraint satisfaction
-                # When TD-qualified employees are needed for regular shifts to meet
-                # minimum staffing requirements, we allow 0 TD that week
-                model.Add(sum(available_for_td) <= 1)
-            else:
-                # No qualified employees available - skip this week
-                # Validation will flag this as an issue
-                pass
-        
-        # TD blocks regular shift work for that employee that week
-        # When employee has TD, they should not be active on weekdays
-        for emp in employees:
-            if not emp.can_do_td:
-                continue
-            
-            if (emp.id, week_idx) not in td_vars:
-                continue
-            
-            # If employee has TD this week, they should not work regular shifts
-            for d in weekday_dates:
-                if (emp.id, d) in employee_active:
-                    # employee_active[emp, d] == 0 when td_vars[emp, week] == 1
-                    # This means: NOT(td_vars[emp, week] AND employee_active[emp, d])
-                    # Equivalent to: employee_active[emp, d] <= 1 - td_vars[emp, week]
-                    model.Add(employee_active[(emp.id, d)] <= 1 - td_vars[(emp.id, week_idx)])
-
-
 def add_weekly_available_employee_constraint(
     model: cp_model.CpModel,
     employee_active: Dict[Tuple[int, date], cp_model.IntVar],
@@ -3400,7 +3306,6 @@ def add_fairness_objectives(
     team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
     employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
     employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
-    td_vars: Dict[Tuple[int, int], cp_model.IntVar],
     employees: List[Employee],
     teams: List[Team],
     dates: List[date],
@@ -3747,35 +3652,5 @@ def add_fairness_objectives(
                         abs_diff = model.NewIntVar(0, max_diff, f"night_abs_diff_{emp_i_id}_{emp_j_id}")
                         model.AddAbsEquality(abs_diff, diff)
                         objective_terms.append(abs_diff * 8)  # HIGH weight for night shift fairness
-    
-    # 5. FAIR DISTRIBUTION OF TD ASSIGNMENTS
-    if td_vars:
-        print("  Adding TD fairness objectives...")
-        td_counts = []
-        for emp in employees:
-            if not emp.can_do_td:
-                continue
-            
-            emp_td_weeks = []
-            for week_idx in range(num_weeks):
-                if (emp.id, week_idx) in td_vars:
-                    emp_td_weeks.append(td_vars[(emp.id, week_idx)])
-            
-            if emp_td_weeks:
-                total_td = model.NewIntVar(0, num_weeks, f"td_total_{emp.id}")
-                model.Add(total_td == sum(emp_td_weeks))
-                td_counts.append((emp.id, total_td))
-        
-        # Minimize variance in TD distribution
-        if len(td_counts) > 1:
-            for i in range(len(td_counts)):
-                for j in range(i + 1, len(td_counts)):
-                    emp_i_id, count_i = td_counts[i]
-                    emp_j_id, count_j = td_counts[j]
-                    diff = model.NewIntVar(-num_weeks, num_weeks, f"td_diff_{emp_i_id}_{emp_j_id}")
-                    model.Add(diff == count_i - count_j)
-                    abs_diff = model.NewIntVar(0, num_weeks, f"td_abs_diff_{emp_i_id}_{emp_j_id}")
-                    model.AddAbsEquality(abs_diff, diff)
-                    objective_terms.append(abs_diff * 4)  # Medium-high weight for TD fairness
     
     return objective_terms

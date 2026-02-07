@@ -125,7 +125,7 @@ def test_max_staff_not_exceeded_when_other_shifts_have_capacity():
         print("\nValidating max staff constraints...")
         
         # Get actual shift assignments
-        shift_assignments, special_functions, complete_schedule = solver.extract_solution()
+        shift_assignments, complete_schedule = solver.extract_solution()
         
         from collections import defaultdict
         

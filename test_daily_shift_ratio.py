@@ -109,7 +109,7 @@ def test_daily_f_greater_equal_s():
     print("\n✓ Solver found solution")
     
     # Extract solution
-    assignments, special_functions, complete_schedule = solver.extract_solution()
+    assignments, complete_schedule = solver.extract_solution()
     
     # Create shift_type_id to code mapping
     shift_type_map = {st.id: st.code for st in shift_types}

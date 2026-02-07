@@ -103,7 +103,7 @@ def test_february_2026_realistic_scenario():
         print("❌ FAILURE: No solution found!")
         return False
     
-    assignments, special_functions, complete_schedule = result
+    assignments, complete_schedule = result
     
     print()
     print("="*80)

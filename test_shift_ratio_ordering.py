@@ -142,7 +142,7 @@ def test_shift_ratio_ordering_respects_max_staff():
     print("\n✓ Solution found!")
     
     # Extract solution
-    assignments, special_functions, complete_schedule = solver.extract_solution()
+    assignments, complete_schedule = solver.extract_solution()
     
     
     # Extract and analyze shift assignments

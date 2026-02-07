@@ -1022,7 +1022,7 @@ class ShiftPlanningSolver:
             where:
             - shift_assignments: List of ShiftAssignment objects (includes cross-team assignments)
             - complete_schedule: dict mapping (employee_id, date) to shift_code or "OFF"
-                                This ensures ALL employees appear for ALL days
+                                 This ensures ALL employees appear for ALL days
         """
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return [], {}
@@ -1400,7 +1400,7 @@ def solve_shift_planning(
     time_limit_seconds: int = 300,
     num_workers: int = 8,
     global_settings: Dict = None
-) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]]:
+) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]]:
     """
     Solve the shift planning problem.
     
@@ -1467,7 +1467,7 @@ if __name__ == "__main__":
     end = start + timedelta(days=13)  # 2 weeks
     
     print("Creating model...")
-    planning_model = create_shift_planning_model(employees, teams, start, end, absences)
+    planning_model = create_shift_planning_model(employees, teams, start, end, absences, shift_types=STANDARD_SHIFT_TYPES)
     planning_model.print_model_statistics()
     
     print("\nSolving...")

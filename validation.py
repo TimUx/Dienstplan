@@ -857,12 +857,12 @@ if __name__ == "__main__":
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if result:
-        assignments, special_functions, complete_schedule = result
+        assignments, complete_schedule = result
         print(f"\nValidating {len(assignments)} assignments...")
         
         validation_result = validate_shift_plan(
             assignments, employees, absences, start, end, teams,
-            special_functions, complete_schedule
+            complete_schedule
         )
         validation_result.print_report()
     else:

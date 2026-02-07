@@ -260,8 +260,7 @@ class SystemInfoExporter:
         output.append("")
         
         for team in teams:
-            virtual_marker = " [VIRTUAL]" if team['IsVirtual'] else ""
-            output.append(f"Team [{team['Id']}]: {team['Name']}{virtual_marker}")
+            output.append(f"Team [{team['Id']}]: {team['Name']}")
             if team['Description']:
                 output.append(f"  Description: {team['Description']}")
             if team['Email']:
@@ -679,29 +678,35 @@ class SystemInfoExporter:
         output = []
         
         # Employee statistics
+        # System active: employees marked as active in the system
         self.cursor.execute("SELECT COUNT(*) as count FROM Employees WHERE IsActive = 1")
-        active_employees = self.cursor.fetchone()['count']
+        system_active_employees = self.cursor.fetchone()['count']
         
+        # Shift planning active: employees that are active AND assigned to a team
+        self.cursor.execute("""
+            SELECT COUNT(*) as count 
+            FROM Employees 
+            WHERE IsActive = 1 AND TeamId IS NOT NULL
+        """)
+        shift_planning_active = self.cursor.fetchone()['count']
+        
+        # Inactive employees
         self.cursor.execute("SELECT COUNT(*) as count FROM Employees WHERE IsActive = 0")
         inactive_employees = self.cursor.fetchone()['count']
         
         output.append("Employee Statistics:")
-        output.append(f"  Active Employees: {active_employees}")
-        output.append(f"  Inactive Employees: {inactive_employees}")
-        output.append(f"  Total: {active_employees + inactive_employees}")
+        output.append(f"  System Active Employees: {system_active_employees}")
+        output.append(f"  Shift Planning Active Employees (with team): {shift_planning_active}")
+        output.append(f"  System Inactive Employees: {inactive_employees}")
+        output.append(f"  Total: {system_active_employees + inactive_employees}")
         output.append("")
         
         # Team statistics
-        self.cursor.execute("SELECT COUNT(*) as count FROM Teams WHERE IsVirtual = 0")
-        regular_teams = self.cursor.fetchone()['count']
-        
-        self.cursor.execute("SELECT COUNT(*) as count FROM Teams WHERE IsVirtual = 1")
-        virtual_teams = self.cursor.fetchone()['count']
+        self.cursor.execute("SELECT COUNT(*) as count FROM Teams")
+        total_teams = self.cursor.fetchone()['count']
         
         output.append("Team Statistics:")
-        output.append(f"  Regular Teams: {regular_teams}")
-        output.append(f"  Virtual Teams: {virtual_teams}")
-        output.append(f"  Total: {regular_teams + virtual_teams}")
+        output.append(f"  Total Teams: {total_teams}")
         output.append("")
         
         # Shift assignment statistics

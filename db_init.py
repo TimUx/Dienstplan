@@ -26,7 +26,6 @@ def create_database_schema(db_path: str = "dienstplan.db"):
             Name TEXT NOT NULL,
             Description TEXT,
             Email TEXT,
-            IsVirtual INTEGER NOT NULL DEFAULT 0,
             RotationGroupId INTEGER,
             CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (RotationGroupId) REFERENCES RotationGroups(Id)
@@ -845,18 +844,18 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
         print("[!] Warning: Default rotation group not found, teams will not have rotation assigned")
     
     # Sample teams with explicit IDs
-    # Format: (Id, Name, Description, Email, IsVirtual, RotationGroupId)
+    # Format: (Id, Name, Description, Email, RotationGroupId)
     teams = [
-        (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", 0, rotation_group_id),
-        (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", 0, rotation_group_id),
-        (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", 0, rotation_group_id),
+        (1, "Team Alpha", "Erste Schichtgruppe", "team.alpha@fritzwinter.de", rotation_group_id),
+        (2, "Team Beta", "Zweite Schichtgruppe", "team.beta@fritzwinter.de", rotation_group_id),
+        (3, "Team Gamma", "Dritte Schichtgruppe", "team.gamma@fritzwinter.de", rotation_group_id),
     ]
     
-    for team_id, name, description, email, is_virtual, rot_group_id in teams:
+    for team_id, name, description, email, rot_group_id in teams:
         cursor.execute("""
-            INSERT OR IGNORE INTO Teams (Id, Name, Description, Email, IsVirtual, RotationGroupId)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (team_id, name, description, email, is_virtual, rot_group_id))
+            INSERT OR IGNORE INTO Teams (Id, Name, Description, Email, RotationGroupId)
+            VALUES (?, ?, ?, ?, ?)
+        """, (team_id, name, description, email, rot_group_id))
     
     conn.commit()
     conn.close()

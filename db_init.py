@@ -434,13 +434,9 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         ON ShiftAssignments(Date)
     """)
     
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_shiftassignments_employee 
-        ON ShiftAssignments(EmployeeId, Date)
-    """)
-    
     # CRITICAL: Unique constraint to prevent double shift assignments on same day
     # An employee can only have ONE shift per day
+    # Note: This unique index also serves as an index for query optimization on (EmployeeId, Date)
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_shiftassignments_unique_employee_date
         ON ShiftAssignments(EmployeeId, Date)

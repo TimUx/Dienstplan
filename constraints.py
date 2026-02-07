@@ -1034,7 +1034,9 @@ def add_total_weekend_staffing_limit(
             total_working = sum(all_weekend_workers)
             
             # Create penalty variable for exceeding total limit
-            # Maximum penalty is capped at 20 (assumes max 32 employees working)
+            # Upper bound calculation: If we have N employees and max is M, worst case is (N - M) overstaffing
+            # With typical setup of ~15 employees and max=12, this gives upper bound of 3-5
+            # We use 20 as a safe upper bound to handle larger employee counts
             overstaffing = model.NewIntVar(0, 20, f"total_weekend_overstaff_{d}")
             model.Add(overstaffing >= total_working - max_total_weekend_staff)
             model.Add(overstaffing >= 0)

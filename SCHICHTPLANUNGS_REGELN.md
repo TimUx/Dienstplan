@@ -35,8 +35,7 @@ Dieses Dokument beschreibt alle Regeln, Abhängigkeiten und Prioritäten des aut
 | 🥈 2 | **Schicht-Isolation** | 100.000 | KRITISCH | Verhindert isolierte Einzelschichten (z.B. S-S-F-S-S Muster) | constraints.py:1900 |
 | 🥉 3 | **Ruhezeit-Verletzungen** | 50.000 (Wochentag)<br>5.000 (So-Mo) | KRITISCH | Erzwingt 11-Stunden Mindestruhe (S→F, N→F) | constraints.py:2000 |
 | 4 | **Rotation-Reihenfolge** | 10.000 | SEHR_HOCH | Erzwingt Team-Rotationssequenz (aus Rotationsgruppen-DB, Standard: F→N→S) | constraints.py:221-393 |
-| 5 | **Zielstunden-Erreichung** | 100* | KRITISCH | **DYNAMISCH berechnet**: Mitarbeiter müssen Zielstunden erreichen: `(weekly_hours/7) × Kalendertage ohne Abwesenheit`<br>- Jan (31T, 48h/W): 212.57h<br>- Feb (28T, 48h/W): 192h<br>- Anpassbar an verschiedene Wochenstunden pro Schichttyp | constraints.py:2916-3066 |
-| 6 | **Min. aufeinanderfolgende Wochentage** | 8.000 | SEHR_HOCH | Mindestens 2 aufeinanderfolgende Tage Mo-Fr | constraints.py:2200 |
+| 5 | **Zielstunden-Erreichung** | 100 | KRITISCH | **DYNAMISCH berechnet**: Mitarbeiter müssen Zielstunden erreichen: `(weekly_hours/7) × Kalendertage ohne Abwesenheit`<br>- Jan (31T, 48h/W): 212.57h<br>- Feb (28T, 48h/W): 192h<br>- Anpassbar an verschiedene Wochenstunden pro Schichttyp | constraints.py:2916-3066 |
 | 6 | **Min. aufeinanderfolgende Wochentage** | 8.000 | SEHR_HOCH | Mindestens 2 aufeinanderfolgende Tage Mo-Fr | constraints.py:2200 |
 | 7 | **Max. aufeinanderfolgende Schichten** | 6.000 | SEHR_HOCH | Begrenzt aufeinanderfolgende Arbeitstage pro Schicht | constraints.py:2300 |
 | 8 | **Schicht-Hopping** | 200 | HOCH | Verhindert schnelle Schichtwechsel | constraints.py:2500 |

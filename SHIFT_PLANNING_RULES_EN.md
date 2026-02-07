@@ -35,8 +35,7 @@ This document describes all rules, dependencies, and priorities of the automatic
 | 🥈 2 | **Shift Isolation** | 100,000 | CRITICAL | Prevents isolated single shifts (e.g., S-S-F-S-S pattern) | constraints.py:1900 |
 | 🥉 3 | **Rest Time Violations** | 50,000 (weekday)<br>5,000 (Sun-Mon) | CRITICAL | Enforces 11-hour minimum rest (S→F, N→F) | constraints.py:2000 |
 | 4 | **Rotation Order** | 10,000 | VERY_HIGH | Enforces team rotation sequence (from rotation groups DB, default: F→N→S) | constraints.py:221-393 |
-| 5 | **Target Hours Achievement** | 100* | CRITICAL | **DYNAMICALLY calculated**: Employees must reach target hours: `(weekly_hours/7) × calendar_days without absence`<br>- Jan (31d, 48h/w): 212.57h<br>- Feb (28d, 48h/w): 192h<br>- Adaptable to different weekly hours per shift type | constraints.py:2916-3066 |
-| 6 | **Min Consecutive Weekdays** | 8,000 | VERY_HIGH | Minimum 2 consecutive days Mon-Fri | constraints.py:2200 |
+| 5 | **Target Hours Achievement** | 100 | CRITICAL | **DYNAMICALLY calculated**: Employees must reach target hours: `(weekly_hours/7) × calendar_days without absence`<br>- Jan (31d, 48h/w): 212.57h<br>- Feb (28d, 48h/w): 192h<br>- Adaptable to different weekly hours per shift type | constraints.py:2916-3066 |
 | 6 | **Min Consecutive Weekdays** | 8,000 | VERY_HIGH | Minimum 2 consecutive days Mon-Fri | constraints.py:2200 |
 | 7 | **Max Consecutive Shifts** | 6,000 | VERY_HIGH | Limits consecutive working days per shift | constraints.py:2300 |
 | 8 | **Shift Hopping** | 200 | HIGH | Prevents rapid shift changes | constraints.py:2500 |

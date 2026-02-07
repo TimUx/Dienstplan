@@ -13,15 +13,15 @@ Dieses Dokument beschreibt alle Regeln, Abhängigkeiten und Prioritäten des aut
 | # | Regelname | Beschreibung | Implementierung | Datei |
 |---|-----------|--------------|-----------------|-------|
 | H1 | **Team-Schicht-Zuweisung** | Jedes Team muss **GENAU EINE** Schicht pro Woche haben | `sum(team_shift[team][week][shift]) == 1` | constraints.py:52 |
-| H2 | **Team-Rotation** | Teams folgen festem Rotationsmuster: **F → N → S** | Rotationsindex = `(Woche + Team_ID) % 3` | constraints.py:120 |
-| H3 | **Mindestbesetzung** | Jede Schicht muss Mindestpersonalstärke erreichen | **Wochentag**: F≥4, S≥3, N≥3<br>**Wochenende**: ≥2 | constraints.py:800 |
-| H4 | **Verbotene Übergänge** | Verhinderung unzureichender Ruhezeiten | **S→F verboten** (nur 8h Ruhe)<br>**N→F verboten** (0h Ruhe)<br>**N→S verboten** (8h Ruhe) | constraints.py:40-43 |
+| H2 | **Team-Rotation** | Teams folgen ihrer konfigurierten Rotationsgruppe aus der Datenbank (Standard: **F → N → S**) | Rotationsindex = `(ISO_Woche + Team_Index) % Anzahl_Schichten`<br>Rotationsmuster aus DB: `RotationGroups` Tabelle | constraints.py:110-219 |
+| H3 | **Mindestbesetzung** | Jede Schicht muss Mindestpersonalstärke erreichen | Dynamisch aus DB gelesen:<br>`ShiftType.min_staff_weekday/weekend` | constraints.py:800 |
+| H4 | **Verbotene Übergänge** | Verhinderung unzureichender Ruhezeiten (Soft Constraint: Gewicht 50.000/5.000) | **S→F** (nur 8h Ruhe)<br>**N→F** (0h Ruhe)<br>Basierend auf Schicht-Endzeiten, nicht Rotationsgruppen | constraints.py:1309-1536 |
 | H5 | **Keine Schichten bei Abwesenheit** | Keine Schichtzuweisung während Urlaub/Krankheit (U/AU/L) | Alle Schicht-Variablen = 0 während Abwesenheit | constraints.py:1200 |
 | H6 | **Maximal eine Schicht pro Tag** | Mitarbeiter kann nur eigene Team-Schicht ODER Cross-Team-Schicht arbeiten | `team_shift[emp] + cross_team_shift[emp] ≤ 1` | constraints.py:650 |
-| H7 | **TD-Beschränkung** | Maximal 1 Tagdienst (TD/BMT/BSB) pro Mitarbeiter pro Woche | `sum(td_assignments[emp][week]) ≤ 1` | constraints.py:1500 |
-| H8 | **Maximale Wochenstunden** | Nicht mehr als 48 Stunden pro Woche | Skaliert nach `Stunden_pro_Tag × Arbeitstage` | constraints.py:1100 |
-| H9 | **Team-Schicht-Erlaubnis** | Teams dürfen nur zugewiesene Schichttypen arbeiten | Basiert auf `TeamShiftAssignments` Konfiguration | constraints.py:89 |
-| H10 | **Rotation-Gruppen** | Teams folgen ihrer konfigurierten Rotationsgruppe | Datenbankgesteuert oder Standard F→N→S | constraints.py:145 |
+| H7 | **TD-Beschränkung** | ⚠️ **VERALTET** - TD/BMT/BSB sollten als reguläre Schichttypen verwaltet werden | `sum(td_assignments[emp][week]) ≤ 1`<br>*Hinweis: Diese Regel ist optional und kann durch reguläre Schichttypenverwaltung ersetzt werden* | constraints.py:3067-3145 |
+| H8 | **Mindeststunden pro Monat** | Mitarbeiter müssen Mindeststunden erreichen (192h/Monat) | `total_hours >= 192h` (hart)<br>Ziel: `(weekly_hours/7) × Arbeitstage` (weich)<br>**Kein hartes wöchentliches Maximum** | constraints.py:2790-3064 |
+| H9 | **Team-Schicht-Erlaubnis** | Teams dürfen nur zugewiesene Schichttypen arbeiten | Basiert auf `TeamShiftAssignments` Konfiguration | constraints.py:50-108 |
+| H10 | **Rotation-Gruppen** | *(Siehe H2 - zusammengeführt)* | Datenbankgesteuert über `RotationGroups` und `RotationGroupShifts` Tabellen | constraints.py:110-219 |
 
 ---
 
@@ -36,14 +36,14 @@ Dieses Dokument beschreibt alle Regeln, Abhängigkeiten und Prioritäten des aut
 | 🥇 1 | **Schicht-Sequenz-Gruppierung** | 500.000 | ULTRA_KRITISCH | Verhindert A-B-B-A Sandwich-Muster (z.B. F-N-N-F) | constraints.py:1800 |
 | 🥈 2 | **Schicht-Isolation** | 100.000 | KRITISCH | Verhindert isolierte Einzelschichten (z.B. S-S-F-S-S Muster) | constraints.py:1900 |
 | 🥉 3 | **Ruhezeit-Verletzungen** | 50.000 (Wochentag)<br>5.000 (So-Mo) | KRITISCH | Erzwingt 11-Stunden Mindestruhe (S→F, N→F) | constraints.py:2000 |
-| 4 | **Rotation-Reihenfolge** | 10.000 | SEHR_HOCH | Erzwingt Team-Rotationssequenz F→N→S | constraints.py:250 |
+| 4 | **Rotation-Reihenfolge** | 10.000 | SEHR_HOCH | Erzwingt Team-Rotationssequenz (aus Rotationsgruppen-DB, Standard: F→N→S) | constraints.py:221-393 |
 | 5 | **Min. aufeinanderfolgende Wochentage** | 8.000 | SEHR_HOCH | Mindestens 2 aufeinanderfolgende Tage Mo-Fr | constraints.py:2200 |
 | 6 | **Max. aufeinanderfolgende Schichten** | 6.000 | SEHR_HOCH | Begrenzt aufeinanderfolgende Arbeitstage pro Schicht | constraints.py:2300 |
 | 7 | **Schicht-Hopping** | 200 | HOCH | Verhindert schnelle Schichtwechsel | constraints.py:2500 |
 | 8 | **Tägliches Schichtverhältnis** | 200 | HOCH | Erzwingt F ≥ S ≥ N Reihenfolge | constraints.py:2600 |
 | 9 | **Cross-Shift Kapazität** | 150 | HOCH | Verhindert Überbelegung bei freien Plätzen | constraints.py:2700 |
-| 10 | **Zielstunden-Unterschreitung** | 100 | KRITISCH | Mitarbeiter müssen 192h monatliches Minimum erreichen | constraints.py:2800 |
-| 11 | **Wöchentliches Schichttyp-Limit** | 500 | MITTEL | Max. 2-3 verschiedene Schichttypen pro Mitarbeiter pro Woche | constraints.py:2900 |
+| 10 | **Zielstunden-Unterschreitung** | 100 | KRITISCH | Mitarbeiter müssen Mindeststunden erreichen: 192h/Monat (hart) + proportionales Ziel (weich) basierend auf `(weekly_hours/7) × Kalendertage` | constraints.py:2790-3064 |
+| 11 | **Wöchentliches Schichttyp-Limit** | 500 | MITTEL | Max. **2** verschiedene Schichttypen pro Mitarbeiter pro Woche | constraints.py:2270-2393 |
 | 12 | **Nacht-Team-Konsistenz** | 600 | MITTEL | Erhält Team-Zusammenhalt bei Nachtschichten | constraints.py:3000 |
 | 13 | **Wochenend-Konsistenz** | 300 | MITTEL | Wochenendschichten entsprechen Wochen-Schichttyp des Teams | constraints.py:3100 |
 | 14 | **Wochentag-Unterbesetzung** | 18-45* | MITTEL | Ermutigt Lückenfüllung (skaliert nach max_staff) | constraints.py:3200 |

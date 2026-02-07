@@ -37,14 +37,18 @@ DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calcu
 # They are ALWAYS read from the ShiftType configuration in the database.
 # See data_loader.py for default values used during DB initialization only.
 
-# Forbidden transitions (violate 11-hour rest rule)
-FORBIDDEN_TRANSITIONS = {
-    "S": ["F"],  # Spät -> Früh (only 8 hours rest)
-    "N": ["F"],  # Nacht -> Früh (0 hours rest)
-}
+# NOTE: Forbidden transitions (S→F, N→F) are checked based on shift timing
+# in add_rest_time_constraints() and are NOT derived from rotation groups.
+# These are based on physical rest time requirements (11-hour minimum rest).
+# The transitions are:
+#   S→F (Spät 21:45 → Früh 05:45 = only 8 hours rest)
+#   N→F (Nacht 05:45 → Früh 05:45 = 0 hours rest in same-day context)
+# See add_rest_time_constraints() for implementation.
 
-# Fixed rotation pattern: F → N → S
-ROTATION_PATTERN = ["F", "N", "S"]
+# NOTE: Rotation patterns are database-driven from RotationGroups table.
+# The F→N→S pattern below is only used as a FALLBACK when no database
+# configuration exists for a team. See add_team_rotation_constraints().
+DEFAULT_ROTATION_PATTERN = ["F", "N", "S"]  # Fallback when DB has no rotation config
 
 
 def add_team_shift_assignment_constraints(
@@ -3074,8 +3078,19 @@ def add_td_constraints(
     absences: List[Absence]
 ):
     """
-    HARD CONSTRAINT: TD (Tagdienst) assignment.
+    ⚠️ DEPRECATED / OPTIONAL: TD (Tagdienst) assignment constraint.
     
+    NOTE: Per user feedback, TD/BMT/BSB should be managed as regular shift types
+    in the shift management system, subject to all other shift rules, rather than
+    having special handling. This constraint is maintained for backward compatibility
+    but may be removed in future versions.
+    
+    If your system requires TD shifts, consider:
+    1. Creating TD/BMT/BSB as regular shift types in ShiftType management
+    2. Assigning them to teams via TeamShiftAssignments
+    3. Letting them follow normal rotation and staffing rules
+    
+    Original behavior:
     TD combines BMT (Brandmeldetechniker) and BSB (Brandschutzbeauftragter).
     
     Rules:

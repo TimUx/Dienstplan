@@ -107,7 +107,7 @@ def test_weekend_shift_ratio_respects_max_staff():
         absences=[]
     )
     
-    # Solve
+    # Create and run solver
     print("\nRunning solver...")
     solver = ShiftPlanningSolver(
         planning_model=planning_model,
@@ -115,6 +115,10 @@ def test_weekend_shift_ratio_respects_max_staff():
         num_workers=8
     )
     
+    print("Adding constraints...")
+    solver.add_all_constraints()
+    
+    print("Solving...")
     solver.solve()
     
     # Check if solution was found
@@ -156,7 +160,14 @@ def test_weekend_shift_ratio_respects_max_staff():
         shift_counts = {'F': 0, 'S': 0, 'N': 0}
         for assignment in assignments:
             if assignment.date == d:
-                shift_counts[assignment.shift_code] += 1
+                # Map shift_type_id to shift code
+                shift_code = None
+                for st in shift_types:
+                    if st.id == assignment.shift_type_id:
+                        shift_code = st.code
+                        break
+                if shift_code in shift_counts:
+                    shift_counts[shift_code] += 1
         
         # Check ordering: F >= S >= N (based on max_staff_weekend: 5 >= 4 >= 3)
         day_name = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][d.weekday()]
@@ -209,9 +220,9 @@ def test_weekend_shift_ratio_respects_max_staff():
     
     # Overall distribution
     print("\nOverall Weekend Distribution:")
-    total_f = sum(1 for a in assignments if a.date.weekday() >= 5 and a.shift_code == 'F')
-    total_s = sum(1 for a in assignments if a.date.weekday() >= 5 and a.shift_code == 'S')
-    total_n = sum(1 for a in assignments if a.date.weekday() >= 5 and a.shift_code == 'N')
+    total_f = sum(1 for a in assignments if a.date.weekday() >= 5 and any(st.id == a.shift_type_id and st.code == 'F' for st in shift_types))
+    total_s = sum(1 for a in assignments if a.date.weekday() >= 5 and any(st.id == a.shift_type_id and st.code == 'S' for st in shift_types))
+    total_n = sum(1 for a in assignments if a.date.weekday() >= 5 and any(st.id == a.shift_type_id and st.code == 'N' for st in shift_types))
     total = total_f + total_s + total_n
     
     print(f"  F: {total_f} shifts ({100*total_f/total:.1f}%)")

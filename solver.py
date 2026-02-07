@@ -1022,12 +1022,12 @@ class ShiftPlanningSolver:
             where:
             - shift_assignments: List of ShiftAssignment objects (includes cross-team assignments)
             - special_functions: dict mapping (employee_id, date) to special function codes (e.g., "TD")
-                                Currently empty as special functions are not yet implemented
+                                 Currently empty as special functions are not yet implemented
             - complete_schedule: dict mapping (employee_id, date) to shift_code or "OFF"
-                                This ensures ALL employees appear for ALL days
+                                 This ensures ALL employees appear for ALL days
         """
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            return [], {}
+            return [], {}, {}
         
         (team_shift, employee_active, employee_weekend_shift, 
          employee_cross_team_shift, employee_cross_team_weekend) = self.planning_model.get_variables()

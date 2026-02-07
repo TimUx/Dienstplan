@@ -2949,9 +2949,50 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             existing_employee_assignments = cursor.fetchall()
             
+            # Calculate weeks for boundary detection (needed for employee locks)
+            # We'll skip locking employee assignments in boundary weeks to avoid conflicts
+            from datetime import timedelta
+            dates_list = []
+            current = extended_start
+            while current <= extended_end:
+                dates_list.append(current)
+                current += timedelta(days=1)
+            
+            # Calculate weeks
+            weeks_for_boundary = []
+            current_week = []
+            for d in dates_list:
+                if d.weekday() == 0 and current_week:  # Monday
+                    weeks_for_boundary.append(current_week)
+                    current_week = []
+                current_week.append(d)
+            if current_week:
+                weeks_for_boundary.append(current_week)
+            
+            # Identify boundary weeks (same logic as team lock boundary detection)
+            boundary_week_dates = set()
+            for week_dates in weeks_for_boundary:
+                has_dates_before_month = any(d < start_date for d in week_dates)
+                has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
+                has_dates_after_month = any(d > end_date for d in week_dates)
+                
+                # If week spans the boundary, mark all its dates as boundary dates
+                if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
+                    boundary_week_dates.update(week_dates)
+                    app.logger.info(f"Boundary week detected: {week_dates[0]} to {week_dates[-1]} - employee locks will be skipped")
+            
             # Lock existing employee assignments
+            # CRITICAL FIX: Skip locking employee assignments in boundary weeks
+            # Boundary weeks span month boundaries and may have assignments that conflict
+            # with current shift configuration or team-based rotation requirements
             for emp_id, date_str, shift_code in existing_employee_assignments:
                 assignment_date = date.fromisoformat(date_str)
+                
+                # Skip assignments in boundary weeks - they will be re-planned to match current config
+                if assignment_date in boundary_week_dates:
+                    app.logger.info(f"Skipping lock for Employee {emp_id}, Date {date_str} (in boundary week)")
+                    continue
+                
                 # CRITICAL FIX: Convert emp_id to int to match assignment.employee_id type
                 # Database returns TEXT ids as strings, but solver uses integers
                 try:

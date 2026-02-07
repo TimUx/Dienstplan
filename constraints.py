@@ -2915,19 +2915,21 @@ def add_working_hours_constraints(
     
     # MINIMUM working hours constraint across the planning period
     # 
-    # Business requirement (per @TimUx - updated 2026-01-24):
-    # - HARD CONSTRAINT: Absolute minimum 192h/month (48h/week × 4 weeks)
-    #   → No employee can work less than this (except when absent)
-    # - SOFT CONSTRAINT: Target is proportional to days: (48h/7) × days_in_period
-    #   → Example: January 31 days → 48/7 × 31 = 212.57h target
-    #   → Example: February 28 days → 48/7 × 28 = 192h target
+    # Business requirement (per @TimUx - updated 2026-01-25 in PR #122):
+    # - SOFT CONSTRAINT: Target minimum proportional to days: (weekly_working_hours/7) × days_in_period
+    #   → Example: January 31 days, 48h/week → 48/7 × 31 = 212.57h ≈ 213h target
+    #   → Example: February 28 days, 48h/week → 48/7 × 28 = 192h target
+    #   → Example: Custom shift 40h/week, 30 days → 40/7 × 30 = 171.43h ≈ 171h target
     # - Hours can vary per week (e.g., 56h one week, 40h another week)
     # - Only absences (sick, vacation, training) exempt employees from these requirements
     # - Minimum staffing (e.g., F=4, S=3, N=3) is a FLOOR - more employees SHOULD work to meet hours
+    # - Rules should be followed but can be violated if necessary for planning feasibility
+    # - Violations are tracked and minimized via high penalty weight
     # 
     # Implementation:
-    # - Hard constraint: total_hours >= 192h (scaled: >= 1920)
-    # - Soft objective: maximize(total_hours - target_hours) where target = (48/7) × days
+    # - Soft constraint with HIGH penalty: minimize shortage from target hours
+    # - Target = (weekly_working_hours / 7) × days_without_absence
+    # - Penalty weight: 100x (very high priority, but not absolute)
     # - Shift hours come from shift settings (ShiftType.hours)
     # - Weekly hours come from shift settings (ShiftType.weekly_working_hours)
     for emp in employees:
@@ -3038,16 +3040,18 @@ def add_working_hours_constraints(
         # Apply minimum hours constraints if employee has days without absences
         # FIX: Use days_without_absence (calculated above) instead of weeks_without_absences
         if total_hours_terms and days_without_absence > 0:
-            # HARD CONSTRAINT: Absolute minimum 192h/month (24 shifts × 8h)
-            # This ensures employees work at least 24 shifts per month as required
-            # Only applies to employees without full-month absences
-            # Scaled: 192h × 10 = 1920
-            min_hours_scaled = 1920  # 192h × 10 (scaling factor)
-            model.Add(sum(total_hours_terms) >= min_hours_scaled)
+            # SOFT CONSTRAINT: Target minimum hours based on proportional calculation
+            # Target = (weekly_working_hours / 7) × days_without_absence
+            # This is dynamic and adapts to different month lengths and weekly hours
+            # 
+            # Examples:
+            # - January (31 days), 48h/week: 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)
+            # - February (28 days), 48h/week: 48/7 × 28 = 192h target (scaled: 1920)
+            # - March (31 days), 40h/week: 40/7 × 31 = 177.14h ≈ 177h target (scaled: 1770)
+            # 
+            # High penalty weight (100x) ensures this is strongly enforced, but allows
+            # violations when necessary for planning feasibility (per PR #122 requirements)
             
-            # SOFT CONSTRAINT: Target proportional hours (48h/7 × days)
-            # Example: 31 days → 48/7 × 31 = 212.57h ≈ 213h target (scaled: 2130)
-            # We want to minimize the shortage from this target
             daily_target_hours = weekly_target_hours / 7.0
             target_total_hours_scaled = int(daily_target_hours * days_without_absence * 10)
             
@@ -3060,8 +3064,9 @@ def add_working_hours_constraints(
             model.Add(shortage_from_target >= target_total_hours_scaled - sum(total_hours_terms))
             model.Add(shortage_from_target >= 0)
             
-            # Add to soft objectives (minimize shortage)
-            soft_objectives.append(shortage_from_target)
+            # Add to soft objectives with HIGH penalty weight (100x)
+            # This makes it nearly as important as hard constraints, but still flexible
+            soft_objectives.append(shortage_from_target * 100)
     
     return soft_objectives
 

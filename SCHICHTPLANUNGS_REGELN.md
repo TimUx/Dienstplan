@@ -18,9 +18,8 @@ Dieses Dokument beschreibt alle Regeln, Abhängigkeiten und Prioritäten des aut
 | H4 | **Verbotene Übergänge** | Verhinderung unzureichender Ruhezeiten (Soft Constraint: Gewicht 50.000/5.000) | **S→F** (nur 8h Ruhe)<br>**N→F** (0h Ruhe)<br>Basierend auf Schicht-Endzeiten, nicht Rotationsgruppen | constraints.py:1309-1536 |
 | H5 | **Keine Schichten bei Abwesenheit** | Keine Schichtzuweisung während Urlaub/Krankheit (U/AU/L) | Alle Schicht-Variablen = 0 während Abwesenheit | constraints.py:1200 |
 | H6 | **Maximal eine Schicht pro Tag** | Mitarbeiter kann nur eigene Team-Schicht ODER Cross-Team-Schicht arbeiten | `team_shift[emp] + cross_team_shift[emp] ≤ 1` | constraints.py:650 |
-| H7 | **Mindeststunden pro Monat** | Mitarbeiter müssen Mindeststunden erreichen (192h/Monat) | `total_hours >= 192h` (hart)<br>Ziel: `(weekly_hours/7) × Arbeitstage` (weich)<br>**Kein hartes wöchentliches Maximum** | constraints.py:2776-3066 |
-| H8 | **Team-Schicht-Erlaubnis** | Teams dürfen nur zugewiesene Schichttypen arbeiten | Basiert auf `TeamShiftAssignments` Konfiguration | constraints.py:50-108 |
-| H9 | **Rotation-Gruppen** | *(Siehe H2 - zusammengeführt)* | Datenbankgesteuert über `RotationGroups` und `RotationGroupShifts` Tabellen | constraints.py:110-219 |
+| H7 | **Team-Schicht-Erlaubnis** | Teams dürfen nur zugewiesene Schichttypen arbeiten | Basiert auf `TeamShiftAssignments` Konfiguration | constraints.py:50-108 |
+| H8 | **Rotation-Gruppen** | *(Siehe H2 - zusammengeführt)* | Datenbankgesteuert über `RotationGroups` und `RotationGroupShifts` Tabellen | constraints.py:110-219 |
 
 ---
 
@@ -36,12 +35,12 @@ Dieses Dokument beschreibt alle Regeln, Abhängigkeiten und Prioritäten des aut
 | 🥈 2 | **Schicht-Isolation** | 100.000 | KRITISCH | Verhindert isolierte Einzelschichten (z.B. S-S-F-S-S Muster) | constraints.py:1900 |
 | 🥉 3 | **Ruhezeit-Verletzungen** | 50.000 (Wochentag)<br>5.000 (So-Mo) | KRITISCH | Erzwingt 11-Stunden Mindestruhe (S→F, N→F) | constraints.py:2000 |
 | 4 | **Rotation-Reihenfolge** | 10.000 | SEHR_HOCH | Erzwingt Team-Rotationssequenz (aus Rotationsgruppen-DB, Standard: F→N→S) | constraints.py:221-393 |
-| 5 | **Min. aufeinanderfolgende Wochentage** | 8.000 | SEHR_HOCH | Mindestens 2 aufeinanderfolgende Tage Mo-Fr | constraints.py:2200 |
-| 6 | **Max. aufeinanderfolgende Schichten** | 6.000 | SEHR_HOCH | Begrenzt aufeinanderfolgende Arbeitstage pro Schicht | constraints.py:2300 |
-| 7 | **Schicht-Hopping** | 200 | HOCH | Verhindert schnelle Schichtwechsel | constraints.py:2500 |
-| 8 | **Tägliches Schichtverhältnis** | 200 | HOCH | Erzwingt F ≥ S ≥ N Reihenfolge | constraints.py:2600 |
-| 9 | **Cross-Shift Kapazität** | 150 | HOCH | Verhindert Überbelegung bei freien Plätzen | constraints.py:2700 |
-| 10 | **Zielstunden-Unterschreitung** | 100 | KRITISCH | Mitarbeiter müssen Mindeststunden erreichen: 192h/Monat (hart) + proportionales Ziel (weich) basierend auf `(weekly_hours/7) × Kalendertage` | constraints.py:2790-3064 |
+| 5 | **Zielstunden-Erreichung** | 100 | KRITISCH | **DYNAMISCH berechnet**: Mitarbeiter müssen Zielstunden erreichen: `(weekly_hours/7) × Kalendertage ohne Abwesenheit`<br>- Jan (31T, 48h/W): 212.57h<br>- Feb (28T, 48h/W): 192h<br>- Anpassbar an verschiedene Wochenstunden pro Schichttyp | constraints.py:2916-3066 |
+| 6 | **Min. aufeinanderfolgende Wochentage** | 8.000 | SEHR_HOCH | Mindestens 2 aufeinanderfolgende Tage Mo-Fr | constraints.py:2200 |
+| 7 | **Max. aufeinanderfolgende Schichten** | 6.000 | SEHR_HOCH | Begrenzt aufeinanderfolgende Arbeitstage pro Schicht | constraints.py:2300 |
+| 8 | **Schicht-Hopping** | 200 | HOCH | Verhindert schnelle Schichtwechsel | constraints.py:2500 |
+| 9 | **Tägliches Schichtverhältnis** | 200 | HOCH | Erzwingt F ≥ S ≥ N Reihenfolge | constraints.py:2600 |
+| 10 | **Cross-Shift Kapazität** | 150 | HOCH | Verhindert Überbelegung bei freien Plätzen | constraints.py:2700 |
 | 11 | **Wöchentliches Schichttyp-Limit** | 500 | MITTEL | Max. **2** verschiedene Schichttypen pro Mitarbeiter pro Woche | constraints.py:2270-2393 |
 | 12 | **Nacht-Team-Konsistenz** | 600 | MITTEL | Erhält Team-Zusammenhalt bei Nachtschichten | constraints.py:3000 |
 | 13 | **Wochenend-Konsistenz** | 300 | MITTEL | Wochenendschichten entsprechen Wochen-Schichttyp des Teams | constraints.py:3100 |
@@ -369,6 +368,53 @@ Bevorzugt bei Zuweisungen:
 
 ---
 
+## 🔐 Sonderfälle und Ausnahmen
+
+### Grenzwochen-Behandlung (Boundary Weeks)
+
+**Problem**: Wenn Schichtkonfigurationen (z.B. Maximale Mitarbeiter pro Schicht) zwischen Planungsperioden geändert werden, können bereits geplante Zuweisungen die neuen Constraints verletzen.
+
+**Beispiel**:
+- Februar 2026 wurde geplant, als N-Schicht max=5 war
+- N-Schicht max wurde später auf 3 reduziert
+- März 2026 Planung erweitert zurück bis 23. Februar (Grenzwoche)
+- Bestehende Zuweisungen vom 23. Feb haben 5 Mitarbeiter auf N-Schicht
+- System versucht alte Zuweisungen (5) UND neue Limits (3) zu respektieren → **INFEASIBLE**
+
+**Lösung** (implementiert in `web_api.py`, Zeilen 2943-2986):
+
+1. **Grenzwochen-Erkennung**: Identifiziert Wochen, die Monatsgrenzen überspannen
+   - Woche enthält Daten VOR dem Planungsmonat UND innerhalb des Monats
+   - Woche enthält Daten innerhalb des Monats UND NACH dem Monat
+
+2. **Überspringe Mitarbeiter-Locks**: Mitarbeiterzuweisungen in Grenzwochen werden NICHT gelockt
+   - Erlaubt komplette Neuplanung mit aktueller Konfiguration
+   - Verhindert Konflikte durch veraltete Zuweisungen
+   - Team-Locks werden ebenfalls übersprungen (bereits existierende Logik)
+
+3. **Bewahre Nicht-Grenzwochen**: Zuweisungen außerhalb von Grenzwochen bleiben gelockt
+   - Nur Wochen, die Grenzen überspannen, werden neu geplant
+   - Sichert Kontinuität wo möglich
+
+**Beispiel für März 2026**:
+```
+Planungszeitraum: 1. März - 31. März
+Erweitert: 23. Februar (Mo) - 5. April (So)
+
+- Woche 0 (23. Feb - 1. März): Grenzwoche → Mitarbeiter-Locks ÜBERSPRUNGEN
+- Wochen 1-4 (2. März - 29. März): Aktueller Monat → Wird geplant
+- Woche 5 (30. März - 5. April): Grenzwoche → Mitarbeiter-Locks ÜBERSPRUNGEN
+```
+
+**Vorteil**: System kann sich an Konfigurationsänderungen anpassen ohne manuelle Eingriffe
+
+**Wichtig**: Diese Lösung ändert KEINE Kern-Constraints:
+- ✅ 192h Mindeststunden bleiben HART (wie zuvor)
+- ✅ Alle anderen Constraints unverändert
+- ✅ Nur Locking-Verhalten in Grenzwochen betroffen
+
+---
+
 ## 📚 Verwandte Dokumentation
 
 - **ALGORITHMUS_BESTAETIGUNG.md**: Algorithmus-Verifikation und Testzusammenfassung
@@ -382,6 +428,8 @@ Bevorzugt bei Zuweisungen:
 
 | Version | Datum | Änderungen |
 |---------|-------|-----------|
+| 1.2 | 2026-02-07 | **Korrektur**: 192h Constraint von HART auf WEICH korrigiert (wie in PR #122 ursprünglich implementiert). Dynamische Berechnung basierend auf `(weekly_hours/7) × Kalendertage` wiederhergestellt. |
+| 1.1 | 2026-02-07 | Grenzwochen-Behandlung für Konfigurationsänderungen hinzugefügt |
 | 1.0 | 2026-02-06 | Initiale Erstellung der Regel-Dokumentation |
 
 ---

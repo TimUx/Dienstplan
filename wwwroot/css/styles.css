@@ -359,6 +359,10 @@ select {
     text-align: center;
 }
 
+.stat-table th.stat-highlight {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
 .stat-table td.stat-number {
     text-align: center;
     font-weight: 500;

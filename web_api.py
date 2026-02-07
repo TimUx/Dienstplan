@@ -5684,14 +5684,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             })
         
         # Employee shift details with weekend counts
-        # Get shift type counts, Saturday count, and Sunday count per employee
+        # First, get shift type counts per employee
         cursor.execute("""
             SELECT e.Id, e.Vorname, e.Name,
                    st.Code as ShiftCode,
                    st.Name as ShiftName,
-                   COUNT(sa.Id) as DaysWorked,
-                   SUM(CASE WHEN strftime('%w', sa.Date) = '6' THEN 1 ELSE 0 END) as Saturdays,
-                   SUM(CASE WHEN strftime('%w', sa.Date) = '0' THEN 1 ELSE 0 END) as Sundays
+                   COUNT(sa.Id) as DaysWorked
             FROM Employees e
             LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
                 AND sa.Date >= ? AND sa.Date <= ?
@@ -5719,8 +5717,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'name': row['ShiftName'],
                 'days': row['DaysWorked']
             }
-            employee_shift_details[emp_id]['totalSaturdays'] += row['Saturdays']
-            employee_shift_details[emp_id]['totalSundays'] += row['Sundays']
+        
+        # Now get weekend counts separately per employee (to avoid double counting)
+        cursor.execute("""
+            SELECT e.Id,
+                   COUNT(DISTINCT CASE WHEN strftime('%w', sa.Date) = '6' THEN sa.Date END) as Saturdays,
+                   COUNT(DISTINCT CASE WHEN strftime('%w', sa.Date) = '0' THEN sa.Date END) as Sundays
+            FROM Employees e
+            LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
+                AND sa.Date >= ? AND sa.Date <= ?
+            WHERE sa.Id IS NOT NULL
+            GROUP BY e.Id
+        """, (start_date.isoformat(), end_date.isoformat()))
+        
+        for row in cursor.fetchall():
+            emp_id = row['Id']
+            if emp_id in employee_shift_details:
+                employee_shift_details[emp_id]['totalSaturdays'] = row['Saturdays']
+                employee_shift_details[emp_id]['totalSundays'] = row['Sundays']
         
         # Convert to list and sort by employee name
         employee_shift_details_list = sorted(

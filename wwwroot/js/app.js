@@ -2050,8 +2050,8 @@ function displayStatistics(stats) {
             html += `<th>${escapeHtml(code)}</th>`;
         });
         
-        html += '<th>Samstage</th>';
-        html += '<th>Sonntage</th>';
+        html += '<th class="stat-highlight">Samstage</th>';
+        html += '<th class="stat-highlight">Sonntage</th>';
         html += '</tr></thead>';
         html += '<tbody>';
         

@@ -938,8 +938,6 @@ function scrollYearViewToCurrentMonth() {
 
 // Helper functions
 
-// Helper functions
-
 // Constant for employees without team assignment
 const UNASSIGNED_TEAM_ID = -1; // Must match Python backend value
 

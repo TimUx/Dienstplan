@@ -1,7 +1,10 @@
 """
 Test for March 2026 planning INFEASIBLE issue.
 
-Root cause: Team size (5) exceeds N shift max capacity (3)
+Root cause: Existing boundary week assignments (Feb 23-28) were locked with old configuration
+(N=5 workers) but current configuration limits N shift to max 3, creating conflict.
+
+Fix: Skip locking employee assignments in boundary weeks to allow re-planning with current config.
 """
 
 import unittest

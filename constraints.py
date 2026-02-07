@@ -1284,12 +1284,12 @@ def add_daily_shift_ratio_constraints(
     shift_types: List[ShiftType]
 ) -> List[cp_model.IntVar]:
     """
-    SOFT CONSTRAINT: Ensure shifts are staffed proportionally to their max_staff capacity on weekdays.
+    SOFT CONSTRAINT: Ensure shifts are staffed proportionally to their max_staff capacity on all days.
     
     This constraint enforces the capacity ordering from max_staff settings on a per-day basis.
-    For example, with F(max=8), S(max=6), N(max=3), we want F >= S >= N on each weekday.
+    For example, with F(max=8), S(max=6), N(max=3), we want F >= S >= N on each day.
     
-    Implementation: On each weekday (Mon-Fri), count workers in each shift type.
+    Implementation: On each day, count workers in each shift type.
     For each pair of shifts where shift_a has higher max_staff than shift_b,
     create a violation variable when shift_b > shift_a, with a penalty.
     
@@ -1299,7 +1299,7 @@ def add_daily_shift_ratio_constraints(
     - Higher than TEAM_PRIORITY (50) to ensure it's respected
     - Much higher than understaffing weights (22-45)
     
-    Penalty weight: 75 (between TEAM_PRIORITY=50 and HOURS_SHORTAGE=100)
+    Penalty weight: 200 (above HOURS_SHORTAGE=100, below operational constraints)
     
     Args:
         shift_types: List of ShiftType objects from database
@@ -1310,18 +1310,13 @@ def add_daily_shift_ratio_constraints(
     if not shift_types:
         raise ValueError("shift_types parameter is required")
     
-    # Build mapping from shift code to max_staff_weekday
-    shift_max_staff = {}
+    # Build mapping from shift code to max_staff for weekdays and weekends
+    shift_max_staff_weekday = {}
+    shift_max_staff_weekend = {}
     for st in shift_types:
         if st.code in shift_codes:
-            shift_max_staff[st.code] = st.max_staff_weekday
-    
-    if len(shift_max_staff) < 2:
-        # Need at least 2 shifts to create ratio constraints
-        return []
-    
-    # Sort shifts by max_staff (descending) to determine expected ordering
-    sorted_shifts = sorted(shift_max_staff.items(), key=lambda x: x[1], reverse=True)
+            shift_max_staff_weekday[st.code] = st.max_staff_weekday
+            shift_max_staff_weekend[st.code] = st.max_staff_weekend
     
     # Weight for ratio violations - HIGH priority to ensure proper shift distribution
     # Set to 200 to prioritize shift ordering over hours shortage (100) but below
@@ -1332,9 +1327,18 @@ def add_daily_shift_ratio_constraints(
     ratio_violation_penalties = []
     
     for d in dates:
-        # Only apply to weekdays (Mon-Fri)
-        if d.weekday() >= 5:
+        # Determine if this is a weekend
+        is_weekend = d.weekday() >= 5
+        
+        # Use appropriate max_staff values based on day type
+        shift_max_staff = shift_max_staff_weekend if is_weekend else shift_max_staff_weekday
+        
+        if len(shift_max_staff) < 2:
+            # Need at least 2 shifts to create ratio constraints
             continue
+        
+        # Sort shifts by max_staff (descending) to determine expected ordering
+        sorted_shifts = sorted(shift_max_staff.items(), key=lambda x: x[1], reverse=True)
         
         # Find which week this date belongs to
         week_idx = None
@@ -1364,24 +1368,40 @@ def add_daily_shift_ratio_constraints(
                     if emp.team_id != team.id:
                         continue
                     
-                    if (emp.id, d) not in employee_active:
-                        continue
-                    
-                    # Employee works this shift if team has shift AND employee is active
-                    is_on_shift = model.NewBoolVar(f"ratio_emp{emp.id}_onshift{shift_code}_date{d}")
-                    model.AddMultiplicationEquality(
-                        is_on_shift,
-                        [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
-                    )
-                    workers.append(is_on_shift)
+                    # Use appropriate employee variable based on day type
+                    if is_weekend:
+                        if (emp.id, d) not in employee_weekend_shift:
+                            continue
+                        # Employee works this shift if team has shift AND employee is working weekend
+                        is_on_shift = model.NewBoolVar(f"ratio_emp{emp.id}_onshift{shift_code}_date{d}")
+                        model.AddMultiplicationEquality(
+                            is_on_shift,
+                            [employee_weekend_shift[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
+                        )
+                        workers.append(is_on_shift)
+                    else:
+                        if (emp.id, d) not in employee_active:
+                            continue
+                        # Employee works this shift if team has shift AND employee is active
+                        is_on_shift = model.NewBoolVar(f"ratio_emp{emp.id}_onshift{shift_code}_date{d}")
+                        model.AddMultiplicationEquality(
+                            is_on_shift,
+                            [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift_code)]]
+                        )
+                        workers.append(is_on_shift)
             
-            # Count cross-team workers
+            # Count cross-team workers (use appropriate variable based on day type)
             for emp in employees:
-                if (emp.id, d, shift_code) in employee_cross_team_shift:
-                    workers.append(employee_cross_team_shift[(emp.id, d, shift_code)])
+                if is_weekend:
+                    if (emp.id, d, shift_code) in employee_cross_team_weekend:
+                        workers.append(employee_cross_team_weekend[(emp.id, d, shift_code)])
+                else:
+                    if (emp.id, d, shift_code) in employee_cross_team_shift:
+                        workers.append(employee_cross_team_shift[(emp.id, d, shift_code)])
             
             if workers:
-                count_var = model.NewIntVar(0, len(employees), f"{shift_code}_count_{d}")
+                day_type = "weekend" if is_weekend else "weekday"
+                count_var = model.NewIntVar(0, len(employees), f"{shift_code}_count_{d}_{day_type}")
                 model.Add(count_var == sum(workers))
                 shift_worker_counts[shift_code] = count_var
         

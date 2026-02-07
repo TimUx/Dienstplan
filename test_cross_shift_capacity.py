@@ -133,7 +133,7 @@ def test_cross_shift_capacity_enforcement():
         # Extract schedule and validate
         print("\nValidating cross-shift capacity enforcement...")
         
-        shift_assignments, special_functions, complete_schedule = solver.extract_solution()
+        shift_assignments, complete_schedule = solver.extract_solution()
         
         from collections import defaultdict
         

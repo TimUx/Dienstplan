@@ -162,7 +162,7 @@ def test_february_2026_n_shift_overflow():
         print("\nValidating max staff constraints...")
         
         # Get actual shift assignments
-        shift_assignments, special_functions, complete_schedule = solver.extract_solution()
+        shift_assignments, complete_schedule = solver.extract_solution()
         
         from collections import defaultdict
         

@@ -3172,15 +3172,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     }
                 }), 500
             
-            assignments, special_functions, complete_schedule = result
+            assignments, complete_schedule = result
             
             # Filter assignments to include:
             # 1. All days in the requested month (start_date to end_date)
             # 2. Extended days into NEXT month (end_date < date <= extended_end) - to maintain rotation continuity
             # 3. EXCLUDE extended days from PREVIOUS month (extended_start <= date < start_date) - these should already exist
             filtered_assignments = [a for a in assignments if start_date <= a.date <= extended_end]
-            filtered_special_functions = {k: v for k, v in special_functions.items() 
-                                         if start_date <= k[1] <= extended_end}
             
             # Count assignments by category for logging
             current_month_count = len([a for a in filtered_assignments if start_date <= a.date <= end_date])
@@ -3235,31 +3233,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             app.logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
             
-            # Insert special functions (TD assignments) - current month + future extended days
-            # Get TD shift type ID
-            cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = 'TD'")
-            td_row = cursor.fetchone()
-            if td_row:
-                td_shift_type_id = td_row[0]
-                for (emp_id, date_obj), function_code in filtered_special_functions.items():
-                    if function_code == "TD":
-                        # CRITICAL FIX: Skip TD assignments that are locked (already exist from previous planning)
-                        if (emp_id, date_obj) in locked_employee_shift:
-                            continue
-                        cursor.execute("""
-                            INSERT INTO ShiftAssignments 
-                            (EmployeeId, ShiftTypeId, Date, IsManual, IsSpringerAssignment, IsFixed, CreatedAt, CreatedBy)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            emp_id,
-                            td_shift_type_id,
-                            date_obj.isoformat(),
-                            0,
-                            0,
-                            0,
-                            datetime.utcnow().isoformat(),
-                            "Python-OR-Tools"
-                        ))
+            # TD (Tag Dienst / Day Duty) assignments have been removed from the system
+            # This section is no longer used
             
             # Create or update approval record for this month (not approved by default)
             cursor.execute("""
@@ -3279,7 +3254,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'success': True,
                 'message': f'Successfully planned {len(filtered_assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
                 'assignmentsCount': len(filtered_assignments),
-                'specialFunctionsCount': len(filtered_special_functions),
                 'year': start_date.year,
                 'month': start_date.month,
                 'extendedPlanning': {

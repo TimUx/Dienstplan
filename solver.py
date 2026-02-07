@@ -1013,21 +1013,19 @@ class ShiftPlanningSolver:
         
         return True
     
-    def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]:
+    def extract_solution(self) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
         """
         Extract shift assignments from the TEAM-BASED solution with CROSS-TEAM support.
         
         Returns:
-            Tuple of (shift_assignments, special_functions, complete_schedule)
+            Tuple of (shift_assignments, complete_schedule)
             where:
             - shift_assignments: List of ShiftAssignment objects (includes cross-team assignments)
-            - special_functions: dict mapping (employee_id, date) to special function codes (e.g., "TD")
-                                 Currently empty as special functions are not yet implemented
             - complete_schedule: dict mapping (employee_id, date) to shift_code or "OFF"
                                  This ensures ALL employees appear for ALL days
         """
         if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            return [], {}, {}
+            return [], {}
         
         (team_shift, employee_active, employee_weekend_shift, 
          employee_cross_team_shift, employee_cross_team_weekend) = self.planning_model.get_variables()
@@ -1245,10 +1243,7 @@ class ShiftPlanningSolver:
                 if not has_assignment:
                     complete_schedule[(emp.id, d)] = "OFF"
         
-        # Special functions dict (currently not implemented, reserved for future use like TD)
-        special_functions = {}
-        
-        return assignments, special_functions, complete_schedule
+        return assignments, complete_schedule
     
     def print_planning_summary(
         self,
@@ -1405,7 +1400,7 @@ def solve_shift_planning(
     time_limit_seconds: int = 300,
     num_workers: int = 8,
     global_settings: Dict = None
-) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], Dict[Tuple[int, date], str]]]:
+) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]]:
     """
     Solve the shift planning problem.
     
@@ -1416,10 +1411,9 @@ def solve_shift_planning(
         global_settings: Dict with global settings from database (optional)
         
     Returns:
-        Tuple of (shift_assignments, special_functions, complete_schedule) if solution found, None otherwise
+        Tuple of (shift_assignments, complete_schedule) if solution found, None otherwise
         where:
         - shift_assignments: List of ShiftAssignment objects for employees who work
-        - special_functions: dict mapping (employee_id, date) to special function codes (currently empty)
         - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"
                             ensuring ALL employees appear for ALL days
     
@@ -1431,7 +1425,7 @@ def solve_shift_planning(
     
     if solver.solve():
         result = solver.extract_solution()
-        assignments, special_functions, complete_schedule = result
+        assignments, complete_schedule = result
         
         # Print comprehensive planning summary
         solver.print_planning_summary(assignments, complete_schedule)
@@ -1480,10 +1474,9 @@ if __name__ == "__main__":
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
     if result:
-        assignments, special_functions, complete_schedule = result
+        assignments, complete_schedule = result
         print(f"\n✓ Solution found!")
         print(f"  - Total assignments: {len(assignments)}")
-        print(f"  - Special functions: {len(special_functions)}")
         print(f"  - Complete schedule entries: {len(complete_schedule)}")
     else:
         print("\n✗ No solution found!")

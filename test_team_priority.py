@@ -134,7 +134,7 @@ def test_team_priority_in_shift_assignment():
     print(f"\n✓ Solver found solution (status: {solver.status})")
     
     # Extract solution
-    shift_assignments, special_functions, complete_schedule = solver.extract_solution()
+    shift_assignments, complete_schedule = solver.extract_solution()
     
     # Analyze Week 2 (Feb 16-22) assignments - THE CRITICAL WEEK
     print("\n" + "=" * 70)

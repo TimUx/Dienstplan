@@ -2029,6 +2029,51 @@ function displayStatistics(stats) {
     html += '</div>';
     
     html += '</div>';
+    
+    // Employee Shift Details Table - full width below the grid
+    if (stats.employeeShiftDetails && stats.employeeShiftDetails.length > 0) {
+        html += '<div class="stat-table-container">';
+        html += '<h3>👤 Detaillierte Schichtübersicht pro Mitarbeiter</h3>';
+        html += '<table class="stat-table">';
+        html += '<thead><tr>';
+        html += '<th>Mitarbeiter</th>';
+        
+        // Get all unique shift types from the data
+        const allShiftTypes = new Set();
+        stats.employeeShiftDetails.forEach(emp => {
+            Object.keys(emp.shiftTypes).forEach(code => allShiftTypes.add(code));
+        });
+        const sortedShiftTypes = Array.from(allShiftTypes).sort();
+        
+        // Add column headers for each shift type
+        sortedShiftTypes.forEach(code => {
+            html += `<th>${escapeHtml(code)}</th>`;
+        });
+        
+        html += '<th>Samstage</th>';
+        html += '<th>Sonntage</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        stats.employeeShiftDetails.forEach(emp => {
+            html += '<tr>';
+            html += `<td><strong>${escapeHtml(emp.employeeName)}</strong></td>`;
+            
+            // Add cells for each shift type
+            sortedShiftTypes.forEach(code => {
+                const days = emp.shiftTypes[code] ? emp.shiftTypes[code].days : 0;
+                html += `<td class="stat-number">${days}</td>`;
+            });
+            
+            html += `<td class="stat-number stat-highlight">${emp.totalSaturdays}</td>`;
+            html += `<td class="stat-number stat-highlight">${emp.totalSundays}</td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        html += '</div>';
+    }
+    
     content.innerHTML = html;
 }
 

@@ -5683,6 +5683,51 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'averageShiftsPerEmployee': row['AvgShiftsPerEmployee']
             })
         
+        # Employee shift details with weekend counts
+        # Get shift type counts, Saturday count, and Sunday count per employee
+        cursor.execute("""
+            SELECT e.Id, e.Vorname, e.Name,
+                   st.Code as ShiftCode,
+                   st.Name as ShiftName,
+                   COUNT(sa.Id) as DaysWorked,
+                   SUM(CASE WHEN strftime('%w', sa.Date) = '6' THEN 1 ELSE 0 END) as Saturdays,
+                   SUM(CASE WHEN strftime('%w', sa.Date) = '0' THEN 1 ELSE 0 END) as Sundays
+            FROM Employees e
+            LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
+                AND sa.Date >= ? AND sa.Date <= ?
+            LEFT JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            WHERE st.Code IS NOT NULL
+            GROUP BY e.Id, e.Vorname, e.Name, st.Code, st.Name
+            ORDER BY e.Vorname, e.Name, st.Code
+        """, (start_date.isoformat(), end_date.isoformat()))
+        
+        # Build employee shift details map
+        employee_shift_details = {}
+        for row in cursor.fetchall():
+            emp_id = row['Id']
+            if emp_id not in employee_shift_details:
+                employee_shift_details[emp_id] = {
+                    'employeeId': emp_id,
+                    'employeeName': f"{row['Vorname']} {row['Name']}",
+                    'shiftTypes': {},
+                    'totalSaturdays': 0,
+                    'totalSundays': 0
+                }
+            
+            shift_code = row['ShiftCode']
+            employee_shift_details[emp_id]['shiftTypes'][shift_code] = {
+                'name': row['ShiftName'],
+                'days': row['DaysWorked']
+            }
+            employee_shift_details[emp_id]['totalSaturdays'] += row['Saturdays']
+            employee_shift_details[emp_id]['totalSundays'] += row['Sundays']
+        
+        # Convert to list and sort by employee name
+        employee_shift_details_list = sorted(
+            employee_shift_details.values(),
+            key=lambda x: x['employeeName']
+        )
+        
         conn.close()
         
         return jsonify({
@@ -5691,7 +5736,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             'employeeWorkHours': employee_work_hours,
             'teamShiftDistribution': team_shift_distribution,
             'employeeAbsenceDays': employee_absence_days,
-            'teamWorkload': team_workload
+            'teamWorkload': team_workload,
+            'employeeShiftDetails': employee_shift_details_list
         })
     
     # ============================================================================

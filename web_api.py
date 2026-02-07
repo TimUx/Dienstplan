@@ -5684,6 +5684,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             })
         
         # Employee shift details with weekend counts
+        # Note: Only includes employees with valid shift assignments in the date range
         # First, get shift type counts per employee
         cursor.execute("""
             SELECT e.Id, e.Vorname, e.Name,
@@ -5694,7 +5695,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
                 AND sa.Date >= ? AND sa.Date <= ?
             LEFT JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-            WHERE st.Code IS NOT NULL
+            WHERE st.Code IS NOT NULL  -- Only include valid shift assignments
             GROUP BY e.Id, e.Vorname, e.Name, st.Code, st.Name
             ORDER BY e.Vorname, e.Name, st.Code
         """, (start_date.isoformat(), end_date.isoformat()))
@@ -5719,6 +5720,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             }
         
         # Now get weekend counts separately per employee (to avoid double counting)
+        # Uses DISTINCT to count unique weekend dates, not individual shift assignments
         cursor.execute("""
             SELECT e.Id,
                    COUNT(DISTINCT CASE WHEN strftime('%w', sa.Date) = '6' THEN sa.Date END) as Saturdays,
@@ -5726,7 +5728,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             FROM Employees e
             LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId 
                 AND sa.Date >= ? AND sa.Date <= ?
-            WHERE sa.Id IS NOT NULL
+            WHERE sa.Id IS NOT NULL  -- Only employees with shift assignments
             GROUP BY e.Id
         """, (start_date.isoformat(), end_date.isoformat()))
         

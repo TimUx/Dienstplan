@@ -305,9 +305,12 @@ def load_from_database(db_path: str = "dienstplan.db"):
             is_virtual = False
         
         # RotationGroupId column for database-driven rotation patterns
+        # Note: None values from the database are intentionally preserved - they represent
+        # teams without assigned rotation groups (will use fallback F→N→S pattern)
         try:
             rotation_group_id = row['RotationGroupId']
         except (KeyError, IndexError):
+            # Column doesn't exist in schema (old database) - default to None
             rotation_group_id = None
         
         team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 

@@ -1318,6 +1318,10 @@ def add_daily_shift_ratio_constraints(
             shift_max_staff_weekday[st.code] = st.max_staff_weekday
             shift_max_staff_weekend[st.code] = st.max_staff_weekend
     
+    # Need at least 2 shifts to create ratio constraints
+    if len(shift_max_staff_weekday) < 2 or len(shift_max_staff_weekend) < 2:
+        return []
+    
     # Weight for ratio violations - HIGH priority to ensure proper shift distribution
     # Set to 200 to prioritize shift ordering over hours shortage (100) but below
     # critical operational constraints (rest time 5000+, shift grouping 20000+)
@@ -1332,10 +1336,6 @@ def add_daily_shift_ratio_constraints(
         
         # Use appropriate max_staff values based on day type
         shift_max_staff = shift_max_staff_weekend if is_weekend else shift_max_staff_weekday
-        
-        if len(shift_max_staff) < 2:
-            # Need at least 2 shifts to create ratio constraints
-            continue
         
         # Sort shifts by max_staff (descending) to determine expected ordering
         sorted_shifts = sorted(shift_max_staff.items(), key=lambda x: x[1], reverse=True)

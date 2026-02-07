@@ -18,10 +18,8 @@ This document describes all rules, dependencies, and priorities of the automatic
 | H4 | **Forbidden Transitions** | Prevent inadequate rest periods (Soft Constraint: Weight 50,000/5,000) | **S→F** (only 8h rest)<br>**N→F** (0h rest)<br>Based on shift end times, not rotation groups | constraints.py:1309-1536 |
 | H5 | **No Shifts During Absence** | No shift assignment during vacation/sick leave (U/AU/L) | All shift variables = 0 during absence | constraints.py:1200 |
 | H6 | **Maximum One Shift Per Day** | Employee can only work own team shift OR cross-team shift | `team_shift[emp] + cross_team_shift[emp] ≤ 1` | constraints.py:650 |
-| H7 | **TD Restriction** | ⚠️ **DEPRECATED** - TD/BMT/BSB should be managed as regular shift types | `sum(td_assignments[emp][week]) ≤ 1`<br>*Note: This rule is optional and can be replaced by regular shift type management* | constraints.py:3067-3145 |
-| H8 | **Minimum Monthly Hours** | Employees must meet minimum hours (192h/month) | `total_hours >= 192h` (hard)<br>Target: `(weekly_hours/7) × work_days` (soft)<br>**No hard weekly maximum** | constraints.py:2790-3064 |
-| H9 | **Team Shift Permission** | Teams can only work assigned shift types | Based on `TeamShiftAssignments` configuration | constraints.py:50-108 |
-| H10 | **Rotation Groups** | *(See H2 - merged)* | Database-driven via `RotationGroups` and `RotationGroupShifts` tables | constraints.py:110-219 |
+| H7 | **Team Shift Permission** | Teams can only work assigned shift types | Based on `TeamShiftAssignments` configuration | constraints.py:50-108 |
+| H8 | **Rotation Groups** | *(See H2 - merged)* | Database-driven via `RotationGroups` and `RotationGroupShifts` tables | constraints.py:110-219 |
 
 ---
 
@@ -37,12 +35,13 @@ This document describes all rules, dependencies, and priorities of the automatic
 | 🥈 2 | **Shift Isolation** | 100,000 | CRITICAL | Prevents isolated single shifts (e.g., S-S-F-S-S pattern) | constraints.py:1900 |
 | 🥉 3 | **Rest Time Violations** | 50,000 (weekday)<br>5,000 (Sun-Mon) | CRITICAL | Enforces 11-hour minimum rest (S→F, N→F) | constraints.py:2000 |
 | 4 | **Rotation Order** | 10,000 | VERY_HIGH | Enforces team rotation sequence (from rotation groups DB, default: F→N→S) | constraints.py:221-393 |
-| 5 | **Min Consecutive Weekdays** | 8,000 | VERY_HIGH | Minimum 2 consecutive days Mon-Fri | constraints.py:2200 |
-| 6 | **Max Consecutive Shifts** | 6,000 | VERY_HIGH | Limits consecutive working days per shift | constraints.py:2300 |
-| 7 | **Shift Hopping** | 200 | HIGH | Prevents rapid shift changes | constraints.py:2500 |
-| 8 | **Daily Shift Ratio** | 200 | HIGH | Enforces F ≥ S ≥ N ordering | constraints.py:2600 |
-| 9 | **Cross-Shift Capacity** | 150 | HIGH | Prevents overstaffing low-capacity shifts when high-capacity have space | constraints.py:2700 |
-| 10 | **Target Hours Shortage** | 100 | CRITICAL | Employees must reach minimum hours: 192h/month (hard) + proportional target (soft) based on `(weekly_hours/7) × calendar_days` | constraints.py:2790-3064 |
+| 5 | **Target Hours Achievement** | 100* | CRITICAL | **DYNAMICALLY calculated**: Employees must reach target hours: `(weekly_hours/7) × calendar_days without absence`<br>- Jan (31d, 48h/w): 212.57h<br>- Feb (28d, 48h/w): 192h<br>- Adaptable to different weekly hours per shift type | constraints.py:2916-3066 |
+| 6 | **Min Consecutive Weekdays** | 8,000 | VERY_HIGH | Minimum 2 consecutive days Mon-Fri | constraints.py:2200 |
+| 6 | **Min Consecutive Weekdays** | 8,000 | VERY_HIGH | Minimum 2 consecutive days Mon-Fri | constraints.py:2200 |
+| 7 | **Max Consecutive Shifts** | 6,000 | VERY_HIGH | Limits consecutive working days per shift | constraints.py:2300 |
+| 8 | **Shift Hopping** | 200 | HIGH | Prevents rapid shift changes | constraints.py:2500 |
+| 9 | **Daily Shift Ratio** | 200 | HIGH | Enforces F ≥ S ≥ N ordering | constraints.py:2600 |
+| 10 | **Cross-Shift Capacity** | 150 | HIGH | Prevents overstaffing low-capacity shifts when high-capacity have space | constraints.py:2700 |
 | 11 | **Weekly Shift Type Limit** | 500 | MEDIUM | Max **2** different shift types per employee per week | constraints.py:2270-2393 |
 | 12 | **Night Team Consistency** | 600 | MEDIUM | Maintains team cohesion in night shifts | constraints.py:3000 |
 | 13 | **Weekend Consistency** | 300 | MEDIUM | Weekend shifts match team's weekly shift type | constraints.py:3100 |
@@ -432,6 +431,7 @@ Extended: February 23 (Mon) - April 5 (Sun)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2 | 2026-02-07 | **Correction**: 192h constraint corrected from HARD back to SOFT (as originally implemented in PR #122). Dynamic calculation based on `(weekly_hours/7) × calendar_days` restored. |
 | 1.1 | 2026-02-07 | Added boundary week handling for configuration changes |
 | 1.0 | 2026-02-06 | Initial creation of rules documentation |
 

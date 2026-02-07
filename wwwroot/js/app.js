@@ -1,6 +1,10 @@
 // API Base URL
 const API_BASE = window.location.origin + '/api';
 
+// Configuration constants
+const YEAR_VIEW_SCROLL_PADDING = 100; // Padding in pixels when scrolling to current month
+const YEAR_VIEW_SCROLL_DELAY = 200; // Delay in ms before attempting auto-scroll
+
 // State
 let currentDate = new Date();
 let currentView = 'week';
@@ -492,7 +496,10 @@ function displaySchedule(data, employees) {
     } else if (viewType === 'year') {
         content.innerHTML = displayYearView(data, employees);
         // Auto-scroll to current month after rendering
-        setTimeout(scrollYearViewToCurrentMonth, 200);
+        // Use requestAnimationFrame to ensure DOM is fully rendered
+        requestAnimationFrame(() => {
+            setTimeout(scrollYearViewToCurrentMonth, YEAR_VIEW_SCROLL_DELAY);
+        });
     }
 }
 
@@ -849,7 +856,8 @@ function displayYearView(data, employees) {
                 let content = '';
                 if (activePeriods.length > 0) {
                     // Show compact vacation period indicator for year view
-                    const shortName = activePeriods[0].name.substring(0, 3);
+                    // Use slice instead of substring for better Unicode support
+                    const shortName = activePeriods[0].name.slice(0, 3);
                     content = `<div class="vacation-period-badge-tiny" style="background-color: ${activePeriods[0].colorCode};" title="${activePeriods.map(p => escapeHtml(p.name)).join(', ')}">${escapeHtml(shortName)}</div>`;
                 }
                 
@@ -923,11 +931,12 @@ function scrollYearViewToCurrentMonth() {
     if (monthStartCells.length > 0 && container.scrollWidth > container.clientWidth) {
         const firstCell = monthStartCells[0];
         const cellLeft = firstCell.offsetLeft;
-        const containerWidth = container.clientWidth;
         // Scroll so the current month is visible on the left side with some padding
-        container.scrollLeft = Math.max(0, cellLeft - 100);
+        container.scrollLeft = Math.max(0, cellLeft - YEAR_VIEW_SCROLL_PADDING);
     }
 }
+
+// Helper functions
 
 // Helper functions
 

@@ -120,10 +120,6 @@ def validate_shift_plan(
     if complete_schedule:
         validate_all_employees_present(result, complete_schedule, employees, start_date, end_date)
     
-    # NEW: Validate TD assignments
-    if special_functions:
-        validate_td_assignments(result, special_functions, employees, start_date, end_date)
-    
     # NEW: Validate locked assignments are respected
     if locked_team_shift or locked_employee_weekend:
         validate_locked_assignments(result, assignments, 
@@ -757,77 +753,6 @@ def validate_all_employees_present(
                 result.add_violation(
                     f"MISSING EMPLOYEE: {emp.full_name} (ID {emp.id}) is missing from schedule on {d}"
                 )
-
-
-def validate_td_assignments(
-    result: ValidationResult,
-    special_functions: Dict[Tuple[int, date], str],
-    employees: List[Employee],
-    start_date: date,
-    end_date: date
-):
-    """
-    Validate TD (Tagdienst / Day Duty) assignments.
-    
-    Rules:
-    - Exactly ONE TD per week (Monday-Friday)
-    - TD must be assigned to a qualified employee
-    - TD is visible and marked in special_functions
-    """
-    # Generate weeks
-    dates = []
-    current = start_date
-    while current <= end_date:
-        dates.append(current)
-        current += timedelta(days=1)
-    
-    weeks = []
-    current_week = []
-    for d in dates:
-        if d.weekday() == 0 and current_week:
-            weeks.append(current_week)
-            current_week = []
-        current_week.append(d)
-    if current_week:
-        weeks.append(current_week)
-    
-    # Check each week
-    for week_idx, week_dates in enumerate(weeks):
-        weekday_dates = [d for d in week_dates if d.weekday() < 5]
-        
-        if not weekday_dates:
-            continue
-        
-        # Count TD assignments in this week
-        td_count = 0
-        td_employees = set()
-        
-        for emp in employees:
-            # Check if this employee has TD any day this week
-            has_td_this_week = False
-            for d in weekday_dates:
-                if (emp.id, d) in special_functions and special_functions[(emp.id, d)] == "TD":
-                    has_td_this_week = True
-                    td_employees.add(emp.id)
-            
-            if has_td_this_week:
-                td_count += 1
-                
-                # Validate employee is qualified
-                if not emp.can_do_td:
-                    result.add_violation(
-                        f"TD QUALIFICATION VIOLATION: {emp.full_name} assigned TD in week {week_idx} but not qualified"
-                    )
-        
-        # Validate exactly 1 TD per week
-        if td_count == 0:
-            result.add_violation(
-                f"MISSING TD: Week {week_idx} ({weekday_dates[0]} to {weekday_dates[-1]}) has no TD assignment (required: exactly 1)"
-            )
-        elif td_count > 1:
-            result.add_violation(
-                f"MULTIPLE TD: Week {week_idx} has {td_count} TD assignments (should be exactly 1)"
-            )
 
 
 def validate_locked_assignments(

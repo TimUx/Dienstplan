@@ -295,7 +295,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
         shift_types.append(shift_type)
     
     # Load teams
-    cursor.execute("SELECT Id, Name, Description, Email, IsVirtual FROM Teams")
+    cursor.execute("SELECT Id, Name, Description, Email, IsVirtual, RotationGroupId FROM Teams")
     teams = []
     for row in cursor.fetchall():
         # IsVirtual column added in migration - default to False if not present
@@ -303,8 +303,15 @@ def load_from_database(db_path: str = "dienstplan.db"):
             is_virtual = bool(row['IsVirtual'])
         except (KeyError, IndexError):
             is_virtual = False
+        
+        # RotationGroupId column for database-driven rotation patterns
+        try:
+            rotation_group_id = row['RotationGroupId']
+        except (KeyError, IndexError):
+            rotation_group_id = None
+        
         team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 
-                   email=row['Email'], is_virtual=is_virtual)
+                   email=row['Email'], is_virtual=is_virtual, rotation_group_id=rotation_group_id)
         teams.append(team)
     
     # Load TeamShiftAssignments (which shifts each team can work)

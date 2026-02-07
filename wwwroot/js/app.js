@@ -6173,11 +6173,6 @@ function displayGlobalSettings(settings) {
     html += '<p>ℹ️ Diese Einstellungen gelten für die automatische Schichtplanung und Validierung.</p>';
     html += '</div>';
     
-    html += '<div class="info-box warning">';
-    html += '<p>📌 <strong>Hinweis:</strong> Die maximale Anzahl aufeinanderfolgender Schichten wird jetzt pro Schichttyp konfiguriert.<br>';
-    html += 'Bitte gehen Sie zu <strong>Verwaltung → Schichten</strong>, um diese Einstellungen für jeden Schichttyp einzeln festzulegen.</p>';
-    html += '</div>';
-    
     html += '<form id="global-settings-form" onsubmit="saveGlobalSettings(event)">';
     
     html += '<div class="form-group">';

@@ -78,9 +78,10 @@ def run_cli_planning(
         print("\n[X] No solution found!")
         return 1
     
-    assignments, complete_schedule = result
+    assignments, special_functions, complete_schedule = result
     print(f"\n[OK] Solution found!")
     print(f"  - Total assignments: {len(assignments)}")
+    print(f"  - Special functions: {len(special_functions)}")
     print(f"  - Complete schedule entries: {len(complete_schedule)}")
     
     # Validate

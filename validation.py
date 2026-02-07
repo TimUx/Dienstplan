@@ -862,7 +862,7 @@ if __name__ == "__main__":
         
         validation_result = validate_shift_plan(
             assignments, employees, absences, start, end, teams,
-            special_functions, complete_schedule
+            complete_schedule
         )
         validation_result.print_report()
     else:

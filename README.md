@@ -1290,6 +1290,7 @@ Das Dienstplan-System verfügt über eine umfassende Dokumentation:
 ### 🔧 Für Administratoren
 - **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** - CLI-Befehle und API-Nutzung
 - **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** - Details zum OR-Tools Solver
+- **[Schichtplanungs-Regeln](SCHICHTPLANUNGS_REGELN.md)** - Alle Regeln, Abhängigkeiten und Prioritäten (DE) | [English Version](SHIFT_PLANNING_RULES_EN.md)
 - **[Beispieldaten](docs/SAMPLE_DATA.md)** - Testdaten und API-Beispiele
 
 ### 💻 Für Entwickler

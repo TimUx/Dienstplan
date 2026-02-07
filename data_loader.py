@@ -19,7 +19,6 @@ def generate_sample_data() -> Tuple[List[Employee], List[Team], List[Absence]]:
     - 17 employees total
     - 3 teams with 5-6 members each
     - TD-qualified employees (combining BMT/BSB roles)
-    - No virtual teams (removed from system)
     
     Returns:
         Tuple of (employees, teams, absences)
@@ -295,16 +294,11 @@ def load_from_database(db_path: str = "dienstplan.db"):
         shift_types.append(shift_type)
     
     # Load teams
-    cursor.execute("SELECT Id, Name, Description, Email, IsVirtual FROM Teams")
+    cursor.execute("SELECT Id, Name, Description, Email FROM Teams")
     teams = []
     for row in cursor.fetchall():
-        # IsVirtual column added in migration - default to False if not present
-        try:
-            is_virtual = bool(row['IsVirtual'])
-        except (KeyError, IndexError):
-            is_virtual = False
         team = Team(id=row['Id'], name=row['Name'], description=row['Description'], 
-                   email=row['Email'], is_virtual=is_virtual)
+                   email=row['Email'])
         teams.append(team)
     
     # Load TeamShiftAssignments (which shifts each team can work)
@@ -329,7 +323,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
         team.allowed_shift_type_ids = team_shift_assignments.get(team.id, [])
         
         # Auto-assign F, S, N to teams with empty configuration (backward compatibility)
-        if not team.allowed_shift_type_ids and not team.is_virtual:
+        if not team.allowed_shift_type_ids:
             # Find F, S, N shift type IDs from loaded shift types
             f_id = next((st.id for st in shift_types if st.code == "F"), None)
             s_id = next((st.id for st in shift_types if st.code == "S"), None)

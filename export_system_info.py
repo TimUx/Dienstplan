@@ -260,8 +260,7 @@ class SystemInfoExporter:
         output.append("")
         
         for team in teams:
-            virtual_marker = " [VIRTUAL]" if team['IsVirtual'] else ""
-            output.append(f"Team [{team['Id']}]: {team['Name']}{virtual_marker}")
+            output.append(f"Team [{team['Id']}]: {team['Name']}")
             if team['Description']:
                 output.append(f"  Description: {team['Description']}")
             if team['Email']:
@@ -692,16 +691,11 @@ class SystemInfoExporter:
         output.append("")
         
         # Team statistics
-        self.cursor.execute("SELECT COUNT(*) as count FROM Teams WHERE IsVirtual = 0")
-        regular_teams = self.cursor.fetchone()['count']
-        
-        self.cursor.execute("SELECT COUNT(*) as count FROM Teams WHERE IsVirtual = 1")
-        virtual_teams = self.cursor.fetchone()['count']
+        self.cursor.execute("SELECT COUNT(*) as count FROM Teams")
+        total_teams = self.cursor.fetchone()['count']
         
         output.append("Team Statistics:")
-        output.append(f"  Regular Teams: {regular_teams}")
-        output.append(f"  Virtual Teams: {virtual_teams}")
-        output.append(f"  Total: {regular_teams + virtual_teams}")
+        output.append(f"  Total Teams: {total_teams}")
         output.append("")
         
         # Shift assignment statistics

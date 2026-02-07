@@ -197,34 +197,14 @@ def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Opti
         print(f"Warning: Failed to log audit entry: {e}", file=sys.stderr)
 
 
-def get_virtual_team_employee_count(cursor, team_id: int) -> int:
-    """
-    Get the actual employee count for a virtual team based on employee qualifications.
-    
-    Args:
-        cursor: Database cursor
-        team_id: Team ID
-        
-    Returns:
-        Number of employees with the qualifications for this virtual team
-    """
-    # For virtual teams, return 0 (no special counting logic needed now)
-    return 0
-
 
 def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) -> tuple[date, date]:
     """
-    Extend planning dates to ensure complete weeks (Monday to Sunday).
+    Extend planning dates to complete weeks (Monday-Sunday).
     
-    CRITICAL FIX: Extends BOTH start and end dates to create complete 7-day weeks.
-    This solves the infeasibility issue with partial weeks at month boundaries.
-    
-    - If start_date is not Monday, extend backwards to previous Monday (may be in previous month)
-    - If end_date is not Sunday, extend forward to next Sunday (may be in next month)
-    
-    This ensures the planning period consists of complete Mon-Sun weeks only,
-    which is required for the F→N→S team rotation to work properly without
-    creating infeasibility with the minimum working hours constraint.
+    This ensures shift planning always happens in complete weeks to maintain proper
+    rotation patterns across week boundaries, especially important for team-based
+    rotation systems.
     
     Example: January 2026 (Thu Jan 1 - Sat Jan 31)
     - Extended: Mon Dec 29, 2025 - Sun Feb 1, 2026 (exactly 5 complete weeks)
@@ -1467,29 +1447,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT t.Id, t.Name, t.Description, t.Email, t.IsVirtual,
+            SELECT t.Id, t.Name, t.Description, t.Email,
                    COUNT(e.Id) as EmployeeCount
             FROM Teams t
             LEFT JOIN Employees e ON t.Id = e.TeamId
-            GROUP BY t.Id, t.Name, t.Description, t.Email, t.IsVirtual
+            GROUP BY t.Id, t.Name, t.Description, t.Email
             ORDER BY t.Name
         """)
         
         teams = []
         for row in cursor.fetchall():
-            employee_count = row['EmployeeCount']
-            
-            # For virtual teams, count employees with special qualifications instead of TeamId
-            if bool(row['IsVirtual']):
-                employee_count = get_virtual_team_employee_count(cursor, row['Id'])
+            employee_count = int(row['EmployeeCount'])
             
             teams.append({
                 'id': row['Id'],
                 'name': row['Name'],
                 'description': row['Description'],
                 'email': row['Email'],
-                'isVirtual': bool(row['IsVirtual']),
-                'employeeCount': employee_count
+                                'employeeCount': employee_count
             })
         
         conn.close()
@@ -1504,12 +1479,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT t.Id, t.Name, t.Description, t.Email, t.IsVirtual,
+                SELECT t.Id, t.Name, t.Description, t.Email,
                        COUNT(e.Id) as EmployeeCount
                 FROM Teams t
                 LEFT JOIN Employees e ON t.Id = e.TeamId
                 WHERE t.Id = ?
-                GROUP BY t.Id, t.Name, t.Description, t.Email, t.IsVirtual
+                GROUP BY t.Id, t.Name, t.Description, t.Email
             """, (id,))
             
             row = cursor.fetchone()
@@ -1517,19 +1492,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if not row:
                 return jsonify({'error': 'Team nicht gefunden'}), 404
             
-            employee_count = row['EmployeeCount']
-            
-            # For virtual teams, count employees with special qualifications instead of TeamId
-            if bool(row['IsVirtual']):
-                employee_count = get_virtual_team_employee_count(cursor, row['Id'])
+            employee_count = int(row['EmployeeCount'])
             
             return jsonify({
                 'id': row['Id'],
                 'name': row['Name'],
                 'description': row['Description'],
                 'email': row['Email'],
-                'isVirtual': bool(row['IsVirtual']),
-                'employeeCount': employee_count
+                                'employeeCount': employee_count
             })
         finally:
             if conn:
@@ -1550,13 +1520,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor = conn.cursor()
             
             cursor.execute("""
-                INSERT INTO Teams (Name, Description, Email, IsVirtual)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO Teams (Name, Description, Email)
+                VALUES (?, ?, ?)
             """, (
                 data.get('name'),
                 data.get('description'),
-                data.get('email'),
-                1 if data.get('isVirtual') else 0
+                data.get('email')
             ))
             
             team_id = cursor.lastrowid
@@ -1566,8 +1535,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 'name': data.get('name'),
                 'description': data.get('description'),
                 'email': data.get('email'),
-                'isVirtual': data.get('isVirtual')
-            }, ensure_ascii=False)
+                            }, ensure_ascii=False)
             log_audit(conn, 'Team', team_id, 'Created', changes)
             
             conn.commit()
@@ -1594,7 +1562,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             cursor = conn.cursor()
             
             # Check if team exists and get old values for audit
-            cursor.execute("SELECT Name, Description, Email, IsVirtual FROM Teams WHERE Id = ?", (id,))
+            cursor.execute("SELECT Name, Description, Email FROM Teams WHERE Id = ?", (id,))
             old_row = cursor.fetchone()
             if not old_row:
                 conn.close()
@@ -1602,13 +1570,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             cursor.execute("""
                 UPDATE Teams 
-                SET Name = ?, Description = ?, Email = ?, IsVirtual = ?
+                SET Name = ?, Description = ?, Email = ?
                 WHERE Id = ?
             """, (
                 data.get('name'),
                 data.get('description'),
                 data.get('email'),
-                1 if data.get('isVirtual') else 0,
                 id
             ))
             
@@ -1620,10 +1587,6 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 changes_dict['description'] = {'old': old_row['Description'], 'new': data.get('description')}
             if old_row['Email'] != data.get('email'):
                 changes_dict['email'] = {'old': old_row['Email'], 'new': data.get('email')}
-            new_is_virtual = 1 if data.get('isVirtual') else 0
-            if old_row['IsVirtual'] != new_is_virtual:
-                changes_dict['isVirtual'] = {'old': bool(old_row['IsVirtual']), 'new': bool(new_is_virtual)}
-            
             if changes_dict:
                 changes = json.dumps(changes_dict, ensure_ascii=False)
                 log_audit(conn, 'Team', id, 'Updated', changes)
@@ -2264,7 +2227,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             SELECT t.Id, t.Name
             FROM Teams t
             INNER JOIN TeamShiftAssignments tsa ON t.Id = tsa.TeamId
-            WHERE tsa.ShiftTypeId = ? AND t.IsVirtual = 0
+            WHERE tsa.ShiftTypeId = ?
             ORDER BY t.Name
         """, (shift_id,))
         
@@ -6472,7 +6435,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Get all teams
             cursor.execute("""
-                SELECT Name, Description, Email, IsVirtual
+                SELECT Name, Description, Email
                 FROM Teams
                 ORDER BY Name
             """)
@@ -6485,7 +6448,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             writer = csv.writer(output)
             
             # Write header
-            writer.writerow(['Name', 'Description', 'Email', 'IsVirtual'])
+            writer.writerow(['Name', 'Description', 'Email'])
             
             # Write data
             for row in rows:
@@ -6728,7 +6691,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         'Name': row['Name'],
                         'Description': row.get('Description', ''),
                         'Email': row.get('Email', ''),
-                        'IsVirtual': int(row.get('IsVirtual', 0))
+                        
                     }
                     
                     if existing:
@@ -6736,11 +6699,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                             # Update existing team
                             cursor.execute("""
                                 UPDATE Teams
-                                SET Description = ?, Email = ?, IsVirtual = ?
+                                SET Description = ?, Email = ?
                                 WHERE Name = ?
                             """, (
                                 values['Description'], values['Email'],
-                                values['IsVirtual'], values['Name']
+                                values['Name']
                             ))
                             updated_count += 1
                         else:
@@ -6749,11 +6712,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     else:
                         # Insert new team
                         cursor.execute("""
-                            INSERT INTO Teams (Name, Description, Email, IsVirtual)
+                            INSERT INTO Teams (Name, Description, Email)
                             VALUES (?, ?, ?, ?)
                         """, (
                             values['Name'], values['Description'],
-                            values['Email'], values['IsVirtual']
+                            values['Email']
                         ))
                         imported_count += 1
                         

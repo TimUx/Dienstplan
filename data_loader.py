@@ -340,12 +340,13 @@ def load_from_database(db_path: str = "dienstplan.db"):
                 team.allowed_shift_type_ids = [f_id, s_id, n_id]
                 print(f"  Auto-assigned F, S, N shifts to {team.name} (no TeamShiftAssignments found)")
     
-    # Load employees
+    # Load employees (only active employees with team assignments for shift planning)
     cursor.execute("""
         SELECT Id, Vorname, Name, Personalnummer, Email, Geburtsdatum, 
                Funktion, IsFerienjobber, IsBrandmeldetechniker, 
-               IsBrandschutzbeauftragter, TeamId
+               IsBrandschutzbeauftragter, TeamId, IsActive
         FROM Employees
+        WHERE IsActive = 1 AND TeamId IS NOT NULL
     """)
     employees = []
     
@@ -361,6 +362,7 @@ def load_from_database(db_path: str = "dienstplan.db"):
     COL_IS_BMT = 8
     COL_IS_BSB = 9
     COL_TEAM_ID = 10
+    COL_IS_ACTIVE = 11
     
     for row in cursor.fetchall():
         # TD qualification: employee is qualified if they have either BMT or BSB qualification

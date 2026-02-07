@@ -678,16 +678,27 @@ class SystemInfoExporter:
         output = []
         
         # Employee statistics
+        # System active: employees marked as active in the system
         self.cursor.execute("SELECT COUNT(*) as count FROM Employees WHERE IsActive = 1")
-        active_employees = self.cursor.fetchone()['count']
+        system_active_employees = self.cursor.fetchone()['count']
         
+        # Shift planning active: employees that are active AND assigned to a team
+        self.cursor.execute("""
+            SELECT COUNT(*) as count 
+            FROM Employees 
+            WHERE IsActive = 1 AND TeamId IS NOT NULL
+        """)
+        shift_planning_active = self.cursor.fetchone()['count']
+        
+        # Inactive employees
         self.cursor.execute("SELECT COUNT(*) as count FROM Employees WHERE IsActive = 0")
         inactive_employees = self.cursor.fetchone()['count']
         
         output.append("Employee Statistics:")
-        output.append(f"  Active Employees: {active_employees}")
-        output.append(f"  Inactive Employees: {inactive_employees}")
-        output.append(f"  Total: {active_employees + inactive_employees}")
+        output.append(f"  System Active Employees: {system_active_employees}")
+        output.append(f"  Shift Planning Active Employees (with team): {shift_planning_active}")
+        output.append(f"  System Inactive Employees: {inactive_employees}")
+        output.append(f"  Total: {system_active_employees + inactive_employees}")
         output.append("")
         
         # Team statistics

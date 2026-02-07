@@ -69,6 +69,7 @@ def test_employee_filter():
                 IsFerienjobber INTEGER NOT NULL DEFAULT 0,
                 IsBrandmeldetechniker INTEGER NOT NULL DEFAULT 0,
                 IsBrandschutzbeauftragter INTEGER NOT NULL DEFAULT 0,
+                IsSpringer INTEGER NOT NULL DEFAULT 0,
                 TeamId INTEGER,
                 IsActive INTEGER NOT NULL DEFAULT 1
             )

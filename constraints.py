@@ -2973,6 +2973,89 @@ def add_consecutive_shifts_constraints(
                                 model.AddMultiplicationEquality(cross_shift_penalty, [cross_shift_violation, 400])
                                 consecutive_violation_penalties.append(cross_shift_penalty)
     
+    # TOTAL CONSECUTIVE WORKING DAYS CONSTRAINT:
+    # Enforce maximum total consecutive working days across ALL shift types.
+    # This prevents scenarios like: 5x S + 3x N = 8 consecutive days
+    # where neither shift type individually violates its limit, but total is too high.
+    #
+    # Use the maximum max_consecutive_days value across all shift types as the global limit.
+    # This ensures employees don't work more than the highest allowed consecutive days,
+    # regardless of shift type combinations.
+    max_total_consecutive = max((st.max_consecutive_days for st in shift_types), default=6)
+    
+    for emp in employees:
+        # Check each possible window of (max_total_consecutive + 1) days
+        for start_idx in range(len(dates) - max_total_consecutive):
+            any_shift_indicators = []
+            
+            for day_offset in range(max_total_consecutive + 1):
+                date_idx = start_idx + day_offset
+                current_date = dates[date_idx]
+                
+                # Get week index
+                week_idx = date_to_week.get(current_date)
+                if week_idx is None:
+                    # Create zero variable for consistency
+                    zero_var = model.NewBoolVar(f"total_zero_{emp.id}_{date_idx}")
+                    model.Add(zero_var == 0)
+                    any_shift_indicators.append(zero_var)
+                    continue
+                
+                # Collect ALL shift variables for this day (ANY shift type)
+                day_shift_vars = []
+                
+                for check_shift_code in shift_codes:
+                    # Team-based shift (weekday)
+                    if current_date.weekday() < 5 and (emp.id, current_date) in employee_active:
+                        team = emp_to_team.get(emp.id)
+                        if team and (team.id, week_idx, check_shift_code) in team_shift:
+                            work_var = model.NewBoolVar(f"total_check_{check_shift_code}_team_{emp.id}_{date_idx}")
+                            model.AddMultiplicationEquality(
+                                work_var,
+                                [employee_active[(emp.id, current_date)], team_shift[(team.id, week_idx, check_shift_code)]]
+                            )
+                            day_shift_vars.append(work_var)
+                    
+                    # Team-based shift (weekend)
+                    if current_date.weekday() >= 5 and (emp.id, current_date) in employee_weekend_shift:
+                        team = emp_to_team.get(emp.id)
+                        if team and (team.id, week_idx, check_shift_code) in team_shift:
+                            weekend_var = model.NewBoolVar(f"total_check_{check_shift_code}_weekend_{emp.id}_{date_idx}")
+                            model.AddMultiplicationEquality(
+                                weekend_var,
+                                [employee_weekend_shift[(emp.id, current_date)], team_shift[(team.id, week_idx, check_shift_code)]]
+                            )
+                            day_shift_vars.append(weekend_var)
+                    
+                    # Cross-team shift
+                    if (emp.id, current_date, check_shift_code) in employee_cross_team_shift:
+                        day_shift_vars.append(employee_cross_team_shift[(emp.id, current_date, check_shift_code)])
+                    if (emp.id, current_date, check_shift_code) in employee_cross_team_weekend:
+                        day_shift_vars.append(employee_cross_team_weekend[(emp.id, current_date, check_shift_code)])
+                
+                # Create indicator: does employee work ANY shift on this day?
+                if day_shift_vars:
+                    works_any = model.NewBoolVar(f"total_any_{emp.id}_{date_idx}")
+                    model.Add(sum(day_shift_vars) >= 1).OnlyEnforceIf(works_any)
+                    model.Add(sum(day_shift_vars) == 0).OnlyEnforceIf(works_any.Not())
+                    any_shift_indicators.append(works_any)
+                else:
+                    # No shifts possible on this day
+                    zero_var = model.NewBoolVar(f"total_zero_{emp.id}_{date_idx}")
+                    model.Add(zero_var == 0)
+                    any_shift_indicators.append(zero_var)
+            
+            # Violation if ALL (max_total_consecutive + 1) days have work
+            if len(any_shift_indicators) == max_total_consecutive + 1:
+                total_violation = model.NewBoolVar(f"total_consec_viol_{emp.id}_{start_idx}")
+                model.Add(sum(any_shift_indicators) == max_total_consecutive + 1).OnlyEnforceIf(total_violation)
+                model.Add(sum(any_shift_indicators) < max_total_consecutive + 1).OnlyEnforceIf(total_violation.Not())
+                
+                # Penalty: 400 points per violation (same priority as other consecutive violations)
+                total_penalty = model.NewIntVar(0, 400, f"total_consec_penalty_{emp.id}_{start_idx}")
+                model.AddMultiplicationEquality(total_penalty, [total_violation, 400])
+                consecutive_violation_penalties.append(total_penalty)
+    
     return consecutive_violation_penalties
 
 

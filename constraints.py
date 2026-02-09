@@ -208,8 +208,8 @@ def add_team_rotation_constraints(
             # This ensures the same calendar week always gets the same shift assignment
             # regardless of which month's planning period it appears in
             week_dates = weeks[week_idx]
-            monday_of_week = week_dates[0]  # First day of week (Monday)
-            iso_year, iso_week, iso_weekday = monday_of_week.isocalendar()
+            sunday_of_week = week_dates[0]  # First day of week (Sunday)
+            iso_year, iso_week, iso_weekday = sunday_of_week.isocalendar()
             
             # Use ISO week number for rotation calculation (absolute reference)
             # This ensures cross-month continuity: if a week spans two months,

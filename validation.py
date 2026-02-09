@@ -653,7 +653,7 @@ def validate_weekend_team_consistency(
     weeks = []
     current_week = []
     for d in dates:
-        if d.weekday() == 0 and current_week:
+        if d.weekday() == 6 and current_week:  # Sunday
             weeks.append(current_week)
             current_week = []
         current_week.append(d)
@@ -782,7 +782,7 @@ def validate_locked_assignments(
     weeks = []
     current_week = []
     for d in dates:
-        if d.weekday() == 0 and current_week:
+        if d.weekday() == 6 and current_week:  # Sunday
             weeks.append(current_week)
             current_week = []
         current_week.append(d)

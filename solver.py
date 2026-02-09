@@ -910,25 +910,27 @@ class ShiftPlanningSolver:
                                 )
                                 break  # Only report once per partial week
         
-        # NEW: Check if planning period starts on a day other than Monday
+        # NEW: Check if planning period starts on a day other than Sunday
         # This creates a partial first week which can cause rotation conflicts
         # NOTE: In the Web UI, this is automatically handled by extending to complete weeks
         first_date = dates[0]
         last_date = dates[-1]
-        if first_date.weekday() != 0:  # Not Monday
-            # Calculate days in first week (from first_date until Sunday)
-            days_in_first_week = 7 - first_date.weekday()
+        if first_date.weekday() != 6:  # Not Sunday
+            # Calculate days in first week (from first_date until Saturday)
+            days_in_first_week = 6 - first_date.weekday()
+            if days_in_first_week <= 0:
+                days_in_first_week = 7 + days_in_first_week
             diagnostics['potential_issues'].append(
                 f"Planungszeitraum beginnt am {first_date.strftime('%A, %d.%m.%Y')} "
-                f"(nicht Montag). Dies erzeugt eine unvollständige erste Woche mit nur "
+                f"(nicht Sonntag). Dies erzeugt eine unvollständige erste Woche mit nur "
                 f"{days_in_first_week} Tagen, was zu Konflikten mit der Team-Rotation und "
                 f"Mindestbesetzungsanforderungen führen kann. "
-                f"HINWEIS: Das System erweitert automatisch auf vollständige Wochen (Mo-So) "
+                f"HINWEIS: Das System erweitert automatisch auf vollständige Wochen (So-Sa) "
                 f"und berücksichtigt bereits geplante Tage aus dem Vormonat."
             )
         
         # NEW: Check if last week is also partial
-        if last_date.weekday() != 6 and len(weeks) > 0:  # Not Sunday
+        if last_date.weekday() != 5 and len(weeks) > 0:  # Not Saturday
             last_week_size = len(weeks[-1])
             if last_week_size < 7:
                 diagnostics['potential_issues'].append(

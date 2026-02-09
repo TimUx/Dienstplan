@@ -2,6 +2,10 @@
 """
 Test: Verify total consecutive working days constraint
 Tests that employees cannot work more than max consecutive days across all shift types
+
+NOTE: This is a documentation test that describes the expected behavior.
+For actual constraint validation, see test_consecutive_days_fix.py which creates
+a CP-SAT model and verifies that violations are properly detected and penalized.
 """
 
 from datetime import date, timedelta

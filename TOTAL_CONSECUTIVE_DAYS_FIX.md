@@ -186,7 +186,7 @@ Benefits:
 
 ### Rest Day Recommendations
 
-The problem statement mentions: "Zusätzlich es es auch Sinnvoll, pause Tage zwischen einen Schichtwechsel zu legen."
+The problem statement mentions: "Zusätzlich es ist auch Sinnvoll, pause Tage zwischen einen Schichtwechsel zu legen."
 
 Translation: "Additionally, it makes sense to place rest days between shift changes."
 

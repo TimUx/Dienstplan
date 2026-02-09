@@ -16,14 +16,21 @@ def test_boundary_week_detection():
     start_date = date(2026, 3, 1)  # Sunday
     end_date = date(2026, 3, 31)    # Tuesday
     
-    # Extended dates (complete weeks)
-    days_since_monday = start_date.weekday()
-    extended_start = start_date - timedelta(days=days_since_monday)
-    days_until_sunday = 6 - end_date.weekday()
-    extended_end = end_date + timedelta(days=days_until_sunday)
+    # Extended dates (complete weeks, now Sunday-Saturday)
+    extended_start = start_date
+    if start_date.weekday() != 6:  # Not Sunday
+        days_since_sunday = start_date.weekday() + 1
+        extended_start = start_date - timedelta(days=days_since_sunday)
     
-    assert extended_start == date(2026, 2, 23), "Extended start should be Feb 23 (Monday)"
-    assert extended_end == date(2026, 4, 5), "Extended end should be Apr 5 (Sunday)"
+    extended_end = end_date
+    if end_date.weekday() != 5:  # Not Saturday
+        days_until_saturday = (5 - end_date.weekday() + 7) % 7
+        extended_end = end_date + timedelta(days=days_until_saturday)
+    
+    # For March 1 (Sunday), no extension needed for start
+    # For March 31 (Tuesday), extend to Saturday April 4
+    assert extended_start == date(2026, 3, 1), "Extended start should be Mar 1 (Sunday)"
+    assert extended_end == date(2026, 4, 4), "Extended end should be Apr 4 (Saturday)"
     
     # Calculate weeks
     dates_list = []
@@ -35,7 +42,7 @@ def test_boundary_week_detection():
     weeks = []
     current_week = []
     for d in dates_list:
-        if d.weekday() == 0 and current_week:  # Monday
+        if d.weekday() == 6 and current_week:  # Sunday
             weeks.append(current_week)
             current_week = []
         current_week.append(d)
@@ -52,19 +59,18 @@ def test_boundary_week_detection():
         if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
             boundary_weeks.add(week_idx)
     
-    # Verify expectations
-    assert len(weeks) == 6, f"Should have 6 weeks, got {len(weeks)}"
-    assert 0 in boundary_weeks, "Week 0 (Feb 23 - Mar 1) should be a boundary week"
-    assert 5 in boundary_weeks, "Week 5 (Mar 30 - Apr 5) should be a boundary week"
-    assert 1 not in boundary_weeks, "Week 1 (Mar 2-8) should NOT be a boundary week"
-    assert 2 not in boundary_weeks, "Week 2 (Mar 9-15) should NOT be a boundary week"
-    assert 3 not in boundary_weeks, "Week 3 (Mar 16-22) should NOT be a boundary week"
-    assert 4 not in boundary_weeks, "Week 4 (Mar 23-29) should NOT be a boundary week"
+    # Verify expectations (updated for Sunday-Saturday weeks)
+    # March 1 is Sunday, so Week 0 is Mar 1-7 (all in March, not a boundary)
+    # Last week will contain April dates (boundary week)
+    assert len(weeks) == 5, f"Should have 5 weeks, got {len(weeks)}"
+    assert 0 not in boundary_weeks, "Week 0 (Mar 1-7) should NOT be a boundary week"
+    assert 4 in boundary_weeks, "Last week should be a boundary week (contains April dates)"
+    
     
     print("✅ All boundary week detection tests passed!")
-    print(f"   - Week 0: {weeks[0][0]} to {weeks[0][-1]} (boundary: {0 in boundary_weeks})")
-    print(f"   - Week 5: {weeks[5][0]} to {weeks[5][-1]} (boundary: {5 in boundary_weeks})")
-    print(f"   - Weeks 1-4 are entirely within March (not boundaries)")
+    for i, week in enumerate(weeks):
+        is_boundary = i in boundary_weeks
+        print(f"   - Week {i}: {week[0]} to {week[-1]} (boundary: {is_boundary})")
 
 
 def test_february_scenario():
@@ -73,17 +79,22 @@ def test_february_scenario():
     start_date = date(2026, 2, 1)   # Sunday
     end_date = date(2026, 2, 28)     # Saturday
     
-    # Extended dates
-    days_since_monday = start_date.weekday()
-    extended_start = start_date - timedelta(days=days_since_monday)
-    days_until_sunday = 6 - end_date.weekday()
-    extended_end = end_date + timedelta(days=days_until_sunday)
+    # Extended dates (now Sunday-Saturday weeks)
+    extended_start = start_date
+    if start_date.weekday() != 6:  # Not Sunday
+        days_since_sunday = start_date.weekday() + 1
+        extended_start = start_date - timedelta(days=days_since_sunday)
+    
+    extended_end = end_date
+    if end_date.weekday() != 5:  # Not Saturday
+        days_until_saturday = (5 - end_date.weekday() + 7) % 7
+        extended_end = end_date + timedelta(days=days_until_saturday)
     
     print(f"\n✅ February 2026 test:")
     print(f"   - Main month: {start_date} to {end_date}")
     print(f"   - Extended: {extended_start} to {extended_end}")
-    print(f"   - Extended start is Monday: {extended_start.weekday() == 0}")
-    print(f"   - Extended end is Sunday: {extended_end.weekday() == 6}")
+    print(f"   - Extended start is Sunday: {extended_start.weekday() == 6}")
+    print(f"   - Extended end is Saturday: {extended_end.weekday() == 5}")
 
 
 if __name__ == "__main__":

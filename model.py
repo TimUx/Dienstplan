@@ -90,20 +90,24 @@ class ShiftPlanningModel:
         self.original_start_date = start_date
         self.original_end_date = end_date
         
-        # Extend planning period to complete weeks (Monday to Sunday)
+        # Extend planning period to complete weeks (Sunday to Saturday)
         # This ensures team rotation constraints can be satisfied
         extended_start = start_date
         extended_end = end_date
         
-        # Extend start to previous Monday if not already Monday
-        if start_date.weekday() != 0:  # 0 = Monday
-            days_back_to_monday = start_date.weekday()
-            extended_start = start_date - timedelta(days=days_back_to_monday)
+        # Extend start to previous Sunday if not already Sunday
+        if start_date.weekday() != 6:  # 6 = Sunday
+            # Calculate days back to previous Sunday
+            # Monday=0 -> go back 1 day, Tuesday=1 -> go back 2 days, ..., Saturday=5 -> go back 6 days
+            days_back_to_sunday = start_date.weekday() + 1
+            extended_start = start_date - timedelta(days=days_back_to_sunday)
         
-        # Extend end to next Sunday if not already Sunday
-        if end_date.weekday() != 6:  # 6 = Sunday
-            days_forward_to_sunday = 6 - end_date.weekday()
-            extended_end = end_date + timedelta(days=days_forward_to_sunday)
+        # Extend end to next Saturday if not already Saturday
+        if end_date.weekday() != 5:  # 5 = Saturday
+            # Calculate days forward to next Saturday
+            # Sunday=6 -> go forward 6 days, Monday=0 -> go forward 5 days, ..., Friday=4 -> go forward 1 day
+            days_forward_to_saturday = (5 - end_date.weekday() + 7) % 7
+            extended_end = end_date + timedelta(days=days_forward_to_saturday)
         
         # Use extended dates for planning
         self.start_date = extended_start
@@ -342,7 +346,7 @@ class ShiftPlanningModel:
     
     def _generate_weeks(self) -> List[List[date]]:
         """
-        Generate list of weeks (Monday to Sunday) from dates.
+        Generate list of weeks (Sunday to Saturday) from dates.
         
         Returns:
             List of weeks, where each week is a list of dates
@@ -351,7 +355,7 @@ class ShiftPlanningModel:
         current_week = []
         
         for d in self.dates:
-            if d.weekday() == 0 and current_week:  # Monday and week has content
+            if d.weekday() == 6 and current_week:  # Sunday and week has content
                 weeks.append(current_week)
                 current_week = []
             current_week.append(d)

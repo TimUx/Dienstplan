@@ -155,10 +155,11 @@ def test_consecutive_night_shifts_violation():
 def test_mixed_shift_scenario():
     """
     Test a scenario where employee switches between shift types.
-    This should NOT violate consecutive days constraint.
+    NEW REQUIREMENT: This SHOULD violate cross-shift-type constraint
+    because after 3 N shifts, employee needs a break before working ANY shift.
     """
     
-    print("\n\nTest: Switching shift types (should NOT violate)")
+    print("\n\nTest: Switching shift types after max consecutive (SHOULD violate)")
     print("=" * 70)
     
     # Create test data
@@ -212,10 +213,12 @@ def test_mixed_shift_scenario():
             employee_cross_team_shift[(1, day, "F")] = var
     
     print("\nSetup:")
-    print(f"  Days 1-3: N shifts")
-    print(f"  Days 4-7: F shifts")
+    print(f"  Days 1-3: N shifts (reaches max_consecutive_days=3)")
+    print(f"  Day 4: F shift (trying to work without break)")
     print(f"  Night shift max consecutive days: {shift_n.max_consecutive_days}")
     print(f"  F shift max consecutive days: {shift_f.max_consecutive_days}")
+    print(f"\nNEW REQUIREMENT: After 3 N shifts, employee needs 1 day off")
+    print(f"  before working ANY shift (F, S, or N)")
     
     shift_types = [shift_f, shift_n]
     shift_codes = ["F", "N"]
@@ -238,11 +241,12 @@ def test_mixed_shift_scenario():
         total_penalty = sum(solver.Value(p) for p in penalties)
         print(f"\nResult: Total penalty = {total_penalty}")
         
-        if total_penalty == 0:
-            print("\n✅ SUCCESS: No violations detected (as expected)")
-            print(f"   Switching from N to F after 3 days is allowed.")
+        if total_penalty > 0:
+            print("\n✅ SUCCESS: Cross-shift-type violation detected (as expected)")
+            print(f"   After 3 N shifts, working F on day 4 triggers penalty")
+            print(f"   This enforces: Employee needs rest day after max consecutive")
         else:
-            print("\n❌ FAIL: Unexpected violations detected!")
+            print("\n❌ FAIL: No violations detected, but expected cross-shift violation!")
             return False
     else:
         print(f"\n⚠️  Solver status: {solver.StatusName(status)}")

@@ -23,12 +23,12 @@ def test_week_extension():
     # Extend to Sunday-Saturday
     extended_start = start_date
     if start_date.weekday() != 6:  # Not Sunday
-        days_back = (start_date.weekday() + 1) % 7
+        days_back = start_date.weekday() + 1
         extended_start = start_date - timedelta(days=days_back)
     
     extended_end = end_date
     if end_date.weekday() != 5:  # Not Saturday
-        days_forward = (5 - end_date.weekday()) % 7
+        days_forward = (5 - end_date.weekday() + 7) % 7
         extended_end = end_date + timedelta(days=days_forward)
     
     print(f"  Original: {start_date} ({start_date.strftime('%A')}) to {end_date} ({end_date.strftime('%A')})")
@@ -45,12 +45,12 @@ def test_week_extension():
     # Extend to Sunday-Saturday
     extended_start = start_date
     if start_date.weekday() != 6:  # Not Sunday
-        days_back = (start_date.weekday() + 1) % 7
+        days_back = start_date.weekday() + 1
         extended_start = start_date - timedelta(days=days_back)
     
     extended_end = end_date
     if end_date.weekday() != 5:  # Not Saturday
-        days_forward = (5 - end_date.weekday()) % 7
+        days_forward = (5 - end_date.weekday() + 7) % 7
         extended_end = end_date + timedelta(days=days_forward)
     
     print(f"  Original: {start_date} ({start_date.strftime('%A')}) to {end_date} ({end_date.strftime('%A')})")
@@ -67,12 +67,12 @@ def test_week_extension():
     # Extend to Sunday-Saturday
     extended_start = start_date
     if start_date.weekday() != 6:  # Not Sunday
-        days_back = (start_date.weekday() + 1) % 7
+        days_back = start_date.weekday() + 1
         extended_start = start_date - timedelta(days=days_back)
     
     extended_end = end_date
     if end_date.weekday() != 5:  # Not Saturday
-        days_forward = (5 - end_date.weekday()) % 7
+        days_forward = (5 - end_date.weekday() + 7) % 7
         extended_end = end_date + timedelta(days=days_forward)
     
     print(f"  Original: {start_date} ({start_date.strftime('%A')}) to {end_date} ({end_date.strftime('%A')})")

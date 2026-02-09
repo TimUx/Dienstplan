@@ -19,12 +19,12 @@ def test_boundary_week_detection():
     # Extended dates (complete weeks, now Sunday-Saturday)
     extended_start = start_date
     if start_date.weekday() != 6:  # Not Sunday
-        days_since_sunday = (start_date.weekday() + 1) % 7
+        days_since_sunday = start_date.weekday() + 1
         extended_start = start_date - timedelta(days=days_since_sunday)
     
     extended_end = end_date
     if end_date.weekday() != 5:  # Not Saturday
-        days_until_saturday = (5 - end_date.weekday()) % 7
+        days_until_saturday = (5 - end_date.weekday() + 7) % 7
         extended_end = end_date + timedelta(days=days_until_saturday)
     
     # For March 1 (Sunday), no extension needed for start
@@ -82,12 +82,12 @@ def test_february_scenario():
     # Extended dates (now Sunday-Saturday weeks)
     extended_start = start_date
     if start_date.weekday() != 6:  # Not Sunday
-        days_since_sunday = (start_date.weekday() + 1) % 7
+        days_since_sunday = start_date.weekday() + 1
         extended_start = start_date - timedelta(days=days_since_sunday)
     
     extended_end = end_date
     if end_date.weekday() != 5:  # Not Saturday
-        days_until_saturday = (5 - end_date.weekday()) % 7
+        days_until_saturday = (5 - end_date.weekday() + 7) % 7
         extended_end = end_date + timedelta(days=days_until_saturday)
     
     print(f"\n✅ February 2026 test:")

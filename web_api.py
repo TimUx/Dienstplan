@@ -221,14 +221,14 @@ def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) ->
     extended_start = start_date
     if start_date.weekday() != 6:  # Not Sunday
         # Monday=0 -> go back 1 day, Tuesday=1 -> go back 2 days, ..., Saturday=5 -> go back 6 days
-        days_since_sunday = (start_date.weekday() + 1) % 7
+        days_since_sunday = start_date.weekday() + 1
         extended_start = start_date - timedelta(days=days_since_sunday)
     
     # Extend END forward to next Saturday if not already Saturday
     extended_end = end_date
     if end_date.weekday() != 5:  # Not Saturday
         # Sunday=6 -> go forward 6 days, Monday=0 -> go forward 5 days, ..., Friday=4 -> go forward 1 day
-        days_until_saturday = (5 - end_date.weekday()) % 7
+        days_until_saturday = (5 - end_date.weekday() + 7) % 7
         extended_end = end_date + timedelta(days=days_until_saturday)
     
     return extended_start, extended_end
@@ -2721,13 +2721,13 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 # Find Sunday of the week containing start_date (first day of month)
                 start_weekday = start_date.weekday()  # Monday=0, Sunday=6
                 if start_weekday != 6:  # Not Sunday
-                    days_back = (start_weekday + 1) % 7
+                    days_back = start_weekday + 1
                     start_date = start_date - timedelta(days=days_back)
                 
                 # Find Saturday of the week containing end_date (last day of month)
                 end_weekday = end_date.weekday()  # Monday=0, Sunday=6
                 if end_weekday != 5:  # If not Saturday already
-                    days_forward = (5 - end_weekday) % 7
+                    days_forward = (5 - end_weekday + 7) % 7
                     end_date = end_date + timedelta(days=days_forward)
             elif view == 'year':
                 end_date = date(start_date.year, 12, 31)

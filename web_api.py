@@ -3113,37 +3113,131 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             conn.close()
             
             # Load previous shifts for cross-month consecutive days checking
-            # We need to look back up to max_consecutive_days before the extended_start
+            # CRITICAL FIX: Extended lookback to capture full consecutive chains
+            # Previous implementation only looked back max_consecutive_days, which allowed
+            # long consecutive chains to build up across multiple planning periods.
+            # Example: If max=6 but employee worked 20 consecutive days in previous month,
+            # only seeing the last 6 days would miss the full violation.
+            # 
+            # New approach: Start with max_consecutive_days lookback, then extend dynamically
+            # for each employee to capture their full consecutive chain.
             max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
-            lookback_start = extended_start - timedelta(days=max_consecutive_limit)
-            lookback_end = extended_start - timedelta(days=1)
+            
+            # Maximum lookback period to prevent excessive database queries
+            # 60 days (approximately 2 months) is chosen because:
+            # 1. It's long enough to catch realistic violation chains (even 4x the typical limit)
+            # 2. It limits database load by not querying indefinitely into the past
+            # 3. Violations beyond 60 days would have been severely penalized in their own planning period
+            # 4. Regulatory requirements typically focus on recent consecutive work, not months-old violations
+            max_lookback_days = 60
             
             previous_employee_shifts = {}
             conn = db.get_connection()
             cursor = conn.cursor()
             
-            # Query shift assignments from the lookback period
+            # First pass: Load initial lookback period (same as before)
+            initial_lookback_start = extended_start - timedelta(days=max_consecutive_limit)
+            initial_lookback_end = extended_start - timedelta(days=1)
+            
             cursor.execute("""
                 SELECT sa.EmployeeId, sa.Date, st.Code
                 FROM ShiftAssignments sa
                 INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
                 WHERE sa.Date >= ? AND sa.Date <= ?
                 ORDER BY sa.Date
-            """, (lookback_start.isoformat(), lookback_end.isoformat()))
+            """, (initial_lookback_start.isoformat(), initial_lookback_end.isoformat()))
             
-            for emp_id, date_str, shift_code in cursor.fetchall():
+            initial_shifts = cursor.fetchall()
+            
+            # Group shifts by employee for analysis
+            employee_shift_dates = {}
+            for emp_id, date_str, shift_code in initial_shifts:
                 shift_date = date.fromisoformat(date_str)
                 try:
                     emp_id_int = int(emp_id)
                 except (ValueError, TypeError):
                     emp_id_int = emp_id
+                    
+                if emp_id_int not in employee_shift_dates:
+                    employee_shift_dates[emp_id_int] = []
+                employee_shift_dates[emp_id_int].append((shift_date, shift_code))
                 previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
+            
+            # Second pass: For each employee with shifts at the start of lookback period,
+            # extend lookback to capture their full consecutive chain
+            employees_to_extend = []
+            for emp_id, shifts in employee_shift_dates.items():
+                if not shifts:
+                    continue
+                
+                # Sort by date
+                shifts.sort(key=lambda x: x[0])
+                
+                # Check if employee has shifts at the very beginning of lookback period
+                # If so, they might have more consecutive days further back
+                earliest_shift_date = shifts[0][0]
+                
+                # Check if there's a consecutive chain leading up to extended_start
+                # Work backwards from extended_start - 1 to find consecutive days
+                # Check at least max_consecutive_limit days to see if chain extends beyond limit
+                consecutive_days = 0
+                check_date = extended_start - timedelta(days=1)
+                # Check max_consecutive_limit days to see if all have shifts
+                for _ in range(max_consecutive_limit):
+                    has_shift = any(shift_date == check_date for shift_date, _ in shifts)
+                    if has_shift:
+                        consecutive_days += 1
+                        check_date -= timedelta(days=1)
+                    else:
+                        break
+                
+                # If we found exactly max_consecutive_limit consecutive days without breaking,
+                # the chain might extend further back. We need extended lookback to find out.
+                # Using == ensures we only extend when we've exhausted the initial lookback.
+                if consecutive_days == max_consecutive_limit:
+                    employees_to_extend.append(emp_id)
+            
+            # Extend lookback for employees who need it
+            if employees_to_extend:
+                extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
+                extended_lookback_end = initial_lookback_start - timedelta(days=1)
+                
+                app.logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
+                
+                # Query extended period for these employees only
+                # Use parameterized query to prevent SQL injection
+                placeholders = ','.join('?' * len(employees_to_extend))
+                query = f"""
+                    SELECT sa.EmployeeId, sa.Date, st.Code
+                    FROM ShiftAssignments sa
+                    INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                    WHERE sa.Date >= ? AND sa.Date <= ?
+                    AND sa.EmployeeId IN ({placeholders})
+                    ORDER BY sa.Date
+                """
+                params = [extended_lookback_start.isoformat(), extended_lookback_end.isoformat()] + employees_to_extend
+                cursor.execute(query, params)
+                
+                for emp_id, date_str, shift_code in cursor.fetchall():
+                    shift_date = date.fromisoformat(date_str)
+                    try:
+                        emp_id_int = int(emp_id)
+                    except (ValueError, TypeError):
+                        emp_id_int = emp_id
+                    previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
             
             conn.close()
             
             app.logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
             if previous_employee_shifts:
-                app.logger.info(f"  Previous shifts date range: {lookback_start} to {lookback_end}")
+                # Find actual date range
+                all_dates = [d for (_, d) in previous_employee_shifts.keys()]
+                if all_dates:
+                    actual_lookback_start = min(all_dates)
+                    actual_lookback_end = max(all_dates)
+                    app.logger.info(f"  Previous shifts date range: {actual_lookback_start} to {actual_lookback_end}")
+                    if employees_to_extend:
+                        app.logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
             
             # Create model with extended dates and locked constraints
             planning_model = create_shift_planning_model(

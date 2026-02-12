@@ -3123,7 +3123,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # for each employee to capture their full consecutive chain.
             max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
             
-            # Maximum lookback period to prevent excessive database queries (e.g., 60 days = 2 months)
+            # Maximum lookback period to prevent excessive database queries
+            # 60 days (approximately 2 months) is chosen because:
+            # 1. It's long enough to catch realistic violation chains (even 4x the typical limit)
+            # 2. It limits database load by not querying indefinitely into the past
+            # 3. Violations beyond 60 days would have been severely penalized in their own planning period
+            # 4. Regulatory requirements typically focus on recent consecutive work, not months-old violations
             max_lookback_days = 60
             
             previous_employee_shifts = {}
@@ -3174,9 +3179,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 
                 # Check if there's a consecutive chain leading up to extended_start
                 # Work backwards from extended_start - 1 to find consecutive days
+                # Need to check up to max_consecutive_limit + 1 to determine if chain extends beyond limit
                 consecutive_days = 0
                 check_date = extended_start - timedelta(days=1)
-                while consecutive_days < max_consecutive_limit:
+                # Loop while we haven't checked max_consecutive_limit days yet
+                # Need to count UP TO max_consecutive_limit to see if chain continues beyond
+                for _ in range(max_consecutive_limit):
                     has_shift = any(shift_date == check_date for shift_date, _ in shifts)
                     if has_shift:
                         consecutive_days += 1

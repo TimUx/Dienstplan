@@ -2,6 +2,7 @@
 Email service for sending notifications using configured SMTP settings.
 """
 
+import os
 import smtplib
 import sqlite3
 from email.mime.text import MIMEText
@@ -126,7 +127,7 @@ def send_password_reset_email(
     to_email: str,
     reset_token: str,
     employee_name: str,
-    base_url: str = "http://localhost:5000"
+    base_url: str = None
 ) -> Tuple[bool, str]:
     """
     Send password reset email to user.
@@ -136,11 +137,14 @@ def send_password_reset_email(
         to_email: Recipient email address
         reset_token: Password reset token
         employee_name: Name of the employee
-        base_url: Base URL of the application
+        base_url: Base URL of the application (defaults to APP_BASE_URL env var or http://localhost:5000)
         
     Returns:
         Tuple of (success: bool, error_message: str)
     """
+    if base_url is None:
+        base_url = os.getenv('APP_BASE_URL', 'http://localhost:5000')
+    
     reset_link = f"{base_url}/#/reset-password?token={reset_token}"
     
     subject = "Dienstplan - Passwort zurücksetzen"

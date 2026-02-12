@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  dienstplan:
+    build: .
+    container_name: dienstplan-app
+    ports:
+      - "8080:5000"
+    environment:
+      - TTS_SERVICE_URL=http://tts-service:5000
+      - DB_PATH=/app/data/dienstplan.db
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - tts-service
+    networks:
+      - dienstplan-network
+
+  tts-service:
+    image: synesthesiam/coqui-tts:latest
+    container_name: tts-service
+    ports:
+      - "5000:5000"
+    networks:
+      - dienstplan-network
+    restart: unless-stopped
+
+networks:
+  dienstplan-network:
+    driver: bridge

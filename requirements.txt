@@ -35,3 +35,6 @@ pyinstaller>=6.0.0
 
 # Excel export (openpyxl) - required for Excel export functionality
 openpyxl>=3.1.0
+
+# HTTP client for TTS service communication
+requests>=2.31.0

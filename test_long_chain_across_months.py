@@ -162,12 +162,13 @@ if __name__ == "__main__":
     print()
     print("Previous Bug:")
     print("  Limited lookback period (max_consecutive_days) missed earlier violations")
-    print("  from web_api.py line 3118:")
-    print("  lookback_start = extended_start - timedelta(days=max_consecutive_limit)")
+    print("  Old code (before fix):")
+    print("    lookback_start = extended_start - timedelta(days=max_consecutive_limit)")
+    print("  This only looked back max_consecutive_days, missing full consecutive chains")
     print("\nFix Implemented:")
     print("  Extended lookback dynamically to find the full chain of consecutive days")
     print("  For employees with shifts at the start of lookback, queries further back")
-    print("  Up to MAX_LOOKBACK_DAYS (60 days) to capture full violation chains")
+    print("  Up to max_lookback_days (60 days) to capture full violation chains")
     
     result = test_long_chain_limited_lookback()
     

@@ -3124,7 +3124,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
             
             # Maximum lookback period to prevent excessive database queries (e.g., 60 days = 2 months)
-            MAX_LOOKBACK_DAYS = 60
+            max_lookback_days = 60
             
             previous_employee_shifts = {}
             conn = db.get_connection()
@@ -3190,21 +3190,24 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             # Extend lookback for employees who need it
             if employees_to_extend:
-                extended_lookback_start = extended_start - timedelta(days=MAX_LOOKBACK_DAYS)
+                extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
                 extended_lookback_end = initial_lookback_start - timedelta(days=1)
                 
                 app.logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
                 
                 # Query extended period for these employees only
-                emp_ids_str = ','.join(str(emp_id) for emp_id in employees_to_extend)
-                cursor.execute(f"""
+                # Use parameterized query to prevent SQL injection
+                placeholders = ','.join('?' * len(employees_to_extend))
+                query = f"""
                     SELECT sa.EmployeeId, sa.Date, st.Code
                     FROM ShiftAssignments sa
                     INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
                     WHERE sa.Date >= ? AND sa.Date <= ?
-                    AND sa.EmployeeId IN ({emp_ids_str})
+                    AND sa.EmployeeId IN ({placeholders})
                     ORDER BY sa.Date
-                """, (extended_lookback_start.isoformat(), extended_lookback_end.isoformat()))
+                """
+                params = [extended_lookback_start.isoformat(), extended_lookback_end.isoformat()] + employees_to_extend
+                cursor.execute(query, params)
                 
                 for emp_id, date_str, shift_code in cursor.fetchall():
                     shift_date = date.fromisoformat(date_str)

@@ -592,9 +592,20 @@ def create_shift_planning_model(
         be used for database initialization, not at runtime.
     """
     return ShiftPlanningModel(
-        employees, teams, start_date, end_date, absences, shift_types,
-        locked_team_shift, locked_employee_weekend, locked_absence, locked_employee_shift,
-        None, None, None, previous_employee_shifts
+        employees=employees,
+        teams=teams,
+        start_date=start_date,
+        end_date=end_date,
+        absences=absences,
+        shift_types=shift_types,
+        locked_team_shift=locked_team_shift,
+        locked_employee_weekend=locked_employee_weekend,
+        locked_absence=locked_absence,
+        locked_employee_shift=locked_employee_shift,
+        ytd_weekend_counts=None,
+        ytd_night_counts=None,
+        ytd_holiday_counts=None,
+        previous_employee_shifts=previous_employee_shifts
     )
 
 

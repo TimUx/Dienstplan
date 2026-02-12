@@ -3179,11 +3179,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 
                 # Check if there's a consecutive chain leading up to extended_start
                 # Work backwards from extended_start - 1 to find consecutive days
-                # Need to check up to max_consecutive_limit + 1 to determine if chain extends beyond limit
+                # Check at least max_consecutive_limit days to see if chain extends beyond limit
                 consecutive_days = 0
                 check_date = extended_start - timedelta(days=1)
-                # Loop while we haven't checked max_consecutive_limit days yet
-                # Need to count UP TO max_consecutive_limit to see if chain continues beyond
+                # Check max_consecutive_limit days to see if all have shifts
                 for _ in range(max_consecutive_limit):
                     has_shift = any(shift_date == check_date for shift_date, _ in shifts)
                     if has_shift:
@@ -3192,8 +3191,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     else:
                         break
                 
-                # If we found max_consecutive_limit consecutive days, the chain might extend further back
-                if consecutive_days >= max_consecutive_limit:
+                # If we found exactly max_consecutive_limit consecutive days without breaking,
+                # the chain might extend further back. We need extended lookback to find out.
+                # Using == ensures we only extend when we've exhausted the initial lookback.
+                if consecutive_days == max_consecutive_limit:
                     employees_to_extend.append(emp_id)
             
             # Extend lookback for employees who need it

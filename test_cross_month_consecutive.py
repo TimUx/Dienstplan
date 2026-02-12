@@ -63,11 +63,12 @@ def test_cross_month_consecutive_violation():
     if current_week:
         weeks.append(current_week)
     
-    # Previous shifts: Employee worked S shift on March 26-31
-    # March 26 (Thu), 27 (Fri), 30 (Mon), 31 (Tue) = 4 weekdays
+    # Previous shifts: Employee worked S shift on March 27-31 (5 consecutive calendar days: Fri-Sat-Sun-Mon-Tue)
+    # This includes weekend work to ensure consecutive calendar days
     previous_employee_shifts = {
-        (employee.id, date(2026, 3, 26)): "S",  # Thursday
         (employee.id, date(2026, 3, 27)): "S",  # Friday
+        (employee.id, date(2026, 3, 28)): "S",  # Saturday
+        (employee.id, date(2026, 3, 29)): "S",  # Sunday
         (employee.id, date(2026, 3, 30)): "S",  # Monday
         (employee.id, date(2026, 3, 31)): "S",  # Tuesday
     }
@@ -85,23 +86,21 @@ def test_cross_month_consecutive_violation():
     model.Add(team_shift[(team.id, 0, "S")] == 1)  # Force S shift in week 0
     model.Add(team_shift[(team.id, 1, "S")] == 1)  # Force S shift in week 1
     
-    # Employee is active on first 5 weekdays (Wed-Fri of week 1, plus Mon-Tue of week 2)
-    # April 1 (Wed), 2 (Thu), 3 (Fri), 6 (Mon), 7 (Tue) = 5 weekdays
-    weekday_count = 0
+    # Employee is active on first 3 weekdays (Wed-Fri of first week)
+    # April 1 (Wed), 2 (Thu), 3 (Fri) = 3 weekdays
     for i, d in enumerate(dates):
-        if d.weekday() < 5 and weekday_count < 5:  # Weekday, and limit to first 5
+        if d.weekday() < 5 and i < 3:  # Weekday, and only first 3 days
             var = model.NewBoolVar(f"emp_1_active_{i}")
             model.Add(var == 1)  # Force active
             employee_active[(employee.id, d)] = var
-            weekday_count += 1
     
     print("\nSetup:")
     print(f"  Planning period: {dates[0]} to {dates[-1]}")
-    print(f"  Previous shifts (March): 26 (Thu), 27 (Fri), 30 (Mon), 31 (Tue) - 4 weekdays of S shift")
-    print(f"  Current period (April): 1 (Wed), 2 (Thu), 3 (Fri), 6 (Mon), 7 (Tue) - 5 weekdays of S shift")
+    print(f"  Previous shifts (March): 27-31 (Fri-Sat-Sun-Mon-Tue) - 5 consecutive calendar days of S shift")
+    print(f"  Current period (April): 1-3 (Wed-Thu-Fri) - 3 weekdays of S shift")
     print(f"  S shift max consecutive days: {shift_s.max_consecutive_days}")
-    print(f"  Total consecutive weekdays: 4 (March) + 5 (April) = 9 days")
-    print(f"  Expected: VIOLATION (9 > 6)")
+    print(f"  Total consecutive calendar days: 5 (March) + 3 (April) = 8 days")
+    print(f"  Expected: VIOLATION (8 > 6)")
     
     # Add constraints
     penalties = add_consecutive_shifts_constraints(

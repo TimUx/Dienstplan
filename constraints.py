@@ -2870,13 +2870,27 @@ def add_consecutive_shifts_constraints(
             if emp.id in previous_shifts_by_emp and len(dates) > 0:
                 prev_shifts = previous_shifts_by_emp[emp.id]
                 
-                # Count consecutive days of this shift type leading up to the planning period
+                # Count consecutive CALENDAR days of this shift type leading up to the planning period
+                # We need to check that days are actually consecutive (no gaps)
                 consecutive_count = 0
-                for prev_date, prev_shift_code in reversed(prev_shifts):
-                    if prev_shift_code == shift_code:
+                last_date_checked = first_planning_date - timedelta(days=1)  # Day before planning period
+                
+                # Work backwards from the day before planning period
+                for days_back in range(1, max_consecutive_limit + 1):
+                    check_date = first_planning_date - timedelta(days=days_back)
+                    
+                    # Check if employee worked this shift on this date
+                    worked_this_shift = False
+                    for prev_date, prev_shift_code in prev_shifts:
+                        if prev_date == check_date and prev_shift_code == shift_code:
+                            worked_this_shift = True
+                            break
+                    
+                    if worked_this_shift:
                         consecutive_count += 1
                     else:
-                        break  # Chain broken by different shift or no shift
+                        # Chain broken - no shift on this date
+                        break
                 
                 # If we have consecutive shifts leading up to the planning period,
                 # check if continuing them into the planning period would violate the limit
@@ -3118,16 +3132,31 @@ def add_consecutive_shifts_constraints(
         if emp.id in previous_shifts_by_emp and len(dates) > 0:
             prev_shifts = previous_shifts_by_emp[emp.id]
             
-            # Count consecutive working days (any shift type) leading up to the planning period
+            # Count consecutive working CALENDAR days (any shift type) leading up to the planning period
+            # We need to check that days are actually consecutive (no gaps)
             consecutive_work_days = 0
-            for prev_date, prev_shift_code in reversed(prev_shifts):
-                # Any shift counts as a working day
-                consecutive_work_days += 1
+            
+            # Work backwards from the day before planning period
+            for days_back in range(1, max_consecutive_limit + 1):
+                check_date = first_planning_date - timedelta(days=days_back)
+                
+                # Check if employee worked ANY shift on this date
+                worked_any_shift = False
+                for prev_date, prev_shift_code in prev_shifts:
+                    if prev_date == check_date:
+                        worked_any_shift = True
+                        break
+                
+                if worked_any_shift:
+                    consecutive_work_days += 1
+                else:
+                    # Chain broken - no shift on this date
+                    break
             
             # If we have consecutive working days leading up to the planning period,
             # check if continuing them into the planning period would violate the limit
             if consecutive_work_days > 0:
-                max_check_days = min(max_total_consecutive - consecutive_work_days + 1, len(dates))
+                max_check_days = min(2 * max_total_consecutive, len(dates))
                 
                 for num_days_in_period in range(1, max_check_days + 1):
                     # Build indicators for ANY shift on each day in the planning period

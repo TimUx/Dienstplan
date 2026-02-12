@@ -7,12 +7,15 @@ import requests
 from typing import Optional, Tuple
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Get logger for this module
 logger = logging.getLogger(__name__)
 
 # Get TTS service URL from environment variable, default to container name
 TTS_SERVICE_URL = os.getenv('TTS_SERVICE_URL', 'http://tts-service:5000')
+
+# Timeout constants (in seconds)
+TTS_SYNTHESIS_TIMEOUT = 30
+TTS_HEALTH_CHECK_TIMEOUT = 5
 
 
 def synthesize_speech(text: str, language: str = 'de') -> Tuple[bool, Optional[bytes], str]:
@@ -34,7 +37,7 @@ def synthesize_speech(text: str, language: str = 'de') -> Tuple[bool, Optional[b
                 'text': text,
                 'language': language
             },
-            timeout=30
+            timeout=TTS_SYNTHESIS_TIMEOUT
         )
         
         if response.status_code == 200:
@@ -67,7 +70,7 @@ def check_tts_service_health() -> bool:
         True if service is healthy, False otherwise
     """
     try:
-        response = requests.get(f'{TTS_SERVICE_URL}/api/health', timeout=5)
+        response = requests.get(f'{TTS_SERVICE_URL}/api/health', timeout=TTS_HEALTH_CHECK_TIMEOUT)
         is_healthy = response.status_code == 200
         if is_healthy:
             logger.info("TTS service is healthy")

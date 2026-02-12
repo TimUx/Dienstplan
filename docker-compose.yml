@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   dienstplan:
     build: .
@@ -19,8 +17,8 @@ services:
   tts-service:
     image: synesthesiam/coqui-tts:latest
     container_name: tts-service
-    ports:
-      - "5000:5000"
+    # Port 5000 is only accessible internally via Docker network
+    # No external port mapping needed
     networks:
       - dienstplan-network
     restart: unless-stopped

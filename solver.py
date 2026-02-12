@@ -257,7 +257,8 @@ class ShiftPlanningSolver:
         consecutive_violation_penalties = add_consecutive_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend, 
-            employees, teams, dates, weeks, shift_codes, shift_types)
+            employees, teams, dates, weeks, shift_codes, shift_types,
+            self.planning_model.previous_employee_shifts)
         
         print("  - Working hours constraints (HARD: min 192h/month, SOFT: proportional target)")
         hours_shortage_objectives = add_working_hours_constraints(

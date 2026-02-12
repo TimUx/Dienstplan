@@ -33,7 +33,8 @@ class ShiftPlanningModel:
         locked_employee_shift: Dict[Tuple[int, date], str] = None,
         ytd_weekend_counts: Dict[int, int] = None,
         ytd_night_counts: Dict[int, int] = None,
-        ytd_holiday_counts: Dict[int, int] = None
+        ytd_holiday_counts: Dict[int, int] = None,
+        previous_employee_shifts: Dict[Tuple[int, date], str] = None
     ):
         """
         Initialize the shift planning model.
@@ -52,6 +53,9 @@ class ShiftPlanningModel:
             ytd_weekend_counts: Dict mapping employee_id -> count of weekend days worked this year (for fairness)
             ytd_night_counts: Dict mapping employee_id -> count of night shifts worked this year (for fairness)
             ytd_holiday_counts: Dict mapping employee_id -> count of holidays worked this year (for fairness)
+            previous_employee_shifts: Dict mapping (emp_id, date) -> shift_code for dates BEFORE planning period.
+                                     Used to check consecutive shifts across month boundaries.
+                                     Should contain shifts from up to max_consecutive_days before start_date.
         
         Note:
             shift_types MUST be loaded from the database. STANDARD_SHIFT_TYPES should only
@@ -80,6 +84,9 @@ class ShiftPlanningModel:
         self.locked_employee_weekend = locked_employee_weekend or {}
         self.locked_absence = locked_absence or {}  # NEW: locked absence assignments
         self.locked_employee_shift = locked_employee_shift or {}  # NEW: locked employee shift assignments from previous planning
+        
+        # Previous shifts for cross-month consecutive days checking
+        self.previous_employee_shifts = previous_employee_shifts or {}
         
         # Year-to-date statistics for fairness tracking
         self.ytd_weekend_counts = ytd_weekend_counts or {}
@@ -558,7 +565,8 @@ def create_shift_planning_model(
     locked_team_shift: Dict[Tuple[int, int], str] = None,
     locked_employee_weekend: Dict[Tuple[int, date], bool] = None,
     locked_absence: Dict[Tuple[int, date], str] = None,
-    locked_employee_shift: Dict[Tuple[int, date], str] = None
+    locked_employee_shift: Dict[Tuple[int, date], str] = None,
+    previous_employee_shifts: Dict[Tuple[int, date], str] = None
 ) -> ShiftPlanningModel:
     """
     Factory function to create a shift planning model.
@@ -574,6 +582,7 @@ def create_shift_planning_model(
         locked_employee_weekend: Dict mapping (emp_id, date) -> bool (manual overrides)
         locked_absence: Dict mapping (emp_id, date) -> absence_code (U/AU/L) (manual overrides)
         locked_employee_shift: Dict mapping (emp_id, date) -> shift_code (existing assignments from previous planning)
+        previous_employee_shifts: Dict mapping (emp_id, date) -> shift_code for dates BEFORE planning period
         
     Returns:
         ShiftPlanningModel instance
@@ -584,7 +593,8 @@ def create_shift_planning_model(
     """
     return ShiftPlanningModel(
         employees, teams, start_date, end_date, absences, shift_types,
-        locked_team_shift, locked_employee_weekend, locked_absence, locked_employee_shift
+        locked_team_shift, locked_employee_weekend, locked_absence, locked_employee_shift,
+        None, None, None, previous_employee_shifts
     )
 
 

@@ -3112,12 +3112,46 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             
             conn.close()
             
+            # Load previous shifts for cross-month consecutive days checking
+            # We need to look back up to max_consecutive_days before the extended_start
+            max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
+            lookback_start = extended_start - timedelta(days=max_consecutive_limit)
+            lookback_end = extended_start - timedelta(days=1)
+            
+            previous_employee_shifts = {}
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            
+            # Query shift assignments from the lookback period
+            cursor.execute("""
+                SELECT sa.EmployeeId, sa.Date, st.Code
+                FROM ShiftAssignments sa
+                INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                ORDER BY sa.Date
+            """, (lookback_start.isoformat(), lookback_end.isoformat()))
+            
+            for emp_id, date_str, shift_code in cursor.fetchall():
+                shift_date = date.fromisoformat(date_str)
+                try:
+                    emp_id_int = int(emp_id)
+                except (ValueError, TypeError):
+                    emp_id_int = emp_id
+                previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
+            
+            conn.close()
+            
+            app.logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
+            if previous_employee_shifts:
+                app.logger.info(f"  Previous shifts date range: {lookback_start} to {lookback_end}")
+            
             # Create model with extended dates and locked constraints
             planning_model = create_shift_planning_model(
                 employees, teams, extended_start, extended_end, absences, 
                 shift_types=shift_types,
                 locked_team_shift=locked_team_shift if locked_team_shift else None,
-                locked_employee_shift=locked_employee_shift if locked_employee_shift else None
+                locked_employee_shift=locked_employee_shift if locked_employee_shift else None,
+                previous_employee_shifts=previous_employee_shifts if previous_employee_shifts else None
             )
             
             # Solve

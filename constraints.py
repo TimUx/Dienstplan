@@ -2771,20 +2771,27 @@ def add_consecutive_shifts_constraints(
     dates: List[date],
     weeks: List[List[date]],
     shift_codes: List[str],
-    shift_types: List[ShiftType]
+    shift_types: List[ShiftType],
+    previous_employee_shifts: Dict[Tuple[int, date], str] = None
 ):
     """
     SOFT CONSTRAINT: Limit consecutive working days per shift type and across all shift types.
     
-    Requirements (updated to enforce cross-shift-type limits):
+    Requirements (updated to enforce cross-shift-type limits and cross-month boundaries):
     - Each shift type defines its own maximum consecutive working days
     - After reaching this limit for a shift type, employee MUST have 24h break before working ANY shift
     - This ensures proper rest periods even when switching between shift types
+    - IMPORTANT: Checks shifts from BEFORE the planning period to catch violations across month boundaries
     
     Example:
     - S shift has max_consecutive_days=6, N shift has max_consecutive_days=3
     - Employee works 6x S shift → must have 1 day off before working ANY shift (S, F, or N)
     - Employee works 3x N shift → must have 1 day off before working ANY shift (S, F, or N)
+    
+    Cross-month boundary example:
+    - Employee works 4 shifts at end of January (Jan 28-31)
+    - Employee plans to work 4 shifts at start of February (Feb 1-4)
+    - Total: 8 consecutive days → VIOLATION detected using previous_employee_shifts
     
     Implementation as SOFT constraint:
     - Violations are penalized but allowed for feasibility
@@ -2795,6 +2802,8 @@ def add_consecutive_shifts_constraints(
     
     Args:
         shift_types: List of shift types with their max_consecutive_days settings
+        previous_employee_shifts: Dict mapping (emp_id, date) -> shift_code for dates BEFORE planning period.
+                                 Used to check consecutive shifts across month boundaries.
     
     Returns:
         List of penalty variables for consecutive shift violations
@@ -2819,6 +2828,31 @@ def add_consecutive_shifts_constraints(
                     emp_to_team[emp.id] = team
                     break
     
+    # Initialize previous_employee_shifts if not provided
+    if previous_employee_shifts is None:
+        previous_employee_shifts = {}
+    
+    # Get the maximum consecutive days across all shift types (for lookback)
+    max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
+    
+    # Build a map of previous shifts by employee for quick lookup
+    # We need to look back up to max_consecutive_limit days before the planning period
+    from datetime import timedelta
+    first_planning_date = dates[0] if dates else None
+    previous_shifts_by_emp = {}
+    if first_planning_date:
+        for emp in employees:
+            emp_previous_shifts = []
+            # Look back up to max_consecutive_limit days
+            for days_back in range(1, max_consecutive_limit + 1):
+                check_date = first_planning_date - timedelta(days=days_back)
+                if (emp.id, check_date) in previous_employee_shifts:
+                    emp_previous_shifts.append((check_date, previous_employee_shifts[(emp.id, check_date)]))
+            # Sort by date (oldest first)
+            emp_previous_shifts.sort(key=lambda x: x[0])
+            if emp_previous_shifts:
+                previous_shifts_by_emp[emp.id] = emp_previous_shifts
+    
     # For each employee and each shift type, check consecutive working days
     for emp in employees:
         for shift_code in shift_codes:
@@ -2828,6 +2862,115 @@ def add_consecutive_shifts_constraints(
                 continue
             
             max_consecutive_days = shift_type.max_consecutive_days
+            
+            # CROSS-MONTH BOUNDARY CHECK:
+            # Check if employee has consecutive shifts from BEFORE the planning period
+            # that extend into the beginning of the planning period, creating a violation.
+            # This catches cases like: 4 shifts at end of Jan + 4 shifts at start of Feb = 8 consecutive days
+            if emp.id in previous_shifts_by_emp and len(dates) > 0:
+                prev_shifts = previous_shifts_by_emp[emp.id]
+                
+                # Count consecutive CALENDAR days of this shift type leading up to the planning period
+                # We need to check that days are actually consecutive (no gaps)
+                consecutive_count = 0
+                last_date_checked = first_planning_date - timedelta(days=1)  # Day before planning period
+                
+                # Work backwards from the day before planning period
+                for days_back in range(1, max_consecutive_limit + 1):
+                    check_date = first_planning_date - timedelta(days=days_back)
+                    
+                    # Check if employee worked this shift on this date
+                    worked_this_shift = False
+                    for prev_date, prev_shift_code in prev_shifts:
+                        if prev_date == check_date and prev_shift_code == shift_code:
+                            worked_this_shift = True
+                            break
+                    
+                    if worked_this_shift:
+                        consecutive_count += 1
+                    else:
+                        # Chain broken - no shift on this date
+                        break
+                
+                # If we have consecutive shifts leading up to the planning period,
+                # check if continuing them into the planning period would violate the limit
+                if consecutive_count > 0:
+                    # Check windows starting from the beginning of the planning period
+                    # We need to detect ANY violation where total consecutive days > max_consecutive_days
+                    # Example: 4 prev days, max=6
+                    # - Check 3 more days: 4+3=7 > 6 → violation
+                    # - Check 4 more days: 4+4=8 > 6 → violation
+                    # - etc.
+                    # We should check up to enough days to catch all violations
+                    # But limit to a reasonable number (e.g., 2 * max_consecutive_days)
+                    max_check_days = min(2 * max_consecutive_days, len(dates))
+                    
+                    for num_days_in_period in range(1, max_check_days + 1):
+                        # Build indicators for the days in the planning period
+                        period_shift_indicators = []
+                        
+                        for day_idx in range(num_days_in_period):
+                            current_date = dates[day_idx]
+                            week_idx = date_to_week.get(current_date)
+                            
+                            if week_idx is None:
+                                zero_var = model.NewBoolVar(f"prev_zero_{shift_code}_{emp.id}_{day_idx}")
+                                model.Add(zero_var == 0)
+                                period_shift_indicators.append(zero_var)
+                                continue
+                            
+                            # Collect variables for this specific shift type (same logic as below)
+                            shift_vars = []
+                            
+                            if current_date.weekday() < 5 and (emp.id, current_date) in employee_active:
+                                team = emp_to_team.get(emp.id)
+                                if team and (team.id, week_idx, shift_code) in team_shift:
+                                    shift_work = model.NewBoolVar(f"prev_{shift_code}_team_{emp.id}_{day_idx}")
+                                    model.AddMultiplicationEquality(
+                                        shift_work,
+                                        [employee_active[(emp.id, current_date)], team_shift[(team.id, week_idx, shift_code)]]
+                                    )
+                                    shift_vars.append(shift_work)
+                            
+                            if current_date.weekday() >= 5 and (emp.id, current_date) in employee_weekend_shift:
+                                team = emp_to_team.get(emp.id)
+                                if team and (team.id, week_idx, shift_code) in team_shift:
+                                    shift_weekend = model.NewBoolVar(f"prev_{shift_code}_weekend_{emp.id}_{day_idx}")
+                                    model.AddMultiplicationEquality(
+                                        shift_weekend,
+                                        [employee_weekend_shift[(emp.id, current_date)], team_shift[(team.id, week_idx, shift_code)]]
+                                    )
+                                    shift_vars.append(shift_weekend)
+                            
+                            if (emp.id, current_date, shift_code) in employee_cross_team_shift:
+                                shift_vars.append(employee_cross_team_shift[(emp.id, current_date, shift_code)])
+                            if (emp.id, current_date, shift_code) in employee_cross_team_weekend:
+                                shift_vars.append(employee_cross_team_weekend[(emp.id, current_date, shift_code)])
+                            
+                            if shift_vars:
+                                is_shift = model.NewBoolVar(f"prev_is_{shift_code}_{emp.id}_{day_idx}")
+                                model.Add(sum(shift_vars) >= 1).OnlyEnforceIf(is_shift)
+                                model.Add(sum(shift_vars) == 0).OnlyEnforceIf(is_shift.Not())
+                                period_shift_indicators.append(is_shift)
+                            else:
+                                zero_var = model.NewBoolVar(f"prev_zero_{shift_code}_{emp.id}_{day_idx}")
+                                model.Add(zero_var == 0)
+                                period_shift_indicators.append(zero_var)
+                        
+                        # Check if all days in this window have the shift type
+                        # Total consecutive = consecutive_count (from previous) + num_days_in_period (from current)
+                        total_consecutive = consecutive_count + num_days_in_period
+                        
+                        if total_consecutive > max_consecutive_days and len(period_shift_indicators) == num_days_in_period:
+                            # Violation if all days in the planning period portion have this shift
+                            all_shifts_in_period = model.NewBoolVar(f"prev_all_{shift_code}_{emp.id}_{num_days_in_period}")
+                            model.Add(sum(period_shift_indicators) == num_days_in_period).OnlyEnforceIf(all_shifts_in_period)
+                            model.Add(sum(period_shift_indicators) < num_days_in_period).OnlyEnforceIf(all_shifts_in_period.Not())
+                            
+                            # Penalty: 400 points per violation (consistent with other consecutive constraints)
+                            prev_penalty = model.NewIntVar(0, 400, f"prev_{shift_code}_penalty_{emp.id}_{num_days_in_period}")
+                            model.AddMultiplicationEquality(prev_penalty, [all_shifts_in_period, 400])
+                            consecutive_violation_penalties.append(prev_penalty)
             
             # Check consecutive days for this specific shift type
             for start_idx in range(len(dates) - max_consecutive_days):
@@ -2984,6 +3127,106 @@ def add_consecutive_shifts_constraints(
     max_total_consecutive = max((st.max_consecutive_days for st in shift_types), default=6)
     
     for emp in employees:
+        # CROSS-MONTH BOUNDARY CHECK FOR TOTAL CONSECUTIVE DAYS:
+        # Check if employee has consecutive days (any shift type) from BEFORE the planning period
+        if emp.id in previous_shifts_by_emp and len(dates) > 0:
+            prev_shifts = previous_shifts_by_emp[emp.id]
+            
+            # Count consecutive working CALENDAR days (any shift type) leading up to the planning period
+            # We need to check that days are actually consecutive (no gaps)
+            consecutive_work_days = 0
+            
+            # Work backwards from the day before planning period
+            for days_back in range(1, max_consecutive_limit + 1):
+                check_date = first_planning_date - timedelta(days=days_back)
+                
+                # Check if employee worked ANY shift on this date
+                worked_any_shift = False
+                for prev_date, prev_shift_code in prev_shifts:
+                    if prev_date == check_date:
+                        worked_any_shift = True
+                        break
+                
+                if worked_any_shift:
+                    consecutive_work_days += 1
+                else:
+                    # Chain broken - no shift on this date
+                    break
+            
+            # If we have consecutive working days leading up to the planning period,
+            # check if continuing them into the planning period would violate the limit
+            if consecutive_work_days > 0:
+                max_check_days = min(2 * max_total_consecutive, len(dates))
+                
+                for num_days_in_period in range(1, max_check_days + 1):
+                    # Build indicators for ANY shift on each day in the planning period
+                    period_any_shift_indicators = []
+                    
+                    for day_idx in range(num_days_in_period):
+                        current_date = dates[day_idx]
+                        week_idx = date_to_week.get(current_date)
+                        
+                        if week_idx is None:
+                            zero_var = model.NewBoolVar(f"prev_total_zero_{emp.id}_{day_idx}")
+                            model.Add(zero_var == 0)
+                            period_any_shift_indicators.append(zero_var)
+                            continue
+                        
+                        # Collect ALL shift variables for this day (ANY shift type)
+                        day_shift_vars = []
+                        
+                        for check_shift_code in shift_codes:
+                            if current_date.weekday() < 5 and (emp.id, current_date) in employee_active:
+                                team = emp_to_team.get(emp.id)
+                                if team and (team.id, week_idx, check_shift_code) in team_shift:
+                                    work_var = model.NewBoolVar(f"prev_total_{check_shift_code}_team_{emp.id}_{day_idx}")
+                                    model.AddMultiplicationEquality(
+                                        work_var,
+                                        [employee_active[(emp.id, current_date)], team_shift[(team.id, week_idx, check_shift_code)]]
+                                    )
+                                    day_shift_vars.append(work_var)
+                            
+                            if current_date.weekday() >= 5 and (emp.id, current_date) in employee_weekend_shift:
+                                team = emp_to_team.get(emp.id)
+                                if team and (team.id, week_idx, check_shift_code) in team_shift:
+                                    weekend_var = model.NewBoolVar(f"prev_total_{check_shift_code}_weekend_{emp.id}_{day_idx}")
+                                    model.AddMultiplicationEquality(
+                                        weekend_var,
+                                        [employee_weekend_shift[(emp.id, current_date)], team_shift[(team.id, week_idx, check_shift_code)]]
+                                    )
+                                    day_shift_vars.append(weekend_var)
+                            
+                            if (emp.id, current_date, check_shift_code) in employee_cross_team_shift:
+                                day_shift_vars.append(employee_cross_team_shift[(emp.id, current_date, check_shift_code)])
+                            if (emp.id, current_date, check_shift_code) in employee_cross_team_weekend:
+                                day_shift_vars.append(employee_cross_team_weekend[(emp.id, current_date, check_shift_code)])
+                        
+                        # Create indicator: does employee work ANY shift on this day?
+                        if day_shift_vars:
+                            works_any = model.NewBoolVar(f"prev_total_any_{emp.id}_{day_idx}")
+                            model.Add(sum(day_shift_vars) >= 1).OnlyEnforceIf(works_any)
+                            model.Add(sum(day_shift_vars) == 0).OnlyEnforceIf(works_any.Not())
+                            period_any_shift_indicators.append(works_any)
+                        else:
+                            zero_var = model.NewBoolVar(f"prev_total_zero_{emp.id}_{day_idx}")
+                            model.Add(zero_var == 0)
+                            period_any_shift_indicators.append(zero_var)
+                    
+                    # Check if all days in this window have work
+                    # Total consecutive = consecutive_work_days (from previous) + num_days_in_period (from current)
+                    total_consecutive = consecutive_work_days + num_days_in_period
+                    
+                    if total_consecutive > max_total_consecutive and len(period_any_shift_indicators) == num_days_in_period:
+                        # Violation if all days in the planning period portion have work
+                        all_work_in_period = model.NewBoolVar(f"prev_total_all_{emp.id}_{num_days_in_period}")
+                        model.Add(sum(period_any_shift_indicators) == num_days_in_period).OnlyEnforceIf(all_work_in_period)
+                        model.Add(sum(period_any_shift_indicators) < num_days_in_period).OnlyEnforceIf(all_work_in_period.Not())
+                        
+                        # Penalty: 400 points per violation (consistent with other consecutive constraints)
+                        prev_total_penalty = model.NewIntVar(0, 400, f"prev_total_penalty_{emp.id}_{num_days_in_period}")
+                        model.AddMultiplicationEquality(prev_total_penalty, [all_work_in_period, 400])
+                        consecutive_violation_penalties.append(prev_total_penalty)
+        
         # Check each possible window of (max_total_consecutive + 1) days
         for start_idx in range(len(dates) - max_total_consecutive):
             any_shift_indicators = []

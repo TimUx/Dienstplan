@@ -208,10 +208,21 @@ Dienstplan/
 ├── constraints.py       # Alle Constraint-Implementierungen
 ├── solver.py            # OR-Tools Solver-Konfiguration
 ├── validation.py        # Ergebnis-Validierung
-├── web_api.py          # Flask REST API
+├── planning_report.py   # Planungsberichte inkl. Abwesenheits-Impact-Analyse
+├── web_api.py          # Flask REST API (Gzip via flask-compress)
 ├── main.py             # Haupteinstiegspunkt (CLI & Server)
+├── minify_css.py       # CSS-Minifizierung (csscompressor, Build-Zeit)
 ├── requirements.txt    # Python-Abhängigkeiten
+├── api/
+│   └── repositories/   # Repository Layer (AbsenceRepository, EmployeeRepository, ShiftRepository)
 ├── wwwroot/            # Web UI (HTML/CSS/JavaScript)
+│   ├── index.html      # Haupt-HTML (schlanke Shell)
+│   ├── partials/       # Lazy-geladene HTML-Partials (schedule, absences, admin, …)
+│   └── js/
+│       ├── app.js      # Lazy-Loading via ensurePartialLoaded() / showView()
+│       └── modules/
+│           ├── store.js    # Zentraler State Store (Observer-Pattern)
+│           └── utils.js    # Hilfsfunktionen inkl. showToast()
 ├── docs/               # Dokumentation und Screenshots
 └── .github/            # CI/CD Pipeline
 ```
@@ -220,8 +231,8 @@ Dienstplan/
 - **Backend**: Python 3.9+
 - **Solver**: Google OR-Tools CP-SAT
 - **Database**: SQLite (einfach austauschbar)
-- **Web Framework**: Flask mit Flask-CORS
-- **Frontend**: Vanilla JavaScript, CSS3, HTML5
+- **Web Framework**: Flask mit Flask-CORS, Flask-Limiter (Rate Limiting), Flask-Compress (Gzip)
+- **Frontend**: Vanilla JavaScript (Event Delegation, State Store), CSS3, HTML5 mit Lazy-Loading-Partials
 - **API**: REST mit JSON
 
 ### Vorteile der OR-Tools-Lösung

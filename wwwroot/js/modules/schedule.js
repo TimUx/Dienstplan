@@ -34,8 +34,10 @@ export function initializeDatePickers() {
     const todayStr = new Date().toISOString().split('T')[0];
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
-    document.getElementById('statsStartDate').value = lastMonth.toISOString().split('T')[0];
-    document.getElementById('statsEndDate').value = todayStr;
+    const statsStartEl = document.getElementById('statsStartDate');
+    if (statsStartEl) statsStartEl.value = lastMonth.toISOString().split('T')[0];
+    const statsEndEl = document.getElementById('statsEndDate');
+    if (statsEndEl) statsEndEl.value = todayStr;
 
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth() + 1;

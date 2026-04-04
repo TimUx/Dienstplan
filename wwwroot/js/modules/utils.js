@@ -4,6 +4,7 @@ export const API_BASE = window.location.origin + '/api';
 // Configuration constants
 export const YEAR_VIEW_SCROLL_PADDING = 100;
 export const YEAR_VIEW_SCROLL_DELAY = 200;
+export const MS_PER_DAY = 86400000;
 
 // Constant for employees without team assignment
 export const UNASSIGNED_TEAM_ID = -1;
@@ -269,7 +270,7 @@ export function generateDateRange(start, end) {
     const startDate = typeof start === 'string' ? new Date(start) : start;
     const endDate = typeof end === 'string' ? new Date(end) : end;
 
-    for (let d = new Date(startDate); d <= endDate; d = new Date(d.getTime() + 86400000)) {
+    for (let d = new Date(startDate); d <= endDate; d = new Date(d.getTime() + MS_PER_DAY)) {
         dates.push(d.toISOString().split('T')[0]);
     }
     return dates;
@@ -400,13 +401,12 @@ export function isHessianHoliday(date) {
     const easter = calculateEaster(year);
     const easterTime = easter.getTime();
     const dateTime = date.getTime();
-    const oneDay = 24 * 60 * 60 * 1000;
 
-    if (dateTime === easterTime - 2 * oneDay) return true;
-    if (dateTime === easterTime + 1 * oneDay) return true;
-    if (dateTime === easterTime + 39 * oneDay) return true;
-    if (dateTime === easterTime + 50 * oneDay) return true;
-    if (dateTime === easterTime + 60 * oneDay) return true;
+    if (dateTime === easterTime - 2 * MS_PER_DAY) return true;
+    if (dateTime === easterTime + 1 * MS_PER_DAY) return true;
+    if (dateTime === easterTime + 39 * MS_PER_DAY) return true;
+    if (dateTime === easterTime + 50 * MS_PER_DAY) return true;
+    if (dateTime === easterTime + 60 * MS_PER_DAY) return true;
 
     return false;
 }

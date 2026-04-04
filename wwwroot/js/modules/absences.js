@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, ABSENCE_TYPES } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES } from './utils.js';
 import { hasRole, canPlanShifts } from './auth.js';
 import { loadSchedule } from './schedule.js';
 
@@ -300,14 +300,14 @@ export function displayAbsences(absences, type) {
 
     absences.forEach(absence => {
         html += '<tr>';
-        html += `<td>${absence.employeeName || 'Unbekannt'}</td>`;
+        html += `<td>${escapeHtml(absence.employeeName || 'Unbekannt')}</td>`;
 
-        const typeColor = absence.typeColor || '#E0E0E0';
-        html += `<td><span style="display: inline-block; padding: 2px 8px; background: ${typeColor}; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">${absence.typeCode || absence.type}</span></td>`;
+        const typeColor = sanitizeColorCode(absence.typeColor || '#E0E0E0');
+        html += `<td><span style="display: inline-block; padding: 2px 8px; background: ${typeColor}; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">${escapeHtml(absence.typeCode || absence.type || '')}</span></td>`;
 
         html += `<td>${new Date(absence.startDate).toLocaleDateString('de-DE')}</td>`;
         html += `<td>${new Date(absence.endDate).toLocaleDateString('de-DE')}</td>`;
-        html += `<td>${absence.notes || '-'}</td>`;
+        html += `<td>${escapeHtml(absence.notes || '-')}</td>`;
         html += `<td>${absence.createdAt ? new Date(absence.createdAt).toLocaleDateString('de-DE') : '-'}</td>`;
 
         if (canDelete) {

@@ -592,6 +592,6 @@ export async function submitResetPassword(event) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+export function initPasswordResetCheck() {
     checkPasswordResetToken();
-});
+}

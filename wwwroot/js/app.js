@@ -337,5 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
     schedule.initializeDatePickers();
     absences.initAbsenceTypeColorPicker();
     initImportFormHandlers();
+    auth.initPasswordResetCheck();
     auth.checkAuthenticationStatus();
 });

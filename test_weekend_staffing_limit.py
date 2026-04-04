@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from entities import Employee, Team, ShiftType
 from model import ShiftPlanningModel
 from solver import ShiftPlanningSolver
-from data_loader import load_employees_from_db, load_teams_from_db, load_shift_types_from_db
+from data_loader import load_from_database
 
 
 def count_weekend_employees(solution, saturday, sunday):
@@ -44,9 +44,7 @@ def test_weekend_limit():
     
     # Load data
     print("\n[1/5] Loading data from database...")
-    employees = load_employees_from_db(db_path)
-    teams = load_teams_from_db(db_path)
-    shift_types = load_shift_types_from_db(db_path)
+    employees, teams, absences, shift_types = load_from_database(db_path)
     
     print(f"  - Employees: {len(employees)}")
     print(f"  - Teams: {len(teams)}")
@@ -81,9 +79,17 @@ def test_weekend_limit():
     )
     
     # Solve
-    solution, status_msg, stats = solver.solve()
+    solver.add_all_constraints()
+    solved = solver.solve()
     
-    print(f"  - Status: {status_msg}")
+    if not solved:
+        print("  - Status: INFEASIBLE / No solution found")
+        print("  - Assignments: 0")
+        return False
+
+    assignments, complete_schedule = solver.extract_solution()
+    solution = assignments
+    print(f"  - Status: OPTIMAL/FEASIBLE")
     print(f"  - Assignments: {len(solution)}")
     
     # Check weekend staffing

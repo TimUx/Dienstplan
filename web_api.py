@@ -83,12 +83,45 @@ def verify_password(password: str, password_hash: str) -> bool:
     Verify password against hash.
 
     Supports both bcrypt hashes (new) and legacy SHA256 hashes (old) so
-    that existing accounts keep working until their password is changed.
+    that existing accounts keep working until their password is changed via
+    the normal account-management flow.
     """
     if password_hash.startswith('$2b$') or password_hash.startswith('$2a$'):
         return bcrypt.checkpw(password.encode(), password_hash.encode())
-    # Legacy SHA256 fallback for accounts that haven't been migrated yet
-    return hashlib.sha256(password.encode()).hexdigest() == password_hash
+    # Legacy path: compare against SHA256 hash stored before bcrypt migration.
+    # This path is only reached for accounts whose passwords pre-date the
+    # migration; the next password change will store a bcrypt hash instead.
+    legacy_hash = hashlib.sha256(password.encode()).hexdigest()  # nosec B324
+    return legacy_hash == password_hash
+
+
+def _paginate(items: list, page: int, limit: int) -> dict:
+    """
+    Return a pagination envelope for *items*.
+
+    Args:
+        items: Full list of items.
+        page:  1-based page number.
+        limit: Items per page.  0 means "return all" (no pagination applied).
+
+    Returns:
+        Dict with keys: data, total, page, limit, totalPages.
+    """
+    total = len(items)
+    if limit > 0:
+        offset = (page - 1) * limit
+        data = items[offset:offset + limit]
+        total_pages = (total + limit - 1) // limit
+    else:
+        data = items
+        total_pages = 1
+    return {
+        'data': data,
+        'total': total,
+        'page': page,
+        'limit': limit,
+        'totalPages': total_pages,
+    }
 
 
 def get_employee_by_email(db, email: str) -> Optional[Dict]:
@@ -989,18 +1022,8 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'roles': row['roles'].split(',') if row['roles'] else []
                 })
 
-            total = len(employees)
-
             if limit > 0:
-                offset = (page - 1) * limit
-                paginated = employees[offset:offset + limit]
-                return jsonify({
-                    'data': paginated,
-                    'total': total,
-                    'page': page,
-                    'limit': limit,
-                    'totalPages': (total + limit - 1) // limit
-                })
+                return jsonify(_paginate(employees, page, limit))
 
             return jsonify(employees)
         except Exception as e:
@@ -2925,24 +2948,19 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'colorCode': row['ColorCode'] or '#E8F5E9'
                 })
             
-            total_assignments = len(assignments)
-            if limit > 0:
-                offset = (page - 1) * limit
-                paged_assignments = assignments[offset:offset + limit]
-            else:
-                paged_assignments = assignments
+            pagination = _paginate(assignments, page, limit)
 
             return jsonify({
                 'startDate': start_date.isoformat(),
                 'endDate': end_date.isoformat(),
-                'assignments': paged_assignments,
+                'assignments': pagination['data'],
                 'absences': absences,
                 'vacationPeriods': vacation_periods,
                 'pagination': {
-                    'total': total_assignments,
-                    'page': page,
-                    'limit': limit,
-                    'totalPages': (total_assignments + limit - 1) // limit if limit > 0 else 1
+                    'total': pagination['total'],
+                    'page': pagination['page'],
+                    'limit': pagination['limit'],
+                    'totalPages': pagination['totalPages'],
                 }
             })
             

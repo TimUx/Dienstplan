@@ -8,6 +8,11 @@ ortools>=9.8.3296
 Flask>=3.0.0
 flask-cors>=4.0.0
 
+# Flask security and performance extensions
+bcrypt>=4.0.0
+flask-limiter>=3.5.0
+flask-compress>=1.14
+
 # Waitress - Production WSGI server
 waitress>=2.1.2
 

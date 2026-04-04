@@ -3,13 +3,17 @@ Flask Web API for shift planning system.
 Provides REST API endpoints compatible with the existing .NET Web UI.
 """
 
-from flask import Flask, jsonify, request, send_file, session
+from flask import Flask, jsonify, request, send_file, session, make_response
 from flask_cors import CORS
+from flask_compress import Compress
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict
 import sqlite3
 import json
 import hashlib
+import bcrypt
 import secrets
 import sys
 from functools import wraps
@@ -70,26 +74,54 @@ class Database:
 
 
 def hash_password(password: str) -> str:
-    """
-    Hash password using SHA256.
-    
-    Note: This is a simple implementation for development/migration from .NET.
-    For production, consider using bcrypt, scrypt, or Argon2 for better security.
-    
-    TODO: Upgrade to bcrypt/Argon2 with proper salting for production use.
-    SHA256 alone is vulnerable to rainbow table attacks without salting.
-    
-    Recommended migration path:
-    1. Install bcrypt: pip install bcrypt
-    2. Replace with: bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-    3. Update verify_password to use bcrypt.checkpw()
-    """
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password using bcrypt with automatic salting."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against hash"""
-    return hash_password(password) == password_hash
+    """
+    Verify password against hash.
+
+    Supports both bcrypt hashes (new) and legacy SHA256 hashes (old) so
+    that existing accounts keep working until their password is changed via
+    the normal account-management flow.
+    """
+    if password_hash.startswith('$2b$') or password_hash.startswith('$2a$'):
+        return bcrypt.checkpw(password.encode(), password_hash.encode())
+    # Legacy path: compare against SHA256 hash stored before bcrypt migration.
+    # This path is only reached for accounts whose passwords pre-date the
+    # migration; the next password change will store a bcrypt hash instead.
+    legacy_hash = hashlib.sha256(password.encode()).hexdigest()  # nosec B324
+    return legacy_hash == password_hash
+
+
+def _paginate(items: list, page: int, limit: int) -> dict:
+    """
+    Return a pagination envelope for *items*.
+
+    Args:
+        items: Full list of items.
+        page:  1-based page number.
+        limit: Items per page.  0 means "return all" (no pagination applied).
+
+    Returns:
+        Dict with keys: data, total, page, limit, totalPages.
+    """
+    total = len(items)
+    if limit > 0:
+        offset = (page - 1) * limit
+        data = items[offset:offset + limit]
+        total_pages = (total + limit - 1) // limit
+    else:
+        data = items
+        total_pages = 1
+    return {
+        'data': data,
+        'total': total,
+        'page': page,
+        'limit': limit,
+        'totalPages': total_pages,
+    }
 
 
 def get_employee_by_email(db, email: str) -> Optional[Dict]:
@@ -371,6 +403,17 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     
     CORS(app, supports_credentials=True)  # Enable CORS with credentials
+
+    # Enable Gzip compression for all responses
+    Compress(app)
+
+    # Rate limiter – keyed by remote IP address
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[],
+        storage_uri="memory://",
+    )
     
     # Ensure AbsenceTypes table exists (for existing databases)
     ensure_absence_types_table(db_path)
@@ -382,6 +425,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     # ============================================================================
     
     @app.route('/api/auth/login', methods=['POST'])
+    @limiter.limit("5 per minute")
     def login():
         """Authenticate employee and create session"""
         try:
@@ -910,9 +954,21 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     
     @app.route('/api/employees', methods=['GET'])
     def get_employees():
-        """Get all employees (now includes authentication data)"""
+        """Get all employees (now includes authentication data).
+
+        Optional query parameters:
+          - page  (int, default 1): 1-based page number
+          - limit (int, default 0): items per page; 0 means return all items
+        """
         conn = None
         try:
+            # Parse pagination parameters
+            try:
+                page = max(1, int(request.args.get('page', 1)))
+                limit = max(0, int(request.args.get('limit', 0)))
+            except (ValueError, TypeError):
+                return jsonify({'error': 'page and limit must be integers'}), 400
+
             conn = db.get_connection()
             cursor = conn.cursor()
             
@@ -965,7 +1021,10 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'hasPassword': bool(row['Email']),  # Has auth if email is set
                     'roles': row['roles'].split(',') if row['roles'] else []
                 })
-            
+
+            if limit > 0:
+                return jsonify(_paginate(employees, page, limit))
+
             return jsonify(employees)
         except Exception as e:
             return jsonify({'error': f'Database error: {str(e)}'}), 500
@@ -2692,11 +2751,23 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     
     @app.route('/api/shifts/schedule', methods=['GET'])
     def get_schedule():
-        """Get shift schedule for a date range"""
+        """Get shift schedule for a date range.
+
+        Optional pagination query parameters:
+          - page  (int, default 1): 1-based page number for assignments
+          - limit (int, default 0): assignments per page; 0 means return all
+        """
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
         view = request.args.get('view', 'week')
-        
+
+        # Parse pagination parameters
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+            limit = max(0, int(request.args.get('limit', 0)))
+        except (ValueError, TypeError):
+            return jsonify({'error': 'page and limit must be integers'}), 400
+
         if not start_date_str:
             return jsonify({'error': 'startDate is required'}), 400
         
@@ -2877,12 +2948,20 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     'colorCode': row['ColorCode'] or '#E8F5E9'
                 })
             
+            pagination = _paginate(assignments, page, limit)
+
             return jsonify({
                 'startDate': start_date.isoformat(),
                 'endDate': end_date.isoformat(),
-                'assignments': assignments,
+                'assignments': pagination['data'],
                 'absences': absences,
-                'vacationPeriods': vacation_periods
+                'vacationPeriods': vacation_periods,
+                'pagination': {
+                    'total': pagination['total'],
+                    'page': pagination['page'],
+                    'limit': pagination['limit'],
+                    'totalPages': pagination['totalPages'],
+                }
             })
             
         except Exception as e:
@@ -6929,11 +7008,29 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     # ============================================================================
     # STATIC FILES (Web UI)
     # ============================================================================
-    
+
     @app.route('/')
     def index():
-        """Serve the main web UI"""
-        return app.send_static_file('index.html')
+        """Serve the main web UI (no-cache so users always get the latest version)"""
+        response = make_response(app.send_static_file('index.html'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+
+    @app.route('/css/styles.css')
+    def serve_styles():
+        """Serve styles with long-term caching"""
+        response = make_response(app.send_static_file('css/styles.css'))
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return response
+
+    @app.route('/js/app.js')
+    def serve_app_js():
+        """Serve app.js with long-term caching"""
+        response = make_response(app.send_static_file('js/app.js'))
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return response
     
     return app
 

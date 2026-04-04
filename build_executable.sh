@@ -33,6 +33,13 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
+echo "[1b/5] Minifying CSS assets..."
+python3 minify_css.py
+if [ $? -ne 0 ]; then
+    echo "WARNING: CSS minification failed, continuing with unminified CSS"
+fi
+
+echo ""
 echo "[2/4] Cleaning previous build..."
 rm -rf build dist
 rm -f Dienstplan Dienstplan.exe

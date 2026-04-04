@@ -43,3 +43,6 @@ pyinstaller>=6.0.0
 
 # Excel export (openpyxl) - required for Excel export functionality
 openpyxl>=3.1.0
+
+# CSS minification for production builds
+csscompressor>=0.9.5

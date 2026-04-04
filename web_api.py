@@ -78,8 +78,14 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
 
     @app.route('/css/styles.css')
     def serve_styles():
-        """Serve styles with long-term caching"""
-        response = make_response(app.send_static_file('css/styles.css'))
+        """Serve styles - minified in production, full version in development"""
+        import os
+        debug_mode = app.debug
+        min_css_path = os.path.join(app.static_folder, 'css', 'styles.min.css')
+        if not debug_mode and os.path.exists(min_css_path):
+            response = make_response(app.send_static_file('css/styles.min.css'))
+        else:
+            response = make_response(app.send_static_file('css/styles.css'))
         response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
         return response
 

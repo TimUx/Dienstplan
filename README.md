@@ -22,6 +22,7 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - [🔐 Sicherheit & Authentifizierung](#-sicherheit--authentifizierung)
 - [🐳 Deployment](#-deployment)
 - [🛠️ Entwicklung](#%EF%B8%8F-entwicklung)
+  - [Datenbankmigrationen (Alembic)](#datenbankmigrationen-alembic)
 - [🤝 Beitragen](#-beitragen)
 - [📊 Migration von .NET zu Python](#-migration-von-net-zu-python)
 - [📚 Dokumentation](#-dokumentation)
@@ -1212,7 +1213,76 @@ def my_endpoint():
 ### Beispieldaten für Entwicklung
 Siehe [docs/SAMPLE_DATA.md](docs/SAMPLE_DATA.md) für Details zu Beispieldaten und API-Aufrufen.
 
-### Datenbank-Verwaltungs-Skripte
+### Datenbankmigrationen (Alembic)
+
+Das Projekt nutzt **Alembic** für versionierte SQLite-Migrationen.  
+SQLAlchemy ORM wird **nicht** verwendet – alle Migrationen arbeiten mit rohem SQL.
+
+#### Automatisches Anwenden beim Start
+
+Migrationen werden **automatisch** angewendet:
+
+- **Neue Datenbank**: `db_init.py` erstellt das vollständige Schema und stempelt
+  die Datenbank sofort auf den aktuellen Stand (`alembic stamp head`).
+- **Bestehende Datenbank**: Beim nächsten Start der Anwendung (via
+  `python main.py serve` oder `launcher.py`) werden fehlende Migrationen
+  automatisch in der richtigen Reihenfolge eingespielt.
+
+#### Migrationsverlauf anzeigen
+
+```bash
+python -m alembic --config alembic.ini history
+python -m alembic --config alembic.ini current   # Stand der aktiven Datenbank
+```
+
+#### Neue Migration erstellen
+
+1. **Revision erstellen:**
+   ```bash
+   python -m alembic --config alembic.ini revision \
+       --autogenerate -m "Kurzbeschreibung der Änderung"
+   # oder ohne Autogenerate (empfohlen bei reinem SQLite):
+   python -m alembic --config alembic.ini revision \
+       -m "Kurzbeschreibung der Änderung"
+   ```
+
+2. **Skript unter `migrations/versions/<id>_<name>.py` bearbeiten:**
+   ```python
+   from alembic import op
+   import sqlalchemy as sa
+   from sqlalchemy import text
+
+   def upgrade() -> None:
+       # Idempotente Änderungen – prüfen, ob die Änderung bereits existiert
+       conn = op.get_bind()
+       result = conn.execute(text("PRAGMA table_info(MeineTabelle)"))
+       if not any(r[1] == "NeueSpalte" for r in result.fetchall()):
+           with op.batch_alter_table("MeineTabelle") as batch_op:
+               batch_op.add_column(sa.Column("NeueSpalte", sa.Text()))
+
+   def downgrade() -> None:
+       with op.batch_alter_table("MeineTabelle") as batch_op:
+           batch_op.drop_column("NeueSpalte")
+   ```
+
+3. **Migration testen (optional):**
+   ```bash
+   # Auf Test-Datenbank anwenden
+   DIENSTPLAN_DB_URL=sqlite:///test.db python -m alembic --config alembic.ini upgrade head
+
+   # Rollback testen
+   DIENSTPLAN_DB_URL=sqlite:///test.db python -m alembic --config alembic.ini downgrade -1
+   ```
+
+4. **Migration committen** – die neue Datei unter `migrations/versions/` in Git aufnehmen.
+
+#### Hinweise für SQLite
+
+- Verwende `op.batch_alter_table()` für alle `ALTER TABLE`-Operationen (SQLite-Einschränkung).
+- `render_as_batch=True` ist in `migrations/env.py` bereits aktiviert.
+- Migrationen sollten **idempotent** sein: vor jeder Änderung prüfen, ob sie bereits existiert.
+
+
 
 #### Alle Schichten löschen
 

@@ -49,7 +49,7 @@ class AbsenceTypeDefinition:
     identically to standard types in shift planning:
     - No shifts are planned on days with absences
     - Existing shifts are removed when absence is added
-    - Springer system is activated
+    - Automatic replacement assignment is triggered
     - Understaffing notifications are triggered
     """
     id: int
@@ -190,7 +190,7 @@ class Absence:
     ALL absence types (standard and custom) behave identically in shift planning:
     - No shifts are planned on days with absences
     - Existing shifts are removed when absence is added
-    - Springer system is activated
+    - Automatic replacement assignment is triggered
     - Understaffing notifications are triggered
     
     Absences MUST:

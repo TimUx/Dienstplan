@@ -70,7 +70,7 @@ Beim ersten Start wird automatisch ein Administrator-Konto erstellt:
    - Personalnummer
 4. Optional:
    - Team zuordnen
-   - Als Springer markieren
+
    - Qualifikationen festlegen (BMT/BSB)
 
 #### Teams erstellen
@@ -180,8 +180,8 @@ Das System verwendet den **Google OR-Tools CP-SAT Constraint Solver** für optim
 - ✅ 1 BSB (Brandschutzbeauftragter) pro Werktag (Mo-Fr)
 - ✅ Nur qualifizierte Mitarbeiter
 
-**Springer-Logik:**
-- ✅ Mindestens 1 Springer muss verfügbar bleiben
+**Vertretungslogik:**
+- ✅ Das System ermittelt automatisch verfügbare Vertretungen
 - ✅ Teamübergreifender Einsatz möglich
 
 #### Weiche Constraints (werden optimiert)
@@ -238,7 +238,7 @@ Authorization: Required (Admin only)
   "vorname": "Max",
   "name": "Mustermann",
   "personalnummer": "12345",
-  "isSpringer": false,
+  
   "teamId": 1
 }
 ```
@@ -285,7 +285,7 @@ Authorization: Required (Admin only)
 
 1. **Planen Sie rechtzeitig**: Erstellen Sie Pläne mindestens 2 Wochen im Voraus
 2. **Überprüfen Sie Abwesenheiten**: Stellen Sie sicher, dass alle bekannten Abwesenheiten erfasst sind
-3. **Nutzen Sie Springer**: Markieren Sie geeignete Mitarbeiter als Springer für Flexibilität
+3. **Vertretungen**: Das System wählt automatisch verfügbare Mitarbeiter als Vertretung aus
 4. **Zeitlimits anpassen**: Bei komplexen Planungen erhöhen Sie das Solver-Zeitlimit
 
 ### Performance
@@ -313,7 +313,7 @@ Authorization: Required (Admin only)
 **Lösungen:**
 - Zeitlimit erhöhen: `--time-limit 600`
 - Zeitraum verkürzen (z.B. 2 Wochen statt Monat)
-- Mehr Springer hinzufügen
+- Verfügbarkeit der Mitarbeiter prüfen
 - Abwesenheiten überprüfen
 
 ### Problem: Server startet nicht

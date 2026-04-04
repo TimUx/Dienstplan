@@ -407,11 +407,8 @@ class ShiftPlanningModel:
         # employee_weekend_shift[emp_id, date] ∈ {0, 1}
         # Note: Shift TYPE is determined by team's weekly shift, only PRESENCE is variable
         # 
-        # Design decision: Springers are excluded from weekend variables because they
-        # don't have a team (no team shift type to derive from). This is a known
-        # limitation that keeps the model consistent. Springers primarily cover weekday
-        # shifts. If weekend springer coverage is needed, extend the model to support
-        # flexible weekend shift types for springers.
+        # Design decision: Employees without a team are excluded from weekend variables
+        # because they don't have a team shift type to derive from.
         for emp in self.employees:
             # Only for employees with a team
             if not emp.team_id:

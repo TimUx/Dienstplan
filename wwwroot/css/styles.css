@@ -258,15 +258,6 @@ select {
 .shift-AU { background: #FF5722; color: #fff; } /* Sick leave - Red-Orange */
 .shift-L { background: #2196F3; color: #fff; } /* Training - Blue */
 
-.springer-badge {
-    background: var(--warning-color);
-    color: white;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.75rem;
-    margin-left: 5px;
-}
-
 .employees-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1524,11 +1515,6 @@ body.disponent button.admin-only.admin-strict {
     border-radius: 12px;
     font-size: 0.85rem;
     font-weight: 600;
-}
-
-.badge-springer {
-    background: #e3f2fd;
-    color: #1976d2;
 }
 
 .badge-ferienjobber {

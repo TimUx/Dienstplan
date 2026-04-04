@@ -8,7 +8,7 @@ Das System kann automatisch Beispieldaten generieren mit:
 
 - **17 Mitarbeiter** insgesamt
 - **3 Teams** (Alpha, Beta, Gamma)
-- **4 Springer**
+- **15 Techniker** (je 5 pro Team)
 - **2 qualifizierte Mitarbeiter**: BMT (Brandmeldetechniker) und BSB (Brandschutzbeauftragter)
 - **Beispiel-Abwesenheiten**
 
@@ -17,7 +17,7 @@ Das System kann automatisch Beispieldaten generieren mit:
 2. **Team Beta** - 5 Mitarbeiter  
 3. **Team Gamma** - 5 Mitarbeiter
 
-### Springer (4 Mitarbeiter)
+### Techniker (alle Mitarbeiter)
 - Robert Franke
 - Maria Lange
 - Thomas Zimmermann
@@ -43,7 +43,7 @@ python main.py plan \
 Dies erstellt automatisch:
 - 17 Mitarbeiter mit Namen, Personalnummern und Qualifikationen
 - 3 Teams mit je 5 Mitarbeitern
-- 4 Springer (verteilt über Teams)
+- 15 Techniker (je 5 pro Team)
 - Qualifikationen (BMT/BSB)
 - Geplante Schichten für den angegebenen Zeitraum
 
@@ -115,33 +115,33 @@ curl -X POST http://localhost:5000/api/employees \
     "vorname": "Max",
     "name": "Müller",
     "personalnummer": "MA001",
-    "isSpringer": false,
+    
     "teamId": 1,
     "isBmt": false,
     "isBsb": false
   }'
 
-# Springer mit BMT-Qualifikation
+# Mitarbeiter mit BMT-Qualifikation
 curl -X POST http://localhost:5000/api/employees \
   -H "Content-Type: application/json" \
   -d '{
     "vorname": "Robert",
     "name": "Franke",
     "personalnummer": "MA016",
-    "isSpringer": true,
+    
     "teamId": null,
     "isBmt": true,
     "isBsb": false
   }'
 
-# Springer mit BSB-Qualifikation
+# Mitarbeiter mit BSB-Qualifikation
 curl -X POST http://localhost:5000/api/employees \
   -H "Content-Type: application/json" \
   -d '{
     "vorname": "Maria",
     "name": "Lange",
     "personalnummer": "MA017",
-    "isSpringer": true,
+    
     "teamId": null,
     "isBmt": false,
     "isBsb": true
@@ -236,31 +236,31 @@ echo "Creating employees..."
 for i in {1..5}; do
   curl -s -X POST $API_BASE/employees \
     -H "Content-Type: application/json" \
-    -d "{\"vorname\":\"Mitarbeiter\",\"name\":\"Alpha$i\",\"personalnummer\":\"MA00$i\",\"isSpringer\":false,\"teamId\":$TEAM_ALPHA}" > /dev/null
+    -d "{\"vorname\":\"Mitarbeiter\",\"name\":\"Alpha$i\",\"personalnummer\":\"MA00$i\",\"\"teamId\":$TEAM_ALPHA}" > /dev/null
 done
 
 # Mitarbeiter für Team Beta
 for i in {6..10}; do
   curl -s -X POST $API_BASE/employees \
     -H "Content-Type: application/json" \
-    -d "{\"vorname\":\"Mitarbeiter\",\"name\":\"Beta$i\",\"personalnummer\":\"MA0$i\",\"isSpringer\":false,\"teamId\":$TEAM_BETA}" > /dev/null
+    -d "{\"vorname\":\"Mitarbeiter\",\"name\":\"Beta$i\",\"personalnummer\":\"MA0$i\",\"\"teamId\":$TEAM_BETA}" > /dev/null
 done
 
 # Mitarbeiter für Team Gamma
 for i in {11..15}; do
   curl -s -X POST $API_BASE/employees \
     -H "Content-Type: application/json" \
-    -d "{\"vorname\":\"Mitarbeiter\",\"name\":\"Gamma$i\",\"personalnummer\":\"MA0$i\",\"isSpringer\":false,\"teamId\":$TEAM_GAMMA}" > /dev/null
+    -d "{\"vorname\":\"Mitarbeiter\",\"name\":\"Gamma$i\",\"personalnummer\":\"MA0$i\",\"\"teamId\":$TEAM_GAMMA}" > /dev/null
 done
 
-# Springer
+# Reguläre Mitarbeiter (Beispiel)
 curl -s -X POST $API_BASE/employees \
   -H "Content-Type: application/json" \
-  -d '{"vorname":"Robert","name":"Franke","personalnummer":"MA016","isSpringer":true,"isBmt":true}' > /dev/null
+  -d '{"vorname":"Robert","name":"Franke","personalnummer":"MA016","isBmt":true}' > /dev/null
 
 curl -s -X POST $API_BASE/employees \
   -H "Content-Type: application/json" \
-  -d '{"vorname":"Maria","name":"Lange","personalnummer":"MA017","isSpringer":true,"isBsb":true}' > /dev/null
+  -d '{"vorname":"Maria","name":"Lange","personalnummer":"MA017","isBsb":true}' > /dev/null
 
 echo "Employees created."
 

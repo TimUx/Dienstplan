@@ -6,7 +6,7 @@ NO SMTP implementation - just the structure for notification triggers.
 
 As per requirements:
 - Notify when absences are entered after scheduling
-- Notify when springer is automatically assigned
+- Notify when replacement employee is automatically assigned
 - Notify when no replacement is possible
 - Notify when locked assignment prevents optimization
 """
@@ -81,22 +81,22 @@ class AbsenceAfterSchedulingNotification(NotificationTrigger):
 
 
 @dataclass
-class SpringerAssignedNotification(NotificationTrigger):
+class ReplacementAssignedNotification(NotificationTrigger):
     """
-    Triggered when a springer is automatically assigned to replace an absent employee.
+    Triggered when a replacement employee is automatically assigned to cover an absent employee.
     
     Recipients:
-    - The springer (assigned employee)
+    - The replacement employee
     - All Admins
     - All Dispatchers
     
     Payload:
-    - Springer details
+    - Replacement employee details
     - Original employee details
     - Shift details (date, shift type)
     - Reason for replacement (absence type)
     """
-    springer: Employee
+    replacement: Employee
     original_employee: Employee
     shift_date: date
     shift_code: str
@@ -104,26 +104,26 @@ class SpringerAssignedNotification(NotificationTrigger):
     
     def __post_init__(self):
         super().__init__(
-            trigger_type="springer_assigned",
+            trigger_type="replacement_assigned",
             timestamp=date.today(),
             description=(
-                f"Springer {self.springer.full_name} automatically assigned to "
+                f"Replacement {self.replacement.full_name} automatically assigned to "
                 f"{self.shift_code} shift on {self.shift_date} "
                 f"replacing {self.original_employee.full_name} ({self.absence_reason})"
             )
         )
     
     def get_recipients(self) -> List[str]:
-        """Return list of recipient roles + specific springer"""
-        return ["Admin", "Disponent", f"employee_{self.springer.id}"]
+        """Return list of recipient roles + specific replacement employee"""
+        return ["Admin", "Disponent", f"employee_{self.replacement.id}"]
     
     def get_message_payload(self) -> dict:
         """Return message data for notification system"""
         return {
             "type": self.trigger_type,
-            "springer_id": self.springer.id,
-            "springer_name": self.springer.full_name,
-            "springer_email": self.springer.email,
+            "replacement_id": self.replacement.id,
+            "replacement_name": self.replacement.full_name,
+            "replacement_email": self.replacement.email,
             "original_employee_id": self.original_employee.id,
             "original_employee_name": self.original_employee.full_name,
             "shift_date": self.shift_date.isoformat(),
@@ -135,7 +135,7 @@ class SpringerAssignedNotification(NotificationTrigger):
 @dataclass
 class NoReplacementAvailableNotification(NotificationTrigger):
     """
-    Triggered when no springer replacement is possible for an absent employee.
+    Triggered when no replacement is possible for an absent employee.
     
     Recipients:
     - All Admins
@@ -145,7 +145,7 @@ class NoReplacementAvailableNotification(NotificationTrigger):
     - Absent employee details
     - Shift details (date, shift type, team)
     - Absence reason
-    - Why no replacement was possible (all springers busy/absent, rest time violations, etc.)
+    - Why no replacement was possible (all employees busy/absent, rest time violations, etc.)
     - Understaffing impact
     """
     employee: Employee
@@ -266,17 +266,17 @@ class NotificationService:
         self.pending_notifications.append(notification)
         return notification
     
-    def trigger_springer_assigned(
+    def trigger_replacement_assigned(
         self,
-        springer: Employee,
+        replacement: Employee,
         original_employee: Employee,
         shift_date: date,
         shift_code: str,
         absence_reason: str
     ):
-        """Queue notification for automatic springer assignment"""
-        notification = SpringerAssignedNotification(
-            springer=springer,
+        """Queue notification for automatic replacement assignment"""
+        notification = ReplacementAssignedNotification(
+            replacement=replacement,
             original_employee=original_employee,
             shift_date=shift_date,
             shift_code=shift_code,

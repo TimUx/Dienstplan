@@ -320,8 +320,6 @@ class SystemInfoExporter:
                 qualifications.append("Team Leader")
             if emp['IsFerienjobber']:
                 qualifications.append("Ferienjobber (Temporary)")
-            if emp['IsSpringer']:
-                qualifications.append("Springer (Substitute)")
             
             if qualifications:
                 output.append(f"  Qualifications: {', '.join(qualifications)}")
@@ -509,8 +507,6 @@ class SystemInfoExporter:
                 markers.append("MANUAL")
             if assignment['IsFixed']:
                 markers.append("FIXED")
-            if assignment['IsSpringerAssignment']:
-                markers.append("SPRINGER")
             
             marker_str = f" [{', '.join(markers)}]" if markers else ""
             

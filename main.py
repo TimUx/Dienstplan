@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from data_loader import generate_sample_data, load_from_database
-from db_init import initialize_database
+from db_init import initialize_database, run_migrations
 from model import create_shift_planning_model
 from solver import solve_shift_planning
 from validation import validate_shift_plan
@@ -181,7 +181,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
         print("[i] Using Waitress production WSGI server")
     print()
     
-    # Check if database exists, if not initialize it
+    # Check if database exists, if not initialize it; otherwise run migrations
     if not os.path.exists(db_path):
         print(f"[i] No database found at {db_path}")
         print("   Initializing new database with default structure...")
@@ -194,6 +194,13 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
             print(f"[!] Error initializing database: {e}")
             print("   The application may not work correctly.")
             print()
+    else:
+        # Existing database – apply any outstanding migrations automatically
+        try:
+            run_migrations(db_path)
+        except Exception as e:
+            print(f"[!] Error running migrations: {e}")
+            print("   The application may not work correctly.")
     
     print("The existing Web UI from .NET version is compatible with this backend.")
     print("=" * 60)

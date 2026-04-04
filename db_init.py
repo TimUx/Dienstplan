@@ -1,12 +1,62 @@
 """
 Database initialization script for Dienstplan system.
 Creates all necessary tables and initializes with sample data if needed.
+
+Alembic is used to track and apply incremental schema migrations.
+- New databases are created with the full current schema and then stamped as
+  "head" so that no migration scripts are re-run.
+- Existing databases are upgraded to "head" by running any outstanding
+  Alembic revisions automatically.
 """
 
+import os
 import sqlite3
 import bcrypt
 import secrets
 from datetime import datetime
+
+
+# ---------------------------------------------------------------------------
+# Alembic helpers
+# ---------------------------------------------------------------------------
+
+def _alembic_config(db_path: str):
+    """Return an Alembic Config object pointing at the given SQLite database."""
+    from alembic.config import Config
+
+    migrations_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+    cfg = Config()
+    cfg.set_main_option("script_location", migrations_dir)
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{os.path.abspath(db_path)}")
+    return cfg
+
+
+def run_migrations(db_path: str = "dienstplan.db") -> None:
+    """
+    Apply all outstanding Alembic migrations to the database.
+
+    Safe to call on every application start: if the database is already at
+    "head" the function returns immediately without making any changes.
+    """
+    from alembic import command
+
+    cfg = _alembic_config(db_path)
+    command.upgrade(cfg, "head")
+    print(f"[OK] Database migrations up-to-date: {db_path}")
+
+
+def stamp_migrations(db_path: str = "dienstplan.db") -> None:
+    """
+    Stamp a freshly-created database as being at migration 'head'.
+
+    Call this after creating a brand-new database with create_database_schema()
+    so that run_migrations() skips all historical revisions on subsequent starts.
+    """
+    from alembic import command
+
+    cfg = _alembic_config(db_path)
+    command.stamp(cfg, "head")
+    print(f"[OK] Database stamped at migration head: {db_path}")
 
 
 def create_database_schema(db_path: str = "dienstplan.db"):
@@ -928,41 +978,66 @@ def initialize_sample_employees(db_path: str = "dienstplan.db"):
 def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool = True):
     """
     Initialize complete database with schema and optional sample data.
-    
+
+    For a **brand-new** database the full current schema is created and the
+    Alembic migration history is stamped as "head" so that run_migrations()
+    will not re-apply the historical migration scripts on subsequent starts.
+
+    For an **existing** database initialize_database() runs the outstanding
+    Alembic migrations instead of recreating the schema from scratch, ensuring
+    that any incremental changes are applied automatically.
+
     Args:
         db_path: Path to SQLite database file
-        with_sample_data: Whether to include sample data
+        with_sample_data: Whether to include sample data (teams, employees)
     """
+    import os as _os
+
+    db_exists = _os.path.exists(db_path)
+
+    if db_exists:
+        # Existing database – apply any missing migrations and return.
+        print(f"[*] Existing database found: {db_path}")
+        print("=" * 60)
+        run_migrations(db_path)
+        print("=" * 60)
+        print("[OK] Database is up-to-date.")
+        return
+
     print(f"[*] Initializing database: {db_path}")
     print("=" * 60)
-    
+
     # Create schema
     create_database_schema(db_path)
-    
+
     # Initialize roles
     initialize_default_roles(db_path)
-    
+
     # Create default admin
     create_default_admin(db_path)
-    
+
     # Initialize shift types
     initialize_shift_types(db_path)
-    
+
     # Initialize shift type relationships (rotation order: F → N → S)
     initialize_shift_type_relationships(db_path)
-    
-    # Initialize default rotation groups (NEW: database-driven rotation)
+
+    # Initialize default rotation groups (database-driven rotation)
     initialize_default_rotation_groups(db_path)
-    
+
     # Initialize standard absence types (U, AU, L)
     initialize_absence_types(db_path)
-    
+
     if with_sample_data:
         # Initialize sample teams (will be linked to default rotation group)
         initialize_sample_teams(db_path)
         # Initialize sample employees
         initialize_sample_employees(db_path)
-    
+
+    # Stamp the new database as already at migration "head" so that
+    # run_migrations() is a no-op on subsequent application starts.
+    stamp_migrations(db_path)
+
     print("=" * 60)
     print("[OK] Database initialization complete!")
     print()

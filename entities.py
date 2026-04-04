@@ -259,6 +259,23 @@ class ShiftAssignment:
 
 
 @dataclass
+class RelaxedConstraint:
+    """
+    Describes a rule violation that occurred in the emergency greedy plan.
+
+    Each instance documents a single deviation from normal planning rules and
+    explains why the deviation was unavoidable (e.g., not enough rested staff).
+    """
+    constraint_name: str          # Human-readable rule name, e.g. "Ruhezeit (11h)"
+    reason: str                   # Why the rule could not be satisfied
+    description: str = ""         # Additional detail / context
+    employee_id: Optional[int] = None
+    employee_name: Optional[str] = None
+    date: Optional[date] = None
+    shift_code: Optional[str] = None
+
+
+@dataclass
 class VacationRequest:
     """Represents a vacation request from an employee"""
     id: int

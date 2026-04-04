@@ -4,10 +4,10 @@ Configures and runs the solver, returns solution.
 """
 
 from ortools.sat.python import cp_model
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import time
 from typing import List, Dict, Tuple, Optional
-from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES, get_shift_type_by_id
+from entities import Employee, ShiftAssignment, RelaxedConstraint, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
 from constraints import (
     add_team_shift_assignment_constraints,
@@ -1688,6 +1688,198 @@ def _print_relaxation_summary(relaxed_constraints: List[str]) -> None:
     for i, constraint in enumerate(relaxed_constraints, 1):
         print(f"  {i}. {constraint}")
     print("=" * 60)
+
+
+def create_emergency_plan(
+    available_employees: List[Employee],
+    dates: List[date],
+    shift_types: List,
+    absences: List,
+) -> Tuple[List[ShiftAssignment], List[RelaxedConstraint]]:
+    """
+    Greedy emergency plan – last-resort fallback without OR-Tools.
+
+    Creates a minimal but complete shift plan when all constraint-relaxation
+    stages of the CP-SAT solver have failed.  The algorithm is intentionally
+    simple and fast; correctness (every available employee gets a shift every
+    day) is preferred over optimality.
+
+    Strategy:
+    ──────────
+    1. Build an absence lookup so absent employees are never scheduled.
+    2. For every date (in chronological order) and every shift type that is
+       active on that date, collect employees who are available (not absent)
+       and not yet assigned on that day.
+    3. Before assigning an employee to a shift, check whether the 11-hour
+       minimum rest time since their last assignment is satisfied.
+       • Employees that satisfy the rest time are preferred.
+       • If no rested employee is available the rest-violating employee is
+         assigned anyway and a RelaxedConstraint is recorded.
+    4. Every rule deviation is captured as a RelaxedConstraint that states
+       what was violated and why ("Notfallabweichung").
+
+    Args:
+        available_employees: All employees to consider for scheduling.
+        dates:               Sorted list of planning dates.
+        shift_types:         Shift-type definitions (ShiftType objects).
+        absences:            All absence records covering the planning period.
+
+    Returns:
+        assignments:          List[ShiftAssignment] – one entry per employee
+                              per working day (absent employees are skipped).
+        relaxed_constraints:  List[RelaxedConstraint] – one entry per rule
+                              violation, explaining what was violated and why.
+    """
+
+    # ------------------------------------------------------------------ #
+    # Helper: parse "HH:MM" into a datetime on a given date               #
+    # ------------------------------------------------------------------ #
+    def _parse_time(time_str: str):
+        """Parse 'HH:MM' using strptime for robustness."""
+        return datetime.strptime(time_str, "%H:%M").time()
+
+    def _shift_end_dt(assignment_date: date, st) -> datetime:
+        """Return the wall-clock datetime when *st* ends on *assignment_date*."""
+        end = datetime.combine(assignment_date, _parse_time(st.end_time))
+        start = datetime.combine(assignment_date, _parse_time(st.start_time))
+        # Overnight shift: end time is on the next calendar day
+        if end <= start:
+            end += timedelta(days=1)
+        return end
+
+    def _shift_start_dt(assignment_date: date, st) -> datetime:
+        return datetime.combine(assignment_date, _parse_time(st.start_time))
+
+    MIN_REST_HOURS = 11
+
+    # ------------------------------------------------------------------ #
+    # Build absence lookup: (employee_id, date) → absence object          #
+    # Iterates over (absence, date) pairs; suitable for the bounded        #
+    # planning periods used by the emergency fallback.                     #
+    # ------------------------------------------------------------------ #
+    absence_lookup: Dict[Tuple[int, date], object] = {}
+    for absence in absences:
+        for d in dates:
+            if absence.start_date <= d <= absence.end_date:
+                absence_lookup[(absence.employee_id, d)] = absence
+
+    # ------------------------------------------------------------------ #
+    # Determine which shift types are active on a given date.             #
+    # Falls back to all shift types when none match the weekday flags     #
+    # (e.g. non-standard configurations) to guarantee every day gets     #
+    # at least one shift to assign.                                       #
+    # ------------------------------------------------------------------ #
+    def _active_shifts(d: date) -> List:
+        active = [st for st in shift_types if st.works_on_date(d)]
+        return active if active else list(shift_types)
+
+    # ------------------------------------------------------------------ #
+    # Main greedy loop                                                     #
+    # ------------------------------------------------------------------ #
+    assignments: List[ShiftAssignment] = []
+    relaxed_constraints: List[RelaxedConstraint] = []
+    assignment_id = 1
+
+    # Track the last assigned shift per employee for rest-time checks.
+    # Maps employee_id → (end_datetime of last shift)
+    last_shift_end: Dict[int, datetime] = {}
+
+    # Tracks which employees are already assigned on a given date so that
+    # no employee receives more than one shift per day.
+    assigned_today: Dict[date, set] = {}
+
+    for d in sorted(dates):
+        assigned_today[d] = set()
+        active_shifts = _active_shifts(d)
+
+        # Employees available on this date (not absent, has a team)
+        available = [
+            emp for emp in available_employees
+            if emp.team_id is not None and (emp.id, d) not in absence_lookup
+        ]
+
+        if not available or not active_shifts:
+            continue
+
+        # Round-robin index to distribute employees evenly across shift types
+        shift_count = len(active_shifts)
+        emp_shift_index: Dict[int, int] = {
+            emp.id: idx % shift_count for idx, emp in enumerate(available)
+        }
+
+        # Sort employees: those satisfying rest time first, rest-violators last.
+        def _rest_ok(emp) -> bool:
+            if emp.id not in last_shift_end:
+                return True
+            # Try each candidate shift; the preferred shift is at emp_shift_index
+            preferred_st = active_shifts[emp_shift_index[emp.id]]
+            start = _shift_start_dt(d, preferred_st)
+            return (start - last_shift_end[emp.id]).total_seconds() >= MIN_REST_HOURS * 3600
+
+        available.sort(key=lambda e: (0 if _rest_ok(e) else 1, e.id))
+
+        for emp in available:
+            if emp.id in assigned_today[d]:
+                continue
+
+            preferred_idx = emp_shift_index[emp.id]
+            chosen_st = None
+
+            # Try to find a shift that does not violate the rest time.
+            for offset in range(shift_count):
+                candidate = active_shifts[(preferred_idx + offset) % shift_count]
+                start_dt = _shift_start_dt(d, candidate)
+                if emp.id not in last_shift_end or \
+                        (start_dt - last_shift_end[emp.id]).total_seconds() >= MIN_REST_HOURS * 3600:
+                    chosen_st = candidate
+                    break
+
+            rest_violated = False
+            if chosen_st is None:
+                # No rest-compliant shift found; fall back to preferred shift and document the violation.
+                chosen_st = active_shifts[preferred_idx]
+                rest_violated = True
+
+            # Record rest-time violation.
+            if rest_violated:
+                prev_end = last_shift_end[emp.id]
+                actual_rest_h = (
+                    _shift_start_dt(d, chosen_st) - prev_end
+                ).total_seconds() / 3600
+                relaxed_constraints.append(RelaxedConstraint(
+                    constraint_name="Ruhezeit (11h)",
+                    reason=(
+                        f"Nicht genügend ausgeruhte Mitarbeiter verfügbar – "
+                        f"Ruhezeit {actual_rest_h:.1f}h statt 11h (Notfallabweichung)"
+                    ),
+                    description=(
+                        f"Mitarbeiter {emp.full_name} (ID {emp.id}) wurde der "
+                        f"Schicht {chosen_st.code} am {d.isoformat()} zugewiesen "
+                        f"obwohl die Mindestruhezeit von 11h unterschritten wurde."
+                    ),
+                    employee_id=emp.id,
+                    employee_name=emp.full_name,
+                    date=d,
+                    shift_code=chosen_st.code,
+                ))
+
+            assignments.append(ShiftAssignment(
+                id=assignment_id,
+                employee_id=emp.id,
+                shift_type_id=chosen_st.id,
+                date=d,
+                notes="Notfallplan (greedy)",
+            ))
+            assigned_today[d].add(emp.id)
+            last_shift_end[emp.id] = _shift_end_dt(d, chosen_st)
+            assignment_id += 1
+
+    print(
+        f"  Notfallplan erstellt: {len(assignments)} Schichtzuweisungen "
+        f"für {len(available_employees)} Mitarbeiter über {len(dates)} Tage "
+        f"({len(relaxed_constraints)} Notfallabweichungen)."
+    )
+    return assignments, relaxed_constraints
 
 
 def _create_greedy_emergency_plan(

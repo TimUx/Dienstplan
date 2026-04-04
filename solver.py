@@ -14,6 +14,7 @@ from planning_report import (
     RuleViolation,
     RelaxedConstraint as PlanningRelaxedConstraint,
     AbsenceInfo,
+    AbsenceImpact,
 )
 from validation import validate_shift_plan
 from constraints import (
@@ -2114,6 +2115,12 @@ def _build_planning_report(
         shifts_assigned=shifts_assigned,
         rule_violations=rule_violations,
         relaxed_constraints=relaxed_constraints,
+        absence_impact=analyze_absence_impact(
+            employees=planning_model.employees,
+            absences=planning_model.absences,
+            dates=planning_model.dates,
+            shift_requirements=planning_model.shift_types,
+        ),
         objective_value=objective_value,
         solver_time_seconds=solver_time_seconds,
     )
@@ -2311,6 +2318,93 @@ def get_infeasibility_diagnostics(
     """
     solver = ShiftPlanningSolver(planning_model, time_limit_seconds=1, num_workers=1)
     return solver.diagnose_infeasibility()
+
+
+def analyze_absence_impact(
+    employees: List,
+    absences: List,
+    dates: List[date],
+    shift_requirements: List,
+) -> Dict[date, AbsenceImpact]:
+    """
+    Analysiert die Abwesenheitsauswirkungen für jeden Tag im Planungszeitraum.
+
+    Diese Funktion ist unabhängig vom Solver-Status und wird sowohl für FEASIBLE-
+    als auch für INFEASIBLE-Planungen aufgerufen, damit der PlanningReport
+    Risikotage dokumentieren kann.
+
+    Args:
+        employees:          Liste aller Employee-Objekte im Planungszeitraum.
+        absences:           Liste aller Absence-Objekte im Planungszeitraum.
+        dates:              Geordnete Liste der zu analysierenden Datumsangaben.
+        shift_requirements: Liste der ShiftType-Objekte (mit min_staff_weekday /
+                            min_staff_weekend und works_on_date()).
+
+    Returns:
+        Dict[date, AbsenceImpact] – ein Eintrag pro Tag in ``dates``.
+    """
+    # Pre-compute per-day absence sets for O(1) lookup
+    # Maps date -> set of employee_ids absent that day
+    absent_per_day: Dict[date, set] = {d: set() for d in dates}
+    for absence in absences:
+        for d in dates:
+            if absence.start_date <= d <= absence.end_date:
+                absent_per_day[d].add(absence.employee_id)
+
+    total_employees = len(employees)
+    all_employee_ids = {e.id for e in employees}
+
+    result: Dict[date, AbsenceImpact] = {}
+
+    for d in dates:
+        absent_ids = absent_per_day[d]
+        absent_count = len(absent_ids)
+        available_count = total_employees - absent_count
+        absence_ratio = absent_count / total_employees if total_employees > 0 else 0.0
+
+        # Determine which shifts are active on this day
+        is_weekend = d.weekday() >= 5  # Saturday=5, Sunday=6
+        active_shifts = [
+            st for st in shift_requirements
+            if st.works_on_date(d)
+        ]
+
+        # Calculate minimum staffing needed across all active shifts
+        total_min_needed = 0
+        affected_shift_codes: List[str] = []
+        for st in active_shifts:
+            min_needed = st.min_staff_weekend if is_weekend else st.min_staff_weekday
+            total_min_needed += min_needed
+            # A shift is "affected" when available staff is less than its minimum
+            if available_count < min_needed:
+                affected_shift_codes.append(st.code)
+
+        # Can we theoretically staff all shifts at their minimums?
+        min_staffing_reachable = (available_count >= total_min_needed)
+
+        # Buffer ratio: how much slack exists relative to available staff.
+        # buffer_ratio = (available - needed) / available
+        # Negative means understaffed; < 0.20 triggers has_risk.
+        if available_count > 0:
+            buffer_ratio = (available_count - total_min_needed) / available_count
+        else:
+            buffer_ratio = -1.0  # No staff at all
+
+        has_risk = buffer_ratio < 0.20
+
+        result[d] = AbsenceImpact(
+            date=d,
+            total_employees=total_employees,
+            absent_count=absent_count,
+            absence_ratio=absence_ratio,
+            affected_shift_codes=affected_shift_codes,
+            min_staffing_reachable=min_staffing_reachable,
+            has_risk=has_risk,
+            available_count=available_count,
+            buffer_ratio=buffer_ratio,
+        )
+
+    return result
 
 
 if __name__ == "__main__":

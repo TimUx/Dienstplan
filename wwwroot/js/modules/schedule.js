@@ -1084,18 +1084,18 @@ export async function saveShiftAssignment(event) {
                     showToast('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.', 'warning');
                 }
             } else {
-                showToast((`Fehler: ${error.error}`), 'error');
+                showToast(`Fehler: ${error.error}`, 'error');
             }
         } else if (response.status === 401) {
-            showToast(('Bitte melden Sie sich an.'), 'warning');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            showToast((isNewShift ? 'Fehler beim Erstellen der Schicht.' : 'Fehler beim Aktualisieren der Schicht.'), 'error');
+            showToast(isNewShift ? 'Fehler beim Erstellen der Schicht.' : 'Fehler beim Aktualisieren der Schicht.', 'error');
         }
     } catch (error) {
         console.error('Error saving shift:', error);
-        showToast((`Fehler: ${error.message}`), 'error');
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1115,17 +1115,17 @@ export async function deleteShiftAssignment() {
         if (response.ok || response.status === 204) {
             closeEditShiftModal();
             await loadSchedule();
-            showToast(('Schicht erfolgreich gelöscht!'), 'success');
+            showToast('Schicht erfolgreich gelöscht!', 'success');
         } else if (response.status === 401) {
-            showToast(('Bitte melden Sie sich an.'), 'warning');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            showToast(('Fehler beim Löschen der Schicht.'), 'error');
+            showToast('Fehler beim Löschen der Schicht.', 'error');
         }
     } catch (error) {
         console.error('Error deleting shift:', error);
-        showToast((`Fehler: ${error.message}`), 'error');
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1135,7 +1135,7 @@ export async function deleteShiftAssignment() {
 
 export async function showQuickEntryModal(employeeId, dateStr) {
     if (!canPlanShifts()) {
-        showToast(('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen. Diese Funktion ist nur für Administratoren und Disponenten verfügbar.'), 'error');
+        showToast('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen. Diese Funktion ist nur für Administratoren und Disponenten verfügbar.', 'error');
         return;
     }
 
@@ -1146,7 +1146,7 @@ export async function showQuickEntryModal(employeeId, dateStr) {
 
     const employee = cachedEmployees.find(emp => emp.id === parseInt(employeeId));
     if (!employee) {
-        showToast(('Mitarbeiter nicht gefunden.'), 'error');
+        showToast('Mitarbeiter nicht gefunden.', 'error');
         return;
     }
 
@@ -1238,7 +1238,7 @@ export async function saveQuickEntry() {
     const entryType = document.getElementById('quickEntryType').value;
 
     if (!entryType) {
-        showToast(('Bitte wählen Sie, ob Sie eine Schicht oder Abwesenheit hinzufügen möchten.'), 'warning');
+        showToast('Bitte wählen Sie, ob Sie eine Schicht oder Abwesenheit hinzufügen möchten.', 'warning');
         return;
     }
 
@@ -1250,7 +1250,7 @@ export async function saveQuickEntry() {
         if (entryType === 'shift') {
             const shiftTypeId = document.getElementById('quickEntryShiftTypeId').value;
             if (!shiftTypeId) {
-                showToast(('Bitte wählen Sie einen Schichttyp.'), 'warning');
+                showToast('Bitte wählen Sie einen Schichttyp.', 'warning');
                 return;
             }
 
@@ -1270,25 +1270,25 @@ export async function saveQuickEntry() {
             });
 
             if (response.ok) {
-                showToast(('Schicht erfolgreich erstellt!'), 'success');
+                showToast('Schicht erfolgreich erstellt!', 'success');
                 closeQuickEntryModal();
                 loadSchedule();
             } else if (response.status === 400) {
                 const error = await response.json();
                 if (error.warning) {
                     if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
-                        showToast(('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.'), 'error');
+                        showToast('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.', 'error');
                     }
                 } else {
-                    showToast((`Fehler: ${error.error}`), 'error');
+                    showToast(`Fehler: ${error.error}`, 'error');
                 }
             } else {
-                showToast(('Fehler beim Erstellen der Schicht.'), 'error');
+                showToast('Fehler beim Erstellen der Schicht.', 'error');
             }
         } else if (entryType === 'absence') {
             const absenceTypeId = document.getElementById('quickEntryAbsenceTypeId').value;
             if (!absenceTypeId) {
-                showToast(('Bitte wählen Sie einen Abwesenheitstyp.'), 'warning');
+                showToast('Bitte wählen Sie einen Abwesenheitstyp.', 'warning');
                 return;
             }
 
@@ -1308,17 +1308,17 @@ export async function saveQuickEntry() {
             });
 
             if (response.ok) {
-                showToast(('Abwesenheit erfolgreich erfasst!'), 'success');
+                showToast('Abwesenheit erfolgreich erfasst!', 'success');
                 closeQuickEntryModal();
                 loadSchedule();
             } else {
                 const error = await response.json();
-                showToast((error.error || 'Fehler beim Speichern der Abwesenheit.'), 'error');
+                showToast(error.error || 'Fehler beim Speichern der Abwesenheit.', 'error');
             }
         }
     } catch (error) {
         console.error('Error saving quick entry:', error);
-        showToast((`Fehler: ${error.message}`), 'error');
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1328,7 +1328,7 @@ export async function saveQuickEntry() {
 
 export async function toggleShiftFixed(shiftId) {
     if (!canPlanShifts()) {
-        showToast(('Sie haben keine Berechtigung, Schichten zu sperren/entsperren.'), 'error');
+        showToast('Sie haben keine Berechtigung, Schichten zu sperren/entsperren.', 'error');
         return;
     }
 
@@ -1341,19 +1341,19 @@ export async function toggleShiftFixed(shiftId) {
         if (response.ok) {
             const data = await response.json();
             const status = data.isFixed ? 'gesperrt' : 'entsperrt';
-            showToast((`Schicht erfolgreich ${status}!`), 'success');
+            showToast(`Schicht erfolgreich ${status}!`, 'success');
             loadSchedule();
         } else if (response.status === 401) {
-            showToast(('Bitte melden Sie sich an.'), 'warning');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
             const error = await response.json();
-            showToast((`Fehler: ${error.error || 'Unbekannter Fehler'}`), 'error');
+            showToast(`Fehler: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error toggling fixed status:', error);
-        showToast((`Fehler: ${error.message}`), 'error');
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1417,12 +1417,12 @@ export function updateSelectionCounter() {
 
 export async function showBulkEditModal() {
     if (selectedShifts.size === 0) {
-        showToast(('Bitte wählen Sie mindestens eine Schicht aus.'), 'warning');
+        showToast('Bitte wählen Sie mindestens eine Schicht aus.', 'warning');
         return;
     }
 
     if (!canPlanShifts()) {
-        showToast(('Sie haben keine Berechtigung, Schichten zu bearbeiten.'), 'error');
+        showToast('Sie haben keine Berechtigung, Schichten zu bearbeiten.', 'error');
         return;
     }
 
@@ -1496,7 +1496,7 @@ export async function saveBulkEdit(event) {
     if (notes) changes.notes = notes;
 
     if (Object.keys(changes).length === 0) {
-        showToast(('Bitte wählen Sie mindestens eine Änderung aus.'), 'warning');
+        showToast('Bitte wählen Sie mindestens eine Änderung aus.', 'warning');
         return;
     }
 
@@ -1517,7 +1517,7 @@ export async function saveBulkEdit(event) {
 
         if (response.ok) {
             const result = await response.json();
-            showToast((`Erfolgreich ${result.updated || selectedShifts.size} Schicht${(result.updated || selectedShifts.size) !== 1 ? 'en' : ''} aktualisiert!`), 'success');
+            showToast(`Erfolgreich ${result.updated || selectedShifts.size} Schicht${(result.updated || selectedShifts.size) !== 1 ? 'en' : ''} aktualisiert!`, 'success');
             closeBulkEditModal();
 
             if (multiSelectMode) {
@@ -1528,15 +1528,15 @@ export async function saveBulkEdit(event) {
             document.getElementById('bulkEditWarningText').textContent = error.error || 'Validierungsfehler';
             document.getElementById('bulkEditWarning').style.display = 'block';
         } else if (response.status === 401) {
-            showToast(('Bitte melden Sie sich an.'), 'warning');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            showToast(('Fehler beim Aktualisieren der Schichten.'), 'error');
+            showToast('Fehler beim Aktualisieren der Schichten.', 'error');
         }
     } catch (error) {
         console.error('Error saving bulk edit:', error);
-        showToast((`Fehler: ${error.message}`), 'error');
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1608,7 +1608,7 @@ export async function togglePlanApproval() {
         });
 
         if (!statusResponse.ok) {
-            showToast(('Fehler beim Abrufen des aktuellen Status.'), 'error');
+            showToast('Fehler beim Abrufen des aktuellen Status.', 'error');
             return;
         }
 
@@ -1636,19 +1636,19 @@ export async function togglePlanApproval() {
 
         if (response.ok) {
             const data = await response.json();
-            showToast((data.message || `Dienstplan wurde ${action}.`), 'error');
+            showToast(data.message || `Dienstplan wurde ${action}.`, 'success');
             await updateApprovalStatus();
             await loadSchedule();
         } else if (response.status === 401) {
-            showToast(('Bitte melden Sie sich an.'), 'warning');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            showToast(('Sie haben keine Berechtigung, Dienstpläne freizugeben.'), 'error');
+            showToast('Sie haben keine Berechtigung, Dienstpläne freizugeben.', 'error');
         } else {
             const error = await response.json();
-            showToast((`Fehler: ${error.error || 'Unbekannter Fehler'}`), 'error');
+            showToast(`Fehler: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error toggling approval:', error);
-        showToast((`Fehler beim Ändern des Freigabestatus.`), 'error');
+        showToast(`Fehler beim Ändern des Freigabestatus.`, 'error');
     }
 }

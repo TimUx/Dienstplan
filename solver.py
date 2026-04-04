@@ -83,6 +83,10 @@ CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT = 150  # NEW: Penalty for overstaffing low
                                               # high-capacity shifts have space. MUST be higher than 
                                               # HOURS_SHORTAGE (100) to prevent N overflow when F/S have capacity
 
+# Fallback penalty weight: used when minimum staffing is relaxed to a soft constraint.
+# Must be extremely high to signal a severely sub-optimal plan to the user.
+MIN_STAFFING_RELAXED_PENALTY_WEIGHT = 200_000
+
 # Expected performance improvements from solver optimizations:
 # - Warmstart hints (AddHint): 20-40% faster first feasible solution on re-planning.
 #   The solver starts near a known-good solution instead of from scratch.
@@ -157,7 +161,8 @@ class ShiftPlanningSolver:
         global_settings: Dict = None,
         db_path: str = "dienstplan.db",
         search_strategy: str = "PORTFOLIO",
-        warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None
+        warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None,
+        relaxation_level: int = 0
     ):
         """
         Initialize the solver.
@@ -183,6 +188,12 @@ class ShiftPlanningSolver:
                 Expected improvement: 20-40% reduction in time to first feasible
                 solution for re-planning scenarios where the shift structure is similar
                 to the previous period (same rotation pattern, same team composition).
+            relaxation_level: Controls which hard constraints are relaxed for fallback solving.
+                - 0 (default): All hard constraints enforced normally (normal solve).
+                - 1: Minimum staffing (H3) is treated as a soft constraint with a very
+                     high penalty weight (MIN_STAFFING_RELAXED_PENALTY_WEIGHT).
+                - 2: Minimum staffing soft + team rotation pattern constraints are skipped,
+                     allowing teams to use any shift assignment each week.
         """
         self.planning_model = planning_model
         self.time_limit_seconds = time_limit_seconds
@@ -192,6 +203,9 @@ class ShiftPlanningSolver:
         self.db_path = db_path
         self.search_strategy = search_strategy
         self.warm_start_shifts = warm_start_shifts
+        self.relaxation_level = relaxation_level
+        # Records which constraints were relaxed (populated by add_all_constraints)
+        self.relaxed_constraints: List[str] = []
         
         # Store global settings
         if global_settings is None:
@@ -240,7 +254,14 @@ class ShiftPlanningSolver:
             print(f"    Error: {e}")
             rotation_patterns = None
         
-        add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types, rotation_patterns)
+        # Level 2+: skip the hard rotation pattern constraint so teams can use any shift order
+        if self.relaxation_level >= 2:
+            print("  - [FALLBACK 2] Team rotation constraint SKIPPED (relaxed for feasibility)")
+            self.relaxed_constraints.append(
+                "Teamrotation (F→N→S): Reihenfolge nicht mehr erzwungen – Teams können beliebige Schichten wählen"
+            )
+        else:
+            add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types, rotation_patterns)
         
         print("  - Employee weekly rotation order (enforce F → N → S transition order)")
         rotation_order_penalties = add_employee_weekly_rotation_order_constraints(
@@ -252,13 +273,21 @@ class ShiftPlanningSolver:
         add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences, employee_weekend_shift, employee_cross_team_weekend)
         
         # STAFFING AND WORKING CONDITIONS
-        print("  - Staffing requirements (min hard / max soft, including cross-team)")
+        relax_min = self.relaxation_level >= 1
+        if relax_min:
+            print("  - Staffing requirements (min SOFT with penalty 200000 / max soft, including cross-team)")
+            self.relaxed_constraints.append(
+                "Mindestbesetzung (H3): Als Soft-Constraint mit Strafgewicht 200.000 behandelt – Unterschreitungen sind möglich"
+            )
+        else:
+            print("  - Staffing requirements (min hard / max soft, including cross-team)")
         # NEW: Collect separate penalties for weekday/weekend overstaffing and weekday understaffing by shift
         # Also collect team priority violations (cross-team usage when team has capacity)
-        weekday_overstaffing, weekend_overstaffing, weekday_understaffing_by_shift, team_priority_violations = add_staffing_constraints(
+        weekday_overstaffing, weekend_overstaffing, weekday_understaffing_by_shift, team_priority_violations, min_staffing_violations = add_staffing_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
-            employees, teams, dates, weeks, shift_codes, shift_types)
+            employees, teams, dates, weeks, shift_codes, shift_types,
+            relax_min_staffing=relax_min)
         
         print("  - Total weekend staffing limit (max 12 employees across all shifts)")
         total_weekend_overstaffing = add_total_weekend_staffing_limit(
@@ -448,6 +477,14 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(cross_shift_capacity_violations)} cross-shift capacity violation penalties (weight {CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT}x)...")
             for penalty_var in cross_shift_capacity_violations:
                 objective_terms.append(penalty_var * CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT)
+        
+        # Add minimum staffing violation penalties (only active when min staffing is relaxed)
+        # Weight MIN_STAFFING_RELAXED_PENALTY_WEIGHT (200,000) is intentionally very high so
+        # the solver treats understaffing as an extreme last resort.
+        if min_staffing_violations:
+            print(f"  Adding {len(min_staffing_violations)} minimum staffing violation penalties (weight {MIN_STAFFING_RELAXED_PENALTY_WEIGHT}x - FALLBACK MODE)...")
+            for viol_var in min_staffing_violations:
+                objective_terms.append(viol_var * MIN_STAFFING_RELAXED_PENALTY_WEIGHT)
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # HIGHEST PRIORITY: Employees must reach their 192h minimum target
@@ -1637,6 +1674,106 @@ class ShiftPlanningSolver:
         }
 
 
+# ---------------------------------------------------------------------------
+# Helper functions used by solve_shift_planning()
+# ---------------------------------------------------------------------------
+
+def _print_relaxation_summary(relaxed_constraints: List[str]) -> None:
+    """Print a summary of which constraints were relaxed during fallback solving."""
+    if not relaxed_constraints:
+        return
+    print("\n" + "=" * 60)
+    print("⚠️  ABWEICHUNGSBERICHT – Folgende Regeln wurden entspannt:")
+    print("=" * 60)
+    for i, constraint in enumerate(relaxed_constraints, 1):
+        print(f"  {i}. {constraint}")
+    print("=" * 60)
+
+
+def _create_greedy_emergency_plan(
+    planning_model: ShiftPlanningModel,
+) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
+    """
+    Stage 4 emergency fallback: build a minimal shift plan using a greedy algorithm
+    without OR-Tools. This guarantees a non-empty result even when the CP-SAT solver
+    cannot find any feasible solution in all relaxed configurations.
+
+    Strategy:
+    - For each day, collect employees who are not absent.
+    - Round-robin distribute available employees across active shift types for that day.
+    - Respects absences (employees on U/AU/L are never assigned shifts).
+    - Does NOT enforce minimum staffing, rotation order, rest times, or hours targets.
+
+    Returns:
+        Tuple of (assignments, complete_schedule) – same format as extract_solution().
+    """
+    employees = planning_model.employees
+    dates = planning_model.dates
+    absences = planning_model.absences
+    shift_types = planning_model.shift_types
+    shift_codes = planning_model.shift_codes
+
+    # Build fast absence lookup: (emp_id, date) -> absence
+    absence_lookup: Dict[Tuple[int, date], object] = {}
+    for absence in absences:
+        for d in dates:
+            if absence.start_date <= d <= absence.end_date:
+                absence_lookup[(absence.employee_id, d)] = absence
+
+    # Only schedule shifts that are active for the day type
+    def active_shifts_for_day(d: date) -> List[str]:
+        result = []
+        for st in shift_types:
+            if st.code in shift_codes and st.works_on_date(d):
+                result.append(st.code)
+        return result or list(shift_codes)  # fallback: all shifts
+
+    assignments: List[ShiftAssignment] = []
+    complete_schedule: Dict[Tuple[int, date], str] = {}
+    assignment_id = 1
+    already_assigned: Dict[Tuple[int, date], str] = {}
+
+    # Track which employees are available (not absent) per day
+    for d in dates:
+        available = [
+            emp for emp in employees
+            if emp.team_id and (emp.id, d) not in absence_lookup
+        ]
+        day_shift_codes = active_shifts_for_day(d)
+
+        for idx, emp in enumerate(available):
+            if (emp.id, d) in already_assigned:
+                continue
+            # Round-robin assignment across shift types
+            shift_code = day_shift_codes[idx % len(day_shift_codes)]
+            shift_type = next((st for st in shift_types if st.code == shift_code), None)
+            if shift_type is None:
+                continue
+            assignments.append(ShiftAssignment(
+                id=assignment_id,
+                employee_id=emp.id,
+                shift_type_id=shift_type.id,
+                date=d,
+                notes="Notfallplan (greedy)",
+            ))
+            already_assigned[(emp.id, d)] = shift_code
+            assignment_id += 1
+
+    # Build complete_schedule: every employee × every date
+    for emp in employees:
+        for d in dates:
+            if (emp.id, d) in absence_lookup:
+                absence = absence_lookup[(emp.id, d)]
+                complete_schedule[(emp.id, d)] = absence.get_code()
+            elif (emp.id, d) in already_assigned:
+                complete_schedule[(emp.id, d)] = already_assigned[(emp.id, d)]
+            else:
+                complete_schedule[(emp.id, d)] = "OFF"
+
+    print(f"  Notfallplan erstellt: {len(assignments)} Schichtzuweisungen für {len(employees)} Mitarbeiter über {len(dates)} Tage.")
+    return assignments, complete_schedule
+
+
 def solve_shift_planning(
     planning_model: ShiftPlanningModel,
     time_limit_seconds: int = 300,
@@ -1645,7 +1782,7 @@ def solve_shift_planning(
     search_strategy: str = "PORTFOLIO",
     warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None,
     db_path: str = "dienstplan.db"
-) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]]:
+) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
     """
     Solve the shift planning problem.
     
@@ -1669,34 +1806,108 @@ def solve_shift_planning(
             patterns. Defaults to "dienstplan.db".
         
     Returns:
-        Tuple of (shift_assignments, complete_schedule) if solution found, None otherwise
-        where:
+        Always returns a non-None Tuple of (shift_assignments, complete_schedule).
+        Uses a 4-stage fallback mechanism to guarantee a plan is always produced:
+          Stage 1 – Normal: all hard + soft constraints.
+          Stage 2 – Fallback 1: minimum staffing (H3) relaxed to soft with
+                    penalty weight MIN_STAFFING_RELAXED_PENALTY_WEIGHT (200,000).
+          Stage 3 – Fallback 2: minimum staffing soft + team rotation skipped.
+          Stage 4 – Emergency plan: greedy assignment without OR-Tools.
+        Which constraints were relaxed is printed via _print_relaxation_summary().
         - shift_assignments: List of ShiftAssignment objects for employees who work
         - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"
                             ensuring ALL employees appear for ALL days
-    
-    Note: When None is returned (no solution found), diagnostic information is printed to stdout.
-          To get structured diagnostic data, check solver.diagnostics attribute after calling solver.solve()
     """
-    solver = ShiftPlanningSolver(
-        planning_model, time_limit_seconds, num_workers, global_settings,
-        db_path=db_path,
-        search_strategy=search_strategy,
-        warm_start_shifts=warm_start_shifts
-    )
-    solver.add_all_constraints()
-    
-    if solver.solve():
-        result = solver.extract_solution()
-        assignments, complete_schedule = result
-        
-        # Print comprehensive planning summary
-        solver.print_planning_summary(assignments, complete_schedule)
-        
+
+    def _make_solver(model: ShiftPlanningModel, level: int) -> "ShiftPlanningSolver":
+        return ShiftPlanningSolver(
+            model, time_limit_seconds, num_workers, global_settings,
+            db_path=db_path,
+            search_strategy=search_strategy,
+            warm_start_shifts=warm_start_shifts,
+            relaxation_level=level,
+        )
+
+    def _rebuild_model() -> ShiftPlanningModel:
+        """Return a fresh ShiftPlanningModel with identical configuration."""
+        from model import ShiftPlanningModel as _SPM
+        return _SPM(
+            employees=planning_model.employees,
+            teams=planning_model.teams,
+            start_date=planning_model.original_start_date,
+            end_date=planning_model.original_end_date,
+            absences=planning_model.absences,
+            shift_types=planning_model.shift_types,
+            locked_team_shift=planning_model.locked_team_shift,
+            locked_employee_weekend=planning_model.locked_employee_weekend,
+            locked_absence=planning_model.locked_absence,
+            locked_employee_shift=planning_model.locked_employee_shift,
+            ytd_weekend_counts=planning_model.ytd_weekend_counts,
+            ytd_night_counts=planning_model.ytd_night_counts,
+            ytd_holiday_counts=planning_model.ytd_holiday_counts,
+            previous_employee_shifts=planning_model.previous_employee_shifts,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Stage 1 – Normal solve                                              #
+    # ------------------------------------------------------------------ #
+    print("\n" + "=" * 60)
+    print("STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)")
+    print("=" * 60)
+    s1 = _make_solver(planning_model, level=0)
+    s1.add_all_constraints()
+    if s1.solve():
+        result = s1.extract_solution()
+        s1.print_planning_summary(result[0], result[1])
         return result
-    else:
-        # Diagnostics are already printed in solver.solve() when INFEASIBLE
-        return None
+
+    # ------------------------------------------------------------------ #
+    # Stage 2 – Fallback 1: relax minimum staffing (H3)                  #
+    # ------------------------------------------------------------------ #
+    print("\n" + "=" * 60)
+    print("STUFE 2 (FALLBACK 1): Mindestbesetzung wird als Soft-Constraint behandelt")
+    print("  Grund: Stufe 1 war INFEASIBLE")
+    print("=" * 60)
+    m2 = _rebuild_model()
+    s2 = _make_solver(m2, level=1)
+    s2.add_all_constraints()
+    if s2.solve():
+        result = s2.extract_solution()
+        _print_relaxation_summary(s2.relaxed_constraints)
+        s2.print_planning_summary(result[0], result[1])
+        return result
+
+    # ------------------------------------------------------------------ #
+    # Stage 3 – Fallback 2: relax staffing + skip rotation constraints   #
+    # ------------------------------------------------------------------ #
+    print("\n" + "=" * 60)
+    print("STUFE 3 (FALLBACK 2): Mindestbesetzung soft + Teamrotation deaktiviert")
+    print("  Grund: Stufe 2 war INFEASIBLE")
+    print("=" * 60)
+    m3 = _rebuild_model()
+    s3 = _make_solver(m3, level=2)
+    s3.add_all_constraints()
+    if s3.solve():
+        result = s3.extract_solution()
+        _print_relaxation_summary(s3.relaxed_constraints)
+        s3.print_planning_summary(result[0], result[1])
+        return result
+
+    # ------------------------------------------------------------------ #
+    # Stage 4 – Emergency plan: greedy algorithm without OR-Tools         #
+    # ------------------------------------------------------------------ #
+    print("\n" + "=" * 60)
+    print("STUFE 4 (NOTFALLPLAN): Greedy-Algorithmus ohne OR-Tools")
+    print("  Grund: Alle Solver-Stufen waren INFEASIBLE")
+    print("=" * 60)
+    greedy_relaxed = [
+        "Mindestbesetzung (H3): nicht garantiert – nur verfügbare Mitarbeiter werden eingeplant",
+        "Teamrotation (F→N→S): nicht eingehalten",
+        "Ruhezeiten, Stunden-Ziele, Aufeinanderfolge-Regeln: nicht berücksichtigt",
+    ]
+    result = _create_greedy_emergency_plan(planning_model)
+    _print_relaxation_summary(greedy_relaxed)
+    return result
 
 
 def get_infeasibility_diagnostics(
@@ -1736,10 +1947,7 @@ if __name__ == "__main__":
     print("\nSolving...")
     result = solve_shift_planning(planning_model, time_limit_seconds=60)
     
-    if result:
-        assignments, complete_schedule = result
-        print(f"\n✓ Solution found!")
-        print(f"  - Total assignments: {len(assignments)}")
-        print(f"  - Complete schedule entries: {len(complete_schedule)}")
-    else:
-        print("\n✗ No solution found!")
+    assignments, complete_schedule = result
+    print(f"\n✓ Solution produced!")
+    print(f"  - Total assignments: {len(assignments)}")
+    print(f"  - Complete schedule entries: {len(complete_schedule)}")

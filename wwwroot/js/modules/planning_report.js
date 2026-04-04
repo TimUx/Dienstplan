@@ -10,11 +10,11 @@ const MONTH_NAMES = [
 ];
 
 const STATUS_CONFIG = {
-    OPTIMAL:     { label: 'Optimal geplant',  cssClass: 'report-status-optimal' },
-    FEASIBLE:    { label: 'Optimal geplant',  cssClass: 'report-status-optimal' },
-    FALLBACK_L1: { label: 'Mit Abweichungen', cssClass: 'report-status-warning' },
-    FALLBACK_L2: { label: 'Mit Abweichungen', cssClass: 'report-status-warning' },
-    EMERGENCY:   { label: 'Notfallplan',      cssClass: 'report-status-emergency' },
+    OPTIMAL:     { label: 'Optimal geplant',        cssClass: 'report-status-optimal' },
+    FEASIBLE:    { label: 'Machbar geplant',         cssClass: 'report-status-optimal' },
+    FALLBACK_L1: { label: 'Mit Abweichungen',        cssClass: 'report-status-warning' },
+    FALLBACK_L2: { label: 'Mit Abweichungen',        cssClass: 'report-status-warning' },
+    EMERGENCY:   { label: 'Notfallplan',             cssClass: 'report-status-emergency' },
 };
 
 const SEVERITY_LABELS = {
@@ -60,7 +60,7 @@ export async function loadPlanningReport() {
     }
 }
 
-export async function exportPlanningReportPdf() {
+export async function exportPlanningReportSummary() {
     const year  = getReportYear();
     const month = getReportMonth();
 

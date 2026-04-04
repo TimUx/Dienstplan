@@ -23,6 +23,7 @@
                         <button onclick="showView('vacationyearplan')" class="nav-btn" id="nav-vacationyearplan">📆 Urlaubsjahresplan</button>
                         <button onclick="showView('shiftexchange')" class="nav-btn" id="nav-shiftexchange" style="display:none;">🔄 Diensttausch</button>
                         <button onclick="showView('statistics')" class="nav-btn admin-only" id="nav-statistics" style="display:none;">📊 Statistiken</button>
+                        <button onclick="showView('planning-report')" class="nav-btn admin-only" id="nav-planning-report" style="display:none;">📝 Planungsbericht</button>
                         <button onclick="showView('manual')" class="nav-btn">📖 Hilfe</button>
                         <button onclick="showView('admin')" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
                     </nav>
@@ -214,6 +215,22 @@
                 </div>
                 <div id="statistics-content">
                     <p class="loading">Lade Statistiken...</p>
+                </div>
+            </div>
+
+            <!-- Planning Report View -->
+            <div id="planning-report-view" class="view">
+                <h2>📝 Planungsbericht</h2>
+                <div class="controls">
+                    <div class="date-range">
+                        <label>Jahr: <input type="number" id="reportYear" min="2020" max="2099" style="width:80px;"></label>
+                        <label>Monat: <input type="number" id="reportMonth" min="1" max="12" style="width:60px;"></label>
+                        <button onclick="loadPlanningReport()" class="btn-primary">🔄 Bericht laden</button>
+                        <button onclick="exportPlanningReportPdf()" class="btn-secondary">⬇️ Bericht exportieren</button>
+                    </div>
+                </div>
+                <div id="planning-report-content">
+                    <p class="loading">Lade Planungsbericht...</p>
                 </div>
             </div>
 

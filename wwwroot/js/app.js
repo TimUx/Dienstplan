@@ -8,6 +8,7 @@ import * as schedule from './modules/schedule.js';
 import * as absences from './modules/absences.js';
 import * as stats from './modules/statistics.js';
 import * as utils from './modules/utils.js';
+import * as planningReport from './modules/planning_report.js';
 
 // ============================================================================
 // VIEW NAVIGATION
@@ -52,6 +53,9 @@ function showView(viewName) {
         absences.loadVacationYearPlan();
     } else if (viewName === 'statistics') {
         stats.loadStatistics();
+    } else if (viewName === 'planning-report') {
+        planningReport.initPlanningReport();
+        planningReport.loadPlanningReport();
     } else if (viewName === 'admin') {
         loadAdminView();
     } else if (viewName === 'manual') {
@@ -326,6 +330,10 @@ function registerGlobals() {
 
     // Statistics
     window.loadStatistics = stats.loadStatistics;
+
+    // Planning Report
+    window.loadPlanningReport = planningReport.loadPlanningReport;
+    window.exportPlanningReportPdf = planningReport.exportPlanningReportPdf;
 }
 
 // ============================================================================

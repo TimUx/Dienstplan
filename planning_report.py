@@ -77,6 +77,38 @@ class RelaxedConstraint:
     description: str = ""   # Zusätzliche Details / Kontext
 
 
+@dataclass
+class AbsenceImpact:
+    """Beschreibt die Abwesenheitsauswirkungen für einen einzelnen Planungstag."""
+
+    date: date
+    """Das analysierte Datum."""
+
+    total_employees: int
+    """Gesamtanzahl der Mitarbeiter im Planungszeitraum."""
+
+    absent_count: int
+    """Anzahl abwesender Mitarbeiter an diesem Tag."""
+
+    absence_ratio: float
+    """Anteil abwesender Mitarbeiter (0.0–1.0)."""
+
+    affected_shift_codes: List[str]
+    """Schichtcodes, für die die Mindestbesetzung durch Abwesenheiten gefährdet sein könnte."""
+
+    min_staffing_reachable: bool
+    """True, wenn die Mindestbesetzung aller Schichten trotz Abwesenheiten theoretisch erreichbar ist."""
+
+    has_risk: bool
+    """True, wenn der Puffer unter 20 % liegt (d. h. weniger als 20 % freie Mitarbeiterkapazität)."""
+
+    available_count: int
+    """Anzahl verfügbarer (nicht abwesender) Mitarbeiter an diesem Tag."""
+
+    buffer_ratio: float
+    """Pufferanteil: (verfügbare – Mindestbedarf) / verfügbare. Negativ bei Unterbesetzung."""
+
+
 # ---------------------------------------------------------------------------
 # PlanningReport
 # ---------------------------------------------------------------------------
@@ -139,6 +171,10 @@ class PlanningReport:
     relaxed_constraints: List[RelaxedConstraint] = field(default_factory=list)
     """Constraints, die für die Planung relaxiert wurden."""
 
+    # -- Abwesenheitsauswirkungen -------------------------------------------
+    absence_impact: Dict[date, AbsenceImpact] = field(default_factory=dict)
+    """Tagesweise Abwesenheitsauswirkungsanalyse (Datum → AbsenceImpact)."""
+
     # -- Solver-Metriken ----------------------------------------------------
     objective_value: float = 0.0
     """Gesamtstrafe des Solvers (niedrigere Werte sind besser)."""
@@ -159,6 +195,11 @@ class PlanningReport:
     def total_shifts_assigned(self) -> int:
         """Gesamtanzahl aller zugewiesenen Schichten."""
         return sum(self.shifts_assigned.values())
+
+    @property
+    def risk_days(self) -> List[AbsenceImpact]:
+        """Tage mit Abwesenheitsrisiko (Puffer < 20 %)."""
+        return [impact for impact in self.absence_impact.values() if impact.has_risk]
 
     @property
     def hard_violations(self) -> List[RuleViolation]:
@@ -278,6 +319,26 @@ class PlanningReport:
                 lines.append(f"    Grund: {rc.reason}")
                 if rc.description:
                     lines.append(f"    Details: {rc.description}")
+
+        # ---- Abwesenheitsrisikotage -----------------------------------------
+        _heading("6. ABWESENHEITSRISIKOTAGE")
+
+        risk = self.risk_days
+        if not risk:
+            lines.append("✓ Keine Risikotage – ausreichend Puffer an allen Planungstagen.")
+        else:
+            lines.append(f"⚠ {len(risk)} Risikotag(e) mit weniger als 20 % freier Personalkapazität:")
+            for impact in sorted(risk, key=lambda x: x.date):
+                affected = ", ".join(impact.affected_shift_codes) if impact.affected_shift_codes else "–"
+                min_ok = "✓" if impact.min_staffing_reachable else "✗"
+                lines.append(
+                    f"  • {impact.date.strftime('%d.%m.%Y')}: "
+                    f"{impact.absent_count}/{impact.total_employees} abwesend "
+                    f"({impact.absence_ratio*100:.0f}%), "
+                    f"Puffer {impact.buffer_ratio*100:.0f}%, "
+                    f"Mindestbesetzung erreichbar: {min_ok}, "
+                    f"betroffene Schichten: {affected}"
+                )
 
         # ---- Abschluss ------------------------------------------------------
         lines.append("")

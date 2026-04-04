@@ -1734,25 +1734,28 @@ def create_emergency_plan(
     # ------------------------------------------------------------------ #
     # Helper: parse "HH:MM" into a datetime on a given date               #
     # ------------------------------------------------------------------ #
+    def _parse_time(time_str: str):
+        """Parse 'HH:MM' using strptime for robustness."""
+        return datetime.strptime(time_str, "%H:%M").time()
+
     def _shift_end_dt(assignment_date: date, st) -> datetime:
         """Return the wall-clock datetime when *st* ends on *assignment_date*."""
-        h, m = int(st.end_time[:2]), int(st.end_time[3:])
-        end = datetime.combine(assignment_date, datetime.min.time().replace(hour=h, minute=m))
-        # Overnight shift: end < start → shift ends next calendar day
-        sh, sm = int(st.start_time[:2]), int(st.start_time[3:])
-        start = datetime.combine(assignment_date, datetime.min.time().replace(hour=sh, minute=sm))
+        end = datetime.combine(assignment_date, _parse_time(st.end_time))
+        start = datetime.combine(assignment_date, _parse_time(st.start_time))
+        # Overnight shift: end time is on the next calendar day
         if end <= start:
             end += timedelta(days=1)
         return end
 
     def _shift_start_dt(assignment_date: date, st) -> datetime:
-        h, m = int(st.start_time[:2]), int(st.start_time[3:])
-        return datetime.combine(assignment_date, datetime.min.time().replace(hour=h, minute=m))
+        return datetime.combine(assignment_date, _parse_time(st.start_time))
 
     MIN_REST_HOURS = 11
 
     # ------------------------------------------------------------------ #
     # Build absence lookup: (employee_id, date) → absence object          #
+    # Iterates over (absence, date) pairs; suitable for the bounded        #
+    # planning periods used by the emergency fallback.                     #
     # ------------------------------------------------------------------ #
     absence_lookup: Dict[Tuple[int, date], object] = {}
     for absence in absences:
@@ -1761,7 +1764,10 @@ def create_emergency_plan(
                 absence_lookup[(absence.employee_id, d)] = absence
 
     # ------------------------------------------------------------------ #
-    # Determine which shift types are active on a given date              #
+    # Determine which shift types are active on a given date.             #
+    # Falls back to all shift types when none match the weekday flags     #
+    # (e.g. non-standard configurations) to guarantee every day gets     #
+    # at least one shift to assign.                                       #
     # ------------------------------------------------------------------ #
     def _active_shifts(d: date) -> List:
         active = [st for st in shift_types if st.works_on_date(d)]

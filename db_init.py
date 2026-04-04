@@ -4,7 +4,6 @@ Creates all necessary tables and initializes with sample data if needed.
 """
 
 import sqlite3
-import hashlib
 import bcrypt
 import secrets
 from datetime import datetime

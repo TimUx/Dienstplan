@@ -1981,13 +1981,9 @@ def _parse_relaxed_constraints(strings: List[str]) -> List[PlanningRelaxedConstr
     """Convert a list of 'name: reason' strings to PlanningRelaxedConstraint objects."""
     result = []
     for s in strings:
-        idx = s.find(": ")
-        if idx >= 0:
-            name = s[:idx]
-            reason = s[idx + 2:]
-        else:
-            name = s
-            reason = ""
+        parts = s.split(": ", 1)
+        name = parts[0]
+        reason = parts[1] if len(parts) > 1 else ""
         result.append(PlanningRelaxedConstraint(constraint_name=name, reason=reason))
     return result
 

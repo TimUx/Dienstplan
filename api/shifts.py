@@ -727,6 +727,98 @@ def get_schedule():
             conn.close()
 
 
+def _serialize_planning_report(report) -> str:
+    """
+    Serialize a PlanningReport dataclass instance to a JSON string.
+
+    All ``date`` objects are converted to ISO-8601 strings so they round-trip
+    safely through the database and the REST API.
+    """
+    from datetime import date as _date
+
+    def _date_to_str(d) -> str:
+        return d.isoformat() if isinstance(d, _date) else d
+
+    data = {
+        'planning_period': [
+            _date_to_str(report.planning_period[0]),
+            _date_to_str(report.planning_period[1]),
+        ],
+        'status': report.status,
+        'total_employees': report.total_employees,
+        'available_employees': report.available_employees,
+        'absent_employees': [
+            {
+                'employee_name': a.employee_name,
+                'absence_type': a.absence_type,
+                'start_date': _date_to_str(a.start_date),
+                'end_date': _date_to_str(a.end_date),
+                'notes': a.notes,
+            }
+            for a in report.absent_employees
+        ],
+        'shifts_assigned': report.shifts_assigned,
+        'uncovered_shifts': [
+            {
+                'date': _date_to_str(u.date),
+                'shift_code': u.shift_code,
+                'reason': u.reason,
+            }
+            for u in report.uncovered_shifts
+        ],
+        'rule_violations': [
+            {
+                'rule_id': v.rule_id,
+                'description': v.description,
+                'severity': v.severity,
+                'affected_dates': [_date_to_str(d) for d in v.affected_dates],
+                'cause': v.cause,
+                'impact': v.impact,
+            }
+            for v in report.rule_violations
+        ],
+        'relaxed_constraints': [
+            {
+                'constraint_name': rc.constraint_name,
+                'reason': rc.reason,
+                'description': rc.description,
+            }
+            for rc in report.relaxed_constraints
+        ],
+        'objective_value': report.objective_value,
+        'solver_time_seconds': report.solver_time_seconds,
+    }
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _save_planning_report(db, year: int, month: int, report) -> None:
+    """
+    Persist a PlanningReport to the PlanningReports table.
+
+    If a report already exists for the given year/month it is replaced.
+    Errors are logged but do not propagate so that a serialization failure
+    never prevents the caller from returning a successful response.
+    """
+    try:
+        report_json = _serialize_planning_report(report)
+        conn = db.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO PlanningReports (year, month, status, created_at, report_json)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(year, month) DO UPDATE SET
+                    status      = excluded.status,
+                    created_at  = excluded.created_at,
+                    report_json = excluded.report_json
+            """, (year, month, report.status, datetime.utcnow().isoformat(), report_json))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        current_app.logger.warning(f"Failed to save PlanningReport for {year}/{month}: {exc}")
+
+
 def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
     """
     Background worker that executes the shift planning solver and stores
@@ -1114,7 +1206,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                         })
                 return
             
-            assignments, complete_schedule, _planning_report = result
+            assignments, complete_schedule, planning_report = result
             
             # Filter assignments to include:
             # 1. All days in the requested month (start_date to end_date)
@@ -1205,11 +1297,17 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             conn.commit()
             conn.close()
 
+            # Serialize and persist the PlanningReport so it can be retrieved later
+            _save_planning_report(db, start_date.year, start_date.month, planning_report)
+
+            report_url = f"/api/planning/report/{start_date.year}/{start_date.month}"
+
             _update('success',
                     f'Erfolgreich! {len(filtered_assignments)} Schichten wurden geplant.',
                     assignmentsCount=len(filtered_assignments),
                     year=start_date.year,
                     month=start_date.month,
+                    report_url=report_url,
                     extendedPlanning={
                         'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
                         'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0

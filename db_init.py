@@ -480,6 +480,19 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
     
+    # PlanningReports table (stores serialised PlanningReport JSON per solved month)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS PlanningReports (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            year        INTEGER NOT NULL,
+            month       INTEGER NOT NULL,
+            status      TEXT    NOT NULL,
+            created_at  TEXT    NOT NULL,
+            report_json TEXT    NOT NULL,
+            UNIQUE (year, month)
+        )
+    """)
+
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 

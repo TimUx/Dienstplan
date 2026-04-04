@@ -53,6 +53,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     from api.absences import bp as absences_bp
     from api.statistics import bp as statistics_bp
     from api.settings import bp as settings_bp
+    from api.planning import bp as planning_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(employees_bp)
@@ -60,6 +61,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
     app.register_blueprint(absences_bp)
     app.register_blueprint(statistics_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(planning_bp)
 
     # ============================================================================
     # STATIC FILES (Web UI)

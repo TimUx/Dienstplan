@@ -5,6 +5,7 @@ Configures and runs the solver, returns solution.
 
 from ortools.sat.python import cp_model
 from datetime import date, timedelta
+import time
 from typing import List, Dict, Tuple, Optional
 from entities import Employee, ShiftAssignment, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
@@ -113,22 +114,23 @@ class ShiftPlanSolutionCallback(cp_model.CpSolverSolutionCallback):
     def __init__(self):
         super().__init__()
         self._solution_count = 0
-        self._best_objective = float('inf')
+        self._best_objective = None  # None until first solution found (works for both min and max)
         self._start_time = None
 
     def OnSolutionCallback(self):
         """Called by the solver each time a new improving solution is found."""
-        import time
         current_time = time.time()
         if self._start_time is None:
             self._start_time = current_time
 
         elapsed = current_time - self._start_time
         current_obj = self.ObjectiveValue()
-        self._solution_count += 1
 
-        if current_obj < self._best_objective:
+        # Track only improving solutions (lower objective = better for minimization).
+        # _best_objective starts as None so the first solution is always recorded.
+        if self._best_objective is None or current_obj < self._best_objective:
             self._best_objective = current_obj
+            self._solution_count += 1
             print(f"  → Solution #{self._solution_count}: objective={current_obj:.0f}, elapsed={elapsed:.1f}s")
 
     @property
@@ -137,8 +139,8 @@ class ShiftPlanSolutionCallback(cp_model.CpSolverSolutionCallback):
         return self._solution_count
 
     @property
-    def best_objective(self) -> float:
-        """Best (lowest) objective value found so far."""
+    def best_objective(self) -> Optional[float]:
+        """Best (lowest) objective value found so far, or None if no solution yet."""
         return self._best_objective
 
 
@@ -794,7 +796,8 @@ class ShiftPlanningSolver:
         for (team_id, week_idx), votes in team_week_shift_votes.items():
             if not votes:
                 continue
-            best_shift = max(votes, key=votes.get)
+            # Tie-break by shift_code name for deterministic results across runs
+            best_shift = max(votes.items(), key=lambda x: (x[1], x[0]))[0]
             for shift_code in self.planning_model.shift_codes:
                 if (team_id, week_idx, shift_code) in team_shift:
                     model.add_hint(team_shift[(team_id, week_idx, shift_code)],

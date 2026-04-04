@@ -1490,10 +1490,15 @@ async function executePlanShifts(event) {
     
     // Show loading overlay
     const planningOverlay = document.getElementById('planningOverlay');
+    const statusEl = document.getElementById('planningStatusMessage');
+    const elapsedEl = document.getElementById('planningElapsedTime');
     planningOverlay.classList.add('active');
+    statusEl.textContent = 'Planung wird gestartet…';
+    elapsedEl.textContent = '';
     
     try {
-        const response = await fetch(
+        // Start the async planning job
+        const startResponse = await fetch(
             `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}`,
             { 
                 method: 'POST',
@@ -1501,31 +1506,87 @@ async function executePlanShifts(event) {
             }
         );
         
-        // Hide loading overlay
-        planningOverlay.classList.remove('active');
-        
-        if (response.ok) {
-            const data = await response.json();
-            const successMsg = `Erfolgreich! ${data.assignmentsCount || 0} Schichten wurden für ${periodText} geplant.`;
-            const reminderMsg = 'Hinweis: Der Dienstplan muss noch freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.';
-            alert(`${successMsg}\n\n${reminderMsg}`);
-            closePlanShiftsModal();
-            loadSchedule();
-        } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an, um Schichten zu planen.');
-        } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung, Schichten zu planen.');
-        } else {
-            const error = await response.json();
-            // Check if we have detailed diagnostic information
-            if (error.details) {
-                // Show detailed error message with diagnostics
-                alert(`Fehler beim Planen der Schichten:\n\n${error.details}`);
+        if (!startResponse.ok) {
+            planningOverlay.classList.remove('active');
+            if (startResponse.status === 401) {
+                alert('Bitte melden Sie sich an, um Schichten zu planen.');
+            } else if (startResponse.status === 403) {
+                alert('Sie haben keine Berechtigung, Schichten zu planen.');
             } else {
-                // Fallback to simple error message
-                alert(`Fehler beim Planen der Schichten: ${error.error || 'Unbekannter Fehler'}`);
+                const error = await startResponse.json();
+                alert(`Fehler beim Starten der Planung: ${error.error || 'Unbekannter Fehler'}`);
             }
+            return;
         }
+        
+        const { jobId } = await startResponse.json();
+        
+        // Poll for status
+        const pollInterval = 2000; // 2 seconds
+        let elapsed = 0;
+        
+        const poll = async () => {
+            try {
+                const statusResponse = await fetch(
+                    `${API_BASE}/shifts/plan/status/${jobId}`,
+                    { credentials: 'include' }
+                );
+                
+                if (!statusResponse.ok) {
+                    planningOverlay.classList.remove('active');
+                    alert('Fehler beim Abrufen des Planungsstatus.');
+                    return;
+                }
+                
+                const job = await statusResponse.json();
+                elapsed = job.elapsedSeconds || 0;
+                
+                // Update status message
+                if (statusEl) statusEl.textContent = job.message || 'Schichten werden geplant…';
+                if (elapsedEl) {
+                    const mins = Math.floor(elapsed / 60);
+                    const secs = elapsed % 60;
+                    elapsedEl.textContent = mins > 0
+                        ? `${mins} Min. ${secs} Sek. vergangen`
+                        : `${secs} Sek. vergangen`;
+                }
+                
+                if (job.status === 'running') {
+                    if (elapsed >= 600) {
+                        // Safety timeout: stop polling after 10 minutes
+                        planningOverlay.classList.remove('active');
+                        alert('Die Planung dauert ungewöhnlich lange. Bitte überprüfen Sie den Server.');
+                        return;
+                    }
+                    setTimeout(poll, pollInterval);
+                    return;
+                }
+                
+                // Job finished
+                planningOverlay.classList.remove('active');
+                
+                if (job.status === 'success') {
+                    const successMsg = `Erfolgreich! ${job.assignmentsCount || 0} Schichten wurden für ${periodText} geplant.`;
+                    const reminderMsg = 'Hinweis: Der Dienstplan muss noch freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.';
+                    alert(`${successMsg}\n\n${reminderMsg}`);
+                    closePlanShiftsModal();
+                    loadSchedule();
+                } else {
+                    // Error
+                    if (job.details) {
+                        alert(`Fehler beim Planen der Schichten:\n\n${job.details}`);
+                    } else {
+                        alert(`Fehler beim Planen der Schichten: ${job.message || 'Unbekannter Fehler'}`);
+                    }
+                }
+            } catch (err) {
+                planningOverlay.classList.remove('active');
+                alert(`Fehler: ${err.message}`);
+            }
+        };
+        
+        setTimeout(poll, pollInterval);
+        
     } catch (error) {
         // Hide loading overlay on error
         planningOverlay.classList.remove('active');

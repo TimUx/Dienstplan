@@ -1653,7 +1653,8 @@
             <!-- Loading Overlay -->
             <div id="planningOverlay" class="planning-overlay">
                 <div class="planning-spinner"></div>
-                <div class="planning-message">Schichten werden geplant...<br>Bitte warten Sie.</div>
+                <div class="planning-message" id="planningStatusMessage">Schichten werden geplant...<br>Bitte warten Sie.</div>
+                <div class="planning-elapsed" id="planningElapsedTime"></div>
             </div>
             
             <form id="planShiftsForm" onsubmit="executePlanShifts(event)">

@@ -2,7 +2,7 @@
 
 **Version 2.1 - Python Edition** | Entwickelt von Timo Braun
 
-Willkommen zur zentralen Dokumentation des Dienstplan-Systems. Diese Seite bietet einen strukturierten Überblick über alle verfügbaren Dokumentationen.
+Willkommen zur zentralen Dokumentation des Dienstplan-Systems.
 
 ---
 
@@ -10,9 +10,9 @@ Willkommen zur zentralen Dokumentation des Dienstplan-Systems. Diese Seite biete
 
 Neu im System? Starten Sie hier:
 
-1. **[Schnellstart-Anleitung](docs/QUICKSTART.md)** - In 5 Minuten produktiv
-2. **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** - Umfassende Anleitung für alle Funktionen
-3. **[README](README.md)** - Projekt-Übersicht und Feature-Liste
+1. **[Installationsanleitung](docs/INSTALLATION.md)** – Native Python, 1-Klick-EXE oder Docker
+2. **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** – Umfassende Anleitung für alle Funktionen
+3. **[README](README.md)** – Projekt-Übersicht und Feature-Liste
 
 ---
 
@@ -22,16 +22,17 @@ Neu im System? Starten Sie hier:
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|--------------|------------|
-| **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** | Vollständige Anleitung mit Screenshots und Beispielen | Alle Benutzer |
-| **[Schnellstart](docs/QUICKSTART.md)** | Installation und erste Schritte | Neue Benutzer |
+| **[Installationsanleitung](docs/INSTALLATION.md)** | Native Python, 1-Klick-EXE, Docker Compose | Alle Benutzer |
+| **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** | Vollständige Anleitung mit Screenshots | Alle Benutzer |
+| **[Schnellstart](docs/QUICKSTART.md)** | Installation und erste Schritte (EN) | Neue Benutzer |
 | **[Windows Standalone](docs/WINDOWS_EXECUTABLE.md)** | Anleitung für die Windows-Exe | Windows-Nutzer |
 
 ### Für Administratoren
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|--------------|------------|
-| **[Schichtplanungs-Regeln (DE)](SCHICHTPLANUNGS_REGELN.md)** | ⭐ Alle Regeln, Abhängigkeiten & Prioritäten | Admins |
-| **[Shift Planning Rules (EN)](SHIFT_PLANNING_RULES_EN.md)** | ⭐ All rules, dependencies & priorities | Admins |
+| **[Schichtplanungs-Regeln (DE)](docs/SCHICHTPLANUNG_REGELN.md)** | ⭐ Alle Regeln, Abhängigkeiten & Prioritäten | Admins |
+| **[Shift Planning Rules (EN)](docs/SHIFT_PLANNING_RULES_EN.md)** | ⭐ All rules, dependencies & priorities | Admins |
 | **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** | CLI-Befehle und API-Nutzung | Admins |
 | **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** | Details zum OR-Tools Solver | Admins |
 | **[Beispieldaten](docs/SAMPLE_DATA.md)** | Testdaten und API-Beispiele | Admins, Entwickler |
@@ -42,7 +43,7 @@ Neu im System? Starten Sie hier:
 |----------|--------------|------------|
 | **[Architektur](ARCHITECTURE.md)** | System-Design und Komponenten | Entwickler |
 | **[Build-Anleitung](docs/BUILD_GUIDE.md)** | Executable erstellen | Entwickler |
-| **[Migration](MIGRATION.md)** | .NET zu Python Migration | Entwickler |
+| **[Migration](MIGRATION.md)** | .NET zu Python Migration + DB-Migrationen | Entwickler |
 | **[Changelog](CHANGELOG.md)** | Versionshistorie | Alle |
 
 ---
@@ -51,56 +52,26 @@ Neu im System? Starten Sie hier:
 
 ### Sie möchten...
 
-#### ...das Schichtplanungssystem vollständig verstehen?
-→ **[Schichtplanungs-Regeln (Deutsch)](SCHICHTPLANUNGS_REGELN.md)** (⭐ Hauptdokument)
-→ **[Shift Planning Rules (English)](SHIFT_PLANNING_RULES_EN.md)** (⭐ Main document)
-
-#### ...ein praktisches Beispiel sehen?
-→ **[Beispieldaten](docs/SAMPLE_DATA.md)** (Testdaten und Beispiele)
-
 #### ...das System zum ersten Mal installieren?
-→ **[Schnellstart-Anleitung](docs/QUICKSTART.md)**
+→ **[Installationsanleitung](docs/INSTALLATION.md)**
 
 #### ...das System als Mitarbeiter nutzen?
-→ **[Benutzerhandbuch - Für Mitarbeiter](BENUTZERHANDBUCH.md#für-mitarbeiter)**
+→ **[Benutzerhandbuch](BENUTZERHANDBUCH.md)**
 
 #### ...Schichten planen als Administrator?
-→ **[Benutzerhandbuch - Schichtplanung](BENUTZERHANDBUCH.md#9-schichtplanung)**
+→ **[Benutzerhandbuch – Schichtplanung](BENUTZERHANDBUCH.md#9-schichtplanung)**
 
-#### ...das System administrieren?
-→ **[Benutzerhandbuch - Administration](BENUTZERHANDBUCH.md#administration)**
+#### ...alle Planungsregeln verstehen?
+→ **[Schichtplanungs-Regeln (DE)](docs/SCHICHTPLANUNG_REGELN.md)** · **[EN](docs/SHIFT_PLANNING_RULES_EN.md)**
 
 #### ...die API nutzen?
-→ **[README - API-Dokumentation](README.md#-api-dokumentation)**
+→ **[README – API-Dokumentation](README.md#-api-dokumentation)**
 
-#### ...eine Windows-Exe erstellen?
+#### ...eine Executable erstellen?
 → **[Build-Anleitung](docs/BUILD_GUIDE.md)**
 
 #### ...das System erweitern oder anpassen?
 → **[Architektur](ARCHITECTURE.md)** + **[Entwicklung](README.md#-entwicklung)**
-
----
-
-## 📸 Screenshots und Beispiele
-
-Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
-
-**Existierende Screenshots:**
-- **Anmeldung**: `00-login-modal.png`
-- **Hauptansicht**: `00-main-view.png`
-- **Dienstplan-Ansichten**: `03-schedule-week-admin.png`, `04-schedule-month-admin.png`, `05-schedule-year-admin.png`
-- **Mitarbeiterverwaltung**: `06-employees-list.png`
-- **Urlaubsverwaltung**: `07-vacation-requests.png`
-- **Diensttausch**: `08-shift-exchange.png`
-- **Statistiken**: `09-statistics.png`
-- **Administration**: `11-admin-panel.png`
-- **Schichtverwaltung**: `12-shift-management.png` - Dynamische Schichttypen-Verwaltung ✅
-- **Schichttyp bearbeiten**: `13-shift-type-edit.png` - Bearbeitungsformular ✅
-- **Team-Zuordnung**: `14-shift-team-assignment.png` - Teams zu Schichten zuweisen ✅
-- **Mehrfachauswahl**: `15-multi-select-active.png` - Multi-Select für Schichten ✅
-- **Bearbeitungsdialog**: `16-multi-select-edit-dialog.png` - Massenbearbeitung ✅
-- **Jahresurlaubsplan**: `17-vacation-year-plan.png` - Jahresübersicht Urlaube ✅
-- **Teamverwaltung**: `18-team-management.png` - Team-Übersicht ✅
 
 ---
 
@@ -109,12 +80,10 @@ Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
 ### Datenbank
 - Standard: `dienstplan.db` im aktuellen Verzeichnis
 - Ändern mit: `--db /pfad/zur/datenbank.db`
-- Siehe: [QUICKSTART - Datenbank](docs/QUICKSTART.md#database-location)
 
 ### Webserver
 - Standard: `http://localhost:5000`
 - Anpassen: `python main.py serve --host 0.0.0.0 --port 8080`
-- Siehe: [USAGE_GUIDE - Server](docs/USAGE_GUIDE.md#1-web-server-starten)
 
 ### Solver-Parameter
 - Zeitlimit: Standardmäßig 300 Sekunden
@@ -127,77 +96,56 @@ Alle Screenshots befinden sich im Verzeichnis `docs/screenshots/`:
 
 ### Häufige Probleme
 
-**Datenbank-Fehler beim Start?**
-→ Initialisieren Sie die Datenbank: `python main.py init-db --with-sample-data`
+| Problem | Lösung |
+|---------|--------|
+| Datenbank-Fehler beim Start | `python main.py init-db --with-sample-data` |
+| Port bereits belegt | `python main.py serve --port 8080` |
+| Login funktioniert nicht | E-Mail: `admin@fritzwinter.de` / PW: `Admin123!` |
+| Keine optimale Lösung | `python main.py plan --time-limit 600` |
 
-**Port bereits belegt?**
-→ Anderen Port verwenden: `python main.py serve --port 8080`
-
-**Login funktioniert nicht?**
-→ Standard-Anmeldedaten: `admin@fritzwinter.de` / `Admin123!`
-
-**Keine optimale Lösung gefunden?**
-→ Zeitlimit erhöhen: `python main.py plan --time-limit 600`
-
-Weitere Hilfe: [BENUTZERHANDBUCH - Fehlerbehebung](BENUTZERHANDBUCH.md#fehlerbehebung)
+Weitere Hilfe: [BENUTZERHANDBUCH – Fehlerbehebung](BENUTZERHANDBUCH.md#fehlerbehebung)
 
 ---
 
-## 🗺️ Dokumentationsstruktur (Verzeichnisbaum)
+## 🗺️ Dokumentationsstruktur
 
 ```
 Dienstplan/
-├── README.md                          # Projekt-Übersicht, Features, Installation
-├── DOKUMENTATION.md                   # Diese Datei - Zentrale Übersicht
-├── BENUTZERHANDBUCH.md               # Vollständiges Benutzerhandbuch
-├── ARCHITECTURE.md                    # System-Architektur
-├── CHANGELOG.md                       # Versionshistorie
-├── MIGRATION.md                       # Migration von .NET zu Python
-├── LICENSE                            # MIT-Lizenz
+├── README.md                         # Projekt-Übersicht, Features, API
+├── DOKUMENTATION.md                  # Diese Datei – Zentrale Übersicht
+├── BENUTZERHANDBUCH.md              # Vollständiges Benutzerhandbuch (DE)
+├── ARCHITECTURE.md                   # System-Architektur
+├── CHANGELOG.md                      # Versionshistorie
+├── MIGRATION.md                      # Migration .NET→Python + DB-Migrationen
+├── LICENSE                           # MIT-Lizenz
+├── Dockerfile                        # Docker-Image-Definition
+├── docker-compose.yml               # Docker Compose Konfiguration
 │
-├── docs/                              # Detaillierte Dokumentation
-│   ├── QUICKSTART.md                 # Schnellstart in 5 Minuten
-│   ├── USAGE_GUIDE.md                # CLI und API Nutzung
-│   ├── BUILD_GUIDE.md                # Executable erstellen
-│   ├── WINDOWS_EXECUTABLE.md         # Windows-Standalone-Anleitung
-│   ├── SHIFT_PLANNING_ALGORITHM.md   # Algorithmus-Details
-│   ├── SAMPLE_DATA.md                # Testdaten und Beispiele
-│   └── screenshots/                   # Alle Screenshots
-│       ├── 00-login-modal.png
-│       ├── 03-schedule-week-admin.png
-│       └── ...
-│
-├── wwwroot/                           # Web-UI (HTML/CSS/JS)
-├── data/                              # Datenbank-Verzeichnis
-└── [Python-Dateien]                   # Backend-Code
+└── docs/
+    ├── INSTALLATION.md              # ⭐ Installationsanleitung (alle Methoden)
+    ├── QUICKSTART.md                # Schnellstart (EN)
+    ├── USAGE_GUIDE.md               # CLI und API Nutzung
+    ├── BUILD_GUIDE.md               # Executable erstellen
+    ├── WINDOWS_EXECUTABLE.md        # Windows-Standalone-Anleitung
+    ├── SHIFT_PLANNING_ALGORITHM.md  # Algorithmus-Details
+    ├── SCHICHTPLANUNG_REGELN.md     # Planungsregeln (DE)
+    ├── SHIFT_PLANNING_RULES_EN.md   # Planungsregeln (EN)
+    ├── SAMPLE_DATA.md               # Testdaten und Beispiele
+    ├── SYSTEM_UEBERSICHT.md         # Systemübersicht
+    ├── SYSTEM_DIAGRAMME.md          # Visuelle Diagramme
+    ├── SHIFT_GROUPING_CONSTRAINT.md # Shift-Sequenz-Constraint
+    └── screenshots/                  # Alle Screenshots
 ```
-
----
-
-## 📝 Dokumentation beitragen
-
-Haben Sie Verbesserungsvorschläge für die Dokumentation?
-
-1. Erstellen Sie ein Issue auf GitHub
-2. Schlagen Sie Änderungen per Pull Request vor
-3. Kontaktieren Sie das Entwicklerteam
-
-**Dokumentations-Richtlinien:**
-- Klare, verständliche Sprache
-- Praxisnahe Beispiele
-- Screenshots für UI-Funktionen
-- Code-Beispiele mit Erklärungen
-- Markdown-Formatierung
 
 ---
 
 ## 📄 Lizenz
 
-Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) für Details.
+Dieses Projekt ist unter der MIT-Lizenz lizenziert – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-## 🔗 Weiterführende Links
+## 🔗 Links
 
 - **GitHub Repository**: https://github.com/TimUx/Dienstplan
 - **Issues & Support**: https://github.com/TimUx/Dienstplan/issues
@@ -205,10 +153,6 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) f�
 
 ---
 
-**Version 2.1 - Python Edition**
-
-Entwickelt von **Timo Braun** mit ❤️ für effiziente Schichtverwaltung
-
-Powered by **Google OR-Tools**
+**Version 2.1 - Python Edition** | Entwickelt von **Timo Braun** mit ❤️ | Powered by **Google OR-Tools**
 
 © 2025 Fritz Winter Eisengießerei GmbH & Co. KG

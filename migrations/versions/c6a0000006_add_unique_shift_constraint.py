@@ -62,7 +62,9 @@ def upgrade() -> None:
                 {"id": row[0]},
             )
 
-    # Add the unique index
+    # Add the unique index (index_name is a fixed constant, validated below)
+    if not index_name.replace("_", "").isalnum():
+        raise ValueError(f"Invalid index name: {index_name!r}")
     conn.execute(
         text(
             f"CREATE UNIQUE INDEX {index_name} "

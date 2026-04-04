@@ -26,6 +26,8 @@ def _table_exists(conn, table_name: str) -> bool:
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
+    if not table_name.replace("_", "").isalnum():
+        raise ValueError(f"Invalid table name: {table_name!r}")
     result = conn.execute(text(f"PRAGMA table_info({table_name})"))
     return any(row[1] == column_name for row in result.fetchall())
 

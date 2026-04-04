@@ -1806,15 +1806,14 @@ def solve_shift_planning(
             patterns. Defaults to "dienstplan.db".
         
     Returns:
-        Tuple of (shift_assignments, complete_schedule). NEVER returns None.
-        Uses a 4-stage fallback mechanism to always produce a plan:
+        Always returns a non-None Tuple of (shift_assignments, complete_schedule).
+        Uses a 4-stage fallback mechanism to guarantee a plan is always produced:
           Stage 1 – Normal: all hard + soft constraints.
           Stage 2 – Fallback 1: minimum staffing (H3) relaxed to soft with
                     penalty weight MIN_STAFFING_RELAXED_PENALTY_WEIGHT (200,000).
           Stage 3 – Fallback 2: minimum staffing soft + team rotation skipped.
           Stage 4 – Emergency plan: greedy assignment without OR-Tools.
-        Which constraints were relaxed is printed in the planning summary.
-        where:
+        Which constraints were relaxed is printed via _print_relaxation_summary().
         - shift_assignments: List of ShiftAssignment objects for employees who work
         - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"
                             ensuring ALL employees appear for ALL days

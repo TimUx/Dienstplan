@@ -13,8 +13,11 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 │                     Web Layer                            │
 │                    (web_api.py)                          │
 │  - Flask REST API                                        │
-│  - Static File Serving (wwwroot/)                       │
+│  - Static File Serving (wwwroot/)                        │
+│  - HTML Partials (wwwroot/partials/)                     │
 │  - CORS Configuration                                    │
+│  - Rate Limiting (flask-limiter)                         │
+│  - Gzip Compression (flask-compress)                     │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
@@ -50,9 +53,10 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
                        ▼
 ┌─────────────────────────────────────────────────────────┐
 │                    Data Layer                            │
-│              (data_loader.py, entities.py)               │
+│     (data_loader.py, entities.py, api/repositories/)    │
 │  - Database Access (SQLite)                              │
 │  - Data Models                                           │
+│  - Repository Layer (Absence, Employee, Shift)           │
 │  - Sample Data Generation                                │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -63,12 +67,15 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 **Datei:** `web_api.py`
 
 - **Zweck**: REST API und Web-Schnittstelle
-- **Technologie**: Flask + Flask-CORS
+- **Technologie**: Flask + Flask-CORS + Flask-Limiter + Flask-Compress
 - **Verantwortlichkeiten**:
   - HTTP Endpoints (REST API)
   - Static File Serving (HTML/CSS/JS)
+  - HTML Partial Serving (`wwwroot/partials/`)
   - Request/Response Handling
   - CORS-Konfiguration
+  - Rate Limiting (200 Req/min, 2000 Req/h pro IP)
+  - Gzip-Komprimierung aller Responses
 
 **Hauptendpoints:**
 - `/api/employees` - Mitarbeiterverwaltung
@@ -149,7 +156,7 @@ python main.py plan --start-date DATE --end-date DATE [--sample-data] [--db PATH
 - Springer-Verfügbarkeit
 
 #### Data Layer
-**Dateien:** `data_loader.py`, `entities.py`
+**Dateien:** `data_loader.py`, `entities.py`, `api/repositories/`
 
 **entities.py:**
 - Datenmodelle (Dataclasses)
@@ -160,6 +167,11 @@ python main.py plan --start-date DATE --end-date DATE [--sample-data] [--db PATH
 - Datenbankzugriff (SQLite)
 - Sample-Data-Generierung
 - Daten-Import/-Export
+
+**api/repositories/:**
+- `AbsenceRepository` – spezialisierter Zugriff auf Abwesenheitsdaten
+- `EmployeeRepository` – spezialisierter Zugriff auf Mitarbeiterdaten
+- `ShiftRepository` – spezialisierter Zugriff auf Schichtzuweisungen
 
 **Datenmodelle:**
 ```python
@@ -232,6 +244,8 @@ Client (Browser)
     ↓ HTTP Request
 web_api.py (Flask Endpoint)
     ↓
+api/repositories/ (Repository Layer)
+    ↓
 data_loader.py (Database Query)
     ↓
 web_api.py (JSON Response)
@@ -267,9 +281,12 @@ Client (Browser)
 - **Flask-CORS**: Cross-Origin Resource Sharing
 
 ### Frontend
-- **HTML5**: Struktur
-- **CSS3**: Styling
-- **JavaScript (Vanilla)**: Interaktivität
+- **HTML5**: Struktur; Views als lazy-geladene HTML-Partials (`wwwroot/partials/`)
+- **CSS3**: Styling; produktive Assets werden mit `minify_css.py` (csscompressor) minifiziert
+- **JavaScript (Vanilla)**: Interaktivität mit Event-Delegation-Pattern
+  - `wwwroot/js/modules/store.js`: Zentraler State Store (Observer-Pattern, Singleton)
+  - `wwwroot/js/app.js`: Lazy-Loading der Partials via `ensurePartialLoaded()` / `showView()`
+  - `wwwroot/js/modules/utils.js`: Toast-Benachrichtigungen (`showToast()`)
 - **Fetch API**: AJAX-Requests
 
 ### Datenbank
@@ -281,6 +298,9 @@ Client (Browser)
 ortools>=9.8.0        # Constraint Solver
 Flask>=3.0.0          # Web Framework
 flask-cors>=4.0.0     # CORS Support
+flask-limiter>=3.0.0  # Rate Limiting (200/min, 2000/h pro IP)
+flask-compress>=1.0.0 # Gzip-Komprimierung
+csscompressor>=0.9.5  # CSS-Minifizierung (Build-Zeit)
 ```
 
 ## 5. Design-Patterns
@@ -291,7 +311,11 @@ flask-cors>=4.0.0     # CORS Support
 - **Composable**: Constraints können aktiviert/deaktiviert werden
 
 ### 2. Repository Pattern
-- **data_loader.py** agiert als Data Access Layer
+- **`api/repositories/`** bildet eine eigenständige Datenzugriffsschicht:
+  - `AbsenceRepository` – Abwesenheitsdaten
+  - `EmployeeRepository` – Mitarbeiterdaten
+  - `ShiftRepository` – Schichtzuweisungen
+- **data_loader.py** agiert weiterhin als allgemeiner Data Access Layer für Lade-/Speicher-Operationen
 - Abstraktion der Datenbankzugriffe
 - Wiederverwendbare Lade-/Speicher-Funktionen
 
@@ -386,10 +410,11 @@ Employees ──→ Teams
 - ✅ Rollenbasierte Autorisierung
 - ✅ SQL-Injection-Schutz (Parametrisierte Queries)
 - ✅ CORS-Konfiguration
+- ✅ Rate Limiting (flask-limiter: 200/min, 2000/h pro IP)
+- ✅ Gzip-Komprimierung (flask-compress)
 
 ### Empfohlene Erweiterungen
 - [ ] HTTPS (via Reverse Proxy)
-- [ ] Rate Limiting
 - [ ] Input Validation (strict)
 - [ ] API Token Authentication
 - [ ] Audit Logging

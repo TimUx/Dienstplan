@@ -543,6 +543,7 @@ WEICHE CONSTRAINTS (Optimierung):
 
 | Version | Datum | Änderungen |
 |---------|-------|------------|
+| 2.1.1 | Apr 2026 | Repository Layer, Rate Limiting, Abwesenheits-Impact-Analyse, Frontend-Partials |
 | 2.1 | Jan 2026 | Vollständige Dokumentation erstellt |
 | 2.0 | Dez 2025 | Python-Migration abgeschlossen |
 | 1.x | 2024 | .NET-Version |

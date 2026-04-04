@@ -1,5 +1,37 @@
 # Changelog
 
+## Version 2.1.1 (April 2026)
+
+### Neue Features
+
+#### Frontend-Refaktorierung (PR #220)
+- **HTML Partials**: `wwwroot/index.html` wurde massiv verschlankt – Inhalte sind nun in lazy-geladene Partial-Dateien ausgelagert
+  - `wwwroot/partials/absences.html`
+  - `wwwroot/partials/admin.html`
+  - `wwwroot/partials/management.html`
+  - `wwwroot/partials/manual.html`
+  - `wwwroot/partials/schedule.html`
+  - `wwwroot/partials/statistics.html`
+- **Zentraler State Store**: `wwwroot/js/modules/store.js` (Observer-Pattern, Singleton) für app-weite Zustandsverwaltung
+- **Event Delegation**: `employees.js` und `schedule.js` wurden von onclick-Attributen auf Event-Delegation-Pattern umgestellt
+- **Toast-Benachrichtigungen**: `showToast()`-Funktion in `wwwroot/js/modules/utils.js` für einheitliche Nutzerfeedbacks
+
+#### Backend-Verbesserungen (PR #220)
+- **Repository Layer**: Neues `api/repositories/`-Verzeichnis mit `AbsenceRepository`, `EmployeeRepository` und `ShiftRepository` als eigenständige Datenzugriffsschicht
+- **Rate Limiting**: `flask-limiter` integriert (200 Anfragen/min, 2000/h pro IP) in `api/shared.py`
+- **Gzip-Komprimierung**: `flask-compress` in `web_api.py` für komprimierte HTTP-Responses
+- **CSS-Minifizierung**: `minify_css.py` mit `csscompressor` für optimierte Stylesheets im Build
+- Neue Abhängigkeiten: `flask-limiter`, `flask-compress`, `csscompressor`
+
+#### Planung & Analyse (PR #219)
+- **Abwesenheits-Impact-Analyse**: Neue `AbsenceImpact`-Klasse in `planning_report.py` mit tagesweiser Risikoanalyse
+- `PlanningReport.absence_impact` liefert ein Dict mit tagesweiser Abwesenheitsauswirkungsanalyse
+
+### Fehlerbehebungen
+- **Fix**: Farb-Picker für Abwesenheitstypen wird nun korrekt erst nach dem Laden des `absences`-Partials initialisiert (`wwwroot/js/app.js`)
+
+---
+
 ## Version 2.1 - Python Edition (January 2026)
 
 ### Updates

@@ -317,17 +317,18 @@ def ensure_absence_types_table(db_path: str):
                 )
             """)
             
-            cursor.execute("PRAGMA table_info(Absences)")
-            columns = [col[1] for col in cursor.fetchall()]
-            
-            if 'AbsenceTypeId' not in columns:
-                print("[i] Adding AbsenceTypeId column to Absences table...")
-                cursor.execute("ALTER TABLE Absences ADD COLUMN AbsenceTypeId INTEGER")
-                
-                cursor.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_absences_type 
-                    ON Absences(AbsenceTypeId)
-                """)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Absences'")
+            absences_exists = cursor.fetchone() is not None
+            if absences_exists:
+                cursor.execute("PRAGMA table_info(Absences)")
+                columns = [col[1] for col in cursor.fetchall()]
+                if 'AbsenceTypeId' not in columns:
+                    print("[i] Adding AbsenceTypeId column to Absences table...")
+                    cursor.execute("ALTER TABLE Absences ADD COLUMN AbsenceTypeId INTEGER")
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_absences_type 
+                        ON Absences(AbsenceTypeId)
+                    """)
             
             print("[✓] AbsenceTypes table created")
         

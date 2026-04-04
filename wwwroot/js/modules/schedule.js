@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate } from './utils.js';
+import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
@@ -612,7 +612,7 @@ export function createShiftBadge(shift) {
 
 export function showPlanShiftsModal() {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten zu planen. Bitte melden Sie sich als Admin oder Disponent an.');
+        showToast('Sie haben keine Berechtigung, Schichten zu planen. Bitte melden Sie sich als Admin oder Disponent an.', 'error');
         return;
     }
     document.getElementById('planShiftsModal').style.display = 'block';
@@ -628,7 +628,7 @@ export async function executePlanShifts(event) {
     event.preventDefault();
 
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten zu planen.');
+        showToast('Sie haben keine Berechtigung, Schichten zu planen.', 'error');
         return;
     }
 
@@ -637,7 +637,7 @@ export async function executePlanShifts(event) {
     const force = document.getElementById('planForceOverwrite').checked;
 
     if (!month || !year) {
-        alert('Bitte wählen Sie Monat und Jahr aus.');
+        showToast('Bitte wählen Sie Monat und Jahr aus.', 'warning');
         return;
     }
 
@@ -677,12 +677,12 @@ export async function executePlanShifts(event) {
         if (!startResponse.ok) {
             planningOverlay.classList.remove('active');
             if (startResponse.status === 401) {
-                alert('Bitte melden Sie sich an, um Schichten zu planen.');
+                showToast('Bitte melden Sie sich an, um Schichten zu planen.', 'warning');
             } else if (startResponse.status === 403) {
-                alert('Sie haben keine Berechtigung, Schichten zu planen.');
+                showToast('Sie haben keine Berechtigung, Schichten zu planen.', 'error');
             } else {
                 const error = await startResponse.json();
-                alert(`Fehler beim Starten der Planung: ${error.error || 'Unbekannter Fehler'}`);
+                showToast(`Fehler beim Starten der Planung: ${error.error || 'Unbekannter Fehler'}`, 'error');
             }
             return;
         }
@@ -702,7 +702,7 @@ export async function executePlanShifts(event) {
 
                 if (!statusResponse.ok) {
                     planningOverlay.classList.remove('active');
-                    alert('Fehler beim Abrufen des Planungsstatus.');
+                    showToast('Fehler beim Abrufen des Planungsstatus.', 'error');
                     return;
                 }
 
@@ -723,7 +723,7 @@ export async function executePlanShifts(event) {
                     if (elapsed >= 600) {
                         // Safety timeout: stop polling after 10 minutes
                         planningOverlay.classList.remove('active');
-                        alert('Die Planung dauert ungewöhnlich lange. Bitte überprüfen Sie den Server.');
+                        showToast('Die Planung dauert ungewöhnlich lange. Bitte überprüfen Sie den Server.', 'warning');
                         return;
                     }
                     setTimeout(poll, pollInterval);
@@ -740,14 +740,14 @@ export async function executePlanShifts(event) {
                 } else {
                     // Error
                     if (job.details) {
-                        alert(`Fehler beim Planen der Schichten:\n\n${job.details}`);
+                        showToast(`Fehler beim Planen der Schichten: ${job.details}`, 'error');
                     } else {
-                        alert(`Fehler beim Planen der Schichten: ${job.message || 'Unbekannter Fehler'}`);
+                        showToast(`Fehler beim Planen der Schichten: ${job.message || 'Unbekannter Fehler'}`, 'error');
                     }
                 }
             } catch (err) {
                 planningOverlay.classList.remove('active');
-                alert(`Fehler: ${err.message}`);
+                showToast(`Fehler: ${err.message}`, 'error');
             }
         };
 
@@ -756,7 +756,7 @@ export async function executePlanShifts(event) {
     } catch (error) {
         // Hide loading overlay on error
         planningOverlay.classList.remove('active');
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -773,7 +773,7 @@ export async function exportScheduleToPdf() {
 
     if (currentView === 'week') {
         startDate = document.getElementById('startDate').value;
-        if (!startDate) { alert('Bitte wählen Sie ein Startdatum aus.'); return; }
+        if (!startDate) { showToast('Bitte wählen Sie ein Startdatum aus.', 'warning'); return; }
         const end = new Date(startDate);
         end.setDate(end.getDate() + 7);
         endDate = end.toISOString().split('T')[0];
@@ -806,15 +806,15 @@ export async function exportScheduleToPdf() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an, um den Dienstplan als PDF zu exportieren.');
+            showToast('Bitte melden Sie sich an, um den Dienstplan als PDF zu exportieren.', 'warning');
         } else if (response.status === 501) {
             const error = await response.json();
-            alert(error.error || 'PDF-Export ist noch nicht implementiert.');
+            showToast(error.error || 'PDF-Export ist noch nicht implementiert.', 'error');
         } else {
-            alert('Fehler beim PDF-Export. Bitte versuchen Sie es erneut.');
+            showToast('Fehler beim PDF-Export. Bitte versuchen Sie es erneut.', 'error');
         }
     } catch (error) {
-        alert(`Fehler beim PDF-Export: ${error.message}`);
+        showToast(`Fehler beim PDF-Export: ${error.message}`, 'error');
     }
 }
 
@@ -823,7 +823,7 @@ export async function exportScheduleToExcel() {
 
     if (currentView === 'week') {
         startDate = document.getElementById('startDate').value;
-        if (!startDate) { alert('Bitte wählen Sie ein Startdatum aus.'); return; }
+        if (!startDate) { showToast('Bitte wählen Sie ein Startdatum aus.', 'warning'); return; }
         const end = new Date(startDate);
         end.setDate(end.getDate() + 7);
         endDate = end.toISOString().split('T')[0];
@@ -856,15 +856,15 @@ export async function exportScheduleToExcel() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an, um den Dienstplan als Excel zu exportieren.');
+            showToast('Bitte melden Sie sich an, um den Dienstplan als Excel zu exportieren.', 'warning');
         } else if (response.status === 501) {
             const error = await response.json();
-            alert(error.error || 'Excel-Export ist noch nicht implementiert.');
+            showToast(error.error || 'Excel-Export ist noch nicht implementiert.', 'error');
         } else {
-            alert('Fehler beim Excel-Export. Bitte versuchen Sie es erneut.');
+            showToast('Fehler beim Excel-Export. Bitte versuchen Sie es erneut.', 'error');
         }
     } catch (error) {
-        alert(`Fehler beim Excel-Export: ${error.message}`);
+        showToast(`Fehler beim Excel-Export: ${error.message}`, 'error');
     }
 }
 
@@ -873,7 +873,7 @@ export async function exportScheduleToCsv() {
 
     if (currentView === 'week') {
         startDate = document.getElementById('startDate').value;
-        if (!startDate) { alert('Bitte wählen Sie ein Startdatum aus.'); return; }
+        if (!startDate) { showToast('Bitte wählen Sie ein Startdatum aus.', 'warning'); return; }
         const end = new Date(startDate);
         end.setDate(end.getDate() + 7);
         endDate = end.toISOString().split('T')[0];
@@ -906,10 +906,10 @@ export async function exportScheduleToCsv() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } else {
-            alert('Fehler beim CSV-Export. Bitte versuchen Sie es erneut.');
+            showToast('Fehler beim CSV-Export. Bitte versuchen Sie es erneut.', 'error');
         }
     } catch (error) {
-        alert(`Fehler beim CSV-Export: ${error.message}`);
+        showToast(`Fehler beim CSV-Export: ${error.message}`, 'error');
     }
 }
 
@@ -933,13 +933,13 @@ export async function loadShiftTypes() {
 
 export async function editShiftAssignment(shiftId) {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten zu bearbeiten.');
+        showToast('Sie haben keine Berechtigung, Schichten zu bearbeiten.', 'error');
         return;
     }
 
     const shift = allShifts.find(s => s.id === shiftId);
     if (!shift) {
-        alert('Schicht nicht gefunden.');
+        showToast('Schicht nicht gefunden.', 'error');
         return;
     }
 
@@ -984,7 +984,7 @@ export async function editShiftAssignment(shiftId) {
 
 export async function showNewShiftModal() {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten zu erstellen.');
+        showToast('Sie haben keine Berechtigung, Schichten zu erstellen.', 'error');
         return;
     }
 
@@ -1071,7 +1071,7 @@ export async function saveShiftAssignment(event) {
         });
 
         if (response.ok) {
-            alert(isNewShift ? 'Schicht erfolgreich erstellt!' : 'Schicht erfolgreich aktualisiert!');
+            showToast(isNewShift ? 'Schicht erfolgreich erstellt!' : 'Schicht erfolgreich aktualisiert!', 'success');
             closeEditShiftModal();
             loadSchedule();
         } else if (response.status === 400) {
@@ -1081,21 +1081,21 @@ export async function saveShiftAssignment(event) {
                 document.getElementById('editShiftWarning').style.display = 'block';
 
                 if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
-                    alert('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.');
+                    showToast('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.', 'warning');
                 }
             } else {
-                alert(`Fehler: ${error.error}`);
+                showToast((`Fehler: ${error.error}`), 'error');
             }
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast(('Bitte melden Sie sich an.'), 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
         } else {
-            alert(isNewShift ? 'Fehler beim Erstellen der Schicht.' : 'Fehler beim Aktualisieren der Schicht.');
+            showToast((isNewShift ? 'Fehler beim Erstellen der Schicht.' : 'Fehler beim Aktualisieren der Schicht.'), 'error');
         }
     } catch (error) {
         console.error('Error saving shift:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast((`Fehler: ${error.message}`), 'error');
     }
 }
 
@@ -1115,17 +1115,17 @@ export async function deleteShiftAssignment() {
         if (response.ok || response.status === 204) {
             closeEditShiftModal();
             await loadSchedule();
-            alert('Schicht erfolgreich gelöscht!');
+            showToast(('Schicht erfolgreich gelöscht!'), 'success');
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast(('Bitte melden Sie sich an.'), 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
         } else {
-            alert('Fehler beim Löschen der Schicht.');
+            showToast(('Fehler beim Löschen der Schicht.'), 'error');
         }
     } catch (error) {
         console.error('Error deleting shift:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast((`Fehler: ${error.message}`), 'error');
     }
 }
 
@@ -1135,7 +1135,7 @@ export async function deleteShiftAssignment() {
 
 export async function showQuickEntryModal(employeeId, dateStr) {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen. Diese Funktion ist nur für Administratoren und Disponenten verfügbar.');
+        showToast(('Sie haben keine Berechtigung, Schichten oder Abwesenheiten zu erstellen. Diese Funktion ist nur für Administratoren und Disponenten verfügbar.'), 'error');
         return;
     }
 
@@ -1146,7 +1146,7 @@ export async function showQuickEntryModal(employeeId, dateStr) {
 
     const employee = cachedEmployees.find(emp => emp.id === parseInt(employeeId));
     if (!employee) {
-        alert('Mitarbeiter nicht gefunden.');
+        showToast(('Mitarbeiter nicht gefunden.'), 'error');
         return;
     }
 
@@ -1238,7 +1238,7 @@ export async function saveQuickEntry() {
     const entryType = document.getElementById('quickEntryType').value;
 
     if (!entryType) {
-        alert('Bitte wählen Sie, ob Sie eine Schicht oder Abwesenheit hinzufügen möchten.');
+        showToast(('Bitte wählen Sie, ob Sie eine Schicht oder Abwesenheit hinzufügen möchten.'), 'warning');
         return;
     }
 
@@ -1250,7 +1250,7 @@ export async function saveQuickEntry() {
         if (entryType === 'shift') {
             const shiftTypeId = document.getElementById('quickEntryShiftTypeId').value;
             if (!shiftTypeId) {
-                alert('Bitte wählen Sie einen Schichttyp.');
+                showToast(('Bitte wählen Sie einen Schichttyp.'), 'warning');
                 return;
             }
 
@@ -1270,25 +1270,25 @@ export async function saveQuickEntry() {
             });
 
             if (response.ok) {
-                alert('Schicht erfolgreich erstellt!');
+                showToast(('Schicht erfolgreich erstellt!'), 'success');
                 closeQuickEntryModal();
                 loadSchedule();
             } else if (response.status === 400) {
                 const error = await response.json();
                 if (error.warning) {
                     if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
-                        alert('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.');
+                        showToast(('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.'), 'error');
                     }
                 } else {
-                    alert(`Fehler: ${error.error}`);
+                    showToast((`Fehler: ${error.error}`), 'error');
                 }
             } else {
-                alert('Fehler beim Erstellen der Schicht.');
+                showToast(('Fehler beim Erstellen der Schicht.'), 'error');
             }
         } else if (entryType === 'absence') {
             const absenceTypeId = document.getElementById('quickEntryAbsenceTypeId').value;
             if (!absenceTypeId) {
-                alert('Bitte wählen Sie einen Abwesenheitstyp.');
+                showToast(('Bitte wählen Sie einen Abwesenheitstyp.'), 'warning');
                 return;
             }
 
@@ -1308,17 +1308,17 @@ export async function saveQuickEntry() {
             });
 
             if (response.ok) {
-                alert('Abwesenheit erfolgreich erfasst!');
+                showToast(('Abwesenheit erfolgreich erfasst!'), 'success');
                 closeQuickEntryModal();
                 loadSchedule();
             } else {
                 const error = await response.json();
-                alert(error.error || 'Fehler beim Speichern der Abwesenheit.');
+                showToast((error.error || 'Fehler beim Speichern der Abwesenheit.'), 'error');
             }
         }
     } catch (error) {
         console.error('Error saving quick entry:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast((`Fehler: ${error.message}`), 'error');
     }
 }
 
@@ -1328,7 +1328,7 @@ export async function saveQuickEntry() {
 
 export async function toggleShiftFixed(shiftId) {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten zu sperren/entsperren.');
+        showToast(('Sie haben keine Berechtigung, Schichten zu sperren/entsperren.'), 'error');
         return;
     }
 
@@ -1341,19 +1341,19 @@ export async function toggleShiftFixed(shiftId) {
         if (response.ok) {
             const data = await response.json();
             const status = data.isFixed ? 'gesperrt' : 'entsperrt';
-            alert(`Schicht erfolgreich ${status}!`);
+            showToast((`Schicht erfolgreich ${status}!`), 'success');
             loadSchedule();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast(('Bitte melden Sie sich an.'), 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
         } else {
             const error = await response.json();
-            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+            showToast((`Fehler: ${error.error || 'Unbekannter Fehler'}`), 'error');
         }
     } catch (error) {
         console.error('Error toggling fixed status:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast((`Fehler: ${error.message}`), 'error');
     }
 }
 
@@ -1417,12 +1417,12 @@ export function updateSelectionCounter() {
 
 export async function showBulkEditModal() {
     if (selectedShifts.size === 0) {
-        alert('Bitte wählen Sie mindestens eine Schicht aus.');
+        showToast(('Bitte wählen Sie mindestens eine Schicht aus.'), 'warning');
         return;
     }
 
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Schichten zu bearbeiten.');
+        showToast(('Sie haben keine Berechtigung, Schichten zu bearbeiten.'), 'error');
         return;
     }
 
@@ -1496,7 +1496,7 @@ export async function saveBulkEdit(event) {
     if (notes) changes.notes = notes;
 
     if (Object.keys(changes).length === 0) {
-        alert('Bitte wählen Sie mindestens eine Änderung aus.');
+        showToast(('Bitte wählen Sie mindestens eine Änderung aus.'), 'warning');
         return;
     }
 
@@ -1517,7 +1517,7 @@ export async function saveBulkEdit(event) {
 
         if (response.ok) {
             const result = await response.json();
-            alert(`Erfolgreich ${result.updated || selectedShifts.size} Schicht${(result.updated || selectedShifts.size) !== 1 ? 'en' : ''} aktualisiert!`);
+            showToast((`Erfolgreich ${result.updated || selectedShifts.size} Schicht${(result.updated || selectedShifts.size) !== 1 ? 'en' : ''} aktualisiert!`), 'success');
             closeBulkEditModal();
 
             if (multiSelectMode) {
@@ -1528,15 +1528,15 @@ export async function saveBulkEdit(event) {
             document.getElementById('bulkEditWarningText').textContent = error.error || 'Validierungsfehler';
             document.getElementById('bulkEditWarning').style.display = 'block';
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast(('Bitte melden Sie sich an.'), 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast(('Sie haben keine Berechtigung für diese Aktion.'), 'error');
         } else {
-            alert('Fehler beim Aktualisieren der Schichten.');
+            showToast(('Fehler beim Aktualisieren der Schichten.'), 'error');
         }
     } catch (error) {
         console.error('Error saving bulk edit:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast((`Fehler: ${error.message}`), 'error');
     }
 }
 
@@ -1608,7 +1608,7 @@ export async function togglePlanApproval() {
         });
 
         if (!statusResponse.ok) {
-            alert('Fehler beim Abrufen des aktuellen Status.');
+            showToast(('Fehler beim Abrufen des aktuellen Status.'), 'error');
             return;
         }
 
@@ -1636,19 +1636,19 @@ export async function togglePlanApproval() {
 
         if (response.ok) {
             const data = await response.json();
-            alert(data.message || `Dienstplan wurde ${action}.`);
+            showToast((data.message || `Dienstplan wurde ${action}.`), 'error');
             await updateApprovalStatus();
             await loadSchedule();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast(('Bitte melden Sie sich an.'), 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung, Dienstpläne freizugeben.');
+            showToast(('Sie haben keine Berechtigung, Dienstpläne freizugeben.'), 'error');
         } else {
             const error = await response.json();
-            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+            showToast((`Fehler: ${error.error || 'Unbekannter Fehler'}`), 'error');
         }
     } catch (error) {
         console.error('Error toggling approval:', error);
-        alert(`Fehler beim Ändern des Freigabestatus.`);
+        showToast((`Fehler beim Ändern des Freigabestatus.`), 'error');
     }
 }

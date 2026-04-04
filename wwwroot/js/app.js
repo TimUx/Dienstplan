@@ -8,6 +8,7 @@ import * as schedule from './modules/schedule.js';
 import * as absences from './modules/absences.js';
 import * as stats from './modules/statistics.js';
 import * as utils from './modules/utils.js';
+import { showToast } from './modules/utils.js';
 import * as planningReport from './modules/planning_report.js';
 
 // ============================================================================
@@ -96,7 +97,7 @@ function initImportFormHandlers() {
             const resultDiv = document.getElementById('importEmployeesResult');
 
             if (!fileInput.files || fileInput.files.length === 0) {
-                alert('Bitte wählen Sie eine CSV-Datei aus.');
+                showToast('Bitte wählen Sie eine CSV-Datei aus.', 'warning');
                 return;
             }
 
@@ -140,7 +141,7 @@ function initImportFormHandlers() {
             const resultDiv = document.getElementById('importTeamsResult');
 
             if (!fileInput.files || fileInput.files.length === 0) {
-                alert('Bitte wählen Sie eine CSV-Datei aus.');
+                showToast('Bitte wählen Sie eine CSV-Datei aus.', 'warning');
                 return;
             }
 

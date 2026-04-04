@@ -410,3 +410,95 @@ export function isHessianHoliday(date) {
 
     return false;
 }
+
+// ============================================================================
+// TOAST NOTIFICATION SYSTEM
+// ============================================================================
+
+/**
+ * Show a toast notification.
+ * @param {string} message - The message to display
+ * @param {'success'|'error'|'warning'|'info'} type - Toast type
+ * @param {number} duration - Auto-dismiss duration in ms (default 4000)
+ */
+export function showToast(message, type = 'info', duration = 4000) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span class="toast-message">${message}</span>
+        <button class="toast-close" aria-label="Schließen">&times;</button>
+    `;
+
+    const close = toast.querySelector('.toast-close');
+    const dismiss = () => {
+        toast.classList.add('toast-hiding');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    };
+    close.addEventListener('click', dismiss);
+
+    container.appendChild(toast);
+
+    // Trigger entrance animation
+    requestAnimationFrame(() => toast.classList.add('toast-visible'));
+
+    if (duration > 0) {
+        setTimeout(dismiss, duration);
+    }
+}
+
+// ============================================================================
+// CENTRAL API CALL WRAPPER
+// ============================================================================
+
+/**
+ * Wrapper around fetch() that automatically shows error toasts on HTTP errors.
+ * @param {string} url - URL to fetch
+ * @param {RequestInit} options - fetch options
+ * @returns {Promise<Response>} - the response (throws on network error)
+ */
+export async function apiCall(url, options = {}) {
+    const defaultOptions = {
+        credentials: 'include',
+        ...options,
+    };
+
+    let response;
+    try {
+        response = await fetch(url, defaultOptions);
+    } catch (networkError) {
+        showToast(`Netzwerkfehler: ${networkError.message}`, 'error');
+        throw networkError;
+    }
+
+    if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+            const data = await response.clone().json();
+            errorMessage = data.error || data.message || errorMessage;
+        } catch {
+            // ignore JSON parse error
+        }
+
+        if (response.status === 401) {
+            showToast('Bitte melden Sie sich an.', 'warning');
+        } else if (response.status === 403) {
+            showToast('Keine Berechtigung für diese Aktion.', 'error');
+        } else if (response.status === 429) {
+            showToast('Zu viele Anfragen. Bitte warten Sie kurz.', 'warning');
+        } else {
+            showToast(errorMessage, 'error');
+        }
+    }
+
+    return response;
+}

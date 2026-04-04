@@ -1,5 +1,27 @@
 # Changelog
 
+## Version 2.1.2 (April 2026)
+
+### Geändert
+
+#### Springer-Rolle entfernt
+- **Breaking Change**: Die feste Springer-Rolle (`IsSpringer`) wurde vollständig aus dem System entfernt
+  - `IsSpringer`-Spalte aus der `Employees`-Tabelle entfernt (Migration `c8a0000008`)
+  - `IsSpringerAssignment`-Spalte aus der `ShiftAssignments`-Tabelle entfernt
+  - Bisherige Springer-Mitarbeiter werden automatisch als `Techniker` klassifiziert
+  - Personalnummern `S001`/`S002`/`S003` werden auf reguläre `PN`-Nummern aktualisiert
+- **Konzept**: Vertretungen erfolgen jetzt vollautomatisch durch den Solver auf Basis von Verfügbarkeit, Rotationsregeln und Ruhezeiten
+- **Frontend**: Alle Springer-bezogenen UI-Elemente (Checkboxen, Filter, Kennzeichnungen) wurden entfernt
+- **API**: Springer-Felder aus allen Employee-Endpunkten entfernt; `validate_springer_availability()` nutzt die automatische Verfügbarkeitslogik
+
+#### Testdokumentation (3 Szenarien, Jan–März 2026)
+- Szenario 1 (Idealfall, Jan 2026): 2/15 Abwesenheiten – Status `FEASIBLE`, 442 Schichten
+- Szenario 2 (Normalfall, Feb 2026): 5/15 Abwesenheiten – Status `FEASIBLE`, volle Mindestbesetzung
+- Szenario 3 (Worst-Case, Mrz 2026): 10/15 Abwesenheiten – Status `FALLBACK_L1`, automatischer Fallback-Modus
+- Screenshots in `docs/screenshots/szenario{1,2,3}-{monat}-*.png`
+
+---
+
 ## Version 2.1.1 (April 2026)
 
 ### Neue Features

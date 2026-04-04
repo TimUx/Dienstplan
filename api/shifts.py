@@ -1054,7 +1054,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             )
             
             # Solve
-            result = solve_shift_planning(planning_model, time_limit_seconds=300, global_settings=global_settings)
+            result = solve_shift_planning(planning_model, time_limit_seconds=300, global_settings=global_settings, db_path=db.db_path)
             
             if not result:
                 # Get diagnostic information to help user understand the issue

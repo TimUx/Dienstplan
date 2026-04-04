@@ -1643,7 +1643,8 @@ def solve_shift_planning(
     num_workers: int = 8,
     global_settings: Dict = None,
     search_strategy: str = "PORTFOLIO",
-    warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None
+    warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None,
+    db_path: str = "dienstplan.db"
 ) -> Optional[Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]]:
     """
     Solve the shift planning problem.
@@ -1664,6 +1665,8 @@ def solve_shift_planning(
             previous shift assignments to use as solver hints (AddHint). Typically
             the previous month's complete schedule. Expected benefit: 20-40% faster
             first feasible solution on re-planning runs with similar structure.
+        db_path: Path to the SQLite database file, used to load rotation group
+            patterns. Defaults to "dienstplan.db".
         
     Returns:
         Tuple of (shift_assignments, complete_schedule) if solution found, None otherwise
@@ -1677,6 +1680,7 @@ def solve_shift_planning(
     """
     solver = ShiftPlanningSolver(
         planning_model, time_limit_seconds, num_workers, global_settings,
+        db_path=db_path,
         search_strategy=search_strategy,
         warm_start_shifts=warm_start_shifts
     )

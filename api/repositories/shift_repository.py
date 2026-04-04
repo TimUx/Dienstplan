@@ -1,6 +1,6 @@
 """Shift Repository: encapsulates SQL queries for shift types and assignments."""
 
-from typing import List, Dict, Any
+from typing import Optional, List, Dict, Any
 
 
 class ShiftRepository:

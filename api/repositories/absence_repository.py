@@ -8,6 +8,12 @@ class AbsenceRepository:
 
     @staticmethod
     def get_absences_by_date_range(cursor, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """Return absences (with employee, team, and absence-type details) overlapping the given date range.
+
+        Args:
+            start_date: ISO-8601 date string (YYYY-MM-DD) for the range start.
+            end_date: ISO-8601 date string (YYYY-MM-DD) for the range end.
+        """
         cursor.execute("""
             SELECT a.*, e.Vorname, e.Name as EmployeeName, e.TeamId,
                    t.Name as TeamName,
@@ -23,7 +29,8 @@ class AbsenceRepository:
         return cursor.fetchall()
 
     @staticmethod
-    def get_absence_by_id(cursor, absence_id: int):
+    def get_absence_by_id(cursor, absence_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single absence (with employee name) by primary key, or None if not found."""
         cursor.execute("""
             SELECT a.*, e.Vorname, e.Name as EmployeeName
             FROM Absences a
@@ -34,6 +41,12 @@ class AbsenceRepository:
 
     @staticmethod
     def get_vacation_requests(cursor, status_filter: Optional[str] = None, employee_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Return vacation requests with employee and team details, optionally filtered by status and/or employee.
+
+        Args:
+            status_filter: If provided and not 'all', only requests with this Status value are returned.
+            employee_id: If provided, only requests for this employee are returned.
+        """
         query = """
             SELECT vr.*, e.Vorname, e.Name as EmployeeName, e.TeamId,
                    t.Name as TeamName
@@ -55,5 +68,6 @@ class AbsenceRepository:
 
     @staticmethod
     def get_all_absence_types(cursor) -> List[Dict[str, Any]]:
+        """Return all absence types ordered alphabetically by name."""
         cursor.execute("SELECT * FROM AbsenceTypes ORDER BY Name")
         return cursor.fetchall()

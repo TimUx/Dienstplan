@@ -1,5 +1,6 @@
 import { API_BASE, escapeHtml, escapeJsString, sanitizeColorCode, formatImportResult } from './utils.js';
 import { hasRole, canEditEmployees, canPlanShifts } from './auth.js';
+import { store } from './store.js';
 
 // ============================================================================
 // EMPLOYEE MANAGEMENT
@@ -14,6 +15,7 @@ export async function loadEmployees() {
         const employees = await response.json();
 
         cachedEmployees = employees;
+        store.setState('cachedEmployees', cachedEmployees);
 
         displayEmployees(employees);
     } catch (error) {

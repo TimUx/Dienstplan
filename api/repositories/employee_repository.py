@@ -8,6 +8,7 @@ class EmployeeRepository:
 
     @staticmethod
     def get_all_employees(cursor) -> List[Dict[str, Any]]:
+        """Return all employees with their team name and concatenated role names, ordered by surname then first name."""
         cursor.execute("""
             SELECT e.*, t.Name as TeamName,
                    GROUP_CONCAT(r.Name) as roles
@@ -21,7 +22,8 @@ class EmployeeRepository:
         return cursor.fetchall()
 
     @staticmethod
-    def get_employee_by_id(cursor, employee_id: int):
+    def get_employee_by_id(cursor, employee_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single employee with team name by primary key, or None if not found."""
         cursor.execute("""
             SELECT e.*, t.Name as TeamName
             FROM Employees e
@@ -32,16 +34,19 @@ class EmployeeRepository:
 
     @staticmethod
     def get_all_teams(cursor) -> List[Dict[str, Any]]:
+        """Return all teams ordered alphabetically by name."""
         cursor.execute("SELECT * FROM Teams ORDER BY Name")
         return cursor.fetchall()
 
     @staticmethod
-    def get_team_by_id(cursor, team_id: int):
+    def get_team_by_id(cursor, team_id: int) -> Optional[Dict[str, Any]]:
+        """Return a single team by primary key, or None if not found."""
         cursor.execute("SELECT * FROM Teams WHERE Id = ?", (team_id,))
         return cursor.fetchone()
 
     @staticmethod
     def get_employees_by_team(cursor, team_id: int) -> List[Dict[str, Any]]:
+        """Return all employees belonging to the given team, ordered by surname then first name."""
         cursor.execute("""
             SELECT * FROM Employees WHERE TeamId = ? ORDER BY Name, Vorname
         """, (team_id,))

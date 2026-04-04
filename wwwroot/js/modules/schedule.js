@@ -2,6 +2,7 @@ import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextC
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
+import { store } from './store.js';
 
 // ============================================================================
 // MODULE STATE
@@ -73,6 +74,7 @@ export function switchScheduleView(view, tabElement) {
     tabElement.classList.add('active');
 
     currentView = view;
+    store.setState('currentView', view);
 
     document.getElementById('week-controls').style.display = view === 'week' ? 'flex' : 'none';
     document.getElementById('month-controls').style.display = view === 'month' ? 'flex' : 'none';
@@ -167,6 +169,7 @@ export function displaySchedule(data, employees) {
     const content = document.getElementById('schedule-content');
 
     allShifts = data.assignments;
+    store.setState('allShifts', allShifts);
 
     if (currentView === 'week') {
         content.innerHTML = displayWeekView(data, employees);
@@ -921,6 +924,7 @@ export async function loadShiftTypes() {
         });
         if (response.ok) {
             allShiftTypes = await response.json();
+            store.setState('cachedShiftTypes', allShiftTypes);
         }
     } catch (error) {
         console.error('Error loading shift types:', error);

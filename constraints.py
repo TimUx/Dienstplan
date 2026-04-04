@@ -706,8 +706,9 @@ def add_staffing_constraints(
     weeks: List[List[date]],
     shift_codes: List[str],
     shift_types: List[ShiftType],
-    violation_tracker=None
-) -> Tuple[List[cp_model.IntVar], List[Tuple[cp_model.IntVar, date]], Dict[str, List[Tuple[cp_model.IntVar, date]]], List[cp_model.IntVar]]:
+    violation_tracker=None,
+    relax_min_staffing: bool = False
+) -> Tuple[List[cp_model.IntVar], List[Tuple[cp_model.IntVar, date]], Dict[str, List[Tuple[cp_model.IntVar, date]]], List[cp_model.IntVar], List[cp_model.IntVar]]:
     """
     HARD MINIMUM + SOFT MAXIMUM: Staffing per shift, INCLUDING cross-team workers.
     
@@ -741,13 +742,20 @@ def add_staffing_constraints(
     Args:
         shift_types: List of ShiftType objects from database (REQUIRED)
         violation_tracker: Optional tracker for recording when max is exceeded
+        relax_min_staffing: When True, minimum staffing is treated as a soft constraint
+            with penalty variables instead of a hard constraint. The returned
+            min_staffing_violations list will contain the penalty variables.
+            When False (default), minimum staffing is a hard constraint.
         
     Returns:
-        Tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, 
-                  weekday_understaffing_by_shift, team_priority_violations) where:
+        5-tuple of (weekday_overstaffing_penalties, weekend_overstaffing_penalties, 
+                  weekday_understaffing_by_shift, team_priority_violations,
+                  min_staffing_violations) where:
                   - weekend_overstaffing_penalties is a list of (penalty_var, date) tuples for temporal weighting
                   - weekday_understaffing_by_shift is a dict mapping shift codes to lists of (penalty_var, date) tuples
                   - team_priority_violations are penalties for using cross-team when team has capacity
+                  - min_staffing_violations is a list of IntVar penalty variables representing how far below
+                    minimum staffing each shift/day falls (non-empty only when relax_min_staffing=True)
     """
     if not shift_types:
         raise ValueError("shift_types parameter is required and must contain ShiftType objects from database")
@@ -771,6 +779,7 @@ def add_staffing_constraints(
     weekend_overstaffing_penalties = []
     weekday_understaffing_by_shift = {shift: [] for shift in shift_codes}  # Separate by shift type for priority
     team_priority_violations = []  # Penalties for using cross-team when team has capacity
+    min_staffing_violations = []  # Only populated when relax_min_staffing=True
     
     for d in dates:
         is_weekend = d.weekday() >= 5
@@ -842,8 +851,16 @@ def add_staffing_constraints(
                 
                 if assigned:
                     total_assigned = sum(assigned)
-                    # HARD minimum staffing
-                    model.Add(total_assigned >= staffing[shift]["min"])
+                    # Minimum staffing: HARD by default, SOFT when relax_min_staffing=True
+                    min_required = staffing[shift]["min"]
+                    if relax_min_staffing:
+                        # Soft constraint: penalise shortfall instead of forbidding it
+                        viol = model.NewIntVar(0, min_required, f"min_staff_viol_{shift}_{d}_weekend")
+                        model.Add(viol >= min_required - total_assigned)
+                        model.Add(viol >= 0)
+                        min_staffing_violations.append(viol)
+                    else:
+                        model.Add(total_assigned >= min_required)
                     # SOFT maximum staffing - create penalty variable for overstaffing
                     # Include date for temporal weighting (penalize later weekends more)
                     overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekend")
@@ -904,8 +921,15 @@ def add_staffing_constraints(
                 
                 if assigned:
                     total_assigned = sum(assigned)
-                    # HARD minimum staffing
-                    model.Add(total_assigned >= staffing[shift]["min"])
+                    # Minimum staffing: HARD by default, SOFT when relax_min_staffing=True
+                    min_required = staffing[shift]["min"]
+                    if relax_min_staffing:
+                        viol = model.NewIntVar(0, min_required, f"min_staff_viol_{shift}_{d}_weekday")
+                        model.Add(viol >= min_required - total_assigned)
+                        model.Add(viol >= 0)
+                        min_staffing_violations.append(viol)
+                    else:
+                        model.Add(total_assigned >= min_required)
                     # SOFT maximum staffing - create penalty variable for overstaffing
                     overstaffing = model.NewIntVar(0, 20, f"overstaff_{shift}_{d}_weekday")
                     model.Add(overstaffing >= total_assigned - staffing[shift]["max"])
@@ -939,7 +963,7 @@ def add_staffing_constraints(
                         model.AddMinEquality(priority_violation, [unfilled_capacity, cross_team_count])
                         team_priority_violations.append(priority_violation)
     
-    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift, team_priority_violations
+    return weekday_overstaffing_penalties, weekend_overstaffing_penalties, weekday_understaffing_by_shift, team_priority_violations, min_staffing_violations
 
 
 def add_total_weekend_staffing_limit(

@@ -1,0 +1,192 @@
+            <!-- Admin View -->
+            <div id="admin-view" class="view">
+                <h2>⚙️ Administration</h2>
+                
+                <!-- Admin Navigation Tabs -->
+                <div class="admin-tabs">
+                    <button class="admin-tab active" data-action="showAdminTab" data-tab="audit-logs">📋 Änderungsprotokoll</button>
+                    <button class="admin-tab" data-action="showAdminTab" data-tab="email">📧 E-Mail-Einstellungen</button>
+                    <button class="admin-tab" data-action="showAdminTab" data-tab="system">📊 System-Information</button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="admin-tab-contents">
+                    <!-- Audit Logs Tab -->
+                    <div id="admin-tab-audit-logs" class="admin-tab-content active">
+                        <div class="admin-section">
+                            <h3>📋 Änderungsprotokoll (Audit Log)</h3>
+                            <p>Protokoll aller Systemänderungen für Nachverfolgbarkeit und Compliance.</p>
+                            
+                            <!-- Filter Controls -->
+                            <div class="audit-filters">
+                                <div class="filter-group">
+                                    <label>Entität:</label>
+                                    <select id="audit-filter-entity">
+                                        <option value="">Alle</option>
+                                        <option value="Employee">Mitarbeiter</option>
+                                        <option value="Team">Team</option>
+                                        <option value="ShiftType">Schichttyp</option>
+                                        <option value="ShiftAssignment">Schichtzuweisung</option>
+                                        <option value="Absence">Abwesenheit</option>
+                                        <option value="VacationPeriod">Ferienzeit</option>
+                                        <option value="VacationRequest">Urlaubsantrag</option>
+                                        <option value="VacationYearApproval">Jahresurlaubsgenehmigung</option>
+                                        <option value="ShiftExchange">Diensttausch</option>
+                                        <option value="TeamShiftAssignment">Team-Schicht-Zuweisung</option>
+                                        <option value="ShiftTypeRelationship">Schichttyp-Beziehung</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>Aktion:</label>
+                                    <select id="audit-filter-action">
+                                        <option value="">Alle</option>
+                                        <option value="Created">Erstellt</option>
+                                        <option value="Updated">Geändert</option>
+                                        <option value="Deleted">Gelöscht</option>
+                                        <option value="BulkUpdate">Mehrfach-Änderung</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>Von Datum:</label>
+                                    <input type="date" id="audit-filter-start-date">
+                                </div>
+                                <div class="filter-group">
+                                    <label>Bis Datum:</label>
+                                    <input type="date" id="audit-filter-end-date">
+                                </div>
+                                <div class="filter-group">
+                                    <button data-action="applyAuditFilters" class="btn-primary">Filter anwenden</button>
+                                    <button data-action="clearAuditFilters" class="btn-secondary">Zurücksetzen</button>
+                                </div>
+                            </div>
+                            
+                            <div class="controls">
+                                <button data-action="loadAuditLogs" data-page="1" data-limit="50" class="btn-primary">Einträge laden</button>
+                                <div style="display: inline-block; margin-left: 20px;">
+                                    <span id="audit-auto-refresh-status" style="color: #999;">⏸ Auto-Aktualisierung: Inaktiv</span>
+                                </div>
+                            </div>
+                            <div id="audit-logs-content">
+                                <p class="loading">Lade Änderungsprotokoll...</p>
+                            </div>
+                            
+                            <!-- Pagination -->
+                            <div id="audit-pagination" class="pagination" style="display: none;">
+                                <button data-action="loadAuditLogsPreviousPage" id="audit-prev-btn" class="btn-secondary">← Vorherige</button>
+                                <span id="audit-page-info">Seite 1</span>
+                                <button data-action="loadAuditLogsNextPage" id="audit-next-btn" class="btn-secondary">Nächste →</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email Settings Tab -->
+                    <div id="admin-tab-email" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📧 E-Mail-Einstellungen</h3>
+                            <p>Konfiguration des SMTP-Servers für Benachrichtigungen.</p>
+                            <div class="controls">
+                                <button data-action="showEmailSettingsModal" class="btn-primary">E-Mail-Einstellungen bearbeiten</button>
+                                <button data-action="loadEmailSettings" class="btn-secondary">Aktuelle Einstellungen laden</button>
+                            </div>
+                            <div id="email-settings-content">
+                                <div class="info-box">
+                                    <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
+                                    <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Info Tab -->
+                    <div id="admin-tab-system" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>📊 System-Information</h3>
+                            <div class="info-box">
+                                <p><strong>Version:</strong> 2.1 - Python Edition</p>
+                                <p><strong>Entwickler:</strong> Timo Braun</p>
+                                <p><strong>Datenbank:</strong> SQLite</p>
+                                <p><strong>Backend:</strong> Python 3.9+ mit Flask</p>
+                                <p><strong>Solver:</strong> Google OR-Tools CP-SAT</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    <!-- Email Settings Modal -->
+    <div id="emailSettingsModal" class="modal">
+        <div class="modal-content large">
+            <span class="close" data-action="closeEmailSettingsModal">&times;</span>
+            <h2>E-Mail-Einstellungen</h2>
+            <form id="emailSettingsForm" onsubmit="saveEmailSettings(event)">
+                <h3>SMTP-Server</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>SMTP Server*</label>
+                        <input type="text" id="smtpServer" required placeholder="smtp.gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Port*</label>
+                        <input type="number" id="smtpPort" required value="587" min="1" max="65535">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Protokoll*</label>
+                        <select id="smtpProtocol" required>
+                            <option value="SMTP">SMTP</option>
+                            <option value="SMTPS">SMTPS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sicherheit*</label>
+                        <select id="smtpSecurity" required>
+                            <option value="None">Keine</option>
+                            <option value="SSL">SSL</option>
+                            <option value="TLS">TLS</option>
+                            <option value="STARTTLS" selected>STARTTLS</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>Authentifizierung</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="requiresAuth" checked>
+                        Authentifizierung erforderlich
+                    </label>
+                </div>
+                <div id="authFields">
+                    <div class="form-group">
+                        <label>Benutzername</label>
+                        <input type="text" id="smtpUsername" placeholder="benutzer@domain.de">
+                    </div>
+                    <div class="form-group">
+                        <label>Passwort</label>
+                        <input type="password" id="smtpPassword" placeholder="••••••••">
+                        <small>Leer lassen, um bestehendes Passwort nicht zu ändern</small>
+                    </div>
+                </div>
+
+                <h3>Absender-Informationen</h3>
+                <div class="form-group">
+                    <label>Absenderadresse*</label>
+                    <input type="email" id="senderEmail" required placeholder="dienstplan@fritzwinter.de">
+                </div>
+                <div class="form-group">
+                    <label>Absendername*</label>
+                    <input type="text" id="senderName" required value="Dienstplan-System">
+                </div>
+                <div class="form-group">
+                    <label>Antwortadresse</label>
+                    <input type="email" id="replyToEmail" placeholder="Optional, falls abweichend">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" data-action="closeEmailSettingsModal" class="btn-secondary">Abbrechen</button>
+                    <button type="button" data-action="testEmailSettings" class="btn-secondary">Test-E-Mail senden</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>

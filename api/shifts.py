@@ -13,8 +13,10 @@ import time
 from .shared import (
     get_db, require_auth, require_role, log_audit,
     get_row_value, _paginate,
-    extend_planning_dates_to_complete_weeks, validate_monthly_date_range
+    extend_planning_dates_to_complete_weeks, validate_monthly_date_range,
+    limiter
 )
+from .repositories.shift_repository import ShiftRepository
 
 bp = Blueprint('shifts', __name__)
 
@@ -33,10 +35,8 @@ def get_shift_types():
     conn = db.get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM ShiftTypes ORDER BY Id")
-    
     shift_types = []
-    for row in cursor.fetchall():
+    for row in ShiftRepository.get_all_shift_types(cursor):
         # Handle MaxConsecutiveDays for backward compatibility
         try:
             max_consecutive_days = row['MaxConsecutiveDays']
@@ -162,8 +162,7 @@ def get_shift_type(id):
     conn = db.get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM ShiftTypes WHERE Id = ?", (id,))
-    row = cursor.fetchone()
+    row = ShiftRepository.get_shift_type_by_id(cursor, id)
     
     if not row:
         conn.close()
@@ -321,6 +320,7 @@ def update_shift_type(id):
 
 
 @bp.route('/api/shifttypes/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_shift_type(id):
     """Delete shift type (Admin only)"""
@@ -819,7 +819,7 @@ def _save_planning_report(db, year: int, month: int, report) -> None:
         current_app.logger.warning(f"Failed to save PlanningReport for {year}/{month}: {exc}")
 
 
-def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
+def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_limit_seconds: int = 120):
     """
     Background worker that executes the shift planning solver and stores
     the result (or error) in *_plan_jobs* under *job_id*.
@@ -1145,8 +1145,13 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 previous_employee_shifts=previous_employee_shifts if previous_employee_shifts else None
             )
             
+            # Check if cancelled before starting the solve
+            with _plan_jobs_lock:
+                if _plan_jobs.get(job_id, {}).get('status') == 'cancelled':
+                    return
+
             # Solve
-            result = solve_shift_planning(planning_model, time_limit_seconds=300, global_settings=global_settings, db_path=db.db_path)
+            result = solve_shift_planning(planning_model, time_limit_seconds=time_limit_seconds, global_settings=global_settings, db_path=db.db_path)
             
             if not result:
                 # Get diagnostic information to help user understand the issue
@@ -1319,6 +1324,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
 
 
 @bp.route('/api/shifts/plan', methods=['POST'])
+@limiter.limit("5 per hour")
 @require_role('Admin')
 def plan_shifts():
     """
@@ -1330,6 +1336,11 @@ def plan_shifts():
     start_date_str = request.args.get('startDate')
     end_date_str = request.args.get('endDate')
     force = request.args.get('force', 'false').lower() == 'true'
+    try:
+        time_limit = int(request.args.get('timeLimit', 120))
+        time_limit = max(30, min(300, time_limit))  # Clamp to 30-300 seconds
+    except (ValueError, TypeError):
+        time_limit = 120
 
     if not start_date_str or not end_date_str:
         return jsonify({'error': 'startDate and endDate are required'}), 400
@@ -1363,7 +1374,7 @@ def plan_shifts():
         app = current_app._get_current_object()
         t = threading.Thread(
             target=_run_planning_job,
-            args=(job_id, start_date, end_date, force, app),
+            args=(job_id, start_date, end_date, force, app, time_limit),
             daemon=True,
             name=f'planning-{job_id[:8]}'
         )
@@ -1397,6 +1408,27 @@ def get_plan_status(job_id):
     elapsed = int(time.time() - job.get('started_at', time.time()))
     job['elapsedSeconds'] = elapsed
     return jsonify(job)
+
+
+@bp.route('/api/shifts/plan/<job_id>', methods=['DELETE'])
+@require_role('Admin')
+def cancel_plan_job(job_id):
+    """
+    Request cancellation of a background planning job.
+
+    The job is marked as cancelled. Since OR-Tools may not immediately stop,
+    this sets the job status to 'cancelled' in the job store.
+    """
+    with _plan_jobs_lock:
+        job = _plan_jobs.get(job_id)
+        if job is None:
+            return jsonify({'error': 'Job not found'}), 404
+        if job.get('status') != 'running':
+            return jsonify({'error': 'Job is not running'}), 400
+        job['status'] = 'cancelled'
+        job['message'] = 'Planung wurde abgebrochen.'
+
+    return jsonify({'success': True, 'message': 'Planung wird abgebrochen.'})
 
 
 @bp.route('/api/shifts/plan/approvals', methods=['GET'])
@@ -1688,6 +1720,7 @@ def create_shift_assignment():
 
 
 @bp.route('/api/shifts/assignments/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_shift_assignment(id):
     """Delete a shift assignment"""
@@ -1915,6 +1948,7 @@ def toggle_fixed_assignment(id):
 # ============================================================================
 
 @bp.route('/api/shifts/export/csv', methods=['GET'])
+@limiter.limit("20 per hour")
 def export_schedule_csv():
     """Export schedule to CSV format"""
     start_date_str = request.args.get('startDate')
@@ -2123,6 +2157,7 @@ def _get_absence_code(absence_type: int) -> str:
 
 
 @bp.route('/api/shifts/export/pdf', methods=['GET'])
+@limiter.limit("20 per hour")
 def export_schedule_pdf():
     """Export schedule to PDF format matching the UI view structure"""
     start_date_str = request.args.get('startDate')
@@ -2333,6 +2368,7 @@ def export_schedule_pdf():
 
 
 @bp.route('/api/shifts/export/excel', methods=['GET'])
+@limiter.limit("20 per hour")
 def export_schedule_excel():
     """Export schedule to Excel format matching the UI view structure"""
     start_date_str = request.args.get('startDate')

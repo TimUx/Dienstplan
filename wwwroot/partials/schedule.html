@@ -1,0 +1,286 @@
+            <!-- Schedule View -->
+            <div id="schedule-view" class="view active">
+                <!-- View Tabs -->
+                <div class="schedule-tabs">
+                    <button class="schedule-tab active" data-action="switchScheduleView" data-view="week">📅 Woche</button>
+                    <button class="schedule-tab" data-action="switchScheduleView" data-view="month">📆 Monat</button>
+                    <button class="schedule-tab" data-action="switchScheduleView" data-view="year">📊 Jahr</button>
+                </div>
+                
+                <div class="controls">
+                    <!-- Week View Controls -->
+                    <div id="week-controls" class="date-controls">
+                        <button data-action="changeDate" data-delta="-1">◀ Vorherige Woche</button>
+                        <input type="date" id="startDate" onchange="loadSchedule()">
+                        <button data-action="changeDate" data-delta="1">Nächste Woche ▶</button>
+                    </div>
+                    
+                    <!-- Month View Controls -->
+                    <div id="month-controls" class="date-controls" style="display: none;">
+                        <button data-action="changeMonth" data-delta="-1">◀ Vorheriger Monat</button>
+                        <select id="monthSelect" onchange="loadSchedule()">
+                            <option value="1">Januar</option>
+                            <option value="2">Februar</option>
+                            <option value="3">März</option>
+                            <option value="4">April</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juni</option>
+                            <option value="7">Juli</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">Oktober</option>
+                            <option value="11">November</option>
+                            <option value="12">Dezember</option>
+                        </select>
+                        <select id="monthYearSelect" onchange="loadSchedule()"></select>
+                        <button data-action="changeMonth" data-delta="1">Nächster Monat ▶</button>
+                        <span id="approvalStatus" style="margin-left: 15px; padding: 5px 10px; border-radius: 4px; font-weight: bold;"></span>
+                        <button id="approvalButton" data-action="togglePlanApproval" class="btn-primary admin-only" style="display: none; margin-left: 10px;">Dienstplan freigeben</button>
+                    </div>
+                    
+                    <!-- Year View Controls -->
+                    <div id="year-controls" class="date-controls" style="display: none;">
+                        <button data-action="changeYear" data-delta="-1">◀ Vorheriges Jahr</button>
+                        <select id="yearSelect" onchange="loadSchedule()"></select>
+                        <button data-action="changeYear" data-delta="1">Nächstes Jahr ▶</button>
+                    </div>
+                    
+                    <div class="view-controls">
+                        <button data-action="showPlanShiftsModal" class="btn-primary admin-only">Schichten planen</button>
+                        <button data-action="showNewShiftModal" class="btn-primary admin-only">+ Neue Schicht</button>
+                        <button data-action="toggleMultiSelectMode" id="multiSelectToggleBtn" class="btn-secondary admin-only">☑ Mehrfachauswahl</button>
+                        <button data-action="showBulkEditModal" id="bulkEditBtn" class="btn-primary admin-only" style="display:none;">✏ Auswahl bearbeiten</button>
+                        <button data-action="clearShiftSelection" id="clearSelectionBtn" class="btn-secondary admin-only" style="display:none;">✖ Auswahl löschen</button>
+                        <span id="selectionCounter" style="margin-left: 10px; font-weight: bold; color: #2196F3;"></span>
+                        <button data-action="exportScheduleToCsv" class="btn-secondary">📊 CSV Export</button>
+                        <button data-action="exportScheduleToPdf" class="btn-secondary">📄 PDF Export</button>
+                        <button data-action="exportScheduleToExcel" class="btn-secondary">📊 Excel Export</button>
+                    </div>
+                </div>
+                
+                <div id="schedule-content" class="schedule-grid">
+                    <p class="loading">Lade Dienstplan...</p>
+                </div>
+            </div>
+
+    <!-- Edit Shift Assignment Modal -->
+    <div id="editShiftModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeEditShiftModal">&times;</span>
+            <h2 id="editShiftModalTitle">Schicht bearbeiten</h2>
+            <form id="editShiftForm" onsubmit="saveShiftAssignment(event)">
+                <input type="hidden" id="editShiftId">
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="editShiftEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Datum*</label>
+                    <input type="date" id="editShiftDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Schichttyp*</label>
+                    <select id="editShiftTypeId" required>
+                        <option value="">Schichttyp wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="editShiftIsFixed">
+                        Feste Schicht (wird nicht automatisch geändert)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Notizen</label>
+                    <textarea id="editShiftNotes" rows="3" placeholder="Optional: Notizen zur Schichtzuweisung"></textarea>
+                </div>
+                <div id="editShiftWarning" class="warning-box" style="display: none;">
+                    <p><strong>⚠️ Regelverstoß:</strong></p>
+                    <p id="editShiftWarningText"></p>
+                    <p>Möchten Sie die Änderung trotzdem vornehmen?</p>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeEditShiftModal" class="btn-secondary">Abbrechen</button>
+                    <button type="button" data-action="deleteShiftAssignment" class="btn-danger admin-only">Löschen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Edit Modal -->
+    <div id="bulkEditModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeBulkEditModal">&times;</span>
+            <h2>Mehrere Schichten bearbeiten</h2>
+            <p>Sie bearbeiten <strong id="bulkEditShiftCount">0</strong> Schichten gleichzeitig.</p>
+            
+            <div id="bulkEditSummary"></div>
+            
+            <form id="bulkEditForm" onsubmit="saveBulkEdit(event)">
+                <div class="form-group">
+                    <label>Mitarbeiter ändern</label>
+                    <select id="bulkEditEmployeeId">
+                        <option value="">Keine Änderung</option>
+                    </select>
+                    <small>Leer lassen, um den Mitarbeiter nicht zu ändern</small>
+                </div>
+                <div class="form-group">
+                    <label>Schichttyp ändern</label>
+                    <select id="bulkEditShiftTypeId">
+                        <option value="">Keine Änderung</option>
+                    </select>
+                    <small>Leer lassen, um den Schichttyp nicht zu ändern</small>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="bulkEditIsFixed">
+                        Alle als feste Schichten markieren (werden nicht automatisch geändert)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Notizen hinzufügen</label>
+                    <textarea id="bulkEditNotes" rows="3" placeholder="Optional: Notizen zu allen ausgewählten Schichten hinzufügen"></textarea>
+                </div>
+                <div id="bulkEditWarning" class="warning-box" style="display: none;">
+                    <p><strong>⚠️ Warnung:</strong></p>
+                    <p id="bulkEditWarningText"></p>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeBulkEditModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Alle ausgewählten Schichten aktualisieren</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Quick Entry Modal for empty cells -->
+    <div id="quickEntryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeQuickEntryModal">&times;</span>
+            <h2>Schicht oder Abwesenheit hinzufügen</h2>
+            <p id="quickEntryInfo">Mitarbeiter: <strong id="quickEntryEmployee"></strong><br>Datum: <strong id="quickEntryDate"></strong></p>
+            
+            <input type="hidden" id="quickEntryEmployeeId">
+            <input type="hidden" id="quickEntryDateValue">
+            
+            <div class="form-group">
+                <label>Was möchten Sie hinzufügen?*</label>
+                <select id="quickEntryType" required onchange="updateQuickEntryOptions()">
+                    <option value="">Bitte wählen...</option>
+                    <option value="shift">Schicht</option>
+                    <option value="absence">Abwesenheit (z.B. AU, L, benutzerdefinierte Typen)</option>
+                </select>
+            </div>
+            
+            <div id="quickEntryShiftGroup" class="form-group" style="display: none;">
+                <label>Schichttyp*</label>
+                <select id="quickEntryShiftTypeId" required>
+                    <option value="">Schichttyp wählen...</option>
+                </select>
+            </div>
+            
+            <div id="quickEntryAbsenceGroup" class="form-group" style="display: none;">
+                <label>Abwesenheitstyp*</label>
+                <select id="quickEntryAbsenceTypeId" required>
+                    <option value="">Abwesenheitstyp wählen...</option>
+                </select>
+                <small>Hinweis: Urlaub (U) muss über die Urlaubsplanung beantragt werden.</small>
+            </div>
+            
+            <div class="form-group">
+                <label>Notizen</label>
+                <textarea id="quickEntryNotes" rows="3" placeholder="Optional: Zusätzliche Informationen"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" data-action="closeQuickEntryModal" class="btn-secondary">Abbrechen</button>
+                <button type="button" data-action="saveQuickEntry" class="btn-primary">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan Shifts Modal -->
+    <div id="planShiftsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closePlanShiftsModal">&times;</span>
+            <h2>Schichten automatisch planen</h2>
+            
+            <!-- Loading Overlay -->
+            <div id="planningOverlay" class="planning-overlay">
+                <div class="planning-spinner"></div>
+                <div class="planning-message" id="planningStatusMessage">Schichten werden geplant...<br>Bitte warten Sie.</div>
+                <div class="planning-elapsed" id="planningElapsedTime"></div>
+                <button type="button" id="cancelPlanningBtn" data-action="cancelPlanning" class="btn-secondary" style="margin-top: 15px; background: rgba(255,255,255,0.9); color: #333; border: 1px solid #ccc;">⏹ Planung abbrechen</button>
+            </div>
+            
+            <form id="planShiftsForm" onsubmit="executePlanShifts(event)">
+                <div class="form-group">
+                    <label>Monat*</label>
+                    <select id="planMonth">
+                        <option value="1">Januar</option>
+                        <option value="2">Februar</option>
+                        <option value="3">März</option>
+                        <option value="4">April</option>
+                        <option value="5">Mai</option>
+                        <option value="6">Juni</option>
+                        <option value="7">Juli</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">Oktober</option>
+                        <option value="11">November</option>
+                        <option value="12">Dezember</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Jahr*</label>
+                    <select id="planMonthYear"></select>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="planForceOverwrite">
+                        Bestehende Schichten überschreiben (außer feste Schichten)
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>Maximale Planungszeit: <span id="timeLimitDisplay">120</span> Sekunden</label>
+                    <input type="range" id="planTimeLimit" min="30" max="300" value="120" step="10"
+                           oninput="document.getElementById('timeLimitDisplay').textContent = this.value"
+                           style="width: 100%; margin-top: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #666;">
+                        <span>30s (schnell)</span>
+                        <span>300s (gründlich)</span>
+                    </div>
+                </div>
+                
+                <div class="info-box">
+                    <p><strong>ℹ️ Hinweis:</strong></p>
+                    <p>Das System plant automatisch Schichten für den ausgewählten Monat unter Berücksichtigung aller Regeln und bestehender Abwesenheiten.</p>
+                    <p>Feste Schichten werden niemals überschrieben.</p>
+                    <p><strong>⚠️ Der geplante Dienstplan muss freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.</strong></p>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" data-action="closePlanShiftsModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Schichten planen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Planning Result Modal -->
+    <div id="planningResultModal" class="modal">
+        <div class="modal-content large">
+            <span class="close" data-action="closePlanningResultModal">&times;</span>
+            <h2 id="planningResultTitle">Planung abgeschlossen</h2>
+            <div id="planningResultContent"></div>
+            <div class="form-actions">
+                <button type="button" data-action="closePlanningResultModal" class="btn-secondary">Schließen</button>
+                <button type="button" id="planningResultDetailsBtn" class="btn-primary">Details anzeigen</button>
+            </div>
+        </div>
+    </div>

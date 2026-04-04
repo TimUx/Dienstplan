@@ -9,8 +9,9 @@ import secrets
 
 from .shared import (
     get_db, require_auth, require_role, log_audit,
-    hash_password, _paginate
+    hash_password, _paginate, limiter
 )
+from .repositories.employee_repository import EmployeeRepository
 
 bp = Blueprint('employees', __name__)
 
@@ -36,19 +37,8 @@ def get_employees():
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT e.*, t.Name as TeamName,
-                   GROUP_CONCAT(r.Name) as roles
-            FROM Employees e
-            LEFT JOIN Teams t ON e.TeamId = t.Id
-            LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
-            LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
-            GROUP BY e.Id
-            ORDER BY e.Name, e.Vorname
-        """)
-        
         employees = []
-        for row in cursor.fetchall():
+        for row in EmployeeRepository.get_all_employees(cursor):
             # Handle fields which may not exist in older databases
             try:
                 is_td_qualified = bool(row['IsTdQualified'])
@@ -528,6 +518,7 @@ def update_employee(id):
 
 
 @bp.route('/api/employees/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_employee(id):
     """Delete employee (Admin only)"""
@@ -745,6 +736,7 @@ def update_team(id):
 
 
 @bp.route('/api/teams/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_team(id):
     """Delete team (Admin only)"""
@@ -1010,6 +1002,7 @@ def update_vacation_period(id):
 
 
 @bp.route('/api/vacation-periods/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_vacation_period(id):
     """Delete vacation period (Admin only)"""
@@ -1262,6 +1255,7 @@ def update_rotation_group(id):
 
 
 @bp.route('/api/rotationgroups/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_rotation_group(id):
     """Delete rotation group (Admin only)"""

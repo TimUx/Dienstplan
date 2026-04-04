@@ -1,0 +1,446 @@
+            <!-- Management View (Employees, Teams, Shift Management) -->
+            <div id="management-view" class="view">
+                <h2>👥 Verwaltung</h2>
+                
+                <!-- Management Navigation Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-action="switchManagementTab" data-tab="employees">👤 Mitarbeiter</button>
+                    <button class="tab-btn" data-action="switchManagementTab" data-tab="teams">👥 Teams</button>
+                    <button class="tab-btn" data-action="switchManagementTab" data-tab="shift-types">🕒 Schichtverwaltung</button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="tab-contents">
+                    <!-- Employees Tab -->
+                    <div id="management-employees-tab" class="tab-content active">
+                        <h3>Mitarbeiterverwaltung</h3>
+                        <div class="controls">
+                            <button data-action="showAddEmployeeModal" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
+                            <button data-action="exportEmployeesCsv" class="btn-secondary admin-only">📤 Mitarbeiter exportieren (CSV)</button>
+                            <button data-action="showImportEmployeesModal" class="btn-secondary admin-only">📥 Mitarbeiter importieren (CSV)</button>
+                        </div>
+                        <div id="employees-content">
+                            <p class="loading">Lade Mitarbeiter...</p>
+                        </div>
+                    </div>
+
+                    <!-- Teams Tab -->
+                    <div id="management-teams-tab" class="tab-content">
+                        <h3>Teamverwaltung</h3>
+                        <div class="controls">
+                            <button data-action="showAddTeamModal" class="btn-primary admin-only">+ Team hinzufügen</button>
+                            <button data-action="exportTeamsCsv" class="btn-secondary admin-only">📤 Teams exportieren (CSV)</button>
+                            <button data-action="showImportTeamsModal" class="btn-secondary admin-only">📥 Teams importieren (CSV)</button>
+                        </div>
+                        <div id="teams-content">
+                            <p class="loading">Lade Teams...</p>
+                        </div>
+                    </div>
+
+                    <!-- Shift Types Tab -->
+                    <div id="management-shift-types-tab" class="tab-content">
+                        <h3>🔄 Schichtverwaltung</h3>
+                        
+                        <!-- Sub-tabs for Shift Management -->
+                        <div class="tabs sub-tabs">
+                            <button class="tab-btn active" data-action="switchShiftManagementTab" data-tab="types">📋 Schichttypen</button>
+                            <button class="tab-btn" data-action="switchShiftManagementTab" data-tab="rotation-groups">🔄 Rotationsgruppen</button>
+                            <button class="tab-btn" data-action="switchShiftManagementTab" data-tab="settings">⚙️ Einstellungen</button>
+                        </div>
+                        
+                        <!-- Shift Types Sub-tab -->
+                        <div id="shift-types-content-tab" class="tab-content active">
+                            <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
+                            <div class="controls">
+                                <button data-action="showShiftTypeModal" class="btn-primary">+ Schichttyp hinzufügen</button>
+                                <button data-action="loadShiftTypesManagement" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="shift-types-management-content">
+                                <p class="loading">Lade Schichttypen...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Rotation Groups Sub-tab -->
+                        <div id="shift-rotation-groups-content-tab" class="tab-content">
+                            <h4>Schichtrotationsgruppen</h4>
+                            <p>Definieren Sie Rotationsgruppen, die mehrere Schichten beinhalten und deren Rotationsreihenfolge festlegen.</p>
+                            <div class="info-box info">
+                                <p>ℹ️ <strong>Rotationsgruppen</strong> ermöglichen es, mehrere Schichten zu einer Gruppe zusammenzufassen und deren Rotationsreihenfolge zentral zu definieren.</p>
+                                <p>Beispiel: Eine "3-Schicht-Rotation" könnte die Schichten F (Früh) → N (Nacht) → S (Spät) beinhalten.</p>
+                            </div>
+                            <div class="controls">
+                                <button data-action="showRotationGroupModal" class="btn-primary">+ Rotationsgruppe hinzufügen</button>
+                                <button data-action="loadRotationGroups" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="rotation-groups-content">
+                                <p class="loading">Lade Rotationsgruppen...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Settings Sub-tab -->
+                        <div id="shift-settings-content-tab" class="tab-content">
+                            <h4>Allgemeine Schichtplanungseinstellungen</h4>
+                            <p>Konfigurieren Sie die globalen Parameter für die Schichtplanung.</p>
+                            <div class="controls">
+                                <button data-action="loadGlobalSettings" class="btn-secondary">🔄 Aktualisieren</button>
+                            </div>
+                            <div id="global-settings-content">
+                                <p class="loading">Lade Einstellungen...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    <!-- Modal for adding/editing employee -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeEmployeeModal">&times;</span>
+            <h2 id="employeeModalTitle">Mitarbeiter hinzufügen</h2>
+            <form id="employeeForm" onsubmit="saveEmployee(event)">
+                <input type="hidden" id="employeeId">
+                <div class="form-group">
+                    <label>Vorname*</label>
+                    <input type="text" id="vorname" required>
+                </div>
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Personalnummer*</label>
+                    <input type="text" id="personalnummer" required>
+                </div>
+                <div class="form-group">
+                    <label>E-Mail</label>
+                    <input type="email" id="email" placeholder="mitarbeiter@fritzwinter.de">
+                </div>
+                <div class="form-group" id="employeePasswordGroup">
+                    <label id="employeePasswordLabel">Passwort*</label>
+                    <input type="password" id="employeePassword" placeholder="Mindestens 8 Zeichen">
+                    <small id="employeePasswordNote">Muss mindestens 8 Zeichen lang sein. Beim Bearbeiten: Leer lassen, um Passwort nicht zu ändern.</small>
+                </div>
+                <div class="form-group">
+                    <label>Geburtsdatum</label>
+                    <input type="date" id="geburtsdatum">
+                </div>
+                <div class="form-group">
+                    <label>Team</label>
+                    <select id="teamId">
+                        <option value="">Kein Team</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="isTeamLeader">
+                        Team-Leiter
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Rolle</label>
+                    <div style="margin-top: 8px;">
+                        <label style="display: block; margin-bottom: 8px;">
+                            <input type="checkbox" id="isAdmin" style="margin-right: 8px;">
+                            Administrator
+                        </label>
+                    </div>
+                    <small class="field-note">Alle Mitarbeiter erhalten automatisch die Rolle "Mitarbeiter". Aktivieren Sie diese Option, um zusätzlich Admin-Rechte zu vergeben.</small>
+                </div>
+                <div class="form-group">
+                    <label>Sonderfunktionen</label>
+                    <div style="margin-top: 8px;">
+                        <label style="display: block; margin-bottom: 8px;">
+                            <input type="checkbox" id="isBrandmeldetechniker" style="margin-right: 8px;">
+                            Brandmeldetechniker (BMT)
+                        </label>
+                        <label style="display: block; margin-bottom: 8px;">
+                            <input type="checkbox" id="isBrandschutzbeauftragter" style="margin-right: 8px;">
+                            Brandschutzbeauftragter (BSB)
+                        </label>
+                    </div>
+                    <small class="field-note">Mitarbeiter mit BMT oder BSB sind automatisch TD-Qualifiziert</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeEmployeeModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Team Modal -->
+    <div id="teamModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeTeamModal">&times;</span>
+            <h2 id="teamModalTitle">Team hinzufügen</h2>
+            <form id="teamForm" onsubmit="saveTeam(event)">
+                <input type="hidden" id="teamEditId">
+                <div class="form-group">
+                    <label>Team-Name*</label>
+                    <input type="text" id="teamName" required placeholder="z.B. Team A">
+                </div>
+                <div class="form-group">
+                    <label>Beschreibung</label>
+                    <textarea id="teamDescription" rows="3" placeholder="Beschreibung des Teams"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>E-Mail</label>
+                    <input type="email" id="teamEmail" placeholder="team@fritzwinter.de">
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeTeamModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Type Modal -->
+    <div id="shiftTypeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeShiftTypeModal">&times;</span>
+            <h2 id="shiftTypeModalTitle">Schichttyp hinzufügen</h2>
+            <form id="shiftTypeForm" onsubmit="saveShiftType(event)">
+                <input type="hidden" id="shiftTypeId">
+                <div class="form-group">
+                    <label>Schichtkürzel*</label>
+                    <input type="text" id="shiftTypeCode" required placeholder="z.B. F, S, N, TD" maxlength="10">
+                    <small>Eindeutiges Kürzel für die Schicht</small>
+                </div>
+                <div class="form-group">
+                    <label>Schichtname*</label>
+                    <input type="text" id="shiftTypeName" required placeholder="z.B. Frühdienst, Spätdienst, Nachtdienst">
+                </div>
+                <div class="form-group">
+                    <label>Startzeit*</label>
+                    <input type="time" id="shiftTypeStartTime" required>
+                </div>
+                <div class="form-group">
+                    <label>Endzeit*</label>
+                    <input type="time" id="shiftTypeEndTime" required>
+                </div>
+                <div class="form-group">
+                    <label>Arbeitsstunden*</label>
+                    <input type="number" id="shiftTypeDuration" required step="0.5" min="0" max="24" placeholder="z.B. 8.0">
+                    <small>Dauer der Schicht in Stunden</small>
+                </div>
+                <div class="form-group">
+                    <label>Farbe*</label>
+                    <input type="color" id="shiftTypeColor" value="#808080" required>
+                    <small>Farbe für die Darstellung im Schichtplan</small>
+                </div>
+                <div class="form-group">
+                    <label>Arbeitstage*</label>
+                    <small>An welchen Wochentagen wird diese Schicht gearbeitet?</small>
+                    <div class="workdays-checkboxes">
+                        <label><input type="checkbox" id="shiftTypeMonday" checked> Montag</label>
+                        <label><input type="checkbox" id="shiftTypeTuesday" checked> Dienstag</label>
+                        <label><input type="checkbox" id="shiftTypeWednesday" checked> Mittwoch</label>
+                        <label><input type="checkbox" id="shiftTypeThursday" checked> Donnerstag</label>
+                        <label><input type="checkbox" id="shiftTypeFriday" checked> Freitag</label>
+                        <label><input type="checkbox" id="shiftTypeSaturday"> Samstag</label>
+                        <label><input type="checkbox" id="shiftTypeSunday"> Sonntag</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Wochen-Arbeitszeit*</label>
+                    <input type="number" id="shiftTypeWeeklyHours" required step="0.5" min="0" max="168" value="40.0" placeholder="z.B. 40.0">
+                    <small>Wöchentliche Arbeitszeit in Stunden, die Mitarbeiter leisten müssen</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Personalstärke Wochentage (Mo-Fr)*</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Minimum*</label>
+                            <input type="number" id="shiftTypeMinStaffWeekday" required min="1" max="50" value="3" placeholder="z.B. 3">
+                        </div>
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Maximum*</label>
+                            <input type="number" id="shiftTypeMaxStaffWeekday" required min="1" max="50" value="5" placeholder="z.B. 5">
+                        </div>
+                    </div>
+                    <small>Mindest- und Maximalanzahl Mitarbeiter in dieser Schicht an Wochentagen</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Personalstärke Wochenende (Sa-So)*</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Minimum*</label>
+                            <input type="number" id="shiftTypeMinStaffWeekend" required min="1" max="50" value="2" placeholder="z.B. 2">
+                        </div>
+                        <div>
+                            <label style="font-weight: normal; font-size: 0.9em;">Maximum*</label>
+                            <input type="number" id="shiftTypeMaxStaffWeekend" required min="1" max="50" value="3" placeholder="z.B. 3">
+                        </div>
+                    </div>
+                    <small>Mindest- und Maximalanzahl Mitarbeiter in dieser Schicht am Wochenende</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Max. aufeinanderfolgende Tage*</label>
+                    <input type="number" id="shiftTypeMaxConsecutiveDays" required min="1" max="10" value="6" placeholder="z.B. 6">
+                    <small>Maximale Anzahl aufeinanderfolgender Tage, die diese Schicht gearbeitet werden darf (z.B. 6 für normale Schichten, 3 für Nachtschichten)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="shiftTypeIsActive" checked>
+                        Aktiv (Schicht kann verwendet werden)
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeShiftTypeModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Type Teams Modal -->
+    <div id="shiftTypeTeamsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeShiftTypeTeamsModal">&times;</span>
+            <h2 id="shiftTypeTeamsModalTitle">Teams für Schicht zuweisen</h2>
+            <form id="shiftTypeTeamsForm" onsubmit="saveShiftTypeTeams(event)">
+                <input type="hidden" id="shiftTypeTeamsId">
+                <div class="form-group">
+                    <label>Wählen Sie die Teams aus, die diese Schicht arbeiten können:</label>
+                    <div id="shiftTypeTeamsList" class="checkbox-list">
+                        <p class="loading">Lade Teams...</p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeShiftTypeTeamsModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rotation Group Modal -->
+    <div id="rotationGroupModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeRotationGroupModal">&times;</span>
+            <h2 id="rotationGroupModalTitle">Rotationsgruppe erstellen</h2>
+            <form id="rotationGroupForm" onsubmit="saveRotationGroup(event)">
+                <input type="hidden" id="rotationGroupId">
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="rotationGroupName" required placeholder="z.B. 3-Schicht-System">
+                </div>
+                <div class="form-group">
+                    <label>Beschreibung</label>
+                    <textarea id="rotationGroupDescription" rows="3" placeholder="Optional: Beschreibung der Rotationsgruppe"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="rotationGroupIsActive" checked>
+                        Aktiv
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Schichten in Rotationsreihenfolge*</label>
+                    <small>Ziehen Sie die Schichten in die gewünschte Rotationsreihenfolge.</small>
+                    <div id="rotationGroupShiftsList" class="sortable-list">
+                        <p class="loading">Lade Schichten...</p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeRotationGroupModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- User Management Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeUserModal">&times;</span>
+            <h2 id="userModalTitle">Benutzer hinzufügen</h2>
+            <form id="userForm" onsubmit="saveUser(event)">
+                <input type="hidden" id="userId">
+                <div class="form-group">
+                    <label>Vollständiger Name*</label>
+                    <input type="text" id="userFullName" required placeholder="Max Mustermann">
+                </div>
+                <div class="form-group">
+                    <label>E-Mail*</label>
+                    <input type="email" id="userEmail" required placeholder="benutzer@fritzwinter.de">
+                </div>
+                <div class="form-group" id="passwordGroup">
+                    <label id="passwordLabel">Passwort*</label>
+                    <input type="password" id="userPassword" placeholder="Mindestens 8 Zeichen">
+                    <small id="passwordNote">Muss mindestens 8 Zeichen lang sein. Beim Bearbeiten: Leer lassen, um Passwort nicht zu ändern.</small>
+                </div>
+                <div class="form-group">
+                    <label>Rolle*</label>
+                    <select id="userRole" required>
+                        <option value="Mitarbeiter">Mitarbeiter (Lesezugriff)</option>
+                        <option value="Disponent">Disponent (Planung & Bearbeitung)</option>
+                        <option value="Admin">Administrator (Volle Berechtigung)</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeUserModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Employees Modal -->
+    <div id="importEmployeesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeImportEmployeesModal">&times;</span>
+            <h2>Mitarbeiter importieren (CSV)</h2>
+            <form id="importEmployeesForm">
+                <div class="form-group">
+                    <label>CSV-Datei auswählen*</label>
+                    <input type="file" id="employeesFile" accept=".csv" required>
+                    <p class="help-text">CSV-Format: Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive</p>
+                </div>
+                <div class="form-group">
+                    <label>Bei Konflikten</label>
+                    <select id="employeesConflictResolution">
+                        <option value="skip">Vorhandene überspringen</option>
+                        <option value="overwrite">Vorhandene überschreiben</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeImportEmployeesModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Importieren</button>
+                </div>
+            </form>
+            <div id="importEmployeesResult" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Import Teams Modal -->
+    <div id="importTeamsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeImportTeamsModal">&times;</span>
+            <h2>Teams importieren (CSV)</h2>
+            <form id="importTeamsForm">
+                <div class="form-group">
+                    <label>CSV-Datei auswählen*</label>
+                    <input type="file" id="teamsFile" accept=".csv" required>
+                    <p class="help-text">CSV-Format: Name, Description, Email, IsVirtual</p>
+                </div>
+                <div class="form-group">
+                    <label>Bei Konflikten</label>
+                    <select id="teamsConflictResolution">
+                        <option value="skip">Vorhandene überspringen</option>
+                        <option value="overwrite">Vorhandene überschreiben</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeImportTeamsModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Importieren</button>
+                </div>
+            </form>
+            <div id="importTeamsResult" style="margin-top: 20px;"></div>
+        </div>
+    </div>

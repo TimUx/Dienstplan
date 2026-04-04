@@ -1,0 +1,372 @@
+            <!-- Manual/Help View -->
+            <div id="manual-view" class="view">
+                <div class="manual-content">
+                    <h2>📖 Betriebshandbuch - Dienstplan-System</h2>
+                    
+                    <div class="manual-toc">
+                        <h3>Inhaltsverzeichnis</h3>
+                        <ul>
+                            <li><a href="#manual-intro">1. Einführung</a></li>
+                            <li><a href="#manual-login">2. Anmeldung</a></li>
+                            <li><a href="#manual-schedule">3. Dienstplan verwalten</a></li>
+                            <li><a href="#manual-employees">4. Mitarbeiter verwalten</a></li>
+                            <li><a href="#manual-vacation">5. Urlaubsverwaltung</a></li>
+                            <li><a href="#manual-exchange">6. Diensttausch</a></li>
+                            <li><a href="#manual-statistics">7. Statistiken</a></li>
+                            <li><a href="#manual-email">8. E-Mail-Einstellungen</a></li>
+                            <li><a href="#manual-rules">9. Schichtplanungsregeln</a></li>
+                            <li><a href="#manual-springer">10. Springer-System</a></li>
+                            <li><a href="#manual-troubleshooting">11. Problembehebung</a></li>
+                        </ul>
+                    </div>
+
+                    <section id="manual-intro" class="manual-section">
+                        <h3>1. Einführung</h3>
+                        <p>Das Dienstplan-System unterstützt Sie bei der Verwaltung von Schichtplänen für Mitarbeiter in mehreren Teams.</p>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/00-main-view.png" alt="Dienstplan Hauptansicht" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung 1: Hauptansicht des Dienstplans (Wochenansicht)</p>
+                        </div>
+                        
+                        <h4>Hauptfunktionen:</h4>
+                        <ul>
+                            <li><strong>Automatische Schichtplanung:</strong> Das System erstellt automatisch Schichtpläne unter Beachtung aller gesetzlichen und betrieblichen Regeln</li>
+                            <li><strong>Mitarbeiterverwaltung:</strong> Verwalten Sie Mitarbeiter, Teams und Abwesenheiten mit erweiterten Daten (E-Mail, Geburtsdatum, Funktion)</li>
+                            <li><strong>Urlaubsverwaltung:</strong> Mitarbeiter können Urlaubsanträge einreichen, die vom Disponent genehmigt werden</li>
+                            <li><strong>Diensttausch-System:</strong> Mitarbeiter können Dienste untereinander tauschen (mit Genehmigung)</li>
+                            <li><strong>Springer-System:</strong> Automatische Zuweisung von Vertretungen bei Ausfällen</li>
+                            <li><strong>Statistiken:</strong> Übersicht über Arbeitsstunden, Schichtverteilung, Wochenend-Dienste und Auslastung</li>
+                            <li><strong>E-Mail-Benachrichtigungen:</strong> Konfigurierbare E-Mail-Benachrichtigungen für alle Beteiligten</li>
+                        </ul>
+                    </section>
+
+                    <section id="manual-login" class="manual-section">
+                        <h3>2. Anmeldung</h3>
+                        <p>Für die Nutzung des Systems benötigen Sie einen Benutzeraccount mit entsprechenden Berechtigungen:</p>
+                        <ul>
+                            <li><strong>Administrator:</strong> Volle Berechtigung für alle Funktionen</li>
+                            <li><strong>Disponent:</strong> Schichtplanung und Bearbeitung</li>
+                            <li><strong>Mitarbeiter:</strong> Nur Lesezugriff auf eigenen Dienstplan</li>
+                        </ul>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/02-login-modal.png" alt="Anmeldedialog" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung 2: Anmeldedialog mit Rollenbasierter Zugriffskontrolle</p>
+                        </div>
+                        
+                        <p class="note"><strong>Hinweis:</strong> Wenden Sie sich an Ihren Administrator, um einen Account zu erhalten.</p>
+                    </section>
+
+                    <section id="manual-schedule" class="manual-section">
+                        <h3>3. Dienstplan verwalten</h3>
+                        <h4>Dienstplan anzeigen</h4>
+                        <p>Wählen Sie im Hauptmenü "Dienstplan" aus. Sie können zwischen folgenden Ansichten wählen:</p>
+                        <ul>
+                            <li><strong>Woche:</strong> Detaillierte Ansicht für 7 Tage</li>
+                            <li><strong>Monat:</strong> Übersicht für 30 Tage</li>
+                            <li><strong>Jahr:</strong> Jahresübersicht</li>
+                        </ul>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/03-schedule-week-admin.png" alt="Dienstplan Wochenansicht" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung 3a: Dienstplan in der Wochenansicht (KW 50 2025)</p>
+                        </div>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/04-schedule-month-admin.png" alt="Dienstplan Monatsansicht" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung 3b: Dienstplan in der Monatsansicht (Dezember 2025)</p>
+                        </div>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/05-schedule-year-admin.png" alt="Dienstplan Jahresansicht" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung 3c: Dienstplan in der Jahresansicht (2025)</p>
+                        </div>
+                        
+                        <h4>Schichten automatisch planen</h4>
+                        <ol>
+                            <li>Klicken Sie auf "Schichten planen"</li>
+                            <li>Wählen Sie den Zeitraum aus</li>
+                            <li>Bestätigen Sie die Planung</li>
+                        </ol>
+                        <p>Das System erstellt automatisch einen optimalen Schichtplan unter Beachtung aller Regeln.</p>
+
+                        <h4>Manuelle Anpassungen</h4>
+                        <p>Sie können jederzeit manuelle Änderungen am Dienstplan vornehmen:</p>
+                        <ul>
+                            <li>Einzelne Schichten können individuell zugewiesen werden</li>
+                            <li>Manuelle Zuweisungen werden vom System respektiert und nicht überschrieben</li>
+                        </ul>
+                    </section>
+
+                    <section id="manual-employees" class="manual-section">
+                        <h3>4. Mitarbeiter verwalten</h3>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/06-employees-list.png" alt="Mitarbeiterverwaltung" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung: Mitarbeiterverwaltung</p>
+                        </div>
+                        
+                        <h4>Neuen Mitarbeiter anlegen</h4>
+                        <ol>
+                            <li>Wechseln Sie zur Ansicht "Mitarbeiter"</li>
+                            <li>Klicken Sie auf "+ Mitarbeiter hinzufügen"</li>
+                            <li>Füllen Sie die Pflichtfelder aus:
+                                <ul>
+                                    <li>Vorname</li>
+                                    <li>Name</li>
+                                    <li>Personalnummer (eindeutig)</li>
+                                </ul>
+                            </li>
+                            <li>Optionale Felder:
+                                <ul>
+                                    <li><strong>E-Mail:</strong> Für Benachrichtigungen</li>
+                                    <li><strong>Geburtsdatum:</strong> Für Personalverwaltung</li>
+                                    <li><strong>Funktion:</strong> Z.B. Brandmeldetechniker, Brandschutzbeauftragter</li>
+                                    <li><strong>Springer:</strong> Markieren für Vertretungspool</li>
+                                </ul>
+                            </li>
+                            <li>Klicken Sie auf "Speichern"</li>
+                        </ol>
+
+                        <h4>Abwesenheiten erfassen</h4>
+                        <p>Erfassen Sie Abwesenheiten direkt über die API oder das Mitarbeiter-Profil:</p>
+                        <ul>
+                            <li><strong>Krank:</strong> Krankheitstage</li>
+                            <li><strong>Urlaub:</strong> Geplanter Urlaub (alternativ über Urlaubsantragssystem)</li>
+                            <li><strong>Lehrgang:</strong> Schulungen und Weiterbildungen</li>
+                        </ul>
+                    </section>
+
+                    <section id="manual-vacation" class="manual-section">
+                        <h3>5. Urlaubsverwaltung</h3>
+                        <p>Das System bietet ein vollständiges Urlaubsantragssystem mit Workflow-Management.</p>
+                        
+                        <h4>Urlaubsantrag stellen (Mitarbeiter)</h4>
+                        <ol>
+                            <li>Verwenden Sie die API: <code>POST /api/vacationrequests</code></li>
+                            <li>Geben Sie Startdatum und Enddatum an</li>
+                            <li>Optional: Fügen Sie eine Notiz hinzu</li>
+                            <li>Der Status wird zunächst auf "In Bearbeitung" gesetzt</li>
+                        </ol>
+
+                        <h4>Urlaub genehmigen/ablehnen (Disponent/Admin)</h4>
+                        <ol>
+                            <li>Rufen Sie offene Anträge ab: <code>GET /api/vacationrequests/pending</code></li>
+                            <li>Prüfen Sie den Antrag</li>
+                            <li>Setzen Sie den Status auf "Genehmigt" oder "Nicht genehmigt": <code>PUT /api/vacationrequests/{id}/status</code></li>
+                            <li>Optional: Fügen Sie eine Antwort/Begründung hinzu</li>
+                        </ol>
+
+                        <p><strong>Hinweis:</strong> Genehmigte Urlaubsanträge werden automatisch als Abwesenheiten vom Typ "Urlaub" in den Kalender eingetragen.</p>
+                    </section>
+
+                    <section id="manual-exchange" class="manual-section">
+                        <h3>6. Diensttausch</h3>
+                        <p>Mitarbeiter können Dienste untereinander tauschen, mit Genehmigungspflicht durch den Disponent.</p>
+                        
+                        <h4>Dienst zum Tausch anbieten (Mitarbeiter)</h4>
+                        <ol>
+                            <li>Verwenden Sie die API: <code>POST /api/shiftexchanges</code></li>
+                            <li>Geben Sie die Schicht-ID an, die getauscht werden soll</li>
+                            <li>Optional: Geben Sie einen Grund an</li>
+                            <li>Der Dienst wird als "Angeboten" markiert</li>
+                        </ol>
+
+                        <h4>Angebotenen Dienst anfragen (Mitarbeiter)</h4>
+                        <ol>
+                            <li>Verfügbare Tauschangebote anzeigen: <code>GET /api/shiftexchanges/available</code></li>
+                            <li>Gewünschten Dienst anfragen: <code>POST /api/shiftexchanges/{id}/request</code></li>
+                            <li>Status wechselt zu "Angefragt"</li>
+                        </ol>
+
+                        <h4>Tausch genehmigen (Disponent/Admin)</h4>
+                        <ol>
+                            <li>Offene Tauschanfragen anzeigen: <code>GET /api/shiftexchanges/pending</code></li>
+                            <li>Tausch prüfen und genehmigen/ablehnen: <code>PUT /api/shiftexchanges/{id}/process</code></li>
+                            <li>Bei Genehmigung wird die Schicht automatisch umgeschichtet</li>
+                        </ol>
+
+                        <p><strong>Wichtig:</strong> Auch bei genehmigten Tauschen werden die Ruhezeiten und Planungsregeln geprüft!</p>
+                    </section>
+
+                    <section id="manual-statistics" class="manual-section">
+                        <h3>7. Statistiken</h3>
+                        
+                        <div class="manual-screenshot">
+                            <img src="images/screenshots/09-statistics.png" alt="Statistiken" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            <p style="text-align: center; font-style: italic; margin-top: 10px;">Abbildung: Statistiken und Auswertungen</p>
+                        </div>
+                        
+                        <p>Die Statistik-Ansicht bietet Ihnen einen Überblick über:</p>
+                        <ul>
+                            <li><strong>Arbeitsstunden:</strong> Gesamtstunden und Schichtanzahl pro Mitarbeiter</li>
+                            <li><strong>Schichtverteilung:</strong> Verteilung der Schichtarten pro Team</li>
+                            <li><strong>Fehltage:</strong> Übersicht der Abwesenheiten nach Typ</li>
+                            <li><strong>Team-Auslastung:</strong> Durchschnittliche Schichten pro Mitarbeiter</li>
+                            <li><strong>Wochenend-Statistiken (Admin/Disponent):</strong> Samstags- und Sonntagsdienste je Mitarbeiter</li>
+                        </ul>
+                        <p>Wählen Sie den gewünschten Zeitraum aus und klicken Sie auf "Aktualisieren".</p>
+                        
+                        <h4>Wochenend-Statistiken abrufen</h4>
+                        <p>Als Administrator oder Disponent können Sie detaillierte Wochenend-Statistiken abrufen:</p>
+                        <code>GET /api/statistics/weekend-shifts?startDate=2025-01-01&endDate=2025-12-31</code>
+                    </section>
+
+                    <section id="manual-email" class="manual-section">
+                        <h3>8. E-Mail-Einstellungen</h3>
+                        <p>Als Administrator können Sie die E-Mail-Server-Einstellungen konfigurieren, um automatische Benachrichtigungen zu ermöglichen.</p>
+                        
+                        <h4>E-Mail-Konfiguration anlegen</h4>
+                        <ol>
+                            <li>Verwenden Sie die API: <code>POST /api/emailsettings</code></li>
+                            <li>Erforderliche Einstellungen:
+                                <ul>
+                                    <li><strong>SMTP Server:</strong> Hostname oder IP-Adresse (z.B. smtp.gmail.com)</li>
+                                    <li><strong>Port:</strong> Standard 587 für STARTTLS, 465 für SSL, 25 für unverschlüsselt</li>
+                                    <li><strong>Protokoll:</strong> SMTP oder SMTPS</li>
+                                    <li><strong>Sicherheit:</strong> None, SSL, TLS oder STARTTLS</li>
+                                    <li><strong>Authentifizierung:</strong> Ja/Nein</li>
+                                    <li><strong>Benutzername:</strong> Falls Authentifizierung erforderlich</li>
+                                    <li><strong>Passwort:</strong> Falls Authentifizierung erforderlich</li>
+                                    <li><strong>Absenderadresse:</strong> z.B. dienstplan@fritzwinter.de</li>
+                                    <li><strong>Absendername:</strong> z.B. "Dienstplan-System"</li>
+                                    <li><strong>Antwortadresse:</strong> Optional, falls abweichend</li>
+                                </ul>
+                            </li>
+                        </ol>
+
+                        <h4>Mitarbeiter-E-Mails pflegen</h4>
+                        <p>Erfassen Sie E-Mail-Adressen für jeden Mitarbeiter, der Benachrichtigungen erhalten soll:</p>
+                        <ol>
+                            <li>Öffnen Sie den Mitarbeiter zur Bearbeitung</li>
+                            <li>Tragen Sie die E-Mail-Adresse im Feld "E-Mail" ein</li>
+                            <li>Speichern Sie die Änderungen</li>
+                        </ol>
+
+                        <h4>Aktive Konfiguration abrufen</h4>
+                        <code>GET /api/emailsettings/active</code>
+
+                        <p><strong>Sicherheitshinweis:</strong> Das System zeigt Passwörter niemals in API-Antworten an. Passwörter sollten vor der Speicherung verschlüsselt werden.</p>
+                    </section>
+
+                    <section id="manual-rules" class="manual-section">
+                        <h3>9. Schichtplanungsregeln</h3>
+                        <p>Das System beachtet automatisch folgende Regeln:</p>
+                        
+                        <h4>Schichtarten</h4>
+                        <table class="rules-table">
+                            <tr>
+                                <th>Schicht</th>
+                                <th>Code</th>
+                                <th>Uhrzeit</th>
+                            </tr>
+                            <tr>
+                                <td>Frühdienst</td>
+                                <td class="shift-badge shift-F">F</td>
+                                <td>05:45 – 13:45</td>
+                            </tr>
+                            <tr>
+                                <td>Spätdienst</td>
+                                <td class="shift-badge shift-S">S</td>
+                                <td>13:45 – 21:45</td>
+                            </tr>
+                            <tr>
+                                <td>Nachtdienst</td>
+                                <td class="shift-badge shift-N">N</td>
+                                <td>21:45 – 05:45</td>
+                            </tr>
+                            <tr>
+                                <td>Zwischendienst</td>
+                                <td class="shift-badge shift-ZD">ZD</td>
+                                <td>08:00 – 16:00</td>
+                            </tr>
+                        </table>
+
+                        <h4>Besetzungsregeln</h4>
+                        <p><strong>Montag bis Freitag:</strong></p>
+                        <ul>
+                            <li>Frühdienst: 4-5 Personen</li>
+                            <li>Spätdienst: 3-4 Personen</li>
+                            <li>Nachtdienst: 3 Personen</li>
+                        </ul>
+                        <p><strong>Samstag und Sonntag:</strong></p>
+                        <ul>
+                            <li>Alle Schichten: maximal 3 Personen</li>
+                        </ul>
+
+                        <h4>Verbotene Schichtwechsel</h4>
+                        <ul>
+                            <li>❌ Spätdienst → Frühdienst (zu kurze Ruhezeit)</li>
+                            <li>❌ Nachtdienst → Spätdienst (zu kurze Ruhezeit)</li>
+                            <li>❌ Gleiche Schicht zweimal hintereinander</li>
+                        </ul>
+
+                        <h4>Idealer Rhythmus</h4>
+                        <p>Frühdienst → Nachtdienst → Spätdienst</p>
+                        <p>Dieser Rhythmus ermöglicht optimale Ruhezeiten und Belastungsverteilung.</p>
+
+                        <h4>Ruhezeiten</h4>
+                        <p>Mindestens 11 Stunden Ruhezeit zwischen zwei Schichten (gesetzlich vorgeschrieben).</p>
+                    </section>
+
+                    <section id="manual-springer" class="manual-section">
+                        <h3>10. Springer-System</h3>
+                        <p>Das Springer-System sorgt für automatische Vertretung bei kurzfristigen Ausfällen.</p>
+                        
+                        <h4>Springer definieren</h4>
+                        <p>Markieren Sie beim Anlegen oder Bearbeiten eines Mitarbeiters das Feld "Springer".</p>
+                        
+                        <h4>Automatische Zuweisung</h4>
+                        <p>Bei Erfassung einer Abwesenheit prüft das System automatisch:</p>
+                        <ol>
+                            <li>Welche Schichten betroffen sind</li>
+                            <li>Welche Springer verfügbar sind</li>
+                            <li>Weist den ersten verfügbaren Springer zu</li>
+                        </ol>
+                        <p class="note"><strong>Hinweis:</strong> Springer werden nur bei tatsächlichen Ausfällen eingesetzt, nicht bei der regulären Planung.</p>
+                    </section>
+
+                    <section id="manual-troubleshooting" class="manual-section">
+                        <h3>11. Problembehebung</h3>
+                        
+                        <h4>Problem: Schichtplanung schlägt fehl</h4>
+                        <p><strong>Lösung:</strong></p>
+                        <ul>
+                            <li>Prüfen Sie, ob genügend Mitarbeiter verfügbar sind</li>
+                            <li>Überprüfen Sie bestehende Abwesenheiten</li>
+                            <li>Stellen Sie sicher, dass mindestens 12-15 Mitarbeiter angelegt sind</li>
+                        </ul>
+
+                        <h4>Problem: Kein Springer verfügbar</h4>
+                        <p><strong>Lösung:</strong></p>
+                        <ul>
+                            <li>Definieren Sie weitere Mitarbeiter als Springer</li>
+                            <li>Prüfen Sie Abwesenheiten der Springer</li>
+                            <li>Bei Bedarf: Manuelle Zuweisung einer Vertretung</li>
+                        </ul>
+
+                        <h4>Problem: Statistiken werden nicht angezeigt</h4>
+                        <p><strong>Lösung:</strong></p>
+                        <ul>
+                            <li>Prüfen Sie den ausgewählten Zeitraum</li>
+                            <li>Stellen Sie sicher, dass Schichten für diesen Zeitraum vorhanden sind</li>
+                            <li>Aktualisieren Sie die Seite (F5)</li>
+                        </ul>
+
+                        <h4>Weitere Hilfe</h4>
+                        <p>Bei weiteren Fragen wenden Sie sich bitte an:</p>
+                        <ul>
+                            <li>IT-Support: support@fritzwinter.de</li>
+                            <li>Telefon: +49 XXX XXXXXXX</li>
+                        </ul>
+                    </section>
+
+                    <div class="manual-footer">
+                        <p><strong>Version:</strong> 2.1</p>
+                        <p><strong>Entwickelt von:</strong> Timo Braun</p>
+                        <p><strong>Letzte Aktualisierung:</strong> Dezember 2025</p>
+                        <p>© Fritz Winter Eisengießerei GmbH & Co. KG</p>
+                    </div>
+                </div>
+            </div>

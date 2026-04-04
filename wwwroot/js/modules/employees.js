@@ -1,5 +1,6 @@
-import { API_BASE, escapeHtml, escapeJsString, sanitizeColorCode, formatImportResult } from './utils.js';
+import { API_BASE, escapeHtml, escapeJsString, sanitizeColorCode, formatImportResult, showToast } from './utils.js';
 import { hasRole, canEditEmployees, canPlanShifts } from './auth.js';
+import { store } from './store.js';
 
 // ============================================================================
 // EMPLOYEE MANAGEMENT
@@ -14,6 +15,7 @@ export async function loadEmployees() {
         const employees = await response.json();
 
         cachedEmployees = employees;
+        store.setState('cachedEmployees', cachedEmployees);
 
         displayEmployees(employees);
     } catch (error) {
@@ -68,7 +70,7 @@ export function displayEmployees(employees) {
 
 export async function showAddEmployeeModal() {
     if (!canEditEmployees()) {
-        alert('Sie haben keine Berechtigung, Mitarbeiter hinzuzufügen. Bitte melden Sie sich als Admin oder Disponent an.');
+        showToast('Sie haben keine Berechtigung, Mitarbeiter hinzuzufügen. Bitte melden Sie sich als Admin oder Disponent an.', 'warning');
         return;
     }
 
@@ -87,14 +89,14 @@ export async function showAddEmployeeModal() {
 
 export async function editEmployee(id) {
     if (!canEditEmployees()) {
-        alert('Sie haben keine Berechtigung, Mitarbeiter zu bearbeiten.');
+        showToast('Sie haben keine Berechtigung, Mitarbeiter zu bearbeiten.', 'error');
         return;
     }
 
     try {
         const response = await fetch(`${API_BASE}/employees/${id}`);
         if (!response.ok) {
-            alert('Fehler beim Laden der Mitarbeiterdaten');
+            showToast('Fehler beim Laden der Mitarbeiterdaten', 'error');
             return;
         }
 
@@ -125,13 +127,13 @@ export async function editEmployee(id) {
         document.getElementById('employeeModalTitle').textContent = 'Mitarbeiter bearbeiten';
         document.getElementById('employeeModal').style.display = 'block';
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
 export async function deleteEmployee(id, name) {
     if (!hasRole('Admin')) {
-        alert('Nur Administratoren können Mitarbeiter löschen.');
+        showToast('Nur Administratoren können Mitarbeiter löschen.', 'error');
         return;
     }
 
@@ -146,17 +148,17 @@ export async function deleteEmployee(id, name) {
         });
 
         if (response.ok) {
-            alert('Mitarbeiter erfolgreich gelöscht!');
+            showToast('Mitarbeiter erfolgreich gelöscht!', 'success');
             loadEmployees();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung zum Löschen.');
+            showToast('Sie haben keine Berechtigung zum Löschen.', 'error');
         } else {
-            alert('Fehler beim Löschen');
+            showToast('Fehler beim Löschen', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -216,19 +218,19 @@ export async function saveEmployee(event) {
         });
 
         if (response.ok) {
-            alert(id ? 'Mitarbeiter erfolgreich aktualisiert!' : 'Mitarbeiter erfolgreich hinzugefügt!');
+            showToast(id ? 'Mitarbeiter erfolgreich aktualisiert!' : 'Mitarbeiter erfolgreich hinzugefügt!', 'success');
             closeEmployeeModal();
             loadEmployees();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Speichern: ${error.message || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Speichern: ${error.message || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -296,7 +298,7 @@ export function displayTeams(teams) {
 
 export async function showAddTeamModal() {
     if (!canEditEmployees()) {
-        alert('Sie haben keine Berechtigung, Teams hinzuzufügen.');
+        showToast('Sie haben keine Berechtigung, Teams hinzuzufügen.', 'error');
         return;
     }
 
@@ -308,7 +310,7 @@ export async function showAddTeamModal() {
 
 export async function editTeam(id) {
     if (!canEditEmployees()) {
-        alert('Sie haben keine Berechtigung, Teams zu bearbeiten.');
+        showToast('Sie haben keine Berechtigung, Teams zu bearbeiten.', 'error');
         return;
     }
 
@@ -317,7 +319,7 @@ export async function editTeam(id) {
             credentials: 'include'
         });
         if (!response.ok) {
-            alert('Fehler beim Laden der Teamdaten');
+            showToast('Fehler beim Laden der Teamdaten', 'error');
             return;
         }
 
@@ -331,13 +333,13 @@ export async function editTeam(id) {
         document.getElementById('teamModalTitle').textContent = 'Team bearbeiten';
         document.getElementById('teamModal').style.display = 'block';
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
 export async function deleteTeam(id, name) {
     if (!hasRole('Admin')) {
-        alert('Nur Administratoren können Teams löschen.');
+        showToast('Nur Administratoren können Teams löschen.', 'error');
         return;
     }
 
@@ -352,22 +354,22 @@ export async function deleteTeam(id, name) {
         });
 
         if (response.ok) {
-            alert('Team erfolgreich gelöscht!');
+            showToast('Team erfolgreich gelöscht!', 'success');
             loadTeams();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung zum Löschen.');
+            showToast('Sie haben keine Berechtigung zum Löschen.', 'error');
         } else if (response.status === 400) {
             const errorData = await response.json();
-            alert(errorData.error || 'Fehler beim Löschen');
+            showToast(errorData.error || 'Fehler beim Löschen', 'error');
         } else {
             const errorData = await response.json().catch(() => ({}));
-            alert(errorData.error || 'Fehler beim Löschen');
+            showToast(errorData.error || 'Fehler beim Löschen', 'error');
         }
     } catch (error) {
         console.error('Error deleting team:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -400,18 +402,18 @@ export async function saveTeam(event) {
         });
 
         if (response.ok) {
-            alert(id ? 'Team erfolgreich aktualisiert!' : 'Team erfolgreich hinzugefügt!');
+            showToast(id ? 'Team erfolgreich aktualisiert!' : 'Team erfolgreich hinzugefügt!', 'success');
             closeTeamModal();
             loadTeams();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            alert('Fehler beim Speichern');
+            showToast('Fehler beim Speichern', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -435,14 +437,14 @@ export async function exportEmployeesCsv() {
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
-            alert('Mitarbeiter erfolgreich exportiert!');
+            showToast('Mitarbeiter erfolgreich exportiert!', 'success');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Export: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Export: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Export error:', error);
-        alert(`Fehler beim Export: ${error.message}`);
+        showToast(`Fehler beim Export: ${error.message}`, 'error');
     }
 }
 
@@ -462,14 +464,14 @@ export async function exportTeamsCsv() {
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
-            alert('Teams erfolgreich exportiert!');
+            showToast('Teams erfolgreich exportiert!', 'success');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Export: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Export: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Export error:', error);
-        alert(`Fehler beim Export: ${error.message}`);
+        showToast(`Fehler beim Export: ${error.message}`, 'error');
     }
 }
 
@@ -613,7 +615,7 @@ export async function loadShiftTypeForEdit(shiftTypeId) {
         document.getElementById('shiftTypeIsActive').checked = shiftType.isActive !== false;
     } catch (error) {
         console.error('Error loading shift type:', error);
-        alert('Fehler beim Laden des Schichttyps.');
+        showToast('Fehler beim Laden des Schichttyps.', 'error');
         closeShiftTypeModal();
     }
 }
@@ -637,15 +639,15 @@ export async function saveShiftType(event) {
     const maxConsecutiveDays = parseInt(document.getElementById('shiftTypeMaxConsecutiveDays').value);
 
     if (minStaffWeekday > maxStaffWeekday) {
-        alert('Fehler: Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke.');
+        showToast('Fehler: Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke.', 'error');
         return;
     }
     if (minStaffWeekend > maxStaffWeekend) {
-        alert('Fehler: Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke.');
+        showToast('Fehler: Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke.', 'error');
         return;
     }
     if (maxConsecutiveDays < 1 || maxConsecutiveDays > 10) {
-        alert('Fehler: Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen.');
+        showToast('Fehler: Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen.', 'error');
         return;
     }
 
@@ -688,15 +690,15 @@ export async function saveShiftType(event) {
         const result = await response.json();
 
         if (response.ok) {
-            alert(shiftTypeId ? 'Schichttyp erfolgreich aktualisiert!' : 'Schichttyp erfolgreich erstellt!');
+            showToast(shiftTypeId ? 'Schichttyp erfolgreich aktualisiert!' : 'Schichttyp erfolgreich erstellt!', 'success');
             closeShiftTypeModal();
             loadShiftTypesManagement();
         } else {
-            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler: ${result.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error saving shift type:', error);
-        alert('Fehler beim Speichern des Schichttyps.');
+        showToast('Fehler beim Speichern des Schichttyps.', 'error');
     }
 }
 
@@ -714,14 +716,14 @@ export async function deleteShiftType(shiftTypeId, shiftCode) {
         const result = await response.json();
 
         if (response.ok) {
-            alert('Schichttyp erfolgreich gelöscht!');
+            showToast('Schichttyp erfolgreich gelöscht!', 'success');
             loadShiftTypesManagement();
         } else {
-            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler: ${result.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error deleting shift type:', error);
-        alert('Fehler beim Löschen des Schichttyps.');
+        showToast('Fehler beim Löschen des Schichttyps.', 'error');
     }
 }
 
@@ -804,14 +806,14 @@ export async function saveShiftTypeTeams(event) {
         const result = await response.json();
 
         if (response.ok) {
-            alert('Team-Zuweisungen erfolgreich gespeichert!');
+            showToast('Team-Zuweisungen erfolgreich gespeichert!', 'success');
             closeShiftTypeTeamsModal();
         } else {
-            alert(`Fehler: ${result.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler: ${result.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error saving shift type teams:', error);
-        alert('Fehler beim Speichern der Team-Zuweisungen.');
+        showToast('Fehler beim Speichern der Team-Zuweisungen.', 'error');
     }
 }
 
@@ -977,7 +979,7 @@ export async function loadRotationGroupForEdit(groupId) {
         await loadAvailableShiftsForRotation(group.shifts);
     } catch (error) {
         console.error('Error loading rotation group:', error);
-        alert('Fehler beim Laden der Rotationsgruppe.');
+        showToast('Fehler beim Laden der Rotationsgruppe.', 'error');
     }
 }
 
@@ -1161,7 +1163,7 @@ export async function saveRotationGroup(event) {
     });
 
     if (shifts.length === 0) {
-        alert('Bitte fügen Sie mindestens eine Schicht zur Rotationsgruppe hinzu.');
+        showToast('Bitte fügen Sie mindestens eine Schicht zur Rotationsgruppe hinzu.', 'warning');
         return;
     }
 
@@ -1192,10 +1194,10 @@ export async function saveRotationGroup(event) {
 
         closeRotationGroupModal();
         loadRotationGroups();
-        alert(groupId ? 'Rotationsgruppe erfolgreich aktualisiert!' : 'Rotationsgruppe erfolgreich erstellt!');
+        showToast(groupId ? 'Rotationsgruppe erfolgreich aktualisiert!' : 'Rotationsgruppe erfolgreich erstellt!', 'success');
     } catch (error) {
         console.error('Error saving rotation group:', error);
-        alert('Fehler beim Speichern: ' + error.message);
+        showToast('Fehler beim Speichern: ' + error.message, 'error');
     }
 }
 
@@ -1220,10 +1222,10 @@ export async function deleteRotationGroup(groupId, groupName) {
         }
 
         loadRotationGroups();
-        alert('Rotationsgruppe erfolgreich gelöscht!');
+        showToast('Rotationsgruppe erfolgreich gelöscht!', 'success');
     } catch (error) {
         console.error('Error deleting rotation group:', error);
-        alert('Fehler beim Löschen: ' + error.message);
+        showToast('Fehler beim Löschen: ' + error.message, 'error');
     }
 }
 
@@ -1302,7 +1304,7 @@ export async function saveGlobalSettings(event) {
     event.preventDefault();
 
     if (!hasRole('Admin')) {
-        alert('Nur Administratoren können Einstellungen ändern.');
+        showToast('Nur Administratoren können Einstellungen ändern.', 'error');
         return;
     }
 
@@ -1322,19 +1324,19 @@ export async function saveGlobalSettings(event) {
         });
 
         if (response.ok) {
-            alert('Einstellungen erfolgreich gespeichert!');
+            showToast('Einstellungen erfolgreich gespeichert!', 'success');
             loadGlobalSettings();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Speichern: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Speichern: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error saving global settings:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1426,11 +1428,11 @@ export async function editUser(userId) {
             document.getElementById('passwordLabel').textContent = 'Neues Passwort (optional)';
             document.getElementById('userModal').style.display = 'block';
         } else {
-            alert('Fehler beim Laden des Benutzers.');
+            showToast('Fehler beim Laden des Benutzers.', 'error');
         }
     } catch (error) {
         console.error('Error loading user:', error);
-        alert('Fehler beim Laden des Benutzers.');
+        showToast('Fehler beim Laden des Benutzers.', 'error');
     }
 }
 
@@ -1446,21 +1448,21 @@ export async function deleteUser(userId, userEmail) {
         });
 
         if (response.ok) {
-            alert('Benutzer erfolgreich gelöscht!');
+            showToast('Benutzer erfolgreich gelöscht!', 'success');
             loadUsers();
         } else {
             const error = await response.json();
-            alert(`Fehler beim Löschen: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Löschen: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error deleting user:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
 export async function showAddUserModal() {
     if (!hasRole('Admin')) {
-        alert('Nur Administratoren können Benutzer hinzufügen.');
+        showToast('Nur Administratoren können Benutzer hinzufügen.', 'error');
         return;
     }
 
@@ -1507,19 +1509,19 @@ export async function saveUser(event) {
         });
 
         if (response.ok) {
-            alert(isEdit ? 'Benutzer erfolgreich aktualisiert!' : 'Benutzer erfolgreich erstellt!');
+            showToast(isEdit ? 'Benutzer erfolgreich aktualisiert!' : 'Benutzer erfolgreich erstellt!', 'success');
             closeUserModal();
             loadUsers();
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
             const error = await response.json();
-            alert(`Fehler beim ${isEdit ? 'Aktualisieren' : 'Erstellen'}: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim ${isEdit ? 'Aktualisieren' : 'Erstellen'}: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1573,7 +1575,7 @@ export function displayEmailSettings(settings) {
 
 export async function showEmailSettingsModal() {
     if (!hasRole('Admin')) {
-        alert('Nur Administratoren können E-Mail-Einstellungen bearbeiten.');
+        showToast('Nur Administratoren können E-Mail-Einstellungen bearbeiten.', 'error');
         return;
     }
 
@@ -1641,16 +1643,16 @@ export async function saveEmailSettings(event) {
         });
 
         if (response.ok) {
-            alert('E-Mail-Einstellungen erfolgreich gespeichert!');
+            showToast('E-Mail-Einstellungen erfolgreich gespeichert!', 'success');
             closeEmailSettingsModal();
             loadEmailSettings();
         } else {
             const error = await response.json();
-            alert(`Fehler beim Speichern: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Speichern: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error saving email settings:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -1667,14 +1669,14 @@ export async function testEmailSettings() {
         });
 
         if (response.ok) {
-            alert(`Test-E-Mail wurde erfolgreich an ${testEmail} gesendet!`);
+            showToast(`Test-E-Mail wurde erfolgreich an ${testEmail} gesendet!`, 'success');
         } else {
             const error = await response.json();
-            alert(`Fehler beim Senden der Test-E-Mail: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler beim Senden der Test-E-Mail: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error testing email settings:', error);
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 

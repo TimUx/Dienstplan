@@ -201,7 +201,7 @@ class PlanningReport:
         status_label = _STATUS_LABELS.get(self.status, self.status)
         lines.append(f"Status:           {status_label}")
         lines.append(f"Solver-Laufzeit:  {self.solver_time_seconds:.1f} Sekunden")
-        lines.append(f"Zielfunktionswert:{self.objective_value:.0f}")
+        lines.append(f"Zielfunktionswert: {self.objective_value:.0f}")
 
         # ---- Mitarbeiter -----------------------------------------------------
         _heading("2. MITARBEITERÜBERSICHT")

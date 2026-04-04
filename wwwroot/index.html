@@ -1672,6 +1672,7 @@
                 <div class="planning-spinner"></div>
                 <div class="planning-message" id="planningStatusMessage">Schichten werden geplant...<br>Bitte warten Sie.</div>
                 <div class="planning-elapsed" id="planningElapsedTime"></div>
+                <button type="button" id="cancelPlanningBtn" onclick="cancelPlanning()" class="btn-secondary" style="margin-top: 15px; background: rgba(255,255,255,0.9); color: #333; border: 1px solid #ccc;">⏹ Planung abbrechen</button>
             </div>
             
             <form id="planShiftsForm" onsubmit="executePlanShifts(event)">
@@ -1702,6 +1703,17 @@
                         <input type="checkbox" id="planForceOverwrite">
                         Bestehende Schichten überschreiben (außer feste Schichten)
                     </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>Maximale Planungszeit: <span id="timeLimitDisplay">120</span> Sekunden</label>
+                    <input type="range" id="planTimeLimit" min="30" max="300" value="120" step="10"
+                           oninput="document.getElementById('timeLimitDisplay').textContent = this.value"
+                           style="width: 100%; margin-top: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #666;">
+                        <span>30s (schnell)</span>
+                        <span>300s (gründlich)</span>
+                    </div>
                 </div>
                 
                 <div class="info-box">

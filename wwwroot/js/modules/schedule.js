@@ -14,6 +14,8 @@ export let allShiftTypes = [];
 export let multiSelectMode = false;
 export let selectedShifts = new Set();
 
+let _currentPlanJobId = null;
+
 // ============================================================================
 // DATE PICKERS & INIT
 // ============================================================================
@@ -635,6 +637,7 @@ export async function executePlanShifts(event) {
     const month = document.getElementById('planMonth').value;
     const year = document.getElementById('planMonthYear').value;
     const force = document.getElementById('planForceOverwrite').checked;
+    const timeLimit = parseInt(document.getElementById('planTimeLimit')?.value || '120', 10);
 
     if (!month || !year) {
         showToast('Bitte wählen Sie Monat und Jahr aus.', 'warning');
@@ -667,7 +670,7 @@ export async function executePlanShifts(event) {
     try {
         // Start the async planning job
         const startResponse = await fetch(
-            `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}`,
+            `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}&timeLimit=${timeLimit}`,
             {
                 method: 'POST',
                 credentials: 'include'
@@ -688,6 +691,7 @@ export async function executePlanShifts(event) {
         }
 
         const { jobId } = await startResponse.json();
+        _currentPlanJobId = jobId;
 
         // Poll for status
         const pollInterval = 2000; // 2 seconds
@@ -732,6 +736,7 @@ export async function executePlanShifts(event) {
 
                 // Job finished
                 planningOverlay.classList.remove('active');
+                _currentPlanJobId = null;
 
                 if (job.status === 'success') {
                     closePlanShiftsModal();
@@ -762,6 +767,23 @@ export async function executePlanShifts(event) {
 
 export function planShifts() {
     showPlanShiftsModal();
+}
+
+export async function cancelPlanning() {
+    if (!_currentPlanJobId) return;
+
+    try {
+        await fetch(`${API_BASE}/shifts/plan/${_currentPlanJobId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+    } catch (e) {
+        // ignore
+    }
+
+    const planningOverlay = document.getElementById('planningOverlay');
+    if (planningOverlay) planningOverlay.classList.remove('active');
+    _currentPlanJobId = null;
 }
 
 // ============================================================================

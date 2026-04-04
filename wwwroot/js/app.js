@@ -213,6 +213,7 @@ function registerGlobals() {
     window.closePlanShiftsModal = schedule.closePlanShiftsModal;
     window.executePlanShifts = schedule.executePlanShifts;
     window.planShifts = schedule.planShifts;
+    window.cancelPlanning = schedule.cancelPlanning;
     window.exportScheduleToPdf = schedule.exportScheduleToPdf;
     window.exportScheduleToExcel = schedule.exportScheduleToExcel;
     window.exportScheduleToCsv = schedule.exportScheduleToCsv;

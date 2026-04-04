@@ -25,6 +25,8 @@ from functools import wraps
 # Maps job_id (str) -> job state dict.
 _plan_jobs: Dict[str, dict] = {}
 _plan_jobs_lock = threading.Lock()
+# Completed jobs are retained for this many seconds before being evicted.
+_PLAN_JOB_TTL_SECONDS = 3600  # 1 hour
 
 # PDF export dependencies
 from reportlab.lib import colors
@@ -3528,11 +3530,19 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
 
             # Create job entry and start background thread
             job_id = str(uuid.uuid4())
+            now = time.time()
             with _plan_jobs_lock:
+                # Evict completed jobs older than the TTL to prevent unbounded growth
+                stale = [jid for jid, j in _plan_jobs.items()
+                         if j.get('status') != 'running'
+                         and now - j.get('started_at', now) > _PLAN_JOB_TTL_SECONDS]
+                for jid in stale:
+                    del _plan_jobs[jid]
+
                 _plan_jobs[job_id] = {
                     'status': 'running',
                     'message': 'Planung wird gestartet…',
-                    'started_at': time.time(),
+                    'started_at': now,
                 }
 
             t = threading.Thread(
@@ -3561,15 +3571,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             (on error)   details, diagnostics
         """
         with _plan_jobs_lock:
-            job = _plan_jobs.get(job_id)
-
-        if job is None:
-            return jsonify({'error': 'Job not found'}), 404
+            job_raw = _plan_jobs.get(job_id)
+            if job_raw is None:
+                return jsonify({'error': 'Job not found'}), 404
+            # Copy while holding the lock to avoid a race with the background thread
+            job = dict(job_raw)
 
         elapsed = int(time.time() - job.get('started_at', time.time()))
-        response = dict(job)
-        response['elapsedSeconds'] = elapsed
-        return jsonify(response)
+        job['elapsedSeconds'] = elapsed
+        return jsonify(job)
     @app.route('/api/shifts/plan/approvals', methods=['GET'])
     @require_role('Admin')
     def get_plan_approvals():

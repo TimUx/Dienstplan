@@ -1552,6 +1552,12 @@ async function executePlanShifts(event) {
                 }
                 
                 if (job.status === 'running') {
+                    if (elapsed >= 600) {
+                        // Safety timeout: stop polling after 10 minutes
+                        planningOverlay.classList.remove('active');
+                        alert('Die Planung dauert ungewöhnlich lange. Bitte überprüfen Sie den Server.');
+                        return;
+                    }
                     setTimeout(poll, pollInterval);
                     return;
                 }

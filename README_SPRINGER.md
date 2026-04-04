@@ -1,1 +1,0 @@
-# Automatic Springer Replacement Feature

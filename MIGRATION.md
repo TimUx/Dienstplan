@@ -434,6 +434,59 @@ Alle 10 Schritte aus der Anforderung sind vollständig implementiert:
 
 ---
 
+## 14. Datenbank-Migrationen
+
+Nach der initialen Python-Migration gab es weitere Datenbankmigrationen, die in der `migrations/`-Ordner als Alembic-Skripte und als Standalone-Skripte vorliegen.
+
+### Übersicht der Migrationsskripte
+
+| Skript | Beschreibung |
+|--------|-------------|
+| `migrate_to_rotation_groups.py` | Rotationsmuster datenbankgesteuert |
+| `migrate_remove_virtual_teams.py` | Entfernt virtuelle Teams |
+| `migrate_add_custom_absence_types.py` | Benutzerdefinierte Abwesenheitstypen |
+| `migrate_add_max_consecutive_days.py` | Maximale aufeinanderfolgende Tage |
+| `migrate_add_password_management.py` | Passwortverwaltung, E-Mail-Reset |
+| `migrate_add_unique_shift_constraint.py` | Eindeutige Schicht-Constraints |
+
+### Rotationsgruppen-Migration
+
+Das System wurde von fest codierten Rotationsmustern auf datenbankgesteuerte Rotation umgestellt:
+
+**Vorher:** Rotationsmuster `["F", "N", "S"]` fest im Code (`constraints.py`)
+
+**Nachher:** Muster werden aus der Datenbank geladen – jedes Team kann ein eigenes Muster haben, konfigurierbar über das Admin-UI.
+
+**Für bestehende Datenbanken:**
+
+```bash
+python migrate_to_rotation_groups.py dienstplan.db
+```
+
+Das Skript:
+1. Fügt `RotationGroupId` Spalte zur `Teams`-Tabelle hinzu
+2. Erstellt Standard-Rotationsgruppe "Standard F→N→S"
+3. Verknüpft alle bestehenden Teams mit der Standard-Rotation
+
+**Neue Datenbanken** (erstellt mit `db_init.py`) enthalten die Rotation automatisch.
+
+### Alembic (Empfohlen für Produktionsumgebungen)
+
+Alembic ist für automatisiertes Datenbankschema-Management konfiguriert:
+
+```bash
+# Aktuelle Version prüfen
+alembic current
+
+# Alle Migrationen ausführen
+alembic upgrade head
+
+# Eine Migration zurückrollen
+alembic downgrade -1
+```
+
+---
+
 **Version 2.1 - Python OR-Tools Migration**  
 Entwickelt von Timo Braun (Original .NET) + Migration
 © 2025 Fritz Winter Eisengießerei GmbH & Co. KG

@@ -585,6 +585,27 @@ Klicken Sie auf Ihren Namen (rechts oben) für:
 
 ![Hauptansicht](docs/screenshots/00-main-view.png)
 
+### Eigenes Passwort ändern
+
+1. Klicken Sie auf Ihren Namen (rechts oben)
+2. Wählen Sie **🔒 Passwort ändern**
+3. Geben Sie Ihr aktuelles Passwort ein
+4. Geben Sie Ihr neues Passwort ein (mind. 8 Zeichen)
+5. Bestätigen Sie das neue Passwort
+6. Klicken Sie auf **Passwort ändern**
+
+### Passwort vergessen
+
+Falls Sie Ihr Passwort vergessen haben (und E-Mail-Benachrichtigungen konfiguriert sind):
+
+1. Klicken Sie auf der Anmeldeseite auf **"Passwort vergessen?"**
+2. Geben Sie Ihre E-Mail-Adresse ein
+3. Prüfen Sie Ihr E-Mail-Postfach (Link ist 24 Stunden gültig)
+4. Klicken Sie den Link und vergeben Sie ein neues Passwort
+
+> **Hinweis:** Diese Funktion erfordert eine konfigurierte E-Mail-Einstellung durch den Administrator.
+> Falls kein E-Mail-Versand möglich ist, wenden Sie sich an Ihren Administrator – dieser kann Ihr Passwort direkt unter **Administration → Benutzerverwaltung** zurücksetzen.
+
 ---
 
 ## 6. Dienstplan-Ansichten
@@ -1362,12 +1383,31 @@ Definieren Sie, welche Teams für welche Schichttypen qualifiziert sind:
 
 #### E-Mail-Konfiguration
 
-**Für zukünftige Benachrichtigungen:**
-- SMTP-Server
-- Port
-- Benutzername
-- Passwort
-- Absender-Adresse
+Die E-Mail-Konfiguration wird benötigt für die **Passwort-Zurücksetzen**-Funktion.
+
+**Konfigurationsschritte:**
+1. Navigieren Sie zu **Administration** → **E-Mail-Einstellungen**
+2. Klicken Sie auf **E-Mail-Einstellungen bearbeiten**
+3. Tragen Sie folgende Werte ein:
+   - **SMTP-Server**: Adresse des Mail-Servers (z.B. `smtp.gmail.com`)
+   - **SMTP-Port**: Normalerweise `587` (STARTTLS) oder `465` (SSL)
+   - **SSL/TLS**: Aktivieren, falls der Server dies verlangt
+   - **Benutzername**: E-Mail-Adresse des Absenders
+   - **Passwort**: Passwort des Absender-Kontos
+   - **Absender-Adresse**: Angezeigte Absender-E-Mail
+   - **Absender-Name**: Angezeigter Name
+4. Klicken Sie auf **Test senden** um die Konfiguration zu prüfen
+5. Klicken Sie auf **Speichern**
+
+**Gängige Anbieter:**
+
+| Anbieter | SMTP-Server | Port | SSL |
+|----------|-------------|------|-----|
+| Gmail | smtp.gmail.com | 587 | Ja |
+| Microsoft 365 | smtp.office365.com | 587 | Ja |
+| Eigener Server | Laut IT-Abteilung | 587 | Je nach Konfiguration |
+
+> **Hinweis Gmail:** Es kann ein App-Passwort in den Google-Konto-Einstellungen erforderlich sein.
 
 #### Schichtparameter
 

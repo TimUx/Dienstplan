@@ -22,7 +22,6 @@ Ein flexibles System zur Verwaltung und automatischen Planung von Schichtdienste
 - [🔐 Sicherheit & Authentifizierung](#-sicherheit--authentifizierung)
 - [🐳 Deployment](#-deployment)
 - [🛠️ Entwicklung](#%EF%B8%8F-entwicklung)
-  - [Datenbankmigrationen (Alembic)](#datenbankmigrationen-alembic)
 - [🤝 Beitragen](#-beitragen)
 - [📊 Migration von .NET zu Python](#-migration-von-net-zu-python)
 - [📚 Dokumentation](#-dokumentation)
@@ -234,185 +233,47 @@ Dienstplan/
 
 ## 🚀 Installation & Ausführung
 
-### Option 1: Windows Standalone Executable (Empfohlen für Windows-Nutzer) 🎯
+Drei Installationsmethoden stehen zur Verfügung. Die vollständige Installationsanleitung mit allen Details finden Sie in **[docs/INSTALLATION.md](docs/INSTALLATION.md)**.
 
-**Keine Installation erforderlich!** Einfach herunterladen und starten.
+### Methoden im Überblick
 
-#### Download
-Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter:
+| Methode | Voraussetzungen | Geeignet für |
+|---------|-----------------|--------------|
+| **1-Klick-Executable** | Keine | Endbenutzer, Windows/Linux |
+| **Native Python** | Python 3.9+ | Entwickler, alle Plattformen |
+| **Docker Compose** | Docker | Server, Mehrbenutzerbetrieb |
 
-**Zwei Versionen verfügbar:**
-- **Dienstplan-Windows-Empty-v2.1.x.zip** - Produktionsversion (leere Datenbank)
-- **Dienstplan-Windows-SampleData-v2.1.x.zip** - Demo-Version (mit Beispieldaten)
+### Schnellstart: Native Python
 
-#### Welche Version soll ich wählen?
-
-**Produktionsversion (Empty)** - Für den produktiven Einsatz:
-- ✅ Leere Datenbank - bereit für Ihre eigenen Daten
-- ✅ Nur Admin-Benutzer und Standard-Schichttypen
-- ✅ Ideal für den ersten Produktiveinsatz
-
-**Demo-Version (SampleData)** - Für Tests und Demonstrationen:
-- ✅ 3 vorkonfigurierte Teams (Alpha, Beta, Gamma)
-- ✅ 17 Mitarbeiter mit verschiedenen Qualifikationen
-- ✅ Beispiel-Abwesenheiten
-- ✅ Ideal zum Testen der Funktionen
-
-#### Installation & Start
-1. ZIP-Datei entpacken
-2. Doppelklick auf `Dienstplan.exe`
-3. Der Webserver startet automatisch und öffnet Ihren Browser
-4. Fertig! Das System ist unter `http://localhost:5000` erreichbar
-
-**Vorteile:**
-- ✅ Keine Python-Installation erforderlich
-- ✅ Keine manuellen Abhängigkeiten
-- ✅ Automatischer Browser-Start
-- ✅ Sofort einsatzbereit
-- ✅ Persistente Datenbank in `data/` Ordner
-- ✅ Produktionsfertig mit Admin-Benutzer
-
-**Standard-Anmeldung:**
-- E-Mail: `admin@fritzwinter.de`
-- Passwort: `Admin123!`
-- ⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
-
-#### Eigene Executable erstellen
-Falls Sie die Executable selbst bauen möchten:
-
-**Windows:**
-```cmd
-REM Einzelne Version bauen:
-REM Mit leerer Datenbank (Standard, produktionsfertig)
-build_windows.bat
-
-REM Mit Beispieldaten (für Tests)
-build_windows.bat --sample-data
-
-REM ODER: Beide Versionen auf einmal bauen
-build_windows_both.bat
-```
-
-**Linux/macOS:**
 ```bash
-chmod +x build_executable.sh
-
-# Einzelne Version bauen:
-# Mit leerer Datenbank (Standard, produktionsfertig)
-./build_executable.sh
-
-# Mit Beispieldaten (für Tests)
-./build_executable.sh --sample-data
-
-# ODER: Beide Versionen auf einmal bauen
-chmod +x build_executable_both.sh
-./build_executable_both.sh
-```
-
-Die Executable enthält:
-- Python Runtime (keine separate Installation nötig)
-- Alle Python-Bibliotheken (Flask, OR-Tools, etc.)
-- Web UI Dateien (wwwroot)
-- Vorkonfigurierte SQLite-Datenbank (data/dienstplan.db)
-- Automatischer Server-Start und Browser-Öffnung
-
-### Option 2: Python-Installation (Für alle Betriebssysteme)
-
-#### Voraussetzungen
-- Python 3.9 oder höher
-- pip (Python Package Manager)
-
-#### Schnellstart
-
-##### 1. Repository klonen
-```bash
-git clone https://github.com/TimUx/Dienstplan.git
-cd Dienstplan
-```
-
-##### 2. Virtuelle Umgebung erstellen (empfohlen)
-```bash
-# Linux/macOS:
-python3 -m venv venv
-source venv/bin/activate
-
-# Windows:
-python -m venv venv
-venv\Scripts\activate
-```
-
-##### 3. Abhängigkeiten installieren
-```bash
+# 1. Abhängigkeiten installieren
 pip install -r requirements.txt
-```
 
-##### 4. Datenbank initialisieren (Wichtig!)
-
-Vor dem ersten Start müssen Sie die Datenbank initialisieren:
-
-```bash
+# 2. Datenbank initialisieren
 python main.py init-db --with-sample-data
-```
 
-Dies erstellt:
-- ✅ Alle erforderlichen Datenbanktabellen
-- ✅ Standard-Rollen (Admin, Mitarbeiter)
-- ✅ Admin-Benutzer (admin@fritzwinter.de / Admin123!)
-- ✅ Standard-Schichttypen
-- ✅ Beispiel-Teams (optional mit --with-sample-data)
-
-**Ohne Sample-Daten:**
-```bash
-python main.py init-db
-```
-
-##### 5. Anwendung starten
-
-**Web-Server-Modus:**
-```bash
-# Server starten (Standard: Port 5000)
+# 3. Server starten
 python main.py serve
-
-# Mit eigener Konfiguration
-python main.py serve --host 0.0.0.0 --port 8080 --db dienstplan.db
 ```
 
-##### 6. Browser öffnen
-Navigieren Sie zu: `http://localhost:5000`
+Anwendung läuft unter: **http://localhost:5000**
 
 **Standard-Anmeldedaten:**
 - E-Mail: `admin@fritzwinter.de`
 - Passwort: `Admin123!`
+- ⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
 
-⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
-
----
-
-**CLI-Modus: Schichtplanung**
-```bash
-# Mit Sample-Daten (zum Testen)
-python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --sample-data
-
-# Mit vorhandener Datenbank
-python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --db dienstplan.db
-
-# Mit Zeitlimit (in Sekunden)
-python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --time-limit 600
-```
-
-### (Optional) Sample-Datenbank generieren
-
-Sie können Testdaten direkt über die Python-CLI generieren:
+### Schnellstart: Docker Compose
 
 ```bash
-# Schichtplanung mit automatisch generierten Sample-Daten
-python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --sample-data
+docker compose up -d
 ```
 
-Dies erstellt automatisch:
-- 3 Teams (Alpha, Beta, Gamma)
-- 17 Mitarbeiter mit verschiedenen Rollen
-- Beispiel-Abwesenheiten
+### Schnellstart: 1-Klick-Executable
+
+Laden Sie die neueste Version von [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter und starten Sie die Datei per Doppelklick (Windows) bzw. `./Dienstplan-Linux` (Linux).
+
+➡️ **Vollständige Anleitung:** [docs/INSTALLATION.md](docs/INSTALLATION.md)
 
 ---
 
@@ -1129,55 +990,36 @@ Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
 
 ## 🐳 Deployment
 
-### Option 1: Windows Standalone Executable (Empfohlen für Desktop) ⭐
+Für detaillierte Deployment-Anleitungen (alle Methoden, Windows und Linux) siehe **[docs/INSTALLATION.md](docs/INSTALLATION.md)**.
 
-Die einfachste Methode für Windows-Anwender:
-
-1. Laden Sie das neueste Release von GitHub herunter
-2. Entpacken Sie die ZIP-Datei
-3. Starten Sie `Dienstplan.exe`
-
-**Für Entwickler:** Erstellen Sie Ihre eigene Executable mit:
-```bash
-# Windows
-build_windows.bat
-
-# Linux/macOS
-./build_executable.sh
-```
-
-Die Executable enthält:
-- Python Runtime (keine separate Installation nötig)
-- Alle Python-Bibliotheken (Flask, OR-Tools, etc.)
-- Web UI Dateien (wwwroot)
-- Automatischer Server-Start und Browser-Öffnung
-
-### Option 2: Docker Container (Für Server-Deployment)
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt
-EXPOSE 5000
-CMD ["python", "main.py", "serve", "--host", "0.0.0.0"]
-```
+### Standalone Executable (Desktop / Einzelplatz)
 
 ```bash
-docker build -t dienstplan .
-docker run -p 5000:5000 -v ./data:/app/data dienstplan
+# Windows: Doppelklick auf Dienstplan.exe (von GitHub Releases)
+
+# Linux:
+chmod +x Dienstplan-Linux
+./Dienstplan-Linux
 ```
 
-### Option 3: Systemd Service (Linux Server)
+### Docker Compose (Server)
+
+```bash
+docker compose up -d
+```
+
+### Systemd Service (Linux Server)
+
 ```ini
 [Unit]
-Description=Dienstplan Python OR-Tools
+Description=Dienstplan Schichtverwaltungssystem
 After=network.target
 
 [Service]
 Type=simple
 User=dienstplan
 WorkingDirectory=/opt/dienstplan
-ExecStart=/opt/dienstplan/venv/bin/python main.py serve
+ExecStart=/opt/dienstplan/venv/bin/python main.py serve --host 0.0.0.0 --port 5000
 Restart=always
 
 [Install]
@@ -1353,20 +1195,22 @@ Details zur Migration: [MIGRATION.md](MIGRATION.md)
 Das Dienstplan-System verfügt über eine umfassende Dokumentation:
 
 ### 📘 Für Benutzer
+- **[Installationsanleitung](docs/INSTALLATION.md)** - Native Python, 1-Klick-EXE, Docker Compose
 - **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** - Vollständige Anleitung für alle Funktionen mit Screenshots
-- **[Schnellstart](docs/QUICKSTART.md)** - In 5 Minuten produktiv
+- **[Schnellstart](docs/QUICKSTART.md)** - In 5 Minuten produktiv (EN)
 - **[Windows Standalone Guide](docs/WINDOWS_EXECUTABLE.md)** - Anleitung für die Exe-Version
 
 ### 🔧 Für Administratoren
 - **[Nutzungsanleitung](docs/USAGE_GUIDE.md)** - CLI-Befehle und API-Nutzung
 - **[Schichtplanungsalgorithmus](docs/SHIFT_PLANNING_ALGORITHM.md)** - Details zum OR-Tools Solver
-- **[Schichtplanungs-Regeln](SCHICHTPLANUNGS_REGELN.md)** - Alle Regeln, Abhängigkeiten und Prioritäten (DE) | [English Version](SHIFT_PLANNING_RULES_EN.md)
+- **[Schichtplanungs-Regeln (DE)](docs/SCHICHTPLANUNG_REGELN.md)** - Alle Regeln, Abhängigkeiten und Prioritäten
+- **[Shift Planning Rules (EN)](docs/SHIFT_PLANNING_RULES_EN.md)** - All rules, dependencies and priorities
 - **[Beispieldaten](docs/SAMPLE_DATA.md)** - Testdaten und API-Beispiele
 
 ### 💻 Für Entwickler
 - **[Architektur](ARCHITECTURE.md)** - System-Design und Komponenten
 - **[Build-Anleitung](docs/BUILD_GUIDE.md)** - Executable erstellen
-- **[Migration](MIGRATION.md)** - .NET zu Python Migration
+- **[Migration](MIGRATION.md)** - .NET zu Python Migration + DB-Migrationen
 - **[Changelog](CHANGELOG.md)** - Versionshistorie
 
 ### 📍 Zentrale Übersicht

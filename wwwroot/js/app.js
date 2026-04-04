@@ -77,6 +77,7 @@ async function showView(viewName) {
         employees.switchManagementTab('teams');
         return;
     } else if (viewName === 'absences') {
+        absences.initAbsenceTypeColorPicker();
         absences.switchAbsenceTab('vacation');
     } else if (viewName === 'vacations') {
         showView('absences');

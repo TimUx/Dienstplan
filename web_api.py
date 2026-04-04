@@ -468,14 +468,25 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 
                 return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
             
-            # Reset failed attempts on successful login
+            # Reset failed attempts on successful login and migrate legacy SHA256
+            # hash to bcrypt transparently so the next login uses the stronger hash.
             conn = db.get_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE Employees 
-                SET AccessFailedCount = 0
-                WHERE Id = ?
-            """, (employee['id'],))
+            is_legacy = not (
+                employee['passwordHash'].startswith('$2b$') or
+                employee['passwordHash'].startswith('$2a$')
+            )
+            if is_legacy:
+                new_hash = hash_password(password)
+                cursor.execute(
+                    "UPDATE Employees SET AccessFailedCount = 0, PasswordHash = ? WHERE Id = ?",
+                    (new_hash, employee['id']),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE Employees SET AccessFailedCount = 0 WHERE Id = ?",
+                    (employee['id'],),
+                )
             conn.commit()
             conn.close()
             

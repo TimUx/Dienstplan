@@ -334,6 +334,7 @@ function registerGlobals() {
     // Planning Report
     window.loadPlanningReport = planningReport.loadPlanningReport;
     window.exportPlanningReportSummary = planningReport.exportPlanningReportSummary;
+    window.closePlanningResultModal = planningReport.closePlanningResultModal;
 }
 
 // ============================================================================

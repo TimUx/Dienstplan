@@ -238,3 +238,102 @@ export function initPlanningReport() {
     if (yearEl && !yearEl.value)  yearEl.value  = now.getFullYear();
     if (monthEl && !monthEl.value) monthEl.value = now.getMonth() + 1;
 }
+
+// ============================================================================
+// PLANNING RESULT MODAL (shown automatically after planning completes)
+// ============================================================================
+
+export function closePlanningResultModal() {
+    document.getElementById('planningResultModal').style.display = 'none';
+}
+
+export async function showPlanningResultModal(year, month, periodText) {
+    const modal   = document.getElementById('planningResultModal');
+    const titleEl = document.getElementById('planningResultTitle');
+    const content = document.getElementById('planningResultContent');
+    const detailsBtn = document.getElementById('planningResultDetailsBtn');
+
+    titleEl.textContent = `Planung abgeschlossen – ${periodText}`;
+    content.innerHTML   = '<p class="loading">Lade Zusammenfassung…</p>';
+    modal.style.display = 'block';
+
+    detailsBtn.onclick = () => {
+        closePlanningResultModal();
+        const yearEl  = document.getElementById('reportYear');
+        const monthEl = document.getElementById('reportMonth');
+        if (yearEl)  yearEl.value  = year;
+        if (monthEl) monthEl.value = month;
+        window.showView('planning-report');
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/planning/report/${year}/${month}`, {
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            content.innerHTML = '<p>Zusammenfassung konnte nicht geladen werden.</p>';
+            return;
+        }
+
+        const report = await response.json();
+        content.innerHTML = renderResultSummary(report);
+    } catch (_err) {
+        content.innerHTML = '<p>Zusammenfassung konnte nicht geladen werden.</p>';
+    }
+}
+
+function getResultStatusConfig(status, violations) {
+    const hasHard = (violations || []).some(v => v.severity === 'HARD');
+    if (hasHard) {
+        return { icon: '🚨', label: 'Notfallplan', cssClass: 'planning-result-status-emergency' };
+    }
+    if (status === 'OPTIMAL' || status === 'FEASIBLE') {
+        return { icon: '✅', label: 'Optimal geplant', cssClass: 'planning-result-status-optimal' };
+    }
+    if (status === 'EMERGENCY') {
+        return { icon: '🚨', label: 'Notfallplan', cssClass: 'planning-result-status-emergency' };
+    }
+    return { icon: '⚠️', label: 'Mit Abweichungen', cssClass: 'planning-result-status-warning' };
+}
+
+function renderResultSummary(report) {
+    const violations  = report.rule_violations || [];
+    const totalShifts = Object.values(report.shifts_assigned || {}).reduce((a, b) => a + b, 0);
+    const absenceCount = (report.absent_employees || []).length;
+    const cfg = getResultStatusConfig(report.status, violations);
+
+    let html = '';
+
+    html += `<div class="planning-result-status ${escapeHtml(cfg.cssClass)}">${cfg.icon} ${escapeHtml(cfg.label)}</div>`;
+
+    html += '<div class="planning-result-summary">';
+    html += `<p>👥 ${escapeHtml(String(report.total_employees ?? 0))} Mitarbeiter berücksichtigt</p>`;
+    html += `<p>📋 ${escapeHtml(String(totalShifts))} Schichten erfolgreich vergeben</p>`;
+    if (absenceCount > 0) {
+        html += `<p>🏖️ ${escapeHtml(String(absenceCount))} Abwesenheit${absenceCount !== 1 ? 'en' : ''} berücksichtigt</p>`;
+    }
+    if (violations.length > 0) {
+        html += `<p>⚠️ ${escapeHtml(String(violations.length))} Regelabweichung${violations.length !== 1 ? 'en' : ''} festgestellt</p>`;
+    } else {
+        html += '<p>✅ Alle Regeln vollständig eingehalten</p>';
+    }
+    const relaxedCount = (report.relaxed_constraints || []).length;
+    if (relaxedCount > 0) {
+        html += `<p>🔧 ${escapeHtml(String(relaxedCount))} Regel${relaxedCount !== 1 ? 'n' : ''} entspannt</p>`;
+    }
+    html += '</div>';
+
+    if (violations.length > 0) {
+        html += '<div class="planning-result-violations"><h4>Wichtigste Regelabweichungen</h4><ul>';
+        violations.slice(0, 5).forEach(v => {
+            html += `<li>${escapeHtml(v.description || v.rule_id || 'Unbekannte Regel')}</li>`;
+        });
+        if (violations.length > 5) {
+            html += `<li class="planning-result-more">… und ${escapeHtml(String(violations.length - 5))} weitere</li>`;
+        }
+        html += '</ul></div>';
+    }
+
+    return html;
+}

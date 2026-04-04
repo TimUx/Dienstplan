@@ -2523,3 +2523,82 @@ body.disponent button.admin-only.admin-strict {
     color: var(--text-secondary, #666);
     font-style: italic;
 }
+
+/* ============================================================================
+   Planning Result Modal (post-planning summary popup)
+   ============================================================================ */
+
+.planning-result-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 18px;
+}
+
+.planning-result-status-optimal {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.planning-result-status-warning {
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+}
+
+.planning-result-status-emergency {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.planning-result-summary {
+    margin-bottom: 18px;
+    line-height: 1.8;
+}
+
+.planning-result-summary p {
+    margin: 4px 0;
+    font-size: 0.95rem;
+}
+
+.planning-result-violations {
+    background: var(--bg-color);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+}
+
+.planning-result-violations h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.planning-result-violations ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.planning-result-violations li {
+    padding: 4px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.planning-result-violations li:last-child {
+    border-bottom: none;
+}
+
+.planning-result-more {
+    font-style: italic;
+    color: var(--text-secondary, #666) !important;
+}

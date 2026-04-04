@@ -1,6 +1,7 @@
 import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
+import { showPlanningResultModal } from './planning_report.js';
 
 // ============================================================================
 // MODULE STATE
@@ -730,11 +731,9 @@ export async function executePlanShifts(event) {
                 planningOverlay.classList.remove('active');
 
                 if (job.status === 'success') {
-                    const successMsg = `Erfolgreich! ${job.assignmentsCount || 0} Schichten wurden für ${periodText} geplant.`;
-                    const reminderMsg = 'Hinweis: Der Dienstplan muss noch freigegeben werden, bevor er für normale Mitarbeiter sichtbar ist.';
-                    alert(`${successMsg}\n\n${reminderMsg}`);
                     closePlanShiftsModal();
                     loadSchedule();
+                    showPlanningResultModal(parseInt(year, 10), parseInt(month, 10), periodText);
                 } else {
                     // Error
                     if (job.details) {

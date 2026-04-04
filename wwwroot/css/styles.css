@@ -2375,3 +2375,151 @@ body.disponent button.admin-only.admin-strict {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ============================================================================
+   Planning Report View
+   ============================================================================ */
+
+.report-status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.report-status-optimal {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.report-status-warning {
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+}
+
+.report-status-emergency {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.report-status-label {
+    font-size: 1.2rem;
+}
+
+.report-status-period {
+    font-size: 0.9rem;
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.report-summary-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.report-summary-tile {
+    background: var(--bg-color);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+    padding: 18px 16px;
+    text-align: center;
+}
+
+.report-tile-icon {
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+}
+
+.report-tile-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1;
+}
+
+.report-tile-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #666);
+    margin-top: 4px;
+}
+
+/* Violation table row colors */
+.report-violation-hard td {
+    background-color: rgba(220, 53, 69, 0.08);
+}
+
+.report-violation-soft-critical td {
+    background-color: rgba(255, 152, 0, 0.08);
+}
+
+/* Severity badges */
+.report-severity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.report-severity-hard {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.report-severity-soft_critical,
+.report-severity-soft-critical {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.report-severity-soft_medium,
+.report-severity-soft-medium {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.report-severity-soft_low,
+.report-severity-soft-low {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+/* Relaxed constraints list */
+.report-relaxed-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.report-relaxed-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-relaxed-item:last-child {
+    border-bottom: none;
+}
+
+.report-relaxed-reason {
+    font-size: 0.9rem;
+    color: var(--text-secondary, #666);
+}
+
+.report-relaxed-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #666);
+    font-style: italic;
+}

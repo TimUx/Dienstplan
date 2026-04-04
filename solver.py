@@ -9,6 +9,13 @@ import time
 from typing import List, Dict, Tuple, Optional
 from entities import Employee, ShiftAssignment, RelaxedConstraint, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
+from planning_report import (
+    PlanningReport,
+    RuleViolation,
+    RelaxedConstraint as PlanningRelaxedConstraint,
+    AbsenceInfo,
+)
+from validation import validate_shift_plan
 from constraints import (
     add_team_shift_assignment_constraints,
     add_team_rotation_constraints,
@@ -1966,6 +1973,151 @@ def _create_greedy_emergency_plan(
     return assignments, complete_schedule
 
 
+# ---------------------------------------------------------------------------
+# PlanningReport helper functions
+# ---------------------------------------------------------------------------
+
+def _parse_relaxed_constraints(strings: List[str]) -> List[PlanningRelaxedConstraint]:
+    """Convert a list of 'name: reason' strings to PlanningRelaxedConstraint objects."""
+    result = []
+    for s in strings:
+        idx = s.find(": ")
+        if idx >= 0:
+            name = s[:idx]
+            reason = s[idx + 2:]
+        else:
+            name = s
+            reason = ""
+        result.append(PlanningRelaxedConstraint(constraint_name=name, reason=reason))
+    return result
+
+
+def _validation_result_to_rule_violations(
+    validation_result,
+    absences,
+    employees,
+) -> List[RuleViolation]:
+    """
+    Convert a ValidationResult into a list of RuleViolation objects.
+
+    For each violation/warning string that mentions an employee by name, the
+    cause field is automatically populated with any matching absence information.
+    """
+    emp_absences: Dict[str, list] = {}
+    for absence in absences:
+        emp = next((e for e in employees if e.id == absence.employee_id), None)
+        if emp:
+            emp_absences.setdefault(emp.full_name, []).append(absence)
+
+    def _find_absence_cause(description: str) -> str:
+        for emp_name, abs_list in emp_absences.items():
+            if emp_name in description:
+                causes = [
+                    f"Abwesenheit ({a.get_code()}): {a.start_date} – {a.end_date}"
+                    for a in abs_list
+                ]
+                return "; ".join(causes)
+        return ""
+
+    violations: List[RuleViolation] = []
+    for msg in validation_result.violations:
+        violations.append(RuleViolation(
+            rule_id="VALIDATION_HARD",
+            description=msg,
+            severity="HARD",
+            affected_dates=[],
+            cause=_find_absence_cause(msg),
+            impact=msg,
+        ))
+    for msg in validation_result.warnings:
+        violations.append(RuleViolation(
+            rule_id="VALIDATION_SOFT",
+            description=msg,
+            severity="SOFT_LOW",
+            affected_dates=[],
+            cause=_find_absence_cause(msg),
+            impact=msg,
+        ))
+    return violations
+
+
+def _build_planning_report(
+    assignments: List[ShiftAssignment],
+    complete_schedule: Dict,
+    planning_model: "ShiftPlanningModel",
+    status: str,
+    objective_value: float,
+    solver_time_seconds: float,
+    relaxed_constraints_strs: List[str],
+) -> PlanningReport:
+    """Build a PlanningReport from solver outputs and a fresh validation run."""
+    start_date = planning_model.original_start_date
+    end_date = planning_model.original_end_date
+
+    # Absent employees list
+    absent_employees_info: List[AbsenceInfo] = []
+    for absence in planning_model.absences:
+        emp = next((e for e in planning_model.employees if e.id == absence.employee_id), None)
+        if emp:
+            absent_employees_info.append(AbsenceInfo(
+                employee_name=emp.full_name,
+                absence_type=absence.get_code(),
+                start_date=absence.start_date,
+                end_date=absence.end_date,
+                notes=absence.notes,
+            ))
+
+    # Available employees: those without a full-period absence
+    absent_full_period_ids = {
+        a.employee_id
+        for a in planning_model.absences
+        if a.start_date <= start_date and a.end_date >= end_date
+    }
+    available_employees = len(
+        [e for e in planning_model.employees if e.id not in absent_full_period_ids]
+    )
+
+    # Shift count per code
+    shifts_assigned: Dict[str, int] = {}
+    for assignment in assignments:
+        shift_type = get_shift_type_by_id(assignment.shift_type_id)
+        code = shift_type.code if shift_type else str(assignment.shift_type_id)
+        shifts_assigned[code] = shifts_assigned.get(code, 0) + 1
+
+    # Relaxed constraints
+    relaxed_constraints = _parse_relaxed_constraints(relaxed_constraints_strs)
+
+    # Validate and convert to RuleViolation objects
+    validation_result = validate_shift_plan(
+        assignments=assignments,
+        employees=planning_model.employees,
+        absences=planning_model.absences,
+        start_date=start_date,
+        end_date=end_date,
+        teams=planning_model.teams,
+        complete_schedule=complete_schedule,
+        locked_team_shift=planning_model.locked_team_shift,
+        locked_employee_weekend=planning_model.locked_employee_weekend,
+        shift_types=planning_model.shift_types,
+    )
+    rule_violations = _validation_result_to_rule_violations(
+        validation_result, planning_model.absences, planning_model.employees
+    )
+
+    return PlanningReport(
+        planning_period=(start_date, end_date),
+        status=status,
+        total_employees=len(planning_model.employees),
+        available_employees=available_employees,
+        absent_employees=absent_employees_info,
+        shifts_assigned=shifts_assigned,
+        rule_violations=rule_violations,
+        relaxed_constraints=relaxed_constraints,
+        objective_value=objective_value,
+        solver_time_seconds=solver_time_seconds,
+    )
+
+
 def solve_shift_planning(
     planning_model: ShiftPlanningModel,
     time_limit_seconds: int = 300,
@@ -1974,7 +2126,7 @@ def solve_shift_planning(
     search_strategy: str = "PORTFOLIO",
     warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None,
     db_path: str = "dienstplan.db"
-) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str]]:
+) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], PlanningReport]:
     """
     Solve the shift planning problem.
     
@@ -1998,7 +2150,8 @@ def solve_shift_planning(
             patterns. Defaults to "dienstplan.db".
         
     Returns:
-        Always returns a non-None Tuple of (shift_assignments, complete_schedule).
+        Always returns a non-None 3-tuple of
+        (shift_assignments, complete_schedule, planning_report).
         Uses a 4-stage fallback mechanism to guarantee a plan is always produced:
           Stage 1 – Normal: all hard + soft constraints.
           Stage 2 – Fallback 1: minimum staffing (H3) relaxed to soft with
@@ -2009,6 +2162,8 @@ def solve_shift_planning(
         - shift_assignments: List of ShiftAssignment objects for employees who work
         - complete_schedule: dict mapping (employee_id, date) to shift_code/"OFF"/"ABSENT"
                             ensuring ALL employees appear for ALL days
+        - planning_report: PlanningReport with solver metrics, violations, and
+                           relaxed constraints for this planning run
     """
 
     def _make_solver(model: ShiftPlanningModel, level: int) -> "ShiftPlanningSolver":
@@ -2051,7 +2206,17 @@ def solve_shift_planning(
     if s1.solve():
         result = s1.extract_solution()
         s1.print_planning_summary(result[0], result[1])
-        return result
+        status = "OPTIMAL" if s1.status == cp_model.OPTIMAL else "FEASIBLE"
+        report = _build_planning_report(
+            assignments=result[0],
+            complete_schedule=result[1],
+            planning_model=planning_model,
+            status=status,
+            objective_value=s1.solution.ObjectiveValue() if s1.solution else 0.0,
+            solver_time_seconds=s1.solution.WallTime() if s1.solution else 0.0,
+            relaxed_constraints_strs=[],
+        )
+        return result[0], result[1], report
 
     # ------------------------------------------------------------------ #
     # Stage 2 – Fallback 1: relax minimum staffing (H3)                  #
@@ -2067,7 +2232,16 @@ def solve_shift_planning(
         result = s2.extract_solution()
         _print_relaxation_summary(s2.relaxed_constraints)
         s2.print_planning_summary(result[0], result[1])
-        return result
+        report = _build_planning_report(
+            assignments=result[0],
+            complete_schedule=result[1],
+            planning_model=m2,
+            status="FALLBACK_L1",
+            objective_value=s2.solution.ObjectiveValue() if s2.solution else 0.0,
+            solver_time_seconds=s2.solution.WallTime() if s2.solution else 0.0,
+            relaxed_constraints_strs=s2.relaxed_constraints,
+        )
+        return result[0], result[1], report
 
     # ------------------------------------------------------------------ #
     # Stage 3 – Fallback 2: relax staffing + skip rotation constraints   #
@@ -2083,7 +2257,16 @@ def solve_shift_planning(
         result = s3.extract_solution()
         _print_relaxation_summary(s3.relaxed_constraints)
         s3.print_planning_summary(result[0], result[1])
-        return result
+        report = _build_planning_report(
+            assignments=result[0],
+            complete_schedule=result[1],
+            planning_model=m3,
+            status="FALLBACK_L2",
+            objective_value=s3.solution.ObjectiveValue() if s3.solution else 0.0,
+            solver_time_seconds=s3.solution.WallTime() if s3.solution else 0.0,
+            relaxed_constraints_strs=s3.relaxed_constraints,
+        )
+        return result[0], result[1], report
 
     # ------------------------------------------------------------------ #
     # Stage 4 – Emergency plan: greedy algorithm without OR-Tools         #
@@ -2099,7 +2282,16 @@ def solve_shift_planning(
     ]
     result = _create_greedy_emergency_plan(planning_model)
     _print_relaxation_summary(greedy_relaxed)
-    return result
+    report = _build_planning_report(
+        assignments=result[0],
+        complete_schedule=result[1],
+        planning_model=planning_model,
+        status="EMERGENCY",
+        objective_value=0.0,
+        solver_time_seconds=0.0,
+        relaxed_constraints_strs=greedy_relaxed,
+    )
+    return result[0], result[1], report
 
 
 def get_infeasibility_diagnostics(

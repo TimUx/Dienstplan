@@ -11,6 +11,7 @@ from .shared import (
     get_db, require_auth, require_role, log_audit,
     hash_password, _paginate, limiter
 )
+from .repositories.employee_repository import EmployeeRepository
 
 bp = Blueprint('employees', __name__)
 
@@ -36,19 +37,8 @@ def get_employees():
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT e.*, t.Name as TeamName,
-                   GROUP_CONCAT(r.Name) as roles
-            FROM Employees e
-            LEFT JOIN Teams t ON e.TeamId = t.Id
-            LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
-            LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
-            GROUP BY e.Id
-            ORDER BY e.Name, e.Vorname
-        """)
-        
         employees = []
-        for row in cursor.fetchall():
+        for row in EmployeeRepository.get_all_employees(cursor):
             # Handle fields which may not exist in older databases
             try:
                 is_td_qualified = bool(row['IsTdQualified'])

@@ -16,6 +16,7 @@ from .shared import (
     extend_planning_dates_to_complete_weeks, validate_monthly_date_range,
     limiter
 )
+from .repositories.shift_repository import ShiftRepository
 
 bp = Blueprint('shifts', __name__)
 
@@ -34,10 +35,8 @@ def get_shift_types():
     conn = db.get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM ShiftTypes ORDER BY Id")
-    
     shift_types = []
-    for row in cursor.fetchall():
+    for row in ShiftRepository.get_all_shift_types(cursor):
         # Handle MaxConsecutiveDays for backward compatibility
         try:
             max_consecutive_days = row['MaxConsecutiveDays']
@@ -163,8 +162,7 @@ def get_shift_type(id):
     conn = db.get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM ShiftTypes WHERE Id = ?", (id,))
-    row = cursor.fetchone()
+    row = ShiftRepository.get_shift_type_by_id(cursor, id)
     
     if not row:
         conn.close()

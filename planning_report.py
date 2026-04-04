@@ -64,6 +64,9 @@ class RuleViolation:
     impact: str
     """Auswirkung des Verstoßes, z. B. \"Nur 2 statt 4 Mitarbeiter in Frühschicht am 2024-01-15\"."""
 
+    cause_type: str = "UNKNOWN"
+    """Strukturierte Ursachenkategorie: \"ABSENCE\", \"UNDERSTAFFING\", \"ROTATION_CONFLICT\", \"UNKNOWN\"."""
+
 
 @dataclass
 class RelaxedConstraint:

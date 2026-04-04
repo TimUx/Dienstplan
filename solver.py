@@ -1996,8 +1996,9 @@ def _validation_result_to_rule_violations(
     """
     Convert a ValidationResult into a list of RuleViolation objects.
 
-    For each violation/warning string that mentions an employee by name, the
-    cause field is automatically populated with any matching absence information.
+    Uses the structured cause_type and cause fields already attached to each
+    ViolationEntry during validation. Falls back to absence-name matching for
+    entries without an explicit cause.
     """
     emp_absences: Dict[str, list] = {}
     for absence in absences:
@@ -2016,23 +2017,27 @@ def _validation_result_to_rule_violations(
         return ""
 
     violations: List[RuleViolation] = []
-    for msg in validation_result.violations:
+    for v in validation_result.violations:
+        cause = v.cause if v.cause else _find_absence_cause(v.message)
         violations.append(RuleViolation(
             rule_id="VALIDATION_HARD",
-            description=msg,
+            description=v.message,
             severity="HARD",
             affected_dates=[],
-            cause=_find_absence_cause(msg),
-            impact=msg,
+            cause=cause,
+            impact=v.message,
+            cause_type=v.cause_type,
         ))
-    for msg in validation_result.warnings:
+    for v in validation_result.warnings:
+        cause = v.cause if v.cause else _find_absence_cause(v.message)
         violations.append(RuleViolation(
             rule_id="VALIDATION_SOFT",
-            description=msg,
+            description=v.message,
             severity="SOFT_LOW",
             affected_dates=[],
-            cause=_find_absence_cause(msg),
-            impact=msg,
+            cause=cause,
+            impact=v.message,
+            cause_type=v.cause_type,
         ))
     return violations
 

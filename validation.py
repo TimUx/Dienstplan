@@ -304,7 +304,8 @@ def validate_rest_times(
                     cause_type, cause = _analyze_absence_cause(
                         next_assign.date, absences, employees, shift_code=next_shift
                     )
-                    if cause_type == "UNDERSTAFFING":
+                    # If no absences explain it, the cause is a rotation conflict
+                    if cause_type != "ABSENCE":
                         cause_type = "ROTATION_CONFLICT"
                         cause = (
                             f"Ursache: Verbotene Schichtfolge Spät→Früh am "
@@ -321,7 +322,8 @@ def validate_rest_times(
                     cause_type, cause = _analyze_absence_cause(
                         next_assign.date, absences, employees, shift_code=next_shift
                     )
-                    if cause_type == "UNDERSTAFFING":
+                    # If no absences explain it, the cause is a rotation conflict
+                    if cause_type != "ABSENCE":
                         cause_type = "ROTATION_CONFLICT"
                         cause = (
                             f"Ursache: Verbotene Schichtfolge Nacht→Früh am "
@@ -690,7 +692,7 @@ def validate_staffing_requirements(
             elif count > max_req:
                 result.add_violation(
                     f"Overstaffing for {shift_code} shift on {d}: {count} (max {max_req})",
-                    cause_type="UNDERSTAFFING",
+                    cause_type="UNKNOWN",
                     cause=(
                         f"Ursache: Überbesetzung in {shift_code}schicht am {d.strftime('%d.%m.')} "
                         f"– {count} von max. {max_req} Mitarbeitern eingeplant"
@@ -813,15 +815,6 @@ def validate_springer_availability(
                 f"No available employee for week starting {week_start} (constraint: at least 1 must be free)",
                 cause_type=cause_type,
                 cause=cause,
-            )
-        elif len(available_employees) == 0:
-            result.add_warning(
-                f"Only {len(available_employees)} employee(s) available for week starting {week_start}",
-                cause_type="UNDERSTAFFING",
-                cause=(
-                    f"Ursache: Keine freien Mitarbeiter in der Woche ab {week_start.strftime('%d.%m.')} "
-                    f"– Springer-Verfügbarkeit nicht gewährleistet"
-                ),
             )
 
 

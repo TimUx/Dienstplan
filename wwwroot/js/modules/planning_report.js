@@ -272,27 +272,24 @@ export async function showPlanningResultModal(year, month, periodText) {
         });
 
         if (!response.ok) {
-            content.innerHTML = '<p>Zusammenfassung konnte nicht geladen werden.</p>';
+            content.innerHTML = `<p>Zusammenfassung konnte nicht geladen werden (Status: ${escapeHtml(String(response.status))}).</p>`;
             return;
         }
 
         const report = await response.json();
         content.innerHTML = renderResultSummary(report);
     } catch (_err) {
-        content.innerHTML = '<p>Zusammenfassung konnte nicht geladen werden.</p>';
+        content.innerHTML = '<p>Zusammenfassung konnte nicht geladen werden. Bitte überprüfen Sie Ihre Verbindung.</p>';
     }
 }
 
 function getResultStatusConfig(status, violations) {
     const hasHard = (violations || []).some(v => v.severity === 'HARD');
-    if (hasHard) {
+    if (hasHard || status === 'EMERGENCY') {
         return { icon: '🚨', label: 'Notfallplan', cssClass: 'planning-result-status-emergency' };
     }
     if (status === 'OPTIMAL' || status === 'FEASIBLE') {
         return { icon: '✅', label: 'Optimal geplant', cssClass: 'planning-result-status-optimal' };
-    }
-    if (status === 'EMERGENCY') {
-        return { icon: '🚨', label: 'Notfallplan', cssClass: 'planning-result-status-emergency' };
     }
     return { icon: '⚠️', label: 'Mit Abweichungen', cssClass: 'planning-result-status-warning' };
 }

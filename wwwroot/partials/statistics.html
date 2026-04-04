@@ -1,0 +1,30 @@
+            <!-- Statistics View -->
+            <div id="statistics-view" class="view">
+                <h2>📊 Statistiken</h2>
+                <div class="controls">
+                    <div class="date-range">
+                        <label>Von: <input type="date" id="statsStartDate"></label>
+                        <label>Bis: <input type="date" id="statsEndDate"></label>
+                        <button data-action="loadStatistics" class="btn-primary">🔄 Aktualisieren</button>
+                    </div>
+                </div>
+                <div id="statistics-content">
+                    <p class="loading">Lade Statistiken...</p>
+                </div>
+            </div>
+
+            <!-- Planning Report View -->
+            <div id="planning-report-view" class="view">
+                <h2>📝 Planungsbericht</h2>
+                <div class="controls">
+                    <div class="date-range">
+                        <label>Jahr: <input type="number" id="reportYear" min="2020" max="2099" style="width:80px;"></label>
+                        <label>Monat: <input type="number" id="reportMonth" min="1" max="12" style="width:60px;"></label>
+                        <button data-action="loadPlanningReport" class="btn-primary">🔄 Bericht laden</button>
+                        <button data-action="exportPlanningReportSummary" class="btn-secondary">⬇️ Bericht exportieren</button>
+                    </div>
+                </div>
+                <div id="planning-report-content">
+                    <p class="loading">Lade Planungsbericht...</p>
+                </div>
+            </div>

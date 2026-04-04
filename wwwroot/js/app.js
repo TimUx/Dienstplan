@@ -12,10 +12,45 @@ import { showToast } from './modules/utils.js';
 import * as planningReport from './modules/planning_report.js';
 
 // ============================================================================
-// VIEW NAVIGATION
+// VIEW NAVIGATION - LAZY LOADING
 // ============================================================================
 
-function showView(viewName) {
+const VIEW_PARTIALS = {
+    'schedule': '/partials/schedule.html',
+    'management': '/partials/management.html',
+    'statistics': '/partials/statistics.html',
+    'planning-report': '/partials/statistics.html',
+    'absences': '/partials/absences.html',
+    'shiftexchange': '/partials/absences.html',
+    'vacationyearplan': '/partials/absences.html',
+    'admin': '/partials/admin.html',
+    'manual': '/partials/manual.html',
+};
+
+const loadedPartials = new Set();
+
+async function ensurePartialLoaded(partialUrl) {
+    if (loadedPartials.has(partialUrl)) return;
+
+    const response = await fetch(partialUrl);
+    if (!response.ok) throw new Error(`Failed to load partial: ${partialUrl}`);
+    const html = await response.text();
+    const container = document.getElementById('view-container');
+    container.insertAdjacentHTML('beforeend', html);
+    loadedPartials.add(partialUrl);
+}
+
+async function showView(viewName) {
+    const partialUrl = VIEW_PARTIALS[viewName];
+    if (partialUrl) {
+        try {
+            await ensurePartialLoaded(partialUrl);
+        } catch (error) {
+            console.error('Could not load view:', viewName, error);
+            return;
+        }
+    }
+
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
@@ -24,9 +59,8 @@ function showView(viewName) {
         viewEl.classList.add('active');
     }
 
-    const navButtons = document.querySelectorAll('.nav-btn');
-    navButtons.forEach(btn => {
-        if (btn.getAttribute('onclick') === `showView('${viewName}')`) {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        if (btn.getAttribute('data-view') === viewName) {
             btn.classList.add('active');
         }
     });
@@ -87,11 +121,11 @@ function initializeManualAnchors() {
 // ============================================================================
 
 function initImportFormHandlers() {
-    const importEmployeesForm = document.getElementById('importEmployeesForm');
-    if (importEmployeesForm) {
-        importEmployeesForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+    document.addEventListener('submit', async (e) => {
+        const form = e.target;
 
+        if (form.id === 'importEmployeesForm') {
+            e.preventDefault();
             const fileInput = document.getElementById('employeesFile');
             const conflictResolution = document.getElementById('employeesConflictResolution').value;
             const resultDiv = document.getElementById('importEmployeesResult');
@@ -103,7 +137,6 @@ function initImportFormHandlers() {
 
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
-
             resultDiv.innerHTML = '<p class="loading">Importiere Mitarbeiter...</p>';
 
             try {
@@ -112,9 +145,7 @@ function initImportFormHandlers() {
                     credentials: 'include',
                     body: formData
                 });
-
                 const result = await response.json();
-
                 if (response.ok) {
                     resultDiv.innerHTML = utils.formatImportResult(result);
                     setTimeout(() => {
@@ -128,14 +159,10 @@ function initImportFormHandlers() {
                 console.error('Import error:', error);
                 resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${error.message}</p></div>`;
             }
-        });
-    }
+        }
 
-    const importTeamsForm = document.getElementById('importTeamsForm');
-    if (importTeamsForm) {
-        importTeamsForm.addEventListener('submit', async (e) => {
+        if (form.id === 'importTeamsForm') {
             e.preventDefault();
-
             const fileInput = document.getElementById('teamsFile');
             const conflictResolution = document.getElementById('teamsConflictResolution').value;
             const resultDiv = document.getElementById('importTeamsResult');
@@ -147,7 +174,6 @@ function initImportFormHandlers() {
 
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
-
             resultDiv.innerHTML = '<p class="loading">Importiere Teams...</p>';
 
             try {
@@ -156,9 +182,7 @@ function initImportFormHandlers() {
                     credentials: 'include',
                     body: formData
                 });
-
                 const result = await response.json();
-
                 if (response.ok) {
                     resultDiv.innerHTML = utils.formatImportResult(result);
                     setTimeout(() => {
@@ -172,12 +196,165 @@ function initImportFormHandlers() {
                 console.error('Import error:', error);
                 resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${error.message}</p></div>`;
             }
-        });
-    }
+        }
+    });
 }
 
 // ============================================================================
-// EXPOSE ALL FUNCTIONS AS GLOBALS (required for HTML inline event handlers)
+// CENTRAL EVENT DELEGATION
+// ============================================================================
+
+function buildActionMap() {
+    return {
+        // Navigation
+        'showView': (el) => showView(el.dataset.view),
+        'showNotificationModal': () => auth.showNotificationModal(),
+        'showChangePasswordModal': () => auth.showChangePasswordModal(),
+        'logout': () => auth.logout(),
+        'showLoginModal': () => auth.showLoginModal(),
+
+        // Schedule tabs
+        'switchScheduleView': (el) => schedule.switchScheduleView(el.dataset.view, el),
+
+        // Schedule controls
+        'changeDate': (el) => schedule.changeDate(parseInt(el.dataset.delta, 10)),
+        'changeMonth': (el) => schedule.changeMonth(parseInt(el.dataset.delta, 10)),
+        'changeYear': (el) => schedule.changeYear(parseInt(el.dataset.delta, 10)),
+        'togglePlanApproval': () => schedule.togglePlanApproval(),
+
+        // Schedule actions
+        'showPlanShiftsModal': () => schedule.showPlanShiftsModal(),
+        'showNewShiftModal': () => schedule.showNewShiftModal(),
+        'toggleMultiSelectMode': () => schedule.toggleMultiSelectMode(),
+        'showBulkEditModal': () => schedule.showBulkEditModal(),
+        'clearShiftSelection': () => schedule.clearShiftSelection(),
+        'exportScheduleToCsv': () => schedule.exportScheduleToCsv(),
+        'exportScheduleToPdf': () => schedule.exportScheduleToPdf(),
+        'exportScheduleToExcel': () => schedule.exportScheduleToExcel(),
+        'closePlanShiftsModal': () => schedule.closePlanShiftsModal(),
+        'cancelPlanning': () => schedule.cancelPlanning(),
+        'closePlanningResultModal': () => planningReport.closePlanningResultModal(),
+        'closeEditShiftModal': () => schedule.closeEditShiftModal(),
+        'saveShiftAssignment': () => schedule.saveShiftAssignment(),
+        'deleteShiftAssignment': () => schedule.deleteShiftAssignment(),
+        'closeBulkEditModal': () => schedule.closeBulkEditModal(),
+        'saveBulkEdit': () => schedule.saveBulkEdit(),
+        'closeQuickEntryModal': () => schedule.closeQuickEntryModal(),
+        'saveQuickEntry': () => schedule.saveQuickEntry(),
+        'updateQuickEntryOptions': () => schedule.updateQuickEntryOptions(),
+
+        // Management tabs
+        'switchManagementTab': (el) => employees.switchManagementTab(el.dataset.tab),
+        'switchShiftManagementTab': (el) => employees.switchShiftManagementTab(el.dataset.tab),
+
+        // Employee actions
+        'showAddEmployeeModal': () => employees.showAddEmployeeModal(),
+        'exportEmployeesCsv': () => employees.exportEmployeesCsv(),
+        'showImportEmployeesModal': () => employees.showImportEmployeesModal(),
+        'closeImportEmployeesModal': () => employees.closeImportEmployeesModal(),
+        'showAddTeamModal': () => employees.showAddTeamModal(),
+        'exportTeamsCsv': () => employees.exportTeamsCsv(),
+        'showImportTeamsModal': () => employees.showImportTeamsModal(),
+        'closeImportTeamsModal': () => employees.closeImportTeamsModal(),
+        'showShiftTypeModal': () => employees.showShiftTypeModal(),
+        'loadShiftTypesManagement': () => employees.loadShiftTypesManagement(),
+        'showRotationGroupModal': () => employees.showRotationGroupModal(),
+        'loadRotationGroups': () => employees.loadRotationGroups(),
+        'loadGlobalSettings': () => employees.loadGlobalSettings(),
+        'saveGlobalSettings': () => employees.saveGlobalSettings(),
+        'closeEmployeeModal': () => employees.closeEmployeeModal(),
+        'saveEmployee': () => employees.saveEmployee(),
+        'closeTeamModal': () => employees.closeTeamModal(),
+        'saveTeam': () => employees.saveTeam(),
+        'closeShiftTypeModal': () => employees.closeShiftTypeModal(),
+        'saveShiftType': () => employees.saveShiftType(),
+        'closeShiftTypeTeamsModal': () => employees.closeShiftTypeTeamsModal(),
+        'saveShiftTypeTeams': () => employees.saveShiftTypeTeams(),
+        'closeRotationGroupModal': () => employees.closeRotationGroupModal(),
+        'saveRotationGroup': () => employees.saveRotationGroup(),
+        'showAddUserModal': () => employees.showAddUserModal(),
+        'closeUserModal': () => employees.closeUserModal(),
+        'saveUser': () => employees.saveUser(),
+        'showEmailSettingsModal': () => employees.showEmailSettingsModal(),
+        'closeEmailSettingsModal': () => employees.closeEmailSettingsModal(),
+        'saveEmailSettings': () => employees.saveEmailSettings(),
+        'testEmailSettings': () => employees.testEmailSettings(),
+
+        // Admin
+        'showAdminTab': (el) => employees.showAdminTab(el.dataset.tab, el),
+        'applyAuditFilters': () => employees.applyAuditFilters(),
+        'clearAuditFilters': () => employees.clearAuditFilters(),
+        'loadAuditLogs': (el) => employees.loadAuditLogs(parseInt(el.dataset.page || '1', 10), parseInt(el.dataset.limit || '50', 10)),
+        'loadAuditLogsPreviousPage': () => employees.loadAuditLogsPreviousPage(),
+        'loadAuditLogsNextPage': () => employees.loadAuditLogsNextPage(),
+        'loadEmailSettings': () => employees.loadEmailSettings(),
+
+        // Statistics
+        'loadStatistics': () => stats.loadStatistics(),
+        'loadPlanningReport': () => planningReport.loadPlanningReport(),
+        'exportPlanningReportSummary': () => planningReport.exportPlanningReportSummary(),
+
+        // Absences
+        'switchAbsenceTab': (el) => absences.switchAbsenceTab(el.dataset.tab),
+        'showAddVacationRequestModal': () => absences.showAddVacationRequestModal(),
+        'loadVacationRequests': (el) => absences.loadVacationRequests(el.dataset.filter),
+        'showAddAbsenceModal': (el) => absences.showAddAbsenceModal(el.dataset.type),
+        'loadAbsences': (el) => absences.loadAbsences(el.dataset.filter),
+        'showVacationPeriodModal': () => absences.showVacationPeriodModal(),
+        'loadVacationYearApprovalsAbsence': () => absences.loadVacationYearApprovalsAbsence(),
+        'showAbsenceTypeModal': () => absences.showAbsenceTypeModal(),
+        'loadAbsenceTypes': () => absences.loadAbsenceTypes(),
+        'showOfferShiftExchangeModal': () => absences.showOfferShiftExchangeModal(),
+        'loadShiftExchanges': (el) => absences.loadShiftExchanges(el.dataset.filter),
+        'loadVacationYearPlan': () => absences.loadVacationYearPlan(),
+        'closeVacationRequestModal': () => absences.closeVacationRequestModal(),
+        'saveVacationRequest': () => absences.saveVacationRequest(),
+        'closeAbsenceModal': () => absences.closeAbsenceModal(),
+        'saveAbsence': () => absences.saveAbsence(),
+        'closeVacationPeriodModal': () => absences.closeVacationPeriodModal(),
+        'saveVacationPeriod': () => absences.saveVacationPeriod(),
+        'closeAbsenceTypeModal': () => absences.closeAbsenceTypeModal(),
+        'saveAbsenceType': () => absences.saveAbsenceType(),
+        'closeShiftExchangeModal': () => absences.closeShiftExchangeModal(),
+        'saveShiftExchange': () => absences.saveShiftExchange(),
+
+        // Auth modals
+        'closeLoginModal': () => auth.closeLoginModal(),
+        'login': () => auth.login(),
+        'showForgotPasswordModal': () => auth.showForgotPasswordModal(),
+        'closeChangePasswordModal': () => auth.closeChangePasswordModal(),
+        'submitChangePassword': () => auth.submitChangePassword(),
+        'closeForgotPasswordModal': () => auth.closeForgotPasswordModal(),
+        'submitForgotPassword': () => auth.submitForgotPassword(),
+        'closeResetPasswordModal': () => auth.closeResetPasswordModal(),
+        'submitResetPassword': () => auth.submitResetPassword(),
+        'filterNotifications': (el) => auth.filterNotifications(el.dataset.filter),
+        'markAllNotificationsRead': () => auth.markAllNotificationsRead(),
+        'closeNotificationModal': () => auth.closeNotificationModal(),
+    };
+}
+
+function initEventDelegation() {
+    const actionMap = buildActionMap();
+
+    document.addEventListener('click', (event) => {
+        const el = event.target.closest('[data-action]');
+        if (!el) return;
+
+        const action = el.dataset.action;
+        const handler = actionMap[action];
+
+        if (handler) {
+            event.preventDefault();
+            handler(el, event);
+        } else {
+            console.warn(`No handler for action: ${action}`);
+        }
+    });
+}
+
+// ============================================================================
+// EXPOSE ALL FUNCTIONS AS GLOBALS (required for dynamically-generated HTML)
 // ============================================================================
 
 function registerGlobals() {
@@ -343,11 +520,24 @@ function registerGlobals() {
 // APP INIT
 // ============================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     registerGlobals();
-    schedule.initializeDatePickers();
-    absences.initAbsenceTypeColorPicker();
+    initEventDelegation();
     initImportFormHandlers();
     auth.initPasswordResetCheck();
     auth.checkAuthenticationStatus();
+
+    // Load default view (schedule) immediately
+    try {
+        await ensurePartialLoaded('/partials/schedule.html');
+        const scheduleView = document.getElementById('schedule-view');
+        if (scheduleView) {
+            scheduleView.classList.add('active');
+        }
+        schedule.initializeDatePickers();
+        absences.initAbsenceTypeColorPicker();
+        schedule.loadSchedule();
+    } catch (error) {
+        console.error('Failed to load initial schedule view:', error);
+    }
 });

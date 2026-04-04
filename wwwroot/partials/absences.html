@@ -1,0 +1,306 @@
+            <!-- Vacations View -->
+            <div id="absences-view" class="view">
+                <h2>🏖️ Abwesenheitsverwaltung</h2>
+                
+                <!-- Tab Navigation -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-action="switchAbsenceTab" data-tab="vacation">🏖️ Urlaub</button>
+                    <button class="tab-btn" data-action="switchAbsenceTab" data-tab="general">📋 Abwesenheiten</button>
+                    <button class="tab-btn" data-action="switchAbsenceTab" data-tab="vacation-periods">📅 Ferienzeiten</button>
+                    <button class="tab-btn admin-only" data-action="switchAbsenceTab" data-tab="vacation-year-approvals" id="tab-vacation-year-approvals" style="display:none;">✅ Urlaubsjahresplan Freigabe</button>
+                    <button class="tab-btn admin-only" data-action="switchAbsenceTab" data-tab="absence-types" id="tab-absence-types" style="display:none;">⚙️ Abwesenheitstypen</button>
+                </div>
+                
+                <!-- Vacation Tab -->
+                <div id="vacation-tab" class="tab-content active">
+                    <h3>Urlaubsverwaltung</h3>
+                    <p class="info">Urlaubsanträge müssen vom Disponent genehmigt werden.</p>
+                    <div class="controls">
+                        <button data-action="showAddVacationRequestModal" class="btn-primary">+ Urlaubsantrag stellen</button>
+                        <button data-action="loadVacationRequests" data-filter="pending" class="btn-secondary admin-only">Offene Anträge</button>
+                        <button data-action="loadVacationRequests" data-filter="all" class="btn-secondary admin-only">Alle Anträge</button>
+                        <button data-action="loadVacationRequests" data-filter="my" class="btn-secondary">Meine Anträge</button>
+                    </div>
+                    <div id="vacation-requests-content">
+                        <p class="loading">Lade Urlaubsanträge...</p>
+                    </div>
+                </div>
+                
+                <!-- General Absences Tab (AU, L, and custom types) -->
+                <div id="general-tab" class="tab-content">
+                    <h3>📋 Abwesenheiten</h3>
+                    <p class="info">
+                        Alle Abwesenheiten außer Urlaub: Arbeitsunfähigkeit (AU), Lehrgänge, Fortbildungen, und weitere benutzerdefinierte Abwesenheitstypen.
+                        Diese werden ohne Genehmigungsprozess direkt erfasst.
+                    </p>
+                    <div class="controls">
+                        <button data-action="showAddAbsenceModal" data-type="general" class="btn-primary admin-only">+ Abwesenheit erfassen</button>
+                        <button data-action="loadAbsences" data-filter="general" class="btn-secondary">Alle anzeigen</button>
+                    </div>
+                    <div id="general-absences-content">
+                        <p class="loading">Lade Abwesenheiten...</p>
+                    </div>
+                </div>
+
+                <!-- Vacation Periods Tab -->
+                <div id="vacation-periods-tab" class="tab-content">
+                    <h3>📅 Ferienzeiten verwalten</h3>
+                    <p class="info">Definieren Sie Ferienzeiträume (Sommer, Herbst, Weihnachten, Ostern usw.). Diese werden in den Kalenderansichten als oberste Zeile angezeigt.</p>
+                    <div class="controls">
+                        <button data-action="showVacationPeriodModal" class="btn-primary admin-only">+ Ferienzeit hinzufügen</button>
+                    </div>
+                    <div id="vacation-periods-content">
+                        <p class="loading">Lade Ferienzeiten...</p>
+                    </div>
+                </div>
+
+                <!-- Vacation Year Approvals Tab -->
+                <div id="vacation-year-approvals-tab" class="tab-content">
+                    <h3>📅 Urlaubsjahresplan Freigabe</h3>
+                    <p class="info">Geben Sie die Anzeige von Urlaubsdaten für einzelne Jahre frei. Nur freigegebene Jahre sind für alle Benutzer im Urlaubsjahresplan sichtbar.</p>
+                    <div class="controls">
+                        <button data-action="loadVacationYearApprovalsAbsence" class="btn-primary">🔄 Aktualisieren</button>
+                    </div>
+                    <div id="vacation-year-approvals-absence-content">
+                        <p class="loading">Lade Freigaben...</p>
+                    </div>
+                </div>
+
+                <!-- Absence Types Management Tab -->
+                <div id="absence-types-tab" class="tab-content">
+                    <h3>⚙️ Abwesenheitstypen verwalten</h3>
+                    <p class="info">
+                        Definieren Sie eigene Abwesenheitstypen (z.B. Elternzeit, Fortbildung, Sonderurlaub). 
+                        Diese verhalten sich wie die Standard-Abwesenheiten (U, AU, L): keine Schichtplanung, automatisches Entfernen von Schichten, Springer-Aktivierung.
+                    </p>
+                    <div class="controls">
+                        <button data-action="showAbsenceTypeModal" class="btn-primary admin-only">+ Abwesenheitstyp hinzufügen</button>
+                        <button data-action="loadAbsenceTypes" class="btn-secondary">🔄 Aktualisieren</button>
+                    </div>
+                    <div id="absence-types-content">
+                        <p class="loading">Lade Abwesenheitstypen...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shift Exchange View (separate from vacation) -->
+            <div id="shiftexchange-view" class="view">
+                <h2>🔄 Diensttausch</h2>
+                <div class="controls">
+                    <button data-action="showOfferShiftExchangeModal" class="btn-primary">➕ Dienst zum Tausch anbieten</button>
+                    <button data-action="loadShiftExchanges" data-filter="available" class="btn-secondary">📋 Verfügbare Dienste</button>
+                    <button data-action="loadShiftExchanges" data-filter="pending" class="btn-secondary admin-only">⏳ Offene Anfragen</button>
+                    <button data-action="loadShiftExchanges" data-filter="my" class="btn-secondary">👤 Meine Tauschangebote</button>
+                </div>
+                <div id="shift-exchanges-content">
+                    <p class="loading">Lade Diensttausch-Angebote...</p>
+                </div>
+            </div>
+
+            <!-- Vacation Year Plan View -->
+            <div id="vacationyearplan-view" class="view">
+                <h2>📅 Urlaubsjahresplan</h2>
+                <p class="info">Übersicht aller Urlaube für ein Jahr. Die Anzeige muss vom Administrator freigegeben werden.</p>
+                
+                <div class="controls">
+                    <label>Jahr auswählen:</label>
+                    <select id="vacationYearSelect" onchange="loadVacationYearPlan()">
+                        <!-- Years will be populated dynamically -->
+                    </select>
+                    <button data-action="loadVacationYearPlan" class="btn-primary">Laden</button>
+                </div>
+                
+                <div id="vacation-year-plan-status" style="margin: 20px 0;">
+                    <!-- Status message will be shown here -->
+                </div>
+                
+                <div id="vacation-year-plan-legend" style="display: none; margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+                    <strong>Legende:</strong>
+                    <span class="shift-badge shift-U" style="margin-left: 15px;">U</span> = Genehmigter Urlaub (Blau)
+                    <span class="shift-badge shift-U-pending" style="margin-left: 15px;">U</span> = Urlaub in Genehmigung (Orange)
+                    <span class="shift-badge shift-U-rejected" style="margin-left: 15px;">U</span> = Abgelehnter Urlaub (Grau)
+                </div>
+                
+                <div id="vacation-year-plan-content">
+                    <p class="loading">Bitte wählen Sie ein Jahr aus...</p>
+                </div>
+            </div>
+
+    <!-- Vacation Request Modal -->
+    <div id="vacationRequestModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeVacationRequestModal">&times;</span>
+            <h2>Urlaubsantrag stellen</h2>
+            <form id="vacationRequestForm" onsubmit="saveVacationRequest(event)">
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="vacationEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Von (Startdatum)*</label>
+                    <input type="date" id="vacationStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Bis (Enddatum)*</label>
+                    <input type="date" id="vacationEndDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Notizen</label>
+                    <textarea id="vacationNotes" rows="3" placeholder="Optional: Grund oder Hinweise zum Urlaubsantrag"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeVacationRequestModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Antrag einreichen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Absence (AU/L) Modal -->
+    <div id="absenceModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeAbsenceModal">&times;</span>
+            <h2 id="absenceModalTitle">Abwesenheit erfassen</h2>
+            <form id="absenceForm" onsubmit="saveAbsence(event)">
+                <input type="hidden" id="absenceType">
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="absenceEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="absenceTypeSelectGroup" style="display: none;">
+                    <label>Abwesenheitstyp*</label>
+                    <select id="absenceTypeIdSelect" required>
+                        <option value="">Abwesenheitstyp wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Von (Startdatum)*</label>
+                    <input type="date" id="absenceStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Bis (Enddatum)*</label>
+                    <input type="date" id="absenceEndDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Notizen</label>
+                    <textarea id="absenceNotes" rows="3" placeholder="Optional: Zusätzliche Informationen"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeAbsenceModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Vacation Period Modal -->
+    <div id="vacationPeriodModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeVacationPeriodModal">&times;</span>
+            <h2 id="vacationPeriodModalTitle">Ferienzeit hinzufügen</h2>
+            <form id="vacationPeriodForm" onsubmit="saveVacationPeriod(event)">
+                <input type="hidden" id="vacationPeriodId">
+                <div class="form-group">
+                    <label>Name*</label>
+                    <input type="text" id="vacationPeriodName" required placeholder="z.B. Sommerferien, Weihnachtsferien, Osterferien">
+                </div>
+                <div class="form-group">
+                    <label>Von (Startdatum)*</label>
+                    <input type="date" id="vacationPeriodStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Bis (Enddatum)*</label>
+                    <input type="date" id="vacationPeriodEndDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Farbe</label>
+                    <input type="color" id="vacationPeriodColor" value="#E8F5E9">
+                    <small>Farbe für die Darstellung in den Kalenderansichten</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeVacationPeriodModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Absence Type Management Modal -->
+    <div id="absenceTypeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeAbsenceTypeModal">&times;</span>
+            <h2 id="absenceTypeModalTitle">Abwesenheitstyp hinzufügen</h2>
+            <form id="absenceTypeForm" onsubmit="saveAbsenceType(event)">
+                <input type="hidden" id="absenceTypeId">
+                <div class="form-group">
+                    <label>Bezeichnung*</label>
+                    <input type="text" id="absenceTypeName" required placeholder="z.B. Elternzeit, Fortbildung, Sonderurlaub">
+                </div>
+                <div class="form-group">
+                    <label>Kürzel*</label>
+                    <input type="text" id="absenceTypeCode" required maxlength="5" placeholder="z.B. EZ, FB, SU" style="text-transform: uppercase;">
+                    <small>Hinweis: U, AU und L sind für Systemtypen reserviert</small>
+                </div>
+                <div class="form-group">
+                    <label>Farbdarstellung im Dienstplan*</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" id="absenceTypeColor" value="#E0E0E0" required style="width: 60px; height: 40px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+                        <span id="absenceTypeColorPreview" style="padding: 8px 20px; border-radius: 4px; background: #E0E0E0; border: 1px solid #ccc;">Vorschau</span>
+                    </div>
+                    <small>Diese Farbe wird im Dienstplan für diesen Abwesenheitstyp angezeigt</small>
+                </div>
+                <div class="info-box">
+                    <p><strong>ℹ️ Hinweis:</strong></p>
+                    <p>Dieser Abwesenheitstyp verhält sich wie die Standard-Abwesenheiten (U, AU, L):</p>
+                    <ul style="margin-left: 20px;">
+                        <li>Keine Schichtplanung an Tagen mit dieser Abwesenheit</li>
+                        <li>Automatisches Entfernen von Schichten bei nachträglicher Eintragung</li>
+                        <li>Springer-System wird aktiviert</li>
+                        <li>Unterbesetzungs-Benachrichtigungen werden ausgelöst</li>
+                    </ul>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeAbsenceTypeModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shift Exchange Modal -->
+    <div id="shiftExchangeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" data-action="closeShiftExchangeModal">&times;</span>
+            <h2>Dienst zum Tausch anbieten</h2>
+            <form id="shiftExchangeForm" onsubmit="saveShiftExchange(event)">
+                <div class="form-group">
+                    <label>Datum*</label>
+                    <input type="date" id="exchangeDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Mitarbeiter*</label>
+                    <select id="exchangeEmployeeId" required>
+                        <option value="">Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Schicht*</label>
+                    <select id="exchangeShiftId" required>
+                        <option value="">Zuerst Datum und Mitarbeiter wählen...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Grund für den Tausch</label>
+                    <textarea id="exchangeReason" rows="3" placeholder="Optional: Grund für den Tauschwunsch"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" data-action="closeShiftExchangeModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Tausch anbieten</button>
+                </div>
+            </form>
+        </div>
+    </div>

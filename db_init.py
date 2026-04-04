@@ -5,6 +5,7 @@ Creates all necessary tables and initializes with sample data if needed.
 
 import sqlite3
 import hashlib
+import bcrypt
 import secrets
 from datetime import datetime
 
@@ -18,7 +19,14 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
+    # Enable WAL mode for better concurrent read/write performance
+    cursor.execute("PRAGMA journal_mode=WAL")
+    # Increase in-memory page cache to ~16 MB (default is ~2 MB)
+    cursor.execute("PRAGMA cache_size=-16384")
+    # Ensure foreign-key constraints are enforced
+    cursor.execute("PRAGMA foreign_keys=ON")
+
     # Teams table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS Teams (
@@ -555,13 +563,8 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
 
 
 def hash_password(password: str) -> str:
-    """
-    Simple password hashing using SHA256.
-    
-    Note: This matches the web_api.py implementation for consistency.
-    For production, consider upgrading to bcrypt, scrypt, or Argon2.
-    """
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password using bcrypt with automatic salting."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def create_default_admin(db_path: str = "dienstplan.db"):

@@ -13,7 +13,6 @@ from data_loader import generate_sample_data, load_from_database
 from db_init import initialize_database, run_migrations
 from model import create_shift_planning_model
 from solver import solve_shift_planning
-from validation import validate_shift_plan
 
 try:
     from waitress import serve as waitress_serve
@@ -78,20 +77,13 @@ def run_cli_planning(
         print("\n[X] No solution found!")
         return 1
     
-    assignments, complete_schedule = result
+    assignments, complete_schedule, planning_report = result
     print(f"\n[OK] Solution found!")
     print(f"  - Total assignments: {len(assignments)}")
     print(f"  - Complete schedule entries: {len(complete_schedule)}")
     
-    # Validate
-    print("\nValidating solution...")
-    validation_result = validate_shift_plan(
-        assignments, employees, absences, start_date, end_date, teams,
-        complete_schedule, 
-        locked_team_shift=None, locked_employee_weekend=None, 
-        shift_types=shift_types
-    )
-    validation_result.print_report()
+    # Print planning report (includes validation results)
+    print(planning_report.generate_text_summary())
     
     # Print summary
     print("\n" + "=" * 60)

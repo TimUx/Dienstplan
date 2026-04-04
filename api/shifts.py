@@ -1114,7 +1114,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                         })
                 return
             
-            assignments, complete_schedule = result
+            assignments, complete_schedule, _planning_report = result
             
             # Filter assignments to include:
             # 1. All days in the requested month (start_date to end_date)

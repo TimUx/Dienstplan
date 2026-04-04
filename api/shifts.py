@@ -13,7 +13,8 @@ import time
 from .shared import (
     get_db, require_auth, require_role, log_audit,
     get_row_value, _paginate,
-    extend_planning_dates_to_complete_weeks, validate_monthly_date_range
+    extend_planning_dates_to_complete_weeks, validate_monthly_date_range,
+    limiter
 )
 
 bp = Blueprint('shifts', __name__)
@@ -321,6 +322,7 @@ def update_shift_type(id):
 
 
 @bp.route('/api/shifttypes/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_shift_type(id):
     """Delete shift type (Admin only)"""
@@ -1319,6 +1321,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
 
 
 @bp.route('/api/shifts/plan', methods=['POST'])
+@limiter.limit("5 per hour")
 @require_role('Admin')
 def plan_shifts():
     """
@@ -1688,6 +1691,7 @@ def create_shift_assignment():
 
 
 @bp.route('/api/shifts/assignments/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_shift_assignment(id):
     """Delete a shift assignment"""
@@ -1915,6 +1919,7 @@ def toggle_fixed_assignment(id):
 # ============================================================================
 
 @bp.route('/api/shifts/export/csv', methods=['GET'])
+@limiter.limit("20 per hour")
 def export_schedule_csv():
     """Export schedule to CSV format"""
     start_date_str = request.args.get('startDate')
@@ -2123,6 +2128,7 @@ def _get_absence_code(absence_type: int) -> str:
 
 
 @bp.route('/api/shifts/export/pdf', methods=['GET'])
+@limiter.limit("20 per hour")
 def export_schedule_pdf():
     """Export schedule to PDF format matching the UI view structure"""
     start_date_str = request.args.get('startDate')
@@ -2333,6 +2339,7 @@ def export_schedule_pdf():
 
 
 @bp.route('/api/shifts/export/excel', methods=['GET'])
+@limiter.limit("20 per hour")
 def export_schedule_excel():
     """Export schedule to Excel format matching the UI view structure"""
     start_date_str = request.args.get('startDate')

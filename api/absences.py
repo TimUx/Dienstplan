@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request, session, current_app
 from datetime import datetime
 import json
 
-from .shared import get_db, require_auth, require_role, log_audit
+from .shared import get_db, require_auth, require_role, log_audit, limiter
 
 bp = Blueprint('absences', __name__)
 
@@ -210,6 +210,7 @@ def create_absence():
 
 
 @bp.route('/api/absences/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_absence(id):
     """Delete an absence"""
@@ -427,6 +428,7 @@ def update_absence_type(id):
 
 
 @bp.route('/api/absencetypes/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_absence_type(id):
     """Delete custom absence type (Admin only)"""
@@ -602,6 +604,7 @@ def update_vacation_request_status(id):
 
 
 @bp.route('/api/vacationrequests/<int:id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @require_role('Admin')
 def delete_vacation_request(id):
     """Delete vacation request (Admin only) - allows cancellation of approved requests"""

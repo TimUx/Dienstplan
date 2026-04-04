@@ -19,7 +19,7 @@ from functools import wraps
 
 
 # Module-level limiter (init_app called in create_app)
-limiter = Limiter(get_remote_address, default_limits=[], storage_uri="memory://")
+limiter = Limiter(get_remote_address, default_limits=["200 per minute", "2000 per hour"], storage_uri="memory://")
 
 
 def get_row_value(row: sqlite3.Row, key: str, default):

@@ -172,7 +172,7 @@ class PlanningReport:
     """Constraints, die für die Planung relaxiert wurden."""
 
     # -- Abwesenheitsauswirkungen -------------------------------------------
-    absence_impact: Dict[date, "AbsenceImpact"] = field(default_factory=dict)
+    absence_impact: Dict[date, AbsenceImpact] = field(default_factory=dict)
     """Tagesweise Abwesenheitsauswirkungsanalyse (Datum → AbsenceImpact)."""
 
     # -- Solver-Metriken ----------------------------------------------------
@@ -197,7 +197,7 @@ class PlanningReport:
         return sum(self.shifts_assigned.values())
 
     @property
-    def risk_days(self) -> List["AbsenceImpact"]:
+    def risk_days(self) -> List[AbsenceImpact]:
         """Tage mit Abwesenheitsrisiko (Puffer < 20 %)."""
         return [impact for impact in self.absence_impact.values() if impact.has_risk]
 

@@ -54,7 +54,7 @@ def main():
     port = 5000
     db_path = str(data_dir / "dienstplan.db")
     
-    # Check if database exists, if not initialize it
+    # Check if database exists, if not initialize it; otherwise run migrations
     if not os.path.exists(db_path):
         print("[i] No database found. Initializing new database...")
         print()
@@ -71,6 +71,16 @@ def main():
             print(f"[!] Error initializing database: {e}")
             print("   The application may not work correctly.")
             print()
+    else:
+        # Existing database – apply any outstanding migrations automatically
+        try:
+            from db_init import run_migrations
+            run_migrations(db_path)
+        except ImportError as e:
+            print(f"[!] Could not import migration module: {e}")
+        except Exception as e:
+            print(f"[!] Error running migrations: {e}")
+            print("   The application may not work correctly.")
     
     # Start browser opener in background thread
     url = f"http://{host}:{port}"

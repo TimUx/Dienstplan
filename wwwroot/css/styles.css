@@ -2364,6 +2364,13 @@ body.disponent button.admin-only.admin-strict {
     text-align: center;
 }
 
+.planning-elapsed {
+    font-size: 13px;
+    color: #718096;
+    margin-top: 6px;
+    text-align: center;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }

@@ -16,7 +16,15 @@ import hashlib
 import bcrypt
 import secrets
 import sys
+import threading
+import uuid
+import time
 from functools import wraps
+
+# In-memory store for background planning jobs.
+# Maps job_id (str) -> job state dict.
+_plan_jobs: Dict[str, dict] = {}
+_plan_jobs_lock = threading.Lock()
 
 # PDF export dependencies
 from reportlab.lib import colors
@@ -2981,56 +2989,42 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             if conn:
                 conn.close()
     
-    @app.route('/api/shifts/plan', methods=['POST'])
-    @require_role('Admin')
-    def plan_shifts():
+    def _run_planning_job(job_id: str, start_date, end_date, force: bool):
         """
-        Automatic shift planning using OR-Tools (Admin only) - Monthly planning with week completion.
-        
-        Planning extends beyond month boundaries to complete partial weeks:
-        - If the last day of the month is not Sunday, planning extends to the next Sunday
-        - Days from the next month that are already planned will be locked as constraints
+        Background worker that executes the shift planning solver and stores
+        the result (or error) in *_plan_jobs* under *job_id*.
         """
-        start_date_str = request.args.get('startDate')
-        end_date_str = request.args.get('endDate')
-        force = request.args.get('force', 'false').lower() == 'true'
-        
-        if not start_date_str or not end_date_str:
-            return jsonify({'error': 'startDate and endDate are required'}), 400
-        
+        def _update(status: str, message: str, **kwargs):
+            with _plan_jobs_lock:
+                _plan_jobs[job_id].update({'status': status, 'message': message, **kwargs})
+
         try:
-            start_date = date.fromisoformat(start_date_str)
-            end_date = date.fromisoformat(end_date_str)
-            
-            # Validate that planning is for a complete single month
-            is_valid, error_msg = validate_monthly_date_range(start_date, end_date)
-            if not is_valid:
-                return jsonify({'error': error_msg}), 400
-            
+            _update('running', 'Daten werden geladen…')
+
             # Extend planning dates to complete weeks (may extend into next month)
             extended_start, extended_end = extend_planning_dates_to_complete_weeks(start_date, end_date)
-            
+
             # Log the extension for transparency
             app.logger.info(f"Planning for {start_date} to {end_date}")
             if extended_end > end_date:
                 app.logger.info(f"Extended to complete week: {extended_start} to {extended_end} (added {(extended_end - end_date).days} days from next month)")
-            
+
             # Load data
             employees, teams, absences, shift_types = load_from_database(db.db_path)
-            
+
             # Load global settings (consecutive shifts limits, rest time, etc.)
             global_settings = load_global_settings(db.db_path)
-            
+
             # Load existing assignments for the extended period (to lock days from adjacent months)
             conn = db.get_connection()
             cursor = conn.cursor()
-            
+
             # Get existing assignments for days that extend beyond the current month
             # These will be locked so we don't overwrite already-planned shifts
             locked_team_shift = {}
             locked_employee_weekend = {}
             locked_employee_shift = {}  # NEW: Lock individual employee shifts to prevent double shifts
-            
+
             # Query ALL existing shift assignments in the extended planning period
             # This prevents double shifts when planning across months
             # NOTE: This is separate from the team-level locking below because we need to
@@ -3041,9 +3035,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
                 WHERE sa.Date >= ? AND sa.Date <= ?
             """, (extended_start.isoformat(), extended_end.isoformat()))
-            
+
             existing_employee_assignments = cursor.fetchall()
-            
+
             # Calculate weeks for boundary detection (needed for employee locks)
             # We'll skip locking employee assignments in boundary weeks to avoid conflicts
             from datetime import timedelta
@@ -3052,7 +3046,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             while current <= extended_end:
                 dates_list.append(current)
                 current += timedelta(days=1)
-            
+
             # Calculate weeks
             weeks_for_boundary = []
             current_week = []
@@ -3063,31 +3057,31 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 current_week.append(d)
             if current_week:
                 weeks_for_boundary.append(current_week)
-            
+
             # Identify boundary weeks (same logic as team lock boundary detection)
             boundary_week_dates = set()
             for week_dates in weeks_for_boundary:
                 has_dates_before_month = any(d < start_date for d in week_dates)
                 has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
                 has_dates_after_month = any(d > end_date for d in week_dates)
-                
+
                 # If week spans the boundary, mark all its dates as boundary dates
                 if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
                     boundary_week_dates.update(week_dates)
                     app.logger.info(f"Boundary week detected: {week_dates[0]} to {week_dates[-1]} - employee locks will be skipped")
-            
+
             # Lock existing employee assignments
             # CRITICAL FIX: Skip locking employee assignments in boundary weeks
             # Boundary weeks span month boundaries and may have assignments that conflict
             # with current shift configuration or team-based rotation requirements
             for emp_id, date_str, shift_code in existing_employee_assignments:
                 assignment_date = date.fromisoformat(date_str)
-                
+
                 # Skip assignments in boundary weeks - they will be re-planned to match current config
                 if assignment_date in boundary_week_dates:
                     app.logger.info(f"Skipping lock for Employee {emp_id}, Date {date_str} (in boundary week)")
                     continue
-                
+
                 # CRITICAL FIX: Convert emp_id to int to match assignment.employee_id type
                 # Database returns TEXT ids as strings, but solver uses integers
                 try:
@@ -3097,7 +3091,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     emp_id_int = emp_id
                 locked_employee_shift[(emp_id_int, assignment_date)] = shift_code
                 app.logger.info(f"Locked: Employee {emp_id_int}, Date {date_str} -> {shift_code} (existing assignment)")
-            
+
             if extended_end > end_date or extended_start < start_date:
                 # Query existing shift assignments for extended dates ONLY (not the main month)
                 # Join ShiftAssignments with Employees (for TeamId) and ShiftTypes (for Code)
@@ -3113,9 +3107,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     AND e.TeamId IS NOT NULL
                 """, (extended_start.isoformat(), extended_end.isoformat(),
                       start_date.isoformat(), end_date.isoformat()))
-                
+
                 existing_team_assignments = cursor.fetchall()
-                
+
                 # Build locked constraints from existing assignments
                 # We need to map dates to week indices
                 from datetime import timedelta
@@ -3124,7 +3118,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 while current <= extended_end:
                     dates_list.append(current)
                     current += timedelta(days=1)
-                
+
                 # Calculate weeks
                 weeks = []
                 current_week = []
@@ -3135,26 +3129,26 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     current_week.append(d)
                 if current_week:
                     weeks.append(current_week)
-                
+
                 # Map dates to week indices
                 date_to_week = {}
                 for week_idx, week_dates in enumerate(weeks):
                     for d in week_dates:
                         date_to_week[d] = week_idx
-                
+
                 # Lock existing team assignments
                 # CRITICAL FIX: Only lock team shifts for weeks entirely in adjacent months (not current month)
                 # Weeks that span the boundary between adjacent and current months should NOT be locked
                 # because they may have conflicting shifts (already-planned days vs. to-be-planned days)
-                # 
+                #
                 # Example for March 2026:
                 # - Week 0 (Feb 23 - Mar 1): spans boundary, NOT locked
                 # - Weeks 1-4 (entirely in March): current month, NOT locked (will be planned)
                 # - Week 5 (Mar 30 - Apr 5): spans boundary, NOT locked
-                # 
-                # Only weeks entirely in February (before Feb 23) or entirely in April (after Apr 5) 
+                #
+                # Only weeks entirely in February (before Feb 23) or entirely in April (after Apr 5)
                 # would be locked, but those don't exist in this extended planning period.
-                
+
                 # Identify weeks that cross the month boundary
                 boundary_weeks = set()
                 for week_idx, week_dates in enumerate(weeks):
@@ -3162,23 +3156,23 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     has_dates_before_month = any(d < start_date for d in week_dates)
                     has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
                     has_dates_after_month = any(d > end_date for d in week_dates)
-                    
+
                     # If week spans the boundary, don't lock it
                     if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
                         boundary_weeks.add(week_idx)
                         app.logger.info(f"Week {week_idx} spans month boundary - will NOT be locked (dates: {week_dates[0]} to {week_dates[-1]})")
-                
+
                 # First pass: identify conflicts and boundary weeks
                 conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
                 for team_id, date_str, shift_code in existing_team_assignments:
                     assignment_date = date.fromisoformat(date_str)
                     if assignment_date in date_to_week:
                         week_idx = date_to_week[assignment_date]
-                        
+
                         # Skip weeks that cross the month boundary
                         if week_idx in boundary_weeks:
                             continue
-                        
+
                         # Check for conflicts
                         if (team_id, week_idx) in locked_team_shift:
                             existing_shift = locked_team_shift[(team_id, week_idx)]
@@ -3189,30 +3183,30 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         else:
                             # No conflict yet - tentatively add this lock
                             locked_team_shift[(team_id, week_idx)] = shift_code
-                
+
                 # Second pass: remove all conflicting locks
                 for team_id, week_idx in conflicting_team_weeks:
                     if (team_id, week_idx) in locked_team_shift:
                         app.logger.warning(f"  Removing team lock for Team {team_id}, Week {week_idx} to avoid INFEASIBLE")
                         del locked_team_shift[(team_id, week_idx)]
-                
+
                 # Log remaining locks
                 for (team_id, week_idx), shift_code in locked_team_shift.items():
                     app.logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignments)")
-            
+
             conn.close()
-            
+
             # Load previous shifts for cross-month consecutive days checking
             # CRITICAL FIX: Extended lookback to capture full consecutive chains
             # Previous implementation only looked back max_consecutive_days, which allowed
             # long consecutive chains to build up across multiple planning periods.
             # Example: If max=6 but employee worked 20 consecutive days in previous month,
             # only seeing the last 6 days would miss the full violation.
-            # 
+            #
             # New approach: Start with max_consecutive_days lookback, then extend dynamically
             # for each employee to capture their full consecutive chain.
             max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
-            
+
             # Maximum lookback period to prevent excessive database queries
             # 60 days (approximately 2 months) is chosen because:
             # 1. It's long enough to catch realistic violation chains (even 4x the typical limit)
@@ -3220,15 +3214,15 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
             # 3. Violations beyond 60 days would have been severely penalized in their own planning period
             # 4. Regulatory requirements typically focus on recent consecutive work, not months-old violations
             max_lookback_days = 60
-            
+
             previous_employee_shifts = {}
             conn = db.get_connection()
             cursor = conn.cursor()
-            
+
             # First pass: Load initial lookback period (same as before)
             initial_lookback_start = extended_start - timedelta(days=max_consecutive_limit)
             initial_lookback_end = extended_start - timedelta(days=1)
-            
+
             cursor.execute("""
                 SELECT sa.EmployeeId, sa.Date, st.Code
                 FROM ShiftAssignments sa
@@ -3236,9 +3230,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 WHERE sa.Date >= ? AND sa.Date <= ?
                 ORDER BY sa.Date
             """, (initial_lookback_start.isoformat(), initial_lookback_end.isoformat()))
-            
+
             initial_shifts = cursor.fetchall()
-            
+
             # Group shifts by employee for analysis
             employee_shift_dates = {}
             for emp_id, date_str, shift_code in initial_shifts:
@@ -3247,26 +3241,26 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     emp_id_int = int(emp_id)
                 except (ValueError, TypeError):
                     emp_id_int = emp_id
-                    
+
                 if emp_id_int not in employee_shift_dates:
                     employee_shift_dates[emp_id_int] = []
                 employee_shift_dates[emp_id_int].append((shift_date, shift_code))
                 previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
-            
+
             # Second pass: For each employee with shifts at the start of lookback period,
             # extend lookback to capture their full consecutive chain
             employees_to_extend = []
             for emp_id, shifts in employee_shift_dates.items():
                 if not shifts:
                     continue
-                
+
                 # Sort by date
                 shifts.sort(key=lambda x: x[0])
-                
+
                 # Check if employee has shifts at the very beginning of lookback period
                 # If so, they might have more consecutive days further back
                 earliest_shift_date = shifts[0][0]
-                
+
                 # Check if there's a consecutive chain leading up to extended_start
                 # Work backwards from extended_start - 1 to find consecutive days
                 # Check at least max_consecutive_limit days to see if chain extends beyond limit
@@ -3280,20 +3274,20 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                         check_date -= timedelta(days=1)
                     else:
                         break
-                
+
                 # If we found exactly max_consecutive_limit consecutive days without breaking,
                 # the chain might extend further back. We need extended lookback to find out.
                 # Using == ensures we only extend when we've exhausted the initial lookback.
                 if consecutive_days == max_consecutive_limit:
                     employees_to_extend.append(emp_id)
-            
+
             # Extend lookback for employees who need it
             if employees_to_extend:
                 extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
                 extended_lookback_end = initial_lookback_start - timedelta(days=1)
-                
+
                 app.logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
-                
+
                 # Query extended period for these employees only
                 # Use parameterized query to prevent SQL injection
                 placeholders = ','.join('?' * len(employees_to_extend))
@@ -3307,7 +3301,7 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 """
                 params = [extended_lookback_start.isoformat(), extended_lookback_end.isoformat()] + employees_to_extend
                 cursor.execute(query, params)
-                
+
                 for emp_id, date_str, shift_code in cursor.fetchall():
                     shift_date = date.fromisoformat(date_str)
                     try:
@@ -3315,9 +3309,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     except (ValueError, TypeError):
                         emp_id_int = emp_id
                     previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
-            
+
             conn.close()
-            
+
             app.logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
             if previous_employee_shifts:
                 # Find actual date range
@@ -3328,23 +3322,25 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     app.logger.info(f"  Previous shifts date range: {actual_lookback_start} to {actual_lookback_end}")
                     if employees_to_extend:
                         app.logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
-            
+
             # Create model with extended dates and locked constraints
+            _update('running', 'Modell wird erstellt…')
             planning_model = create_shift_planning_model(
-                employees, teams, extended_start, extended_end, absences, 
+                employees, teams, extended_start, extended_end, absences,
                 shift_types=shift_types,
                 locked_team_shift=locked_team_shift if locked_team_shift else None,
                 locked_employee_shift=locked_employee_shift if locked_employee_shift else None,
                 previous_employee_shifts=previous_employee_shifts if previous_employee_shifts else None
             )
-            
+
             # Solve
+            _update('running', 'Solver läuft… (bis zu 5 Minuten)')
             result = solve_shift_planning(planning_model, time_limit_seconds=300, global_settings=global_settings)
-            
+
             if not result:
                 # Get diagnostic information to help user understand the issue
                 diagnostics = get_infeasibility_diagnostics(planning_model)
-                
+
                 # Build helpful error message with root cause analysis
                 error_details = []
                 error_details.append(f"Planung für {start_date.strftime('%d.%m.%Y')} bis {end_date.strftime('%d.%m.%Y')} nicht möglich.")
@@ -3353,11 +3349,11 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                 error_details.append(f"• Mitarbeiter gesamt: {diagnostics['total_employees']}")
                 error_details.append(f"• Teams: {diagnostics['total_teams']}")
                 error_details.append(f"• Planungszeitraum: {diagnostics['planning_days']} Tage ({diagnostics['planning_weeks']:.1f} Wochen)")
-                
+
                 if diagnostics['employees_with_absences'] > 0:
                     error_details.append(f"• Mitarbeiter mit Abwesenheiten: {diagnostics['employees_with_absences']}")
                     error_details.append(f"• Abwesenheitstage gesamt: {diagnostics['total_absence_days']} von {diagnostics['total_employees'] * diagnostics['planning_days']} ({diagnostics['absence_ratio']*100:.1f}%)")
-                
+
                 # Add specific issues - these are the root causes
                 if diagnostics['potential_issues']:
                     error_details.append("")
@@ -3373,9 +3369,9 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     error_details.append("• Zu wenige Mitarbeiter für die erforderliche Schichtbesetzung")
                     error_details.append("• Konflikte zwischen Ruhezeiten und Schichtzuweisungen")
                     error_details.append("• Teams sind zu klein für die Rotationsanforderungen")
-                
+
                 # Add staffing analysis for shifts with issues
-                problem_shifts = [shift for shift, data in diagnostics['shift_analysis'].items() 
+                problem_shifts = [shift for shift, data in diagnostics['shift_analysis'].items()
                                  if not data['is_feasible']]
                 if problem_shifts:
                     error_details.append("")
@@ -3383,54 +3379,55 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     for shift in problem_shifts:
                         data = diagnostics['shift_analysis'][shift]
                         error_details.append(f"• Schicht {shift}: Nur {data['eligible_employees']} Mitarbeiter verfügbar, aber {data['min_required']} erforderlich")
-                
+
                 error_message = "\n".join(error_details)
-                
-                return jsonify({
-                    'error': 'Planung fehlgeschlagen',
-                    'details': error_message,
-                    'diagnostics': {
-                        'total_employees': diagnostics['total_employees'],
-                        'available_employees': diagnostics['available_employees'],  # Deprecated: same as total_employees
-                        'employees_with_absences': diagnostics['employees_with_absences'],
-                        'absent_employees': diagnostics['absent_employees'],  # Deprecated: same as employees_with_absences (kept for backward compatibility)
-                        'potential_issues': diagnostics['potential_issues'],
-                        'shift_analysis': diagnostics.get('shift_analysis', {})
-                    }
-                }), 500
-            
+
+                _update('error',
+                        'Planung fehlgeschlagen',
+                        details=error_message,
+                        diagnostics={
+                            'total_employees': diagnostics['total_employees'],
+                            'available_employees': diagnostics['available_employees'],
+                            'employees_with_absences': diagnostics['employees_with_absences'],
+                            'absent_employees': diagnostics['absent_employees'],
+                            'potential_issues': diagnostics['potential_issues'],
+                            'shift_analysis': diagnostics.get('shift_analysis', {})
+                        })
+                return
+
             assignments, complete_schedule = result
-            
+
             # Filter assignments to include:
             # 1. All days in the requested month (start_date to end_date)
             # 2. Extended days into NEXT month (end_date < date <= extended_end) - to maintain rotation continuity
             # 3. EXCLUDE extended days from PREVIOUS month (extended_start <= date < start_date) - these should already exist
             filtered_assignments = [a for a in assignments if start_date <= a.date <= extended_end]
-            
+
             # Count assignments by category for logging
             current_month_count = len([a for a in filtered_assignments if start_date <= a.date <= end_date])
             future_extended_count = len([a for a in filtered_assignments if a.date > end_date])
             past_excluded_count = len([a for a in assignments if a.date < start_date])
-            
+
             app.logger.info(f"Total assignments generated: {len(assignments)}")
             app.logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
             if future_extended_count > 0:
                 app.logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
             if past_excluded_count > 0:
                 app.logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
-            
+
             # Save to database
+            _update('running', 'Ergebnisse werden gespeichert…')
             conn = db.get_connection()
             cursor = conn.cursor()
-            
+
             # Delete existing non-fixed assignments for current month AND future extended days
             # (but NOT for past extended days - those were planned by previous month)
             if force:
                 cursor.execute("""
-                    DELETE FROM ShiftAssignments 
+                    DELETE FROM ShiftAssignments
                     WHERE Date >= ? AND Date <= ? AND IsFixed = 0
                 """, (start_date.isoformat(), extended_end.isoformat()))
-            
+
             # Insert new assignments (current month + future extended days)
             # CRITICAL FIX: Skip assignments that are locked (already exist from previous planning)
             # This prevents duplicate shifts when planning months that overlap with previously planned weeks
@@ -3443,21 +3440,21 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     # It was loaded as a locked constraint and should not be duplicated
                     skipped_locked += 1
                     continue
-                
+
                 # CRITICAL: Check if assignment already exists (safety against double shifts)
                 # With unique constraint on (EmployeeId, Date), this prevents database errors
                 cursor.execute("""
-                    SELECT Id FROM ShiftAssignments 
+                    SELECT Id FROM ShiftAssignments
                     WHERE EmployeeId = ? AND Date = ?
                 """, (assignment.employee_id, assignment.date.isoformat()))
-                
+
                 if cursor.fetchone():
                     # Assignment already exists - skip to prevent duplicate
                     skipped_locked += 1
                     continue
-                
+
                 cursor.execute("""
-                    INSERT INTO ShiftAssignments 
+                    INSERT INTO ShiftAssignments
                     (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -3470,12 +3467,12 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     "Python-OR-Tools"
                 ))
                 inserted += 1
-            
+
             app.logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
-            
+
             # TD (Tag Dienst / Day Duty) assignments have been removed from the system
             # This section is no longer used
-            
+
             # Create or update approval record for this month (not approved by default)
             cursor.execute("""
                 INSERT INTO ShiftPlanApprovals (Year, Month, IsApproved, CreatedAt)
@@ -3486,25 +3483,93 @@ def create_app(db_path: str = "dienstplan.db") -> Flask:
                     ApprovedBy = NULL,
                     ApprovedByName = NULL
             """, (start_date.year, start_date.month, datetime.utcnow().isoformat()))
-            
+
             conn.commit()
             conn.close()
-            
-            return jsonify({
-                'success': True,
-                'message': f'Successfully planned {len(filtered_assignments)} shifts for {start_date.strftime("%B %Y")}. Plan must be approved before visible to regular users.',
-                'assignmentsCount': len(filtered_assignments),
-                'year': start_date.year,
-                'month': start_date.month,
-                'extendedPlanning': {
-                    'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
-                    'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0
+
+            _update('success',
+                    f'Erfolgreich! {len(filtered_assignments)} Schichten wurden geplant.',
+                    assignmentsCount=len(filtered_assignments),
+                    year=start_date.year,
+                    month=start_date.month,
+                    extendedPlanning={
+                        'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
+                        'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0
+                    })
+
+        except Exception as exc:
+            app.logger.exception(f"Planning job {job_id} failed")
+            _update('error', 'Unbekannter Fehler', details=str(exc))
+
+    @app.route('/api/shifts/plan', methods=['POST'])
+    @require_role('Admin')
+    def plan_shifts():
+        """
+        Start asynchronous shift planning using OR-Tools (Admin only).
+
+        Returns a job_id immediately; the caller should poll
+        GET /api/shifts/plan/status/<job_id> for progress and result.
+        """
+        start_date_str = request.args.get('startDate')
+        end_date_str = request.args.get('endDate')
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        if not start_date_str or not end_date_str:
+            return jsonify({'error': 'startDate and endDate are required'}), 400
+
+        try:
+            start_date = date.fromisoformat(start_date_str)
+            end_date = date.fromisoformat(end_date_str)
+
+            # Validate that planning is for a complete single month
+            is_valid, error_msg = validate_monthly_date_range(start_date, end_date)
+            if not is_valid:
+                return jsonify({'error': error_msg}), 400
+
+            # Create job entry and start background thread
+            job_id = str(uuid.uuid4())
+            with _plan_jobs_lock:
+                _plan_jobs[job_id] = {
+                    'status': 'running',
+                    'message': 'Planung wird gestartet…',
+                    'started_at': time.time(),
                 }
-            })
-            
+
+            t = threading.Thread(
+                target=_run_planning_job,
+                args=(job_id, start_date, end_date, force),
+                daemon=True,
+                name=f'planning-{job_id[:8]}'
+            )
+            t.start()
+
+            return jsonify({'jobId': job_id, 'status': 'running'}), 202
+
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-    
+
+    @app.route('/api/shifts/plan/status/<job_id>', methods=['GET'])
+    @require_role('Admin')
+    def get_plan_status(job_id):
+        """
+        Poll the status of a background planning job.
+
+        Returns:
+            status: 'running' | 'success' | 'error'
+            message: human-readable status text
+            (on success) assignmentsCount, year, month, extendedPlanning
+            (on error)   details, diagnostics
+        """
+        with _plan_jobs_lock:
+            job = _plan_jobs.get(job_id)
+
+        if job is None:
+            return jsonify({'error': 'Job not found'}), 404
+
+        elapsed = int(time.time() - job.get('started_at', time.time()))
+        response = dict(job)
+        response['elapsedSeconds'] = elapsed
+        return jsonify(response)
     @app.route('/api/shifts/plan/approvals', methods=['GET'])
     @require_role('Admin')
     def get_plan_approvals():

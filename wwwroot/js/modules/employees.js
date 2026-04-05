@@ -49,7 +49,6 @@ export function displayEmployees(employees) {
                     ${e.geburtsdatum ? `<span><strong>Geburtsdatum:</strong> ${birthdateStr}</span>` : ''}
                     <span><strong>Team:</strong> ${e.teamName || 'Kein Team'}</span>
                     <div class="badge-row">
-                        ${e.isSpringer ? '<span class="badge badge-springer">Springer</span>' : ''}
                         ${e.isBrandmeldetechniker ? '<span class="badge badge-bmt">BMT</span>' : ''}
                         ${e.isBrandschutzbeauftragter ? '<span class="badge badge-bsb">BSB</span>' : ''}
                     </div>
@@ -194,7 +193,6 @@ export async function saveEmployee(event) {
         email: document.getElementById('email').value || null,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         teamId: document.getElementById('teamId').value ? parseInt(document.getElementById('teamId').value) : null,
-        isSpringer: false,
         isTeamLeader: document.getElementById('isTeamLeader').checked,
         isAdmin: document.getElementById('isAdmin').checked,
         isBrandmeldetechniker: document.getElementById('isBrandmeldetechniker').checked,

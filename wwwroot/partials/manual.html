@@ -15,7 +15,7 @@
                             <li><a href="#manual-statistics">7. Statistiken</a></li>
                             <li><a href="#manual-email">8. E-Mail-Einstellungen</a></li>
                             <li><a href="#manual-rules">9. Schichtplanungsregeln</a></li>
-                            <li><a href="#manual-springer">10. Springer-System</a></li>
+                            <li><a href="#manual-springer">10. Automatische Vertretung</a></li>
                             <li><a href="#manual-troubleshooting">11. Problembehebung</a></li>
                         </ul>
                     </div>
@@ -35,7 +35,7 @@
                             <li><strong>Mitarbeiterverwaltung:</strong> Verwalten Sie Mitarbeiter, Teams und Abwesenheiten mit erweiterten Daten (E-Mail, Geburtsdatum, Funktion)</li>
                             <li><strong>Urlaubsverwaltung:</strong> Mitarbeiter können Urlaubsanträge einreichen, die vom Disponent genehmigt werden</li>
                             <li><strong>Diensttausch-System:</strong> Mitarbeiter können Dienste untereinander tauschen (mit Genehmigung)</li>
-                            <li><strong>Springer-System:</strong> Automatische Zuweisung von Vertretungen bei Ausfällen</li>
+                            <li><strong>Automatische Vertretung:</strong> Automatische Zuweisung von Vertretungen bei Ausfällen</li>
                             <li><strong>Statistiken:</strong> Übersicht über Arbeitsstunden, Schichtverteilung, Wochenend-Dienste und Auslastung</li>
                             <li><strong>E-Mail-Benachrichtigungen:</strong> Konfigurierbare E-Mail-Benachrichtigungen für alle Beteiligten</li>
                         </ul>
@@ -123,7 +123,6 @@
                                     <li><strong>E-Mail:</strong> Für Benachrichtigungen</li>
                                     <li><strong>Geburtsdatum:</strong> Für Personalverwaltung</li>
                                     <li><strong>Funktion:</strong> Z.B. Brandmeldetechniker, Brandschutzbeauftragter</li>
-                                    <li><strong>Springer:</strong> Markieren für Vertretungspool</li>
                                 </ul>
                             </li>
                             <li>Klicken Sie auf "Speichern"</li>
@@ -311,20 +310,27 @@
                     </section>
 
                     <section id="manual-springer" class="manual-section">
-                        <h3>10. Springer-System</h3>
-                        <p>Das Springer-System sorgt für automatische Vertretung bei kurzfristigen Ausfällen.</p>
+                        <h3>10. Automatische Vertretung</h3>
+                        <p>Das System sorgt bei Bedarf für automatische Vertretung bei kurzfristigen Ausfällen.</p>
                         
-                        <h4>Springer definieren</h4>
-                        <p>Markieren Sie beim Anlegen oder Bearbeiten eines Mitarbeiters das Feld "Springer".</p>
+                        <h4>Wie funktioniert die Vertretungssuche?</h4>
+                        <p>Es gibt keine fest eingeteilten Springer. Stattdessen ermittelt das System bei einer Abwesenheit automatisch, welche Mitarbeiter als Vertretung in Frage kommen. Dabei werden berücksichtigt:</p>
+                        <ul>
+                            <li>Verfügbarkeit (keine eigene Abwesenheit, keine Schicht am selben Tag)</li>
+                            <li>Zugehörigkeit zum gleichen oder einem anderen Team</li>
+                            <li>Schicht-Rotationsregeln</li>
+                            <li>Mindest-Ruhezeiten (11 Stunden)</li>
+                            <li>Fairness (Gleichverteilung)</li>
+                        </ul>
                         
                         <h4>Automatische Zuweisung</h4>
                         <p>Bei Erfassung einer Abwesenheit prüft das System automatisch:</p>
                         <ol>
                             <li>Welche Schichten betroffen sind</li>
-                            <li>Welche Springer verfügbar sind</li>
-                            <li>Weist den ersten verfügbaren Springer zu</li>
+                            <li>Welche Mitarbeiter als Vertretung verfügbar sind (aus dem gleichen oder anderen Teams)</li>
+                            <li>Weist die bestmögliche Vertretung automatisch zu</li>
                         </ol>
-                        <p class="note"><strong>Hinweis:</strong> Springer werden nur bei tatsächlichen Ausfällen eingesetzt, nicht bei der regulären Planung.</p>
+                        <p class="note"><strong>Hinweis:</strong> Vertretungen werden nur bei tatsächlichen Ausfällen eingesetzt, nicht bei der regulären Planung.</p>
                     </section>
 
                     <section id="manual-troubleshooting" class="manual-section">
@@ -338,11 +344,10 @@
                             <li>Stellen Sie sicher, dass mindestens 12-15 Mitarbeiter angelegt sind</li>
                         </ul>
 
-                        <h4>Problem: Kein Springer verfügbar</h4>
+                        <h4>Problem: Keine Vertretung verfügbar</h4>
                         <p><strong>Lösung:</strong></p>
                         <ul>
-                            <li>Definieren Sie weitere Mitarbeiter als Springer</li>
-                            <li>Prüfen Sie Abwesenheiten der Springer</li>
+                            <li>Prüfen Sie Abwesenheiten der Mitarbeiter</li>
                             <li>Bei Bedarf: Manuelle Zuweisung einer Vertretung</li>
                         </ul>
 

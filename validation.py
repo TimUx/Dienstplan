@@ -195,7 +195,7 @@ def validate_shift_plan(
     validate_working_hours(result, assignments, emp_dict, start_date, end_date, shift_types, absences, employees)
     validate_staffing_requirements(result, assignments_by_date, emp_dict, shift_types, absences, employees)
     validate_special_functions(result, assignments, emp_dict, absences, employees)
-    validate_springer_availability(result, assignments, employees, absences)
+    validate_coverage_availability(result, assignments, employees, absences)
     
     # NEW: Validate all employees present in complete schedule
     if complete_schedule:
@@ -771,7 +771,7 @@ def validate_special_functions(
             )
 
 
-def validate_springer_availability(
+def validate_coverage_availability(
     result: ValidationResult,
     assignments: List[ShiftAssignment],
     employees: List[Employee],

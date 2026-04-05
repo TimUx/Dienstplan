@@ -154,9 +154,9 @@ def create_absence():
             if notification_ids:
                 current_app.logger.info(f"Created {len(notification_ids)} understaffing notifications for absence {absence_id}")
             
-            # NEW: Automatically assign springers for affected shifts
+            # Automatically assign replacements for affected shifts
             from springer_replacement import process_absence_with_springer_assignment
-            springer_results = process_absence_with_springer_assignment(
+            replacement_results = process_absence_with_springer_assignment(
                 conn,
                 absence_id,
                 data.get('employeeId'),
@@ -166,38 +166,38 @@ def create_absence():
                 session.get('user_email')
             )
             
-            # Log shift removal and springer assignments
-            shifts_removed = springer_results.get('shiftsRemoved', 0)
+            # Log shift removal and replacement assignments
+            shifts_removed = replacement_results.get('shiftsRemoved', 0)
             if shifts_removed > 0:
                 current_app.logger.info(
                     f"Removed {shifts_removed} shift assignment(s) for absent employee (Absence ID: {absence_id})"
                 )
             
-            if springer_results['assignmentsCreated'] > 0:
+            if replacement_results['assignmentsCreated'] > 0:
                 current_app.logger.info(
-                    f"Automatically assigned {springer_results['assignmentsCreated']} springers "
-                    f"for {springer_results['shiftsNeedingCoverage']} affected shifts (Absence ID: {absence_id})"
+                    f"Automatically assigned {replacement_results['assignmentsCreated']} replacements "
+                    f"for {replacement_results['shiftsNeedingCoverage']} affected shifts (Absence ID: {absence_id})"
                 )
                 
-                # Include springer results in response
+                # Include replacement results in response
                 conn.commit()
                 conn.close()
                 
                 return jsonify({
                     'success': True,
                     'id': absence_id,
-                    'springerAssignments': {
-                        'assignmentsCreated': springer_results['assignmentsCreated'],
-                        'notificationsSent': springer_results['notificationsSent'],
-                        'shiftsNeedingCoverage': springer_results['shiftsNeedingCoverage'],
+                    'replacementAssignments': {
+                        'assignmentsCreated': replacement_results['assignmentsCreated'],
+                        'notificationsSent': replacement_results['notificationsSent'],
+                        'shiftsNeedingCoverage': replacement_results['shiftsNeedingCoverage'],
                         'shiftsRemoved': shifts_removed,
-                        'details': springer_results['details']
+                        'details': replacement_results['details']
                     }
                 }), 201
                 
         except Exception as notif_error:
             # Log notification error but don't fail the absence creation
-            current_app.logger.error(f"Error processing absence notifications/springers: {notif_error}")
+            current_app.logger.error(f"Error processing absence notifications/replacements: {notif_error}")
         
         conn.commit()
         conn.close()

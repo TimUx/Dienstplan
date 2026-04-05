@@ -587,7 +587,7 @@ def get_schedule():
         
         # Get assignments
         cursor.execute("""
-            SELECT sa.*, e.Vorname, e.Name, e.TeamId, e.IsSpringer,
+            SELECT sa.*, e.Vorname, e.Name, e.TeamId,
                    st.Code, st.Name as ShiftName, st.ColorCode
             FROM ShiftAssignments sa
             JOIN Employees e ON sa.EmployeeId = e.Id
@@ -611,14 +611,12 @@ def get_schedule():
                 'employeeId': row['EmployeeId'],
                 'employeeName': f"{row['Vorname']} {row['Name']}",
                 'teamId': row['TeamId'],
-                'isSpringer': bool(row['IsSpringer']),
                 'shiftTypeId': row['ShiftTypeId'],
                 'shiftCode': row['Code'],
                 'shiftName': row['ShiftName'],
                 'colorCode': row['ColorCode'],
                 'date': row['Date'],
                 'isManual': bool(row['IsManual']),
-                'isSpringerAssignment': bool(row['IsSpringerAssignment']),
                 'isFixed': bool(row['IsFixed']),
                 'notes': row['Notes']
             })
@@ -2033,11 +2031,11 @@ def _group_data_by_team_and_employee(conn, start_date: date, end_date: date, vie
     # Get all employees with their team info and special functions
     cursor.execute("""
         SELECT e.Id, e.Vorname, e.Name, e.Personalnummer, e.TeamId, 
-               t.Name as TeamName, e.IsSpringer,
+               t.Name as TeamName,
                e.IsBrandmeldetechniker, e.IsBrandschutzbeauftragter
         FROM Employees e
         LEFT JOIN Teams t ON e.TeamId = t.Id
-        ORDER BY t.Name NULLS LAST, e.IsSpringer DESC, e.Name, e.Vorname
+        ORDER BY t.Name NULLS LAST, e.Name, e.Vorname
     """)
     employees = cursor.fetchall()
     

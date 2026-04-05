@@ -1,11 +1,11 @@
 """
-Automatic springer (replacement employee) assignment module.
+Automatic replacement employee assignment module.
 
 This module provides functionality to automatically assign replacement employees
 when an absence is reported, considering:
 - Legal requirements (rest times, consecutive work days)
 - Employee qualifications
-- Team availability and cross-team springer capability
+- Team availability and cross-team replacement capability
 - Shift staffing requirements
 
 Key features:
@@ -13,7 +13,7 @@ Key features:
 - Respect rest time regulations (11 hours minimum)
 - Consider consecutive work day limits
 - Automatic assignment on absence report
-- Notifications to admins and assigned springer
+- Notifications to admins and assigned replacement employee
 """
 
 from datetime import date, timedelta, datetime
@@ -211,14 +211,14 @@ def is_employee_absent(
     return row[0] > 0 if row else False
 
 
-def find_suitable_springer(
+def find_suitable_replacement(
     conn: sqlite3.Connection,
     absence_date: date,
     shift_code: str,
     absent_employee_id: int
 ) -> Optional[Dict]:
     """
-    Find a suitable springer (replacement employee) for a specific shift.
+    Find a suitable replacement employee for a specific shift.
     
     Selection criteria:
     1. Employee's team must be assigned to the shift type (NEW REQUIREMENT)
@@ -241,7 +241,7 @@ def find_suitable_springer(
         absent_employee_id: ID of absent employee (to get team info)
         
     Returns:
-        Dictionary with springer details or None if no suitable employee found
+        Dictionary with replacement employee details or None if no suitable employee found
     """
     cursor = conn.cursor()
     
@@ -269,7 +269,7 @@ def find_suitable_springer(
     shift_type_id = shift_type_row[0]
     
     # Get all employees whose teams are assigned to this shift type
-    # This is the NEW requirement: springer must be from a team assigned to the shift
+    # Replacement must be from a team assigned to the shift
     cursor.execute("""
         SELECT e.Id, e.Vorname, e.Name, e.TeamId, e.Email,
                e.IsTdQualified, e.IsBrandmeldetechniker, e.IsBrandschutzbeauftragter
@@ -314,7 +314,7 @@ def find_suitable_springer(
         if not consecutive_ok:
             continue  # Too many consecutive days
         
-        # Found a suitable springer!
+        # Found a suitable replacement!
         return {
             'employeeId': emp_id,
             'employeeName': emp_name,
@@ -323,23 +323,23 @@ def find_suitable_springer(
             'isSameTeam': emp_team_id == absent_team_id
         }
     
-    return None  # No suitable springer found
+    return None  # No suitable replacement found
 
 
-def assign_springer_to_shift(
+def assign_replacement_to_shift(
     conn: sqlite3.Connection,
-    springer_id: int,
+    replacement_id: int,
     shift_date: date,
     shift_code: str,
     absence_id: int,
     created_by: Optional[str] = None
 ) -> Tuple[bool, Optional[int], Optional[str]]:
     """
-    Assign a springer to a shift to cover an absence.
+    Assign a replacement employee to a shift to cover an absence.
     
     Args:
         conn: Database connection
-        springer_id: Employee ID to assign as springer
+        replacement_id: Employee ID to assign as replacement
         shift_date: Date of shift
         shift_code: Shift code (F, S, N)
         absence_id: ID of absence being covered
@@ -371,10 +371,10 @@ def assign_springer_to_shift(
             )
             VALUES (?, ?, ?, 1, 0, ?, CURRENT_TIMESTAMP)
         """, (
-            springer_id,
+            replacement_id,
             shift_type_id,
             shift_date.isoformat(),
-            f"Automatisch zugewiesen als Springer (Abwesenheit ID: {absence_id})"
+            f"Automatisch als Vertretung zugewiesen (Abwesenheit ID: {absence_id})"
         ))
         
         assignment_id = cursor.lastrowid
@@ -387,7 +387,7 @@ def assign_springer_to_shift(
         return False, None, f"Datenbankfehler: {str(e)}"
 
 
-def process_absence_with_springer_assignment(
+def process_absence_with_replacement_assignment(
     conn: sqlite3.Connection,
     absence_id: int,
     employee_id: int,
@@ -397,14 +397,14 @@ def process_absence_with_springer_assignment(
     created_by: Optional[str] = None
 ) -> Dict:
     """
-    Process an absence and automatically assign springers where needed.
+    Process an absence and automatically assign replacement employees where needed.
     
     This function:
     1. Finds all shifts affected by the absence
     2. Deletes the absent employee's shifts from the database
-    3. For each deleted shift, tries to find a suitable springer
-    4. Assigns springers automatically
-    5. Creates notifications for admins and springers
+    3. For each deleted shift, tries to find a suitable replacement employee
+    4. Assigns replacement employees automatically
+    5. Creates notifications for admins and replacement employees
     
     Args:
         conn: Database connection
@@ -456,7 +456,7 @@ def process_absence_with_springer_assignment(
     # an employee is marked absent after shifts have been planned.
     #
     # NOTE: We store affected_shifts in memory BEFORE deletion so we can
-    # still use this data to find springer replacements below.
+    # still use this data to find replacement employees below.
     if affected_shifts:
         shift_ids_to_delete = [shift_row[0] for shift_row in affected_shifts]
         placeholders = ','.join(['?' for _ in shift_ids_to_delete])
@@ -468,13 +468,13 @@ def process_absence_with_springer_assignment(
         deleted_count = cursor.rowcount
         results['shiftsRemoved'] = deleted_count
         
-        # NOTE: Commit is deferred until after all springer assignments succeed
-        # to ensure data integrity. If springer assignment fails, we can rollback.
+        # NOTE: Commit is deferred until after all replacement assignments succeed
+        # to ensure data integrity. If replacement assignment fails, we can rollback.
         
         print(f"INFO: Removed {deleted_count} shift assignment(s) for absent employee {employee_id}")
         print(f"      Date range: {start_date.isoformat()} to {end_date.isoformat()}")
     
-    # Process each affected shift to find springer replacements
+    # Process each affected shift to find replacement employees
     # We use the cached 'affected_shifts' data from before deletion
     for shift_row in affected_shifts:
         assignment_id = shift_row[0]
@@ -482,13 +482,13 @@ def process_absence_with_springer_assignment(
         shift_code = shift_row[2]
         shift_name = shift_row[3]
         
-        # Try to find a suitable springer
-        springer = find_suitable_springer(conn, shift_date, shift_code, employee_id)
+        # Try to find a suitable replacement employee
+        replacement = find_suitable_replacement(conn, shift_date, shift_code, employee_id)
         
-        if springer:
-            # Assign springer
-            success, new_assignment_id, error = assign_springer_to_shift(
-                conn, springer['employeeId'], shift_date, shift_code, absence_id, created_by
+        if replacement:
+            # Assign replacement
+            success, new_assignment_id, error = assign_replacement_to_shift(
+                conn, replacement['employeeId'], shift_date, shift_code, absence_id, created_by
             )
             
             if success:
@@ -502,13 +502,13 @@ def process_absence_with_springer_assignment(
                 absence_type_names = {1: 'Krank / AU', 2: 'Urlaub', 3: 'Lehrgang'}
                 absence_type_name = absence_type_names.get(absence_type, 'Abwesenheit')
                 
-                # Send notification email to springer
-                if springer['email']:
-                    email_success, email_error = send_springer_notification_email(
+                # Send notification email to replacement employee
+                if replacement['email']:
+                    email_success, email_error = send_replacement_notification_email(
                         conn,
-                        springer['employeeId'],
-                        springer['email'],
-                        springer['employeeName'],
+                        replacement['employeeId'],
+                        replacement['email'],
+                        replacement['employeeName'],
                         shift_date,
                         shift_name,
                         absent_name,
@@ -519,9 +519,9 @@ def process_absence_with_springer_assignment(
                 
                 # Create in-app notification
                 try:
-                    create_springer_notification(
+                    create_replacement_notification(
                         conn,
-                        springer['employeeId'],
+                        replacement['employeeId'],
                         shift_date,
                         shift_code,
                         employee_id,
@@ -533,9 +533,9 @@ def process_absence_with_springer_assignment(
                 
                 # Send notification to admins
                 try:
-                    send_admin_springer_notification(
+                    send_admin_replacement_notification(
                         conn,
-                        springer['employeeName'],
+                        replacement['employeeName'],
                         shift_date,
                         shift_name,
                         absent_name,
@@ -549,10 +549,10 @@ def process_absence_with_springer_assignment(
                     'date': shift_date.isoformat(),
                     'shiftCode': shift_code,
                     'shiftName': shift_name,
-                    'springerName': springer['employeeName'],
-                    'springerId': springer['employeeId'],
-                    'springerEmail': springer['email'],
-                    'isSameTeam': springer['isSameTeam'],
+                    'replacementName': replacement['employeeName'],
+                    'replacementId': replacement['employeeId'],
+                    'replacementEmail': replacement['email'],
+                    'isSameTeam': replacement['isSameTeam'],
                     'assignmentId': new_assignment_id,
                     'status': 'assigned'
                 })
@@ -565,39 +565,39 @@ def process_absence_with_springer_assignment(
                     'error': error
                 })
         else:
-            # No springer found
+            # No replacement found
             results['details'].append({
                 'date': shift_date.isoformat(),
                 'shiftCode': shift_code,
                 'shiftName': shift_name,
-                'status': 'no_springer_found'
+                'status': 'no_replacement_found'
             })
     
-    # Commit all changes (shift deletions and springer assignments) together
+    # Commit all changes (shift deletions and replacement assignments) together
     # This ensures data integrity - either all changes succeed or all are rolled back
     conn.commit()
     
     return results
 
 
-def send_springer_notification_email(
+def send_replacement_notification_email(
     conn: sqlite3.Connection,
-    springer_id: int,
-    springer_email: str,
-    springer_name: str,
+    replacement_id: int,
+    replacement_email: str,
+    replacement_name: str,
     shift_date: date,
     shift_name: str,
     absent_employee_name: str,
     absence_type_name: str
 ) -> Tuple[bool, str]:
     """
-    Send email notification to springer about their assignment.
+    Send email notification to replacement employee about their assignment.
     
     Args:
         conn: Database connection
-        springer_id: ID of springer employee
-        springer_email: Email address of springer
-        springer_name: Name of springer
+        replacement_id: ID of replacement employee
+        replacement_email: Email address of replacement employee
+        replacement_name: Name of replacement employee
         shift_date: Date of shift assignment
         shift_name: Name of shift
         absent_employee_name: Name of absent employee
@@ -609,7 +609,7 @@ def send_springer_notification_email(
     day_name = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][shift_date.weekday()]
     date_formatted = shift_date.strftime('%d.%m.%Y')
     
-    subject = f"Dienstplan - Automatische Springer-Zuweisung für {day_name}, {date_formatted}"
+    subject = f"Dienstplan - Automatische Vertretungs-Zuweisung für {day_name}, {date_formatted}"
     
     body_html = f"""
     <html>
@@ -628,11 +628,11 @@ def send_springer_notification_email(
     <body>
         <div class="container">
             <div class="header">
-                <h1>🔄 Springer-Zuweisung</h1>
+                <h1>🔄 Vertretungs-Zuweisung</h1>
             </div>
             <div class="content">
-                <p>Hallo {springer_name},</p>
-                <p><strong>Sie wurden automatisch als Springer für eine Schicht eingeteilt.</strong></p>
+                <p>Hallo {replacement_name},</p>
+                <p><strong>Sie wurden automatisch als Vertretung für eine Schicht eingeteilt.</strong></p>
                 
                 <div class="info-box">
                     <h3>Schicht-Details:</h3>
@@ -657,9 +657,9 @@ def send_springer_notification_email(
     """
     
     body_text = f"""
-Hallo {springer_name},
+Hallo {replacement_name},
 
-Sie wurden automatisch als Springer für eine Schicht eingeteilt.
+Sie wurden automatisch als Vertretung für eine Schicht eingeteilt.
 
 Schicht-Details:
 - Datum: {day_name}, {date_formatted}
@@ -673,26 +673,26 @@ Bitte überprüfen Sie die Zuweisung in der Dienstplan-App und melden Sie sich b
 Bei Fragen wenden Sie sich bitte an Ihren Administrator.
     """
     
-    if not springer_email:
-        return False, "Keine E-Mail-Adresse für Springer vorhanden"
+    if not replacement_email:
+        return False, "Keine E-Mail-Adresse für Vertretungsmitarbeiter vorhanden"
     
-    return send_email(conn, springer_email, subject, body_html, body_text)
+    return send_email(conn, replacement_email, subject, body_html, body_text)
 
 
-def create_springer_notification(
+def create_replacement_notification(
     conn: sqlite3.Connection,
-    springer_id: int,
+    replacement_id: int,
     shift_date: date,
     shift_code: str,
     absent_employee_id: int,
     assignment_id: int
 ) -> int:
     """
-    Create an in-app notification for springer assignment.
+    Create an in-app notification for replacement assignment.
     
     Args:
         conn: Database connection
-        springer_id: ID of springer employee
+        replacement_id: ID of replacement employee
         shift_date: Date of shift
         shift_code: Shift code
         absent_employee_id: ID of absent employee
@@ -704,9 +704,9 @@ def create_springer_notification(
     cursor = conn.cursor()
     
     # Get employee names
-    cursor.execute("SELECT Vorname, Name FROM Employees WHERE Id = ?", (springer_id,))
-    springer_row = cursor.fetchone()
-    springer_name = f"{springer_row[0]} {springer_row[1]}" if springer_row else "Unbekannt"
+    cursor.execute("SELECT Vorname, Name FROM Employees WHERE Id = ?", (replacement_id,))
+    replacement_row = cursor.fetchone()
+    replacement_name = f"{replacement_row[0]} {replacement_row[1]}" if replacement_row else "Unbekannt"
     
     cursor.execute("SELECT Vorname, Name FROM Employees WHERE Id = ?", (absent_employee_id,))
     absent_row = cursor.fetchone()
@@ -720,8 +720,8 @@ def create_springer_notification(
     day_name = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][shift_date.weekday()]
     date_formatted = shift_date.strftime('%d.%m.%Y')
     
-    title = f"Springer-Zuweisung: {shift_name} am {date_formatted}"
-    message = f"Sie wurden automatisch als Springer für die {shift_name} Schicht am {day_name}, {date_formatted} eingeteilt (Vertretung für {absent_name})."
+    title = f"Vertretungs-Zuweisung: {shift_name} am {date_formatted}"
+    message = f"Sie wurden automatisch als Vertretung für die {shift_name} Schicht am {day_name}, {date_formatted} eingeteilt (Vertretung für {absent_name})."
     
     # Create notification (insert into a suitable notifications table)
     # Note: This assumes there's an EmployeeNotifications table - adjust as needed
@@ -738,7 +738,7 @@ def create_springer_notification(
         message,
         shift_date.isoformat(),
         shift_code,
-        springer_id
+        replacement_id
     ))
     
     notification_id = cursor.lastrowid
@@ -747,20 +747,20 @@ def create_springer_notification(
     return notification_id
 
 
-def send_admin_springer_notification(
+def send_admin_replacement_notification(
     conn: sqlite3.Connection,
-    springer_name: str,
+    replacement_name: str,
     shift_date: date,
     shift_name: str,
     absent_employee_name: str,
     absence_type_name: str
 ) -> Tuple[bool, str]:
     """
-    Send notification to admins about automatic springer assignment.
+    Send notification to admins about automatic replacement assignment.
     
     Args:
         conn: Database connection
-        springer_name: Name of springer
+        replacement_name: Name of replacement employee
         shift_date: Date of shift
         shift_name: Name of shift
         absent_employee_name: Name of absent employee
@@ -789,7 +789,7 @@ def send_admin_springer_notification(
     day_name = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][shift_date.weekday()]
     date_formatted = shift_date.strftime('%d.%m.%Y')
     
-    subject = f"Dienstplan - Automatische Springer-Zuweisung: {springer_name}"
+    subject = f"Dienstplan - Automatische Vertretungs-Zuweisung: {replacement_name}"
     
     body_html = f"""
     <html>
@@ -807,14 +807,14 @@ def send_admin_springer_notification(
     <body>
         <div class="container">
             <div class="header">
-                <h1>✅ Automatische Springer-Zuweisung</h1>
+                <h1>✅ Automatische Vertretungs-Zuweisung</h1>
             </div>
             <div class="content">
-                <p>Eine Springer-Zuweisung wurde automatisch vorgenommen:</p>
+                <p>Eine Vertretungs-Zuweisung wurde automatisch vorgenommen:</p>
                 
                 <div class="info-box">
                     <h3>Details:</h3>
-                    <p><strong>Springer:</strong> {springer_name}</p>
+                    <p><strong>Vertretung:</strong> {replacement_name}</p>
                     <p><strong>Datum:</strong> {day_name}, {date_formatted}</p>
                     <p><strong>Schicht:</strong> {shift_name}</p>
                     <p><strong>Ersetzt:</strong> {absent_employee_name} ({absence_type_name})</p>
@@ -834,10 +834,10 @@ def send_admin_springer_notification(
     """
     
     body_text = f"""
-Eine Springer-Zuweisung wurde automatisch vorgenommen:
+Eine Vertretungs-Zuweisung wurde automatisch vorgenommen:
 
 Details:
-- Springer: {springer_name}
+- Vertretung: {replacement_name}
 - Datum: {day_name}, {date_formatted}
 - Schicht: {shift_name}
 - Ersetzt: {absent_employee_name} ({absence_type_name})

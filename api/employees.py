@@ -131,7 +131,6 @@ def get_employee(id):
         'email': row['Email'],
         'geburtsdatum': row['Geburtsdatum'],
         'funktion': row['Funktion'],
-        'isSpringer': bool(row['IsSpringer']),
         'isFerienjobber': bool(row['IsFerienjobber']),
         'isBrandmeldetechniker': bool(row['IsBrandmeldetechniker']),
         'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
@@ -142,39 +141,6 @@ def get_employee(id):
         'fullName': f"{row['Vorname']} {row['Name']}",
         'roles': row['roles'] if row['roles'] else ''
     })
-
-
-@bp.route('/api/employees/springers', methods=['GET'])
-def get_springers():
-    """Get all springers"""
-    db = get_db()
-    conn = db.get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT e.*, t.Name as TeamName
-        FROM Employees e
-        LEFT JOIN Teams t ON e.TeamId = t.Id
-        WHERE e.IsSpringer = 1
-        ORDER BY e.Name, e.Vorname
-    """)
-    
-    springers = []
-    for row in cursor.fetchall():
-        springers.append({
-            'id': row['Id'],
-            'vorname': row['Vorname'],
-            'name': row['Name'],
-            'personalnummer': row['Personalnummer'],
-            'email': row['Email'],
-            'isSpringer': True,
-            'teamId': row['TeamId'],
-            'teamName': row['TeamName'],
-            'fullName': f"{row['Vorname']} {row['Name']}"
-        })
-    
-    conn.close()
-    return jsonify(springers)
 
 
 @bp.route('/api/employees', methods=['POST'])
@@ -198,8 +164,8 @@ def create_employee():
         
         # Validate Funktion field - only allow specific values
         funktion = data.get('funktion')
-        if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
-            return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker, Springer'}), 400
+        if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker']:
+            return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker'}), 400
         
         # Use checkbox values directly from frontend for BMT/BSB flags
         is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
@@ -234,8 +200,8 @@ def create_employee():
             INSERT INTO Employees 
             (Vorname, Name, Personalnummer, Email, NormalizedEmail, PasswordHash, SecurityStamp,
              Geburtsdatum, Funktion, 
-             IsSpringer, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, TeamId)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, TeamId)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get('vorname'),
             data.get('name'),
@@ -246,7 +212,6 @@ def create_employee():
             security_stamp,
             data.get('geburtsdatum'),
             funktion,
-            1 if data.get('isSpringer') else 0,
             1 if data.get('isFerienjobber') else 0,
             is_bmt,
             is_bsb,
@@ -325,8 +290,8 @@ def update_employee(id):
         
         # Validate Funktion field
         funktion = data.get('funktion')
-        if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker', 'Springer']:
-            return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker, Springer'}), 400
+        if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker']:
+            return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker'}), 400
         
         # Use checkbox values directly from frontend for BMT/BSB flags
         is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
@@ -342,7 +307,7 @@ def update_employee(id):
         # Check if employee exists and get old values for audit
         cursor.execute("""
             SELECT Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion, 
-                   IsSpringer, IsFerienjobber, IsBrandmeldetechniker, 
+                   IsFerienjobber, IsBrandmeldetechniker, 
                    IsBrandschutzbeauftragter, IsTdQualified, TeamId 
             FROM Employees WHERE Id = ?
         """, (id,))
@@ -374,7 +339,7 @@ def update_employee(id):
                 UPDATE Employees 
                 SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, NormalizedEmail = ?,
                     PasswordHash = ?, SecurityStamp = ?, Geburtsdatum = ?, 
-                    Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
+                    Funktion = ?, IsFerienjobber = ?, 
                     IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, IsTeamLeader = ?, TeamId = ?
                 WHERE Id = ?
             """, (
@@ -387,7 +352,6 @@ def update_employee(id):
                 security_stamp,
                 data.get('geburtsdatum'),
                 funktion,
-                1 if data.get('isSpringer') else 0,
                 1 if data.get('isFerienjobber') else 0,
                 is_bmt,
                 is_bsb,
@@ -400,7 +364,7 @@ def update_employee(id):
             cursor.execute("""
                 UPDATE Employees 
                 SET Vorname = ?, Name = ?, Personalnummer = ?, Email = ?, NormalizedEmail = ?, Geburtsdatum = ?, 
-                    Funktion = ?, IsSpringer = ?, IsFerienjobber = ?, 
+                    Funktion = ?, IsFerienjobber = ?, 
                     IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?, IsTdQualified = ?, IsTeamLeader = ?, TeamId = ?
                 WHERE Id = ?
             """, (
@@ -411,7 +375,6 @@ def update_employee(id):
                 email.upper() if email else None,
                 data.get('geburtsdatum'),
                 funktion,
-                1 if data.get('isSpringer') else 0,
                 1 if data.get('isFerienjobber') else 0,
                 is_bmt,
                 is_bsb,
@@ -1312,7 +1275,7 @@ def export_employees_csv():
         # Get all employees with their data
         cursor.execute("""
             SELECT Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion,
-                   TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker,
+                   TeamId, IsFerienjobber, IsBrandmeldetechniker,
                    IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive
             FROM Employees
             WHERE Id > 1
@@ -1329,7 +1292,7 @@ def export_employees_csv():
         # Write header
         writer.writerow([
             'Vorname', 'Name', 'Personalnummer', 'Email', 'Geburtsdatum', 'Funktion',
-            'TeamId', 'IsSpringer', 'IsFerienjobber', 'IsBrandmeldetechniker',
+            'TeamId', 'IsFerienjobber', 'IsBrandmeldetechniker',
             'IsBrandschutzbeauftragter', 'IsTdQualified', 'IsTeamLeader', 'IsActive'
         ])
         
@@ -1490,7 +1453,6 @@ def import_employees_csv():
                     'Geburtsdatum': row.get('Geburtsdatum', None),
                     'Funktion': row.get('Funktion', ''),
                     'TeamId': int(row['TeamId']) if row.get('TeamId') and row['TeamId'].strip() else None,
-                    'IsSpringer': int(row.get('IsSpringer', 0)),
                     'IsFerienjobber': int(row.get('IsFerienjobber', 0)),
                     'IsBrandmeldetechniker': int(row.get('IsBrandmeldetechniker', 0)),
                     'IsBrandschutzbeauftragter': int(row.get('IsBrandschutzbeauftragter', 0)),
@@ -1505,14 +1467,14 @@ def import_employees_csv():
                         cursor.execute("""
                             UPDATE Employees
                             SET Vorname = ?, Name = ?, Email = ?, Geburtsdatum = ?,
-                                Funktion = ?, TeamId = ?, IsSpringer = ?, IsFerienjobber = ?,
+                                Funktion = ?, TeamId = ?, IsFerienjobber = ?,
                                 IsBrandmeldetechniker = ?, IsBrandschutzbeauftragter = ?,
                                 IsTdQualified = ?, IsTeamLeader = ?, IsActive = ?
                             WHERE Personalnummer = ?
                         """, (
                             values['Vorname'], values['Name'], values['Email'],
                             values['Geburtsdatum'], values['Funktion'], values['TeamId'],
-                            values['IsSpringer'], values['IsFerienjobber'],
+                            values['IsFerienjobber'],
                             values['IsBrandmeldetechniker'], values['IsBrandschutzbeauftragter'],
                             values['IsTdQualified'], values['IsTeamLeader'], values['IsActive'],
                             values['Personalnummer']
@@ -1526,13 +1488,13 @@ def import_employees_csv():
                     cursor.execute("""
                         INSERT INTO Employees
                         (Vorname, Name, Personalnummer, Email, Geburtsdatum, Funktion,
-                         TeamId, IsSpringer, IsFerienjobber, IsBrandmeldetechniker,
+                         TeamId, IsFerienjobber, IsBrandmeldetechniker,
                          IsBrandschutzbeauftragter, IsTdQualified, IsTeamLeader, IsActive)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         values['Vorname'], values['Name'], values['Personalnummer'],
                         values['Email'], values['Geburtsdatum'], values['Funktion'],
-                        values['TeamId'], values['IsSpringer'], values['IsFerienjobber'],
+                        values['TeamId'], values['IsFerienjobber'],
                         values['IsBrandmeldetechniker'], values['IsBrandschutzbeauftragter'],
                         values['IsTdQualified'], values['IsTeamLeader'], values['IsActive']
                     ))

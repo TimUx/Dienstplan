@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, fetchCsrfToken, showToast } from './utils.js';
+import { API_BASE, escapeHtml, fetchCsrfToken, getCsrfToken, showToast } from './utils.js';
 
 // Authentication state
 export let currentUser = null;
@@ -109,7 +109,8 @@ export async function login(event) {
         const response = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify({
@@ -148,6 +149,9 @@ export async function logout() {
     try {
         await fetch(`${API_BASE}/auth/logout`, {
             method: 'POST',
+            headers: {
+                'X-CSRF-Token': getCsrfToken() || ''
+            },
             credentials: 'include'
         });
 
@@ -417,7 +421,7 @@ export async function submitChangePassword(event) {
     try {
         const response = await fetch(`${API_BASE}/auth/change-password`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({
                 currentPassword: currentPassword,

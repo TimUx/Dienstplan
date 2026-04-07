@@ -26,8 +26,18 @@ logger = logging.getLogger(__name__)
 def _alembic_config(db_path: str):
     """Return an Alembic Config object pointing at the given SQLite database."""
     from alembic.config import Config
+    import sys
 
-    migrations_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+    # When running from a PyInstaller bundle the Python files are extracted to
+    # sys._MEIPASS.  The migrations folder is bundled there as well (see the
+    # .spec file).  In a normal Python environment we resolve relative to this
+    # source file as before.
+    if getattr(sys, 'frozen', False):
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    migrations_dir = os.path.join(base_dir, "migrations")
     cfg = Config()
     cfg.set_main_option("script_location", migrations_dir)
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{os.path.abspath(db_path)}")

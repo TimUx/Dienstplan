@@ -39,10 +39,8 @@ alembic>=1.13.0
 reportlab>=4.0.0
 
 # Build tools for creating standalone executable
-pyinstaller>=6.0.0
 
 # Excel export (openpyxl) - required for Excel export functionality
 openpyxl>=3.1.0
 
 # CSS minification for production builds
-csscompressor>=0.9.5

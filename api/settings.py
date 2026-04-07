@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request, session, current_app
 from datetime import datetime
 import json
 
-from .shared import get_db, require_auth, require_role, log_audit
+from .shared import get_db, require_auth, require_role, log_audit, require_csrf
 
 bp = Blueprint('settings', __name__)
 
@@ -46,6 +46,7 @@ def get_global_settings():
 
 @bp.route('/api/settings/global', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_global_settings():
     """Update global shift planning settings (Admin only)"""
     try:
@@ -158,6 +159,7 @@ def get_email_settings():
 
 @bp.route('/api/email-settings', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def save_email_settings():
     """Save email settings (Admin only)"""
     try:
@@ -249,6 +251,7 @@ def save_email_settings():
 
 @bp.route('/api/email-settings/test', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def test_email_settings():
     """Send test email to verify settings (Admin only)"""
     try:

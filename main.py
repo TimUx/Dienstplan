@@ -4,6 +4,7 @@ Provides both CLI and web server interfaces.
 """
 
 import argparse
+import logging
 import os
 import sys
 from datetime import date, timedelta
@@ -13,6 +14,8 @@ from data_loader import generate_sample_data, load_from_database
 from db_init import initialize_database, run_migrations
 from model import create_shift_planning_model
 from solver import solve_shift_planning
+
+logger = logging.getLogger(__name__)
 
 try:
     from waitress import serve as waitress_serve
@@ -37,76 +40,71 @@ def run_cli_planning(
         db_path: Path to SQLite database
         time_limit: Solver time limit in seconds
     """
-    print("=" * 60)
-    print("SHIFT PLANNING SYSTEM - Python OR-Tools Migration")
-    print("=" * 60)
-    print()
+    logger.info("SHIFT PLANNING SYSTEM - Python OR-Tools Migration")
     
     # Load data
     if use_sample_data:
-        print("Loading sample data...")
+        logger.info("Loading sample data...")
         employees, teams, absences = generate_sample_data()
         shift_types = None  # Use default STANDARD_SHIFT_TYPES
     else:
-        print(f"Loading data from database: {db_path}")
+        logger.info(f"Loading data from database: {db_path}")
         try:
             employees, teams, absences, shift_types = load_from_database(db_path)
         except Exception as e:
-            print(f"Error loading database: {e}")
-            print("Using sample data instead...")
+            logger.error(f"Error loading database: {e}")
+            logger.warning("Using sample data instead...")
             employees, teams, absences = generate_sample_data()
             shift_types = None  # Use default STANDARD_SHIFT_TYPES
     
-    print(f"  - Loaded {len(employees)} employees")
-    print(f"  - Loaded {len(teams)} teams")
-    print(f"  - Loaded {len(absences)} absences")
-    print()
+    logger.info(f"Loaded {len(employees)} employees")
+    logger.info(f"Loaded {len(teams)} teams")
+    logger.info(f"Loaded {len(absences)} absences")
+
     
     # Create model
-    print(f"Creating planning model for {start_date} to {end_date}...")
+    logger.info(f"Creating planning model for {start_date} to {end_date}...")
     planning_model = create_shift_planning_model(
         employees, teams, start_date, end_date, absences, shift_types=shift_types
     )
     planning_model.print_model_statistics()
     
     # Solve
-    print("\nSolving shift planning problem...")
+    logger.info("Solving shift planning problem...")
     result = solve_shift_planning(planning_model, time_limit_seconds=time_limit)
     
     if not result:
-        print("\n[X] No solution found!")
+        logger.error("No solution found!")
         return 1
     
     assignments, complete_schedule, planning_report = result
-    print(f"\n[OK] Solution found!")
-    print(f"  - Total assignments: {len(assignments)}")
-    print(f"  - Complete schedule entries: {len(complete_schedule)}")
+    logger.info("Solution found!")
+    logger.info(f"Total assignments: {len(assignments)}")
+    logger.info(f"Complete schedule entries: {len(complete_schedule)}")
     
     # Print planning report (includes validation results)
-    print(planning_report.generate_text_summary())
+    logger.info(planning_report.generate_text_summary())
     
     # Print summary
-    print("\n" + "=" * 60)
-    print("SUMMARY BY TEAM")
-    print("=" * 60)
+    logger.info("SUMMARY BY TEAM")
     
     for team in teams:
-        print(f"\n{team.name}:")
+        logger.info(f"Team: {team.name}")
         team_employees = [emp for emp in employees if emp.team_id == team.id]
         for emp in team_employees:
             emp_assignments = [a for a in assignments if a.employee_id == emp.id]
-            print(f"  {emp.full_name}: {len(emp_assignments)} shifts")
+            logger.info(f"  {emp.full_name}: {len(emp_assignments)} shifts")
     
-    print("\n" + "=" * 60)
+
     
     # Save results if database mode
     if not use_sample_data:
-        print("\nSaving results to database...")
+        logger.info("Saving results to database...")
         try:
             save_assignments_to_database(assignments, db_path)
-            print("[OK] Results saved successfully!")
+            logger.info("Results saved successfully!")
         except Exception as e:
-            print(f"[X] Error saving results: {e}")
+            logger.error(f"Error saving results: {e}")
     
     return 0
 
@@ -161,42 +159,37 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     """
     from web_api import create_app
     
-    print("=" * 60)
-    print("SHIFT PLANNING WEB SERVER - Python OR-Tools Backend")
-    print("=" * 60)
-    print(f"Starting web server on http://{host}:{port}")
-    print(f"Database: {db_path}")
+    logger.info(f"SHIFT PLANNING WEB SERVER starting on http://{host}:{port}")
+    logger.info(f"Database: {db_path}")
     if debug:
-        print("[!] WARNING: Debug mode enabled - Using Flask development server!")
-        print("[!] DO NOT use in production!")
+        logger.warning("Debug mode enabled - Using Flask development server! DO NOT use in production!")
     else:
-        print("[i] Using Waitress production WSGI server")
-    print()
+        logger.info("Using Waitress production WSGI server")
+
     
     # Check if database exists, if not initialize it; otherwise run migrations
     if not os.path.exists(db_path):
         print(f"[i] No database found at {db_path}")
         print("   Initializing new database with default structure...")
-        print()
+    
         try:
             # Initialize without sample data for production use
             initialize_database(db_path, with_sample_data=False)
-            print()
+        
         except Exception as e:
             print(f"[!] Error initializing database: {e}")
             print("   The application may not work correctly.")
-            print()
+        
     else:
         # Existing database – apply any outstanding migrations automatically
         try:
             run_migrations(db_path)
         except Exception as e:
-            print(f"[!] Error running migrations: {e}")
-            print("   The application may not work correctly.")
+            logger.error(f"Error running migrations: {e}")
     
     print("The existing Web UI from .NET version is compatible with this backend.")
     print("=" * 60)
-    print()
+
     
     app = create_app(db_path)
     
@@ -206,8 +199,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     else:
         # Use Waitress production WSGI server
         if waitress_serve is None:
-            print("[!] WARNING: Waitress not available, falling back to Flask development server")
-            print("[!] This is not recommended for production use!")
+            logger.warning("Waitress not available, falling back to Flask development server")
             app.run(host=host, port=port, debug=False)
         else:
             waitress_serve(app, host=host, port=port, threads=4)

@@ -1,10 +1,11 @@
-import { API_BASE, escapeHtml } from './utils.js';
+import { API_BASE, escapeHtml, fetchCsrfToken, showToast } from './utils.js';
 
 // Authentication state
 export let currentUser = null;
 export let userRoles = [];
 
 export async function checkAuthenticationStatus() {
+    await fetchCsrfToken();
     try {
         const response = await fetch(`${API_BASE}/auth/current-user`, {
             credentials: 'include'
@@ -125,6 +126,11 @@ export async function login(event) {
             userRoles = data.user.roles || [];
             updateUIForAuthenticatedUser(data.user);
             closeLoginModal();
+            if (data.requiresPasswordChange) {
+                showChangePasswordModal();
+                showToast('Bitte ändern Sie Ihr Passwort.', 'warning', 0);
+                return;
+            }
             if (window.showView) {
                 window.showView('schedule');
             }

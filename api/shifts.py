@@ -4,28 +4,20 @@ Shifts Blueprint: shift types, schedule, planning, assignments, exports, shift e
 
 from flask import Blueprint, jsonify, request, session, current_app, send_file, make_response
 from datetime import datetime, date, timedelta
-from typing import Optional, Dict
-import json
+from typing import Optional
 import threading
+import json
 import uuid
-import time
 
 from .shared import (
     get_db, require_auth, require_role, log_audit,
     get_row_value, _paginate,
     extend_planning_dates_to_complete_weeks, validate_monthly_date_range,
-    limiter
+    limiter, require_csrf
 )
 from .repositories.shift_repository import ShiftRepository
 
 bp = Blueprint('shifts', __name__)
-
-# In-memory store for background planning jobs.
-# Maps job_id (str) -> job state dict.
-_plan_jobs: Dict[str, dict] = {}
-_plan_jobs_lock = threading.Lock()
-# Completed jobs are retained for this many seconds before being evicted.
-_PLAN_JOB_TTL_SECONDS = 3600  # 1 hour
 
 
 @bp.route('/api/shifttypes', methods=['GET'])
@@ -73,6 +65,7 @@ def get_shift_types():
 
 @bp.route('/api/shifttypes', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_shift_type():
     """Create new shift type (Admin only)"""
     try:
@@ -203,6 +196,7 @@ def get_shift_type(id):
 
 @bp.route('/api/shifttypes/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_shift_type(id):
     """Update shift type (Admin only)"""
     try:
@@ -322,6 +316,7 @@ def update_shift_type(id):
 @bp.route('/api/shifttypes/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_shift_type(id):
     """Delete shift type (Admin only)"""
     try:
@@ -390,6 +385,7 @@ def get_shift_type_teams(shift_id):
 
 @bp.route('/api/shifttypes/<int:shift_id>/teams', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_shift_type_teams(shift_id):
     """Update teams assigned to a shift type (Admin only)"""
     try:
@@ -460,6 +456,7 @@ def get_team_shift_types(team_id):
 
 @bp.route('/api/teams/<int:team_id>/shifttypes', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_team_shift_types(team_id):
     """Update shift types assigned to a team (Admin only)"""
     try:
@@ -817,18 +814,56 @@ def _save_planning_report(db, year: int, month: int, report) -> None:
         current_app.logger.warning(f"Failed to save PlanningReport for {year}/{month}: {exc}")
 
 
+def _cleanup_old_jobs(db):
+    """Remove finished jobs older than 24 hours."""
+    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    with db.connection() as conn:
+        conn.execute(
+            "DELETE FROM PlanningJobs WHERE finished_at IS NOT NULL AND finished_at < ?",
+            (cutoff,)
+        )
+        conn.commit()
+
+def _create_job(db, job_id: str):
+    _cleanup_old_jobs(db)
+    with db.connection() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO PlanningJobs (id, status, started_at) VALUES (?, 'running', ?)",
+            (job_id, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+
+def _update_job(db, job_id: str, status: str, message: str = None, result_json: str = None):
+    finished_at = datetime.utcnow().isoformat() if status in ('completed', 'error', 'cancelled', 'success') else None
+    with db.connection() as conn:
+        conn.execute(
+            "UPDATE PlanningJobs SET status=?, message=?, finished_at=? WHERE id=?",
+            (status, message, finished_at, job_id)
+        )
+        if result_json is not None:
+            conn.execute("UPDATE PlanningJobs SET result_json=? WHERE id=?", (result_json, job_id))
+        conn.commit()
+
+def _get_job(db, job_id: str):
+    with db.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM PlanningJobs WHERE id=?", (job_id,))
+        return cursor.fetchone()
+
+
 def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_limit_seconds: int = 120):
     """
     Background worker that executes the shift planning solver and stores
-    the result (or error) in *_plan_jobs* under *job_id*.
+    the result in the PlanningJobs DB table under *job_id*.
     """
-    def _update(status: str, message: str, **kwargs):
-        with _plan_jobs_lock:
-            _plan_jobs[job_id].update({'status': status, 'message': message, **kwargs})
-
     with app.app_context():
         try:
             db = get_db()
+
+            def _update(status: str, message: str, **kwargs):
+                result_json = json.dumps(kwargs) if kwargs else None
+                _update_job(db, job_id, status, message, result_json)
+
             _update('running', 'Daten werden geladen…')
 
             # Extend planning dates to complete weeks (may extend into next month)
@@ -1144,9 +1179,9 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_
             )
             
             # Check if cancelled before starting the solve
-            with _plan_jobs_lock:
-                if _plan_jobs.get(job_id, {}).get('status') == 'cancelled':
-                    return
+            row = _get_job(db, job_id)
+            if row and row['status'] == 'cancelled':
+                return
 
             # Solve
             result = solve_shift_planning(planning_model, time_limit_seconds=time_limit_seconds, global_settings=global_settings, db_path=db.db_path)
@@ -1324,6 +1359,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_
 @bp.route('/api/shifts/plan', methods=['POST'])
 @limiter.limit("5 per hour")
 @require_role('Admin')
+@require_csrf
 def plan_shifts():
     """
     Start asynchronous shift planning using OR-Tools (Admin only).
@@ -1354,20 +1390,8 @@ def plan_shifts():
 
         # Create job entry and start background thread
         job_id = str(uuid.uuid4())
-        now = time.time()
-        with _plan_jobs_lock:
-            # Evict completed jobs older than the TTL to prevent unbounded growth
-            stale = [jid for jid, j in _plan_jobs.items()
-                     if j.get('status') != 'running'
-                     and now - j.get('started_at', now) > _PLAN_JOB_TTL_SECONDS]
-            for jid in stale:
-                del _plan_jobs[jid]
-
-            _plan_jobs[job_id] = {
-                'status': 'running',
-                'message': 'Planung wird gestartet…',
-                'started_at': now,
-            }
+        db = get_db()
+        _create_job(db, job_id)
 
         app = current_app._get_current_object()
         t = threading.Thread(
@@ -1396,20 +1420,35 @@ def get_plan_status(job_id):
         (on success) assignmentsCount, year, month, extendedPlanning
         (on error)   details, diagnostics
     """
-    with _plan_jobs_lock:
-        job_raw = _plan_jobs.get(job_id)
-        if job_raw is None:
-            return jsonify({'error': 'Job not found'}), 404
-        # Copy while holding the lock to avoid a race with the background thread
-        job = dict(job_raw)
+    db = get_db()
+    job = _get_job(db, job_id)
+    if job is None:
+        return jsonify({'error': 'Job not found'}), 404
 
-    elapsed = int(time.time() - job.get('started_at', time.time()))
-    job['elapsedSeconds'] = elapsed
-    return jsonify(job)
+    result = {
+        'status': job['status'],
+        'message': job['message'],
+    }
+    if job['result_json']:
+        try:
+            result.update(json.loads(job['result_json']))
+        except Exception:
+            pass
+
+    if job['started_at']:
+        try:
+            started = datetime.fromisoformat(job['started_at'])
+            elapsed = int((datetime.utcnow() - started).total_seconds())
+            result['elapsedSeconds'] = elapsed
+        except Exception:
+            result['elapsedSeconds'] = 0
+
+    return jsonify(result)
 
 
 @bp.route('/api/shifts/plan/<job_id>', methods=['DELETE'])
 @require_role('Admin')
+@require_csrf
 def cancel_plan_job(job_id):
     """
     Request cancellation of a background planning job.
@@ -1417,15 +1456,13 @@ def cancel_plan_job(job_id):
     The job is marked as cancelled. Since OR-Tools may not immediately stop,
     this sets the job status to 'cancelled' in the job store.
     """
-    with _plan_jobs_lock:
-        job = _plan_jobs.get(job_id)
-        if job is None:
-            return jsonify({'error': 'Job not found'}), 404
-        if job.get('status') != 'running':
-            return jsonify({'error': 'Job is not running'}), 400
-        job['status'] = 'cancelled'
-        job['message'] = 'Planung wurde abgebrochen.'
-
+    db = get_db()
+    job = _get_job(db, job_id)
+    if job is None:
+        return jsonify({'error': 'Job not found'}), 404
+    if job['status'] != 'running':
+        return jsonify({'error': 'Job is not running'}), 400
+    _update_job(db, job_id, 'cancelled', 'Planung wurde abgebrochen.')
     return jsonify({'success': True, 'message': 'Planung wird abgebrochen.'})
 
 
@@ -1507,6 +1544,7 @@ def get_plan_approval_status(year, month):
 
 @bp.route('/api/shifts/plan/approvals/<int:year>/<int:month>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def approve_plan(year, month):
     """Approve or unapprove a shift plan for a specific month (Admin only)"""
     try:
@@ -1566,6 +1604,7 @@ def approve_plan(year, month):
 
 @bp.route('/api/shifts/assignments/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_shift_assignment(id):
     """Update a shift assignment (manual edit)"""
     try:
@@ -1645,6 +1684,7 @@ def update_shift_assignment(id):
 
 @bp.route('/api/shifts/assignments', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_shift_assignment():
     """Create a shift assignment manually"""
     try:
@@ -1720,6 +1760,7 @@ def create_shift_assignment():
 @bp.route('/api/shifts/assignments/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_shift_assignment(id):
     """Delete a shift assignment"""
     try:
@@ -1769,6 +1810,7 @@ def delete_shift_assignment(id):
 
 @bp.route('/api/shifts/assignments/bulk', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def bulk_update_shift_assignments():
     """Bulk update multiple shift assignments"""
     try:
@@ -1895,6 +1937,7 @@ def bulk_update_shift_assignments():
 
 @bp.route('/api/shifts/assignments/<int:id>/toggle-fixed', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def toggle_fixed_assignment(id):
     """Toggle the IsFixed flag on an assignment (lock/unlock)"""
     try:

@@ -9,14 +9,21 @@ import secrets
 
 from .shared import (
     get_db, require_auth, require_role, log_audit, limiter,
-    hash_password, verify_password, get_employee_by_email
+    hash_password, verify_password, get_employee_by_email, require_csrf
 )
 
 bp = Blueprint('auth', __name__)
 
 
+@bp.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    from .shared import generate_csrf_token
+    return jsonify({'token': generate_csrf_token()})
+
+
 @bp.route('/api/auth/login', methods=['POST'])
 @limiter.limit("5 per minute")
+@require_csrf
 def login():
     """Authenticate employee and create session"""
     try:
@@ -91,8 +98,16 @@ def login():
         if remember_me:
             session.permanent = True
         
+        conn2 = db.get_connection()
+        cursor2 = conn2.cursor()
+        cursor2.execute("SELECT MustChangePassword FROM Employees WHERE Id = ?", (employee['id'],))
+        row_mcp = cursor2.fetchone()
+        conn2.close()
+        must_change = bool(row_mcp and row_mcp[0])
+
         return jsonify({
             'success': True,
+            'requiresPasswordChange': must_change,
             'user': {
                 'email': employee['email'],
                 'fullName': employee['fullName'],
@@ -106,6 +121,7 @@ def login():
 
 
 @bp.route('/api/auth/logout', methods=['POST'])
+@require_csrf
 def logout():
     """Logout user and clear session"""
     session.clear()
@@ -563,6 +579,7 @@ def get_roles():
 
 @bp.route('/api/auth/change-password', methods=['POST'])
 @require_auth
+@require_csrf
 def change_password():
     """Change password for currently logged in user"""
     try:
@@ -609,6 +626,7 @@ def change_password():
         log_audit(conn, 'Employee', user_id, 'PasswordChanged', 
                  json.dumps({'action': 'User changed own password'}, ensure_ascii=False))
         
+        cursor.execute("UPDATE Employees SET MustChangePassword = 0 WHERE Id = ?", (user_id,))
         conn.commit()
         conn.close()
         

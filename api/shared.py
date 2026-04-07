@@ -4,22 +4,50 @@ Shared utilities for the Dienstplan API blueprints.
 Contains: Database class, decorators, helper functions, rate limiter.
 """
 
-from flask import jsonify, session, current_app
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from datetime import datetime, date, timedelta
-from typing import Optional, Dict
+import logging
 import sqlite3
 import json
 import hashlib
 import bcrypt
 import secrets
 import sys
+from contextlib import contextmanager
 from functools import wraps
+from datetime import datetime, date, timedelta
+from typing import Optional, Dict
 
+from flask import jsonify, session, current_app, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+logger = logging.getLogger(__name__)
 
 # Module-level limiter (init_app called in create_app)
 limiter = Limiter(get_remote_address, default_limits=["200 per minute", "2000 per hour"], storage_uri="memory://")
+
+
+# ============================================================================
+# CSRF PROTECTION
+# ============================================================================
+
+def generate_csrf_token() -> str:
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+
+def validate_csrf_token(token: str) -> bool:
+    return bool(token and token == session.get('csrf_token'))
+
+
+def require_csrf(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token')
+        if not validate_csrf_token(token):
+            return jsonify({'error': 'CSRF token invalid or missing'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def get_row_value(row: sqlite3.Row, key: str, default):
@@ -55,6 +83,16 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
+    @contextmanager
+    def connection(self):
+        """Context manager for database connection - auto-closes on exit."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 def get_db() -> Database:
@@ -113,28 +151,34 @@ def _paginate(items: list, page: int, limit: int) -> dict:
     }
 
 
+def get_absence_type_defaults() -> dict:
+    """Legacy absence type fallback values. Kept for backward compatibility only."""
+    return {
+        1: {'id': 1, 'name': 'Krank / AU', 'code': 'AU', 'colorCode': '#FFB6C1'},
+        2: {'id': 2, 'name': 'Urlaub', 'code': 'U', 'colorCode': '#90EE90'},
+        3: {'id': 3, 'name': 'Lehrgang', 'code': 'L', 'colorCode': '#87CEEB'},
+    }
+
+
 def get_employee_by_email(db: Database, email: str) -> Optional[Dict]:
     """Get employee by email (employees now include authentication data)"""
-    conn = db.get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT e.*, GROUP_CONCAT(r.Name) as roles
-        FROM Employees e
-        LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
-        LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
-        WHERE e.Email = ?
-        GROUP BY e.Id
-    """, (email,))
-    
-    row = cursor.fetchone()
-    conn.close()
-    
+    with db.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT e.*, GROUP_CONCAT(r.Name) as roles
+            FROM Employees e
+            LEFT JOIN AspNetUserRoles ur ON CAST(e.Id AS TEXT) = ur.UserId
+            LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
+            WHERE e.Email = ?
+            GROUP BY e.Id
+        """, (email,))
+        row = cursor.fetchone()
+
     if not row:
         return None
-    
+
     full_name = f"{row['Vorname']} {row['Name']}"
-    
+
     return {
         'id': row['Id'],
         'email': row['Email'],
@@ -214,8 +258,7 @@ def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Opti
             changes
         ))
     except Exception as e:
-        # Log the audit failure but don't raise - we don't want audit logging to break business operations
-        print(f"Warning: Failed to log audit entry: {e}", file=sys.stderr)
+        logger.warning(f"Failed to log audit entry: {e}")
 
 
 def extend_planning_dates_to_complete_weeks(start_date: date, end_date: date) -> tuple:
@@ -302,7 +345,7 @@ def ensure_absence_types_table(db_path: str):
         table_exists = cursor.fetchone() is not None
         
         if not table_exists:
-            print("[i] Creating AbsenceTypes table...")
+            logger.info("Creating AbsenceTypes table...")
             cursor.execute("""
                 CREATE TABLE AbsenceTypes (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -323,14 +366,14 @@ def ensure_absence_types_table(db_path: str):
                 cursor.execute("PRAGMA table_info(Absences)")
                 columns = [col[1] for col in cursor.fetchall()]
                 if 'AbsenceTypeId' not in columns:
-                    print("[i] Adding AbsenceTypeId column to Absences table...")
+                    logger.info("Adding AbsenceTypeId column to Absences table...")
                     cursor.execute("ALTER TABLE Absences ADD COLUMN AbsenceTypeId INTEGER")
                     cursor.execute("""
                         CREATE INDEX IF NOT EXISTS idx_absences_type 
                         ON Absences(AbsenceTypeId)
                     """)
             
-            print("[✓] AbsenceTypes table created")
+            logger.info("AbsenceTypes table created")
         
         standard_types = [
             ('Urlaub', 'U', '#90EE90', 1),
@@ -342,21 +385,21 @@ def ensure_absence_types_table(db_path: str):
         existing_standard_count = cursor.fetchone()[0]
         
         if existing_standard_count < len(standard_types):
-            print("[i] Initializing default absence types...")
+            logger.info("Initializing default absence types...")
             
             cursor.executemany("""
                 INSERT OR IGNORE INTO AbsenceTypes (Name, Code, ColorCode, IsSystemType, CreatedBy)
                 VALUES (?, ?, ?, ?, 'system')
             """, standard_types)
             
-            print("[✓] Default absence types initialized (U, AU, L)")
+            logger.info("Default absence types initialized (U, AU, L)")
         
         conn.commit()
     except Exception as e:
         conn.rollback()
-        print(f"[!] Error ensuring AbsenceTypes table: {e}", file=sys.stderr)
-        print("[!] Possible causes: database permissions, disk space, or database corruption", file=sys.stderr)
-        print("[!] Please check database file permissions and disk space", file=sys.stderr)
+        logger.error(f"Error ensuring AbsenceTypes table: {e}")
+        logger.error("Possible causes: database permissions, disk space, or database corruption")
+        logger.error("Please check database file permissions and disk space")
         raise
     finally:
         conn.close()

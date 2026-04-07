@@ -195,7 +195,11 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 
 ### Administration
 ![Admin-Panel](docs/screenshots/11-admin-panel.png)
-*Administrator-Panel mit Benutzerverwaltung, E-Mail-Einstellungen und globalen Systemparametern*
+*Administrator-Panel mit Änderungsprotokoll (Audit Log), E-Mail-Einstellungen und Systeminformationen*
+
+### Passwort ändern
+![Passwort ändern Dialog](docs/screenshots/22-password-change-dialog.png)
+*Dialog zum Ändern des Passworts – erscheint automatisch, wenn der Administrator die Passwort-Änderungspflicht gesetzt hat*
 
 ## 🏗️ Architektur
 
@@ -978,12 +982,19 @@ python main.py serve
   - Schichttausch genehmigen/ablehnen
   - Teams verwalten
   - Ferienzeiten verwalten
+  - Audit-Log einsehen
 - **Mitarbeiter**: Eingeschränkte Berechtigungen
   - Dienstplan ansehen (nur lesend)
   - Statistiken einsehen
   - Mitarbeiterliste ansehen
   - Urlaubsanträge einreichen
   - Schichttausch anfragen/einreichen
+
+### Sicherheitsmaßnahmen
+- **CSRF-Schutz**: Alle schreibenden API-Endpunkte erfordern ein gültiges CSRF-Token (`X-CSRF-Token`-Header). Das Token wird per `GET /api/csrf-token` abgerufen und ist an die Sitzung gebunden.
+- **XSS-Schutz**: Alle benutzerkontrollierten Inhalte werden vor dem Einfügen in den DOM HTML-escaped.
+- **Rate Limiting**: Maximal 200 Anfragen/min bzw. 2000/h pro IP-Adresse.
+- **Audit-Logging**: Alle Datenänderungen werden mit Benutzer, Zeitstempel und Felddifferenz protokolliert.
 
 ### Standard-Anmeldedaten
 Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
@@ -992,12 +1003,16 @@ Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
 
 **WICHTIG**: Ändern Sie das Standard-Passwort nach der ersten Anmeldung!
 
+### Passwort-Änderungspflicht
+Administratoren können für Benutzer das `MustChangePassword`-Flag setzen (z. B. nach einem Passwort-Reset). Beim nächsten Login wird diesen Benutzern automatisch der Dialog zur Passwort-Änderung angezeigt; erst danach können sie das System nutzen.
+
 ### Sicherheitshinweise für Produktion
 1. **Passwörter ändern**: Ändern Sie alle Standard-Passwörter
 2. **HTTPS verwenden**: Setzen Sie einen Reverse Proxy (nginx, Apache) vor Flask
 3. **CORS konfigurieren**: Beschränken Sie erlaubte Origins in `web_api.py`
 4. **Datenbank schützen**: SQLite-Datei vor unbefugtem Zugriff schützen
 5. **Regular Updates**: Halten Sie alle Python-Pakete aktuell
+6. **Health-Check**: `GET /api/health` gibt Systemstatus zurück – für Monitoring und Container-Probes nutzbar
 
 ## 🐳 Deployment
 

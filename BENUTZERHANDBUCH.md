@@ -594,6 +594,12 @@ Klicken Sie auf Ihren Namen (rechts oben) für:
 5. Bestätigen Sie das neue Passwort
 6. Klicken Sie auf **Passwort ändern**
 
+![Passwort ändern Dialog](docs/screenshots/22-password-change-dialog.png)
+
+### Passwort-Änderungspflicht beim ersten Login
+
+Wenn ein Administrator Ihr Konto angelegt oder Ihr Passwort zurückgesetzt hat, kann er das Flag **„Passwort bei nächstem Login ändern"** setzen. In diesem Fall erscheint nach der Anmeldung automatisch der Passwort-Änderungs-Dialog. Sie müssen ein neues Passwort vergeben, bevor Sie das System nutzen können.
+
 ### Passwort vergessen
 
 Falls Sie Ihr Passwort vergessen haben (und E-Mail-Benachrichtigungen konfiguriert sind):
@@ -1424,7 +1430,7 @@ Die E-Mail-Konfiguration wird benötigt für die **Passwort-Zurücksetzen**-Funk
 - Anzahl Worker (Standard: 8)
 - Such-Strategie
 
-### Audit-Logs
+### Audit-Logs (Änderungsprotokoll)
 
 **Protokollierung aller Änderungen:**
 - Wer hat was geändert?
@@ -1432,12 +1438,17 @@ Die E-Mail-Konfiguration wird benötigt für die **Passwort-Zurücksetzen**-Funk
 - Welche Daten wurden geändert?
 
 **Zugriff:**
-1. Navigieren Sie zu **Administration** → **Audit-Logs**
-2. Filtern Sie nach:
-   - Datum
-   - Benutzer
-   - Aktion (Create, Update, Delete)
-   - Entität (Employee, Shift, etc.)
+1. Navigieren Sie zu **Administration** → Tab **📋 Änderungsprotokoll**
+2. Klicken Sie auf **Einträge laden**
+3. Filtern Sie nach:
+   - **Entität** (Mitarbeiter, Team, etc.)
+   - **Benutzer**
+   - **Aktion** (Created, Updated, Deleted, PasswordChanged, PasswordReset)
+   - **Zeitraum** (Von / Bis)
+4. Klicken Sie auf **Filter anwenden**
+5. Blättern Sie mit den Paginierungs-Schaltflächen durch die Ergebnisse (50 Einträge/Seite)
+
+> Der Tab **🔍 API Audit-Log** zeigt dasselbe Log über den direkten API-Endpunkt `GET /api/audit-logs`.
 
 ### Datenbank-Wartung
 

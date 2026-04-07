@@ -33,7 +33,7 @@ def _alembic_config(db_path: str):
     # .spec file).  In a normal Python environment we resolve relative to this
     # source file as before.
     if getattr(sys, 'frozen', False):
-        base_dir = sys._MEIPASS
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     else:
         base_dir = os.path.dirname(os.path.abspath(__file__))
 

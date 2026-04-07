@@ -550,21 +550,25 @@ Empfohlene Tools:
 #### Sicherheit & Administration
 - ✅ **Rollenbasierte Zugriffskontrolle** (Admin, Mitarbeiter)
 - ✅ **Cookie-basierte Authentifizierung**
-- ✅ **Audit-Logging** für alle Änderungen
+- ✅ **CSRF-Schutz** – Token-basiert für alle schreibenden Endpunkte
+- ✅ **XSS-Schutz** – `escapeHtml()` auf alle benutzerkontrollierten Ausgaben
+- ✅ **Audit-Logging** für alle Datenänderungen
 - ✅ **Passwort-Hashing** mit SHA-256
+- ✅ **Passwort-Änderungspflicht** (`MustChangePassword`-Flag für Benutzer)
 
 #### Spezialfunktionen
 - ✅ **BMT (Brandmeldetechniker)** - Sonderfunktion mit eigenem virtuellem Team
 - ✅ **BSB (Brandschutzbeauftragter)** - Sonderfunktion mit eigenem virtuellem Team
 - ✅ **TD (Tagdienst)** - Automatisch für BMT/BSB-qualifizierte Mitarbeiter
 - ✅ **Ferienjobber-Support** - Eigenes virtuelles Team für temporäre Mitarbeiter
-- ✅ **Springer-System** - Teamübergreifende Vertretungsregelung
+- ✅ **Automatische Vertretung** - Solver plant Vertretungen vollautomatisch auf Basis von Verfügbarkeit und Rotationsregeln
 
 #### Benutzeroberfläche
 - ✅ **Responsive Web-UI** für Desktop und Mobile
 - ✅ **Wochenansicht, Monatsansicht, Jahresansicht**
 - ✅ **Manuelle Schichtbearbeitung** mit Fixierung
 - ✅ **Integriertes Hilfesystem**
+- ✅ **Lade-Indikatoren** (`.loading-spinner`) bei länger dauernden Operationen
 
 #### Deployment
 - ✅ **Windows Standalone Executable** mit PyInstaller
@@ -586,11 +590,11 @@ CREATE TABLE Employees (
     Email TEXT,
     Geburtsdatum TEXT,
     Funktion TEXT,
-    IsSpringer INTEGER DEFAULT 0,
     IsFerienjobber INTEGER DEFAULT 0,
     IsBrandmeldetechniker INTEGER DEFAULT 0,
     IsBrandschutzbeauftragter INTEGER DEFAULT 0,
     IsTdQualified INTEGER DEFAULT 0,
+    MustChangePassword INTEGER DEFAULT 0,
     TeamId INTEGER,
     FOREIGN KEY (TeamId) REFERENCES Teams(Id)
 );
@@ -619,7 +623,6 @@ CREATE TABLE ShiftAssignments (
     ShiftTypeId INTEGER NOT NULL,
     Date TEXT NOT NULL,
     IsManual INTEGER DEFAULT 0,
-    IsSpringer INTEGER DEFAULT 0,
     IsFixed INTEGER DEFAULT 0,
     CreatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
     CreatedBy TEXT,
@@ -679,7 +682,18 @@ CREATE TABLE AuditLogs (
     Action TEXT NOT NULL,
     Changes TEXT,
     UserId TEXT,
+    UserName TEXT,
     Timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Planungsjobs (persistiert DB-seitig, ersetzt in-memory-Dict)
+CREATE TABLE PlanningJobs (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'pending',
+    message TEXT,
+    started_at TEXT,
+    finished_at TEXT,
+    result_json TEXT
 );
 ```
 
@@ -692,13 +706,15 @@ CREATE TABLE AuditLogs (
 - `GET /api/auth/users` - Alle Benutzer (Admin)
 - `POST /api/auth/register` - Neuen Benutzer registrieren (Admin)
 
+**CSRF-Schutz:**
+- `GET /api/csrf-token` - Sitzungsgebundenes CSRF-Token abrufen (muss vor schreibenden Requests aufgerufen werden)
+
 **Mitarbeiter:**
 - `GET /api/employees` - Alle Mitarbeiter
 - `GET /api/employees/{id}` - Einzelner Mitarbeiter
 - `POST /api/employees` - Mitarbeiter erstellen
 - `PUT /api/employees/{id}` - Mitarbeiter bearbeiten
 - `DELETE /api/employees/{id}` - Mitarbeiter löschen
-- `GET /api/employees/springers` - Alle Springer
 
 **Teams:**
 - `GET /api/teams` - Alle Teams
@@ -710,7 +726,8 @@ CREATE TABLE AuditLogs (
 **Schichten:**
 - `GET /api/shifttypes` - Alle Schichttypen
 - `GET /api/shifts/schedule` - Dienstplan anzeigen
-- `POST /api/shifts/plan` - Automatisch planen
+- `POST /api/shifts/plan` - Automatisch planen (startet asynchronen Job)
+- `GET /api/shifts/plan/status/{job_id}` - Planungsjob-Status abfragen
 - `POST /api/shifts/assignments` - Schicht erstellen
 - `PUT /api/shifts/assignments/{id}` - Schicht bearbeiten
 - `DELETE /api/shifts/assignments/{id}` - Schicht löschen
@@ -742,9 +759,11 @@ CREATE TABLE AuditLogs (
 - `GET /api/statistics/dashboard` - Dashboard-Statistiken
 - `GET /api/statistics/weekend-shifts` - Wochenend-Statistiken
 
-**Audit:**
-- `GET /api/audit/logs` - Audit-Logs
-- `GET /api/audit/recent/{count}` - Letzte N Einträge
+**Audit-Log:**
+- `GET /api/audit-logs` - Audit-Logs mit Filterung und Paginierung (nur Admins)
+
+**System:**
+- `GET /api/health` - Health-Check (DB-Status, Versionen)
 
 ---
 

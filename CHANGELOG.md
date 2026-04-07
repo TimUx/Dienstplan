@@ -1,5 +1,58 @@
 # Changelog
 
+## Version 2.1.3 (April 2026)
+
+### Sicherheit
+
+#### CSRF-Schutz
+- **Neuer Endpunkt**: `GET /api/csrf-token` liefert ein sitzungsgebundenes CSRF-Token
+- **`require_csrf`-Decorator**: Alle schreibenden API-Endpunkte (POST/PUT/DELETE) prüfen den `X-CSRF-Token`-Header
+- **Frontend**: `fetchCsrfToken()` und `getCsrfToken()` in `utils.js`; das Token wird bei jedem mutierenden Request automatisch als `X-CSRF-Token`-Header übermittelt
+- Das Token wird serverseitig in der Flask-Session gespeichert und geprüft (Constant-Time-Vergleich)
+
+#### XSS-Behebung
+- `escapeHtml()` wird nun konsequent auf alle benutzerkontrollierten Inhalte angewendet, bevor sie in den DOM geschrieben werden (`employees.js`, `schedule.js`, `statistics.js`, `app.js`)
+
+#### Passwort-Änderungspflicht (MustChangePassword)
+- Neues Feld `MustChangePassword` in der `Employees`-Tabelle (Migration `c9a0000009`)
+- Beim nächsten Login wird betroffenen Benutzern automatisch der Passwort-Änderungs-Dialog angezeigt
+- Nach erfolgreichem Ändern wird das Flag zurückgesetzt
+- Admins können das Flag beim Anlegen oder Zurücksetzen von Passwörtern setzen
+
+### Neue Features
+
+#### Health-Check-Endpunkt
+- **`GET /api/health`** – liefert Systemstatus: DB-Verbindung, App-Version, Python-Version, OR-Tools-Version
+- HTTP-Statuscode `200` (healthy) oder `503` (DB-Fehler)
+- Geeignet für Monitoring-Systeme und Container-Health-Probes
+
+#### Audit-Log (Admin-Oberfläche)
+- Neues Admin-Tab **"📋 Änderungsprotokoll"** in der Administration
+- Filter nach Entität, Benutzer, Aktion und Zeitraum
+- Paginierung (50 Einträge/Seite) und Auto-Aktualisierung
+- API-Endpunkt: `GET /api/audit-logs` (nur für Admins)
+
+### Stabilitätsverbesserungen
+
+#### Datenbankgestützte Planungsjobs
+- Die in-memory-Ablage `_plan_jobs` wurde durch die SQLite-Tabelle `PlanningJobs` ersetzt (Migration `cb0000011`)
+- Planungsjobs überleben Server-Neustarts und sind persistiert
+- Felder: `id`, `status`, `message`, `started_at`, `finished_at`, `result_json`
+
+#### Performance-Indizes
+- Neue Datenbank-Indizes für häufig abgefragte Spalten (Migration `ca0000010`)
+
+### UI-Verbesserungen
+- **Lade-Spinner**: `.loading-spinner`-CSS-Klasse für Wartezeiten bei langen Operationen
+- **Responsive Tabellen**: Verbessertes CSS für mobile Darstellung aller Tabellen
+- **Barrierefreiheit**: `:focus-visible`-Stile für bessere Tastaturbedienung
+
+### Build & Abhängigkeiten
+- `requirements-build.txt` eingeführt: PyInstaller und `csscompressor` wurden aus `requirements.txt` ausgelagert
+- `minify_css.py` mit `csscompressor` für optimierte Stylesheets im Build-Prozess
+
+---
+
 ## Version 2.1.2 (April 2026)
 
 ### Geändert

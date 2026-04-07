@@ -9,11 +9,14 @@ Alembic is used to track and apply incremental schema migrations.
   Alembic revisions automatically.
 """
 
+import logging
 import os
 import sqlite3
 import bcrypt
 import secrets
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +45,7 @@ def run_migrations(db_path: str = "dienstplan.db") -> None:
 
     cfg = _alembic_config(db_path)
     command.upgrade(cfg, "head")
-    print(f"[OK] Database migrations up-to-date: {db_path}")
+    logger.info(f"Database migrations up-to-date: {db_path}")
 
 
 def stamp_migrations(db_path: str = "dienstplan.db") -> None:
@@ -56,7 +59,7 @@ def stamp_migrations(db_path: str = "dienstplan.db") -> None:
 
     cfg = _alembic_config(db_path)
     command.stamp(cfg, "head")
-    print(f"[OK] Database stamped at migration head: {db_path}")
+    logger.info(f"Database stamped at migration head: {db_path}")
 
 
 def create_database_schema(db_path: str = "dienstplan.db"):
@@ -598,7 +601,7 @@ def create_database_schema(db_path: str = "dienstplan.db"):
     conn.commit()
     conn.close()
     
-    print(f"[OK] Database schema created successfully: {db_path}")
+    logger.info(f"Database schema created successfully: {db_path}")
 
 
 def initialize_default_roles(db_path: str = "dienstplan.db"):
@@ -619,7 +622,7 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("[OK] Default roles initialized (Admin, Mitarbeiter)")
+    logger.info("Default roles initialized (Admin, Mitarbeiter)")
 
 
 def hash_password(password: str) -> str:
@@ -640,7 +643,7 @@ def create_default_admin(db_path: str = "dienstplan.db"):
     existing_admin = cursor.fetchone()
     
     if existing_admin:
-        print("[!] Admin employee already exists")
+        logger.warning("Admin employee already exists")
         admin_id = existing_admin[0]
     else:
         # Create admin employee with authentication credentials
@@ -651,8 +654,8 @@ def create_default_admin(db_path: str = "dienstplan.db"):
             INSERT INTO Employees 
             (Vorname, Name, Personalnummer, Email, NormalizedEmail, PasswordHash, SecurityStamp,
              Funktion, IsFerienjobber, IsBrandmeldetechniker, IsBrandschutzbeauftragter,
-             IsTdQualified, IsTeamLeader, TeamId, AccessFailedCount, IsActive)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, NULL, 0, 1)
+             IsTdQualified, IsTeamLeader, TeamId, AccessFailedCount, IsActive, MustChangePassword)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, NULL, 0, 1, 1)
         """, (
             "Admin",  # Vorname
             "Administrator",  # Name
@@ -665,7 +668,7 @@ def create_default_admin(db_path: str = "dienstplan.db"):
         ))
         
         admin_id = cursor.lastrowid
-        print(f"[OK] Default admin employee created (ID: {admin_id})")
+        logger.info(f"Default admin employee created (ID: {admin_id})")
     
     # Assign Admin role (UserId in AspNetUserRoles now refers to Employee Id)
     cursor.execute("""
@@ -677,7 +680,7 @@ def create_default_admin(db_path: str = "dienstplan.db"):
     conn.close()
     
     print(f"   Email: {admin_email}")
-    print(f"   Password: {admin_password}")
+    print(f"   [!] Password change required on first login!")
     print(f"   [!] CHANGE THIS PASSWORD AFTER FIRST LOGIN!")
 
 
@@ -740,7 +743,7 @@ def initialize_shift_types(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("[OK] Standard shift types initialized: Früh, Nacht, Spät (48h/week, all working Monday-Sunday)")
+    logger.info("Standard shift types initialized: Früh, Nacht, Spät (48h/week, all working Monday-Sunday)")
 
 
 def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
@@ -765,7 +768,7 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     
     if len(shifts) < 3:
         missing = set(['F', 'N', 'S']) - set(shifts.keys())
-        print(f"[!] Not all shift types found, skipping relationship initialization. Missing: {', '.join(missing)}")
+        logger.warning(f"Not all shift types found, skipping relationship initialization. Missing: {', '.join(missing)}")
         conn.close()
         return
     
@@ -794,7 +797,7 @@ def initialize_shift_type_relationships(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("[OK] Shift type relationships initialized: F -> N -> S rotation")
+    logger.info("Shift type relationships initialized: F -> N -> S rotation")
 
 
 def initialize_default_rotation_groups(db_path: str = "dienstplan.db"):
@@ -813,7 +816,7 @@ def initialize_default_rotation_groups(db_path: str = "dienstplan.db"):
     existing = cursor.fetchone()
     
     if existing:
-        print("[!] Default rotation group already exists")
+        logger.warning("Default rotation group already exists")
         conn.close()
         return
     
@@ -823,7 +826,7 @@ def initialize_default_rotation_groups(db_path: str = "dienstplan.db"):
     
     if len(shifts) < 3:
         missing = set(['F', 'N', 'S']) - set(shifts.keys())
-        print(f"[!] Not all shift types found, skipping rotation group initialization. Missing: {', '.join(missing)}")
+        logger.warning(f"Not all shift types found, skipping rotation group initialization. Missing: {', '.join(missing)}")
         conn.close()
         return
     
@@ -851,7 +854,7 @@ def initialize_default_rotation_groups(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print(f"[OK] Default rotation group initialized: 'Standard F→N→S' (ID: {rotation_group_id})")
+    logger.info(f"Default rotation group initialized: 'Standard F→N→S' (ID: {rotation_group_id})")
 
 
 def initialize_absence_types(db_path: str = "dienstplan.db"):
@@ -869,7 +872,7 @@ def initialize_absence_types(db_path: str = "dienstplan.db"):
     count = cursor.fetchone()[0]
     
     if count >= 3:
-        print("[!] Standard absence types already initialized")
+        logger.info("Standard absence types already initialized")
         conn.close()
         return
     
@@ -888,7 +891,7 @@ def initialize_absence_types(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("[OK] Standard absence types initialized (U, AU, L)")
+    logger.info("Standard absence types initialized (U, AU, L)")
 
 
 def initialize_sample_teams(db_path: str = "dienstplan.db"):
@@ -907,7 +910,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     rotation_group_id = rotation_group_result[0] if rotation_group_result else None
     
     if not rotation_group_id:
-        print("[!] Warning: Default rotation group not found, teams will not have rotation assigned")
+        logger.warning("Default rotation group not found, teams will not have rotation assigned")
     
     # Sample teams with explicit IDs
     # Format: (Id, Name, Description, Email, RotationGroupId)
@@ -925,7 +928,7 @@ def initialize_sample_teams(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("[OK] Sample teams initialized with rotation groups")
+    logger.info("Sample teams initialized with rotation groups")
 
 
 def initialize_sample_employees(db_path: str = "dienstplan.db"):
@@ -981,7 +984,7 @@ def initialize_sample_employees(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    print("[OK] Sample employees initialized: 17 total (3 teams × 5 + 2 with special functions)")
+    logger.info("Sample employees initialized: 17 total (3 teams × 5 + 2 with special functions)")
 
 
 def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool = True):
@@ -1006,15 +1009,12 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
 
     if db_exists:
         # Existing database – apply any missing migrations and return.
-        print(f"[*] Existing database found: {db_path}")
-        print("=" * 60)
+        logger.info(f"Existing database found: {db_path}")
         run_migrations(db_path)
-        print("=" * 60)
-        print("[OK] Database is up-to-date.")
+        logger.info("Database is up-to-date.")
         return
 
-    print(f"[*] Initializing database: {db_path}")
-    print("=" * 60)
+    logger.info(f"Initializing database: {db_path}")
 
     # Create schema
     create_database_schema(db_path)
@@ -1047,15 +1047,9 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
     # run_migrations() is a no-op on subsequent application starts.
     stamp_migrations(db_path)
 
-    print("=" * 60)
-    print("[OK] Database initialization complete!")
-    print()
-    print("You can now start the server with:")
-    print(f"  python main.py serve --db {db_path}")
-    print()
-    print("Default login credentials:")
-    print("  Email: admin@fritzwinter.de")
-    print("  Password: Admin123!")
+    logger.info("Database initialization complete!")
+    logger.info(f"Start the server with: python main.py serve --db {db_path}")
+    logger.info("Default login credentials: Email: admin@fritzwinter.de")
 
 
 if __name__ == "__main__":

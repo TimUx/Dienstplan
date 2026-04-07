@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request, session, current_app
 from datetime import datetime
 import json
 
-from .shared import get_db, require_auth, require_role, log_audit, limiter
+from .shared import get_db, require_auth, require_role, log_audit, limiter, require_csrf, get_absence_type_defaults
 
 bp = Blueprint('absences', __name__)
 
@@ -36,12 +36,11 @@ def get_absences():
             type_color = row['TypeColor']
         else:
             # Legacy fallback: Map type: 1=AU (Krank), 2=U (Urlaub), 3=L (Lehrgang)
-            type_names = {1: 'Krank / AU', 2: 'Urlaub', 3: 'Lehrgang'}
-            type_codes = {1: 'AU', 2: 'U', 3: 'L'}
-            type_colors = {1: '#FFB6C1', 2: '#90EE90', 3: '#87CEEB'}
-            type_name = type_names.get(row['Type'], 'Unbekannt')
-            type_code = type_codes.get(row['Type'], 'U')
-            type_color = type_colors.get(row['Type'], '#E0E0E0')
+            defaults = get_absence_type_defaults()
+            default = defaults.get(row['Type'], {'name': 'Unbekannt', 'code': 'U', 'colorCode': '#E0E0E0'})
+            type_name = default['name']
+            type_code = default['code']
+            type_color = default['colorCode']
         
         absences.append({
             'id': row['Id'],
@@ -64,6 +63,7 @@ def get_absences():
 
 @bp.route('/api/absences', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_absence():
     """Create new absence with support for custom absence types"""
     try:
@@ -212,6 +212,7 @@ def create_absence():
 @bp.route('/api/absences/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_absence(id):
     """Delete an absence"""
     try:
@@ -288,6 +289,7 @@ def get_absence_types():
 
 @bp.route('/api/absencetypes', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_absence_type():
     """Create new custom absence type (Admin only)"""
     try:
@@ -348,6 +350,7 @@ def create_absence_type():
 
 @bp.route('/api/absencetypes/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_absence_type(id):
     """Update custom absence type (Admin only)"""
     try:
@@ -430,6 +433,7 @@ def update_absence_type(id):
 @bp.route('/api/absencetypes/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_absence_type(id):
     """Delete custom absence type (Admin only)"""
     try:
@@ -529,6 +533,7 @@ def get_vacation_requests():
 
 @bp.route('/api/vacationrequests', methods=['POST'])
 @require_auth
+@require_csrf
 def create_vacation_request():
     """Create new vacation request"""
     try:
@@ -567,6 +572,7 @@ def create_vacation_request():
 
 @bp.route('/api/vacationrequests/<int:id>/status', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_vacation_request_status(id):
     """Update vacation request status (Admin only)"""
     try:
@@ -606,6 +612,7 @@ def update_vacation_request_status(id):
 @bp.route('/api/vacationrequests/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_vacation_request(id):
     """Delete vacation request (Admin only) - allows cancellation of approved requests"""
     try:
@@ -720,6 +727,7 @@ def get_vacation_year_approval(year):
 
 @bp.route('/api/vacationyearapprovals', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_or_update_vacation_year_approval():
     """Create or update vacation year approval (Admin only)"""
     try:

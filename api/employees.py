@@ -9,7 +9,7 @@ import secrets
 
 from .shared import (
     get_db, require_auth, require_role, log_audit,
-    hash_password, _paginate, limiter
+    hash_password, _paginate, limiter, require_csrf
 )
 from .repositories.employee_repository import EmployeeRepository
 
@@ -145,6 +145,7 @@ def get_employee(id):
 
 @bp.route('/api/employees', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_employee():
     """Create new employee"""
     try:
@@ -274,6 +275,7 @@ def create_employee():
 
 @bp.route('/api/employees/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_employee(id):
     """Update employee"""
     try:
@@ -483,6 +485,7 @@ def update_employee(id):
 @bp.route('/api/employees/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_employee(id):
     """Delete employee (Admin only)"""
     try:
@@ -601,6 +604,7 @@ def get_team(id):
 
 @bp.route('/api/teams', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_team():
     """Create new team"""
     try:
@@ -645,6 +649,7 @@ def create_team():
 
 @bp.route('/api/teams/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_team(id):
     """Update team"""
     try:
@@ -701,6 +706,7 @@ def update_team(id):
 @bp.route('/api/teams/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_team(id):
     """Delete team (Admin only)"""
     try:
@@ -825,6 +831,7 @@ def get_vacation_period(id):
 
 @bp.route('/api/vacation-periods', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_vacation_period():
     """Create new vacation period"""
     try:
@@ -887,6 +894,7 @@ def create_vacation_period():
 
 @bp.route('/api/vacation-periods/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_vacation_period(id):
     """Update vacation period"""
     try:
@@ -967,6 +975,7 @@ def update_vacation_period(id):
 @bp.route('/api/vacation-periods/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_vacation_period(id):
     """Delete vacation period (Admin only)"""
     try:
@@ -1059,6 +1068,7 @@ def get_rotation_groups():
 
 @bp.route('/api/rotationgroups', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_rotation_group():
     """Create new rotation group (Admin only)"""
     try:
@@ -1164,6 +1174,7 @@ def get_rotation_group(id):
 
 @bp.route('/api/rotationgroups/<int:id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_rotation_group(id):
     """Update rotation group (Admin only)"""
     try:
@@ -1220,6 +1231,7 @@ def update_rotation_group(id):
 @bp.route('/api/rotationgroups/<int:id>', methods=['DELETE'])
 @limiter.limit("30 per minute")
 @require_role('Admin')
+@require_csrf
 def delete_rotation_group(id):
     """Delete rotation group (Admin only)"""
     try:
@@ -1375,6 +1387,7 @@ def export_teams_csv():
 
 @bp.route('/api/employees/import/csv', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def import_employees_csv():
     """
     Import employees from CSV file.
@@ -1522,6 +1535,7 @@ def import_employees_csv():
 
 @bp.route('/api/teams/import/csv', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def import_teams_csv():
     """
     Import teams from CSV file.

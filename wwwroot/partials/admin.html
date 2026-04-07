@@ -7,6 +7,7 @@
                     <button class="admin-tab active" data-action="showAdminTab" data-tab="audit-logs">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" data-action="showAdminTab" data-tab="email">📧 E-Mail-Einstellungen</button>
                     <button class="admin-tab" data-action="showAdminTab" data-tab="system">📊 System-Information</button>
+                    <button class="admin-tab" data-action="showAdminTab" data-tab="audit-log">🔍 API Audit-Log</button>
                 </div>
 
                 <!-- Tab Contents -->
@@ -109,6 +110,35 @@
                                 <p><strong>Solver:</strong> Google OR-Tools CP-SAT</p>
                             </div>
                         </div>
+
+                    <!-- Audit Log Tab (API-based) -->
+                    <div id="admin-tab-audit-log" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>🔍 API Audit-Log</h3>
+                            <p>Detaillierte Auswertung des Audit-Logs über die API.</p>
+                            <div class="controls" style="margin-bottom: 12px;">
+                                <select id="audit-entity-filter" style="margin-right: 8px;">
+                                    <option value="">Alle Entitäten</option>
+                                    <option value="Employee">Mitarbeiter</option>
+                                    <option value="Team">Team</option>
+                                    <option value="ShiftAssignment">Schichtzuweisung</option>
+                                    <option value="Absence">Abwesenheit</option>
+                                </select>
+                                <select id="audit-action-filter" style="margin-right: 8px;">
+                                    <option value="">Alle Aktionen</option>
+                                    <option value="Created">Erstellt</option>
+                                    <option value="Updated">Geändert</option>
+                                    <option value="Deleted">Gelöscht</option>
+                                </select>
+                                <input type="date" id="audit-start-date" style="margin-right: 8px;">
+                                <input type="date" id="audit-end-date" style="margin-right: 8px;">
+                                <button onclick="window.loadAuditLog()" class="btn-primary">Laden</button>
+                            </div>
+                            <div id="audit-log-content">
+                                <p>Klicken Sie auf "Laden" um die Einträge anzuzeigen.</p>
+                            </div>
+                        </div>
+                    </div>
                     </div>
                 </div>
             </div>

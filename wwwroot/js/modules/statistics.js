@@ -17,7 +17,7 @@ export async function loadStatistics() {
 
         displayStatistics(stats);
     } catch (error) {
-        content.innerHTML = `<p class="error">Fehler beim Laden: ${error.message}</p>`;
+        content.innerHTML = `<p class="error">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
     }
 }
 

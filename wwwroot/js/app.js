@@ -10,6 +10,7 @@ import * as stats from './modules/statistics.js';
 import * as utils from './modules/utils.js';
 import { showToast } from './modules/utils.js';
 import * as planningReport from './modules/planning_report.js';
+import * as audit from './modules/audit.js';
 
 // ============================================================================
 // VIEW NAVIGATION - LAZY LOADING
@@ -158,7 +159,7 @@ function initImportFormHandlers() {
                 }
             } catch (error) {
                 console.error('Import error:', error);
-                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${error.message}</p></div>`;
+                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${utils.escapeHtml(error.message)}</p></div>`;
             }
         }
 
@@ -195,7 +196,7 @@ function initImportFormHandlers() {
                 }
             } catch (error) {
                 console.error('Import error:', error);
-                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${error.message}</p></div>`;
+                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${utils.escapeHtml(error.message)}</p></div>`;
             }
         }
     });
@@ -510,6 +511,7 @@ function registerGlobals() {
 
     // Statistics
     window.loadStatistics = stats.loadStatistics;
+    window.loadAuditLog = audit.loadAuditLog;
 
     // Planning Report
     window.loadPlanningReport = planningReport.loadPlanningReport;
@@ -522,6 +524,7 @@ function registerGlobals() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    utils.fetchCsrfToken();
     registerGlobals();
     initEventDelegation();
     initImportFormHandlers();

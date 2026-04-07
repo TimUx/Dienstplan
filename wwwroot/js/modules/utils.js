@@ -460,16 +460,35 @@ export function showToast(message, type = 'info', duration = 4000) {
 // CENTRAL API CALL WRAPPER
 // ============================================================================
 
-/**
- * Wrapper around fetch() that automatically shows error toasts on HTTP errors.
- * @param {string} url - URL to fetch
- * @param {RequestInit} options - fetch options
- * @returns {Promise<Response>} - the response (throws on network error)
- */
+let _csrfToken = null;
+
+export async function fetchCsrfToken() {
+    try {
+        const resp = await fetch(`${API_BASE}/csrf-token`, { credentials: 'include' });
+        if (resp.ok) {
+            const data = await resp.json();
+            _csrfToken = data.token;
+        }
+    } catch (e) {
+        console.warn('Could not fetch CSRF token', e);
+    }
+}
+
+export function getCsrfToken() { return _csrfToken; }
+
 export async function apiCall(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+    
+    const headers = { ...(options.headers || {}) };
+    if (isMutating && _csrfToken) {
+        headers['X-CSRF-Token'] = _csrfToken;
+    }
+    
     const defaultOptions = {
         credentials: 'include',
         ...options,
+        headers,
     };
 
     let response;
@@ -501,4 +520,19 @@ export async function apiCall(url, options = {}) {
     }
 
     return response;
+}
+
+export function showLoading(containerId) {
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.innerHTML = '<div class="loading-spinner" role="status" aria-label="Wird geladen..."></div>';
+    }
+}
+
+export function hideLoading(containerId) {
+    const container = document.getElementById(containerId);
+    if (container) {
+        const spinner = container.querySelector('.loading-spinner');
+        if (spinner) spinner.remove();
+    }
 }

@@ -49,6 +49,15 @@ except ImportError:
 # Only include wwwroot files, not data directory
 all_data_files = wwwroot_files
 
+# Include the migrations folder so Alembic can find scripts at runtime
+migrations_dir = app_dir / 'migrations'
+if migrations_dir.exists():
+    for root, dirs, files in os.walk(migrations_dir):
+        for file in files:
+            file_path = Path(root) / file
+            rel_path = file_path.relative_to(app_dir)
+            all_data_files.append((str(file_path), str(rel_path.parent)))
+
 block_cipher = None
 
 a = Analysis(

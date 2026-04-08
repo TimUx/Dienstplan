@@ -7,7 +7,7 @@ Sie dienen dazu, die App schnell mit Testdaten zu befüllen.
 
 | Datei | Inhalt |
 |---|---|
-| `teams_export_beispiel.csv` | 3 Teams (Wache 1, 2, 3) |
+| `teams_export_beispiel.csv` | 3 Teams (Team 1, 2, 3) |
 | `mitarbeiter_export_beispiel.csv` | 15 Mitarbeiter (je 5 pro Team) |
 
 ## Importreihenfolge
@@ -33,26 +33,26 @@ Sie dienen dazu, die App schnell mit Testdaten zu befüllen.
 ### Teams
 | ID | Name | Beschreibung |
 |----|------|-------------|
-| 1 | Wache 1 | Feuerwehr Wache 1 – Früh- und Spätdienst |
-| 2 | Wache 2 | Feuerwehr Wache 2 – Früh- und Spätdienst |
-| 3 | Wache 3 | Feuerwehr Wache 3 – Früh- und Spätdienst |
+| 1 | Team 1 | Erste Schichtgruppe |
+| 2 | Team 2 | Zweite Schichtgruppe |
+| 3 | Team 3 | Dritte Schichtgruppe |
 
 ### Mitarbeiter
 
-| PersonalNr | Vorname | Name | Team | Funktion | Teamleiter | BMT | BSB | TD |
-|---|---|---|---|---|---|---|---|---|
-| PN001 | Max | Müller | Wache 1 | Brandmeister | ✓ | | | |
-| PN002 | Anna | Schmidt | Wache 1 | Oberbrandmeister | | | | |
-| PN003 | Peter | Weber | Wache 1 | Hauptbrandmeister | | ✓ | | ✓ |
-| PN004 | Lisa | Meyer | Wache 1 | Brandmeister | | | | |
-| PN005 | Robert | Franke | Wache 1 | Oberbrandmeister | | | ✓ | ✓ |
-| PN006 | Julia | Becker | Wache 2 | Hauptbrandmeister | ✓ | | | |
-| PN007 | Michael | Schulz | Wache 2 | Brandmeister | | | | |
-| PN008 | Sarah | Hoffmann | Wache 2 | Oberbrandmeister | | ✓ | | ✓ |
-| PN009 | Daniel | Koch | Wache 2 | Brandmeister | | | | |
-| PN010 | Thomas | Zimmermann | Wache 2 | Hauptbrandmeister | | | | |
-| PN011 | Markus | Richter | Wache 3 | Hauptbrandmeister | ✓ | | | |
-| PN012 | Stefanie | Klein | Wache 3 | Brandmeister | | | | |
-| PN013 | Andreas | Wolf | Wache 3 | Oberbrandmeister | | ✓ | | ✓ |
-| PN014 | Nicole | Schröder | Wache 3 | Brandmeister | | | | |
-| PN015 | Maria | Lange | Wache 3 | Oberbrandmeister | | | ✓ | ✓ |
+| PersonalNr | Vorname | Name | Team | Funktion |
+|---|---|---|---|---|
+| PN001 | Max | Müller | Team 1 | Mitarbeiter |
+| PN002 | Anna | Schmidt | Team 1 | Mitarbeiter |
+| PN003 | Peter | Weber | Team 1 | Mitarbeiter |
+| PN004 | Lisa | Meyer | Team 1 | Mitarbeiter |
+| PN005 | Robert | Franke | Team 1 | Mitarbeiter |
+| PN006 | Julia | Becker | Team 2 | Mitarbeiter |
+| PN007 | Michael | Schulz | Team 2 | Mitarbeiter |
+| PN008 | Sarah | Hoffmann | Team 2 | Mitarbeiter |
+| PN009 | Daniel | Koch | Team 2 | Mitarbeiter |
+| PN010 | Thomas | Zimmermann | Team 2 | Mitarbeiter |
+| PN011 | Markus | Richter | Team 3 | Mitarbeiter |
+| PN012 | Stefanie | Klein | Team 3 | Mitarbeiter |
+| PN013 | Andreas | Wolf | Team 3 | Mitarbeiter |
+| PN014 | Nicole | Schröder | Team 3 | Mitarbeiter |
+| PN015 | Maria | Lange | Team 3 | Mitarbeiter |

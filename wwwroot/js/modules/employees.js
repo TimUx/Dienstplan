@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, escapeJsString, sanitizeColorCode, formatImportResult, showToast } from './utils.js';
+import { API_BASE, escapeHtml, escapeJsString, sanitizeColorCode, formatImportResult, showToast, getCsrfToken } from './utils.js';
 import { hasRole, canEditEmployees, canPlanShifts } from './auth.js';
 import { store } from './store.js';
 
@@ -143,7 +143,8 @@ export async function deleteEmployee(id, name) {
     try {
         const response = await fetch(`${API_BASE}/employees/${id}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -210,7 +211,7 @@ export async function saveEmployee(event) {
 
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(employee)
         });
@@ -348,7 +349,8 @@ export async function deleteTeam(id, name) {
     try {
         const response = await fetch(`${API_BASE}/teams/${id}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -394,7 +396,7 @@ export async function saveTeam(event) {
 
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(team)
         });
@@ -679,7 +681,8 @@ export async function saveShiftType(event) {
         const response = await fetch(url, {
             method: method,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify(data)
@@ -708,7 +711,8 @@ export async function deleteShiftType(shiftTypeId, shiftCode) {
     try {
         const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         const result = await response.json();
@@ -795,7 +799,8 @@ export async function saveShiftTypeTeams(event) {
         const response = await fetch(`${API_BASE}/shifttypes/${shiftTypeId}/teams`, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify({ teamIds })
@@ -1179,7 +1184,8 @@ export async function saveRotationGroup(event) {
         const response = await fetch(url, {
             method: method,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify(data)
@@ -1211,7 +1217,8 @@ export async function deleteRotationGroup(groupId, groupName) {
     try {
         const response = await fetch(`${API_BASE}/rotationgroups/${groupId}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (!response.ok) {
@@ -1316,7 +1323,7 @@ export async function saveGlobalSettings(event) {
     try {
         const response = await fetch(`${API_BASE}/settings/global`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(settings)
         });
@@ -1442,7 +1449,8 @@ export async function deleteUser(userId, userEmail) {
     try {
         const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -1501,7 +1509,7 @@ export async function saveUser(event) {
 
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(userData)
         });
@@ -1635,7 +1643,7 @@ export async function saveEmailSettings(event) {
     try {
         const response = await fetch(`${API_BASE}/email-settings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(settings)
         });
@@ -1661,7 +1669,7 @@ export async function testEmailSettings() {
     try {
         const response = await fetch(`${API_BASE}/email-settings/test`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({ testEmail: testEmail })
         });

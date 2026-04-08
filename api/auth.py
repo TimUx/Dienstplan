@@ -243,6 +243,7 @@ def get_user(user_id):
 
 @bp.route('/api/users', methods=['POST'])
 @require_role('Admin')
+@require_csrf
 def create_user():
     """Create new employee with authentication credentials (Admin only)"""
     try:
@@ -358,6 +359,7 @@ def create_user():
 
 @bp.route('/api/users/<int:user_id>', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def update_user(user_id):
     """Update employee with authentication data (Admin only)"""
     try:
@@ -496,6 +498,7 @@ def update_user(user_id):
 
 @bp.route('/api/users/<int:user_id>', methods=['DELETE'])
 @require_role('Admin')
+@require_csrf
 def delete_user(user_id):
     """Delete employee/user (Admin only)"""
     try:
@@ -638,6 +641,7 @@ def change_password():
 
 
 @bp.route('/api/auth/forgot-password', methods=['POST'])
+@require_csrf
 def forgot_password():
     """Request password reset link"""
     try:
@@ -701,6 +705,7 @@ def forgot_password():
 
 
 @bp.route('/api/auth/reset-password', methods=['POST'])
+@require_csrf
 def reset_password():
     """Reset password using token"""
     try:
@@ -772,6 +777,7 @@ def reset_password():
 
 
 @bp.route('/api/auth/validate-reset-token', methods=['POST'])
+@require_csrf
 def validate_reset_token():
     """Validate if reset token is valid"""
     try:

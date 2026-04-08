@@ -2685,6 +2685,7 @@ def get_pending_shift_exchanges():
 
 @bp.route('/api/shiftexchanges', methods=['POST'])
 @require_auth
+@require_csrf
 def create_shift_exchange():
     """Create new shift exchange offer"""
     try:
@@ -2721,6 +2722,7 @@ def create_shift_exchange():
 
 @bp.route('/api/shiftexchanges/<int:id>/request', methods=['POST'])
 @require_auth
+@require_csrf
 def request_shift_exchange(id):
     """Request a shift exchange"""
     try:
@@ -2756,6 +2758,7 @@ def request_shift_exchange(id):
 
 @bp.route('/api/shiftexchanges/<int:id>/process', methods=['PUT'])
 @require_role('Admin')
+@require_csrf
 def process_shift_exchange(id):
     """Process shift exchange (approve/reject)"""
     try:

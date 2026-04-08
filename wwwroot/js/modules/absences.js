@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES, getCsrfToken } from './utils.js';
 import { hasRole, canPlanShifts } from './auth.js';
 import { loadSchedule } from './schedule.js';
 
@@ -123,7 +123,7 @@ export async function saveVacationRequest(event) {
     try {
         const response = await fetch(`${API_BASE}/vacationrequests`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(request)
         });
@@ -148,7 +148,7 @@ export async function processVacationRequest(id, status) {
     try {
         const result = await fetch(`${API_BASE}/vacationrequests/${id}/status`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({
                 status: status,
@@ -179,7 +179,8 @@ export async function deleteVacationRequest(id, employeeName) {
     try {
         const result = await fetch(`${API_BASE}/vacationrequests/${id}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (result.ok) {
@@ -410,7 +411,7 @@ export async function saveAbsence(event) {
     try {
         const response = await fetch(`${API_BASE}/absences`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(absence)
         });
@@ -450,7 +451,8 @@ export async function deleteAbsence(id, type) {
     try {
         const response = await fetch(`${API_BASE}/absences/${id}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -619,7 +621,7 @@ export async function saveShiftExchange(event) {
     try {
         const response = await fetch(`${API_BASE}/shiftexchanges`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(exchange)
         });
@@ -651,7 +653,7 @@ export async function requestShiftExchange(id) {
     try {
         const response = await fetch(`${API_BASE}/shiftexchanges/${id}/request`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({
                 requestingEmployeeId: parseInt(employeeId)
@@ -677,7 +679,7 @@ export async function processShiftExchange(id, status) {
     try {
         const response = await fetch(`${API_BASE}/shiftexchanges/${id}/process`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({
                 status: status,
@@ -837,7 +839,8 @@ export async function saveVacationPeriod(event) {
         const response = await fetch(url, {
             method: method,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify(data)
@@ -871,7 +874,8 @@ export async function deleteVacationPeriod(periodId, periodName) {
     try {
         const response = await fetch(`${API_BASE}/vacation-periods/${periodId}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -1111,7 +1115,8 @@ export async function toggleYearApproval(year, approve) {
         const response = await fetch(`${API_BASE}/vacationyearapprovals`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify({
@@ -1219,7 +1224,8 @@ export async function toggleYearApprovalAbsence(year, approve) {
         const response = await fetch(`${API_BASE}/vacationyearapprovals`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify({
@@ -1378,7 +1384,8 @@ export async function saveAbsenceType(event) {
 
         const result = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
+            credentials: 'include',
             body: JSON.stringify(data)
         });
 
@@ -1407,7 +1414,9 @@ export async function deleteAbsenceType(id, name) {
 
     try {
         const result = await fetch(`/api/absencetypes/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (result.ok) {

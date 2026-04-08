@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken } from './utils.js';
+import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
@@ -670,6 +670,11 @@ export async function executePlanShifts(event) {
     elapsedEl.textContent = '';
 
     try {
+        // Ensure CSRF token is available before the mutating request
+        if (!getCsrfToken()) {
+            await fetchCsrfToken();
+        }
+
         // Start the async planning job
         const startResponse = await fetch(
             `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}&timeLimit=${timeLimit}`,

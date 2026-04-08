@@ -616,13 +616,14 @@ def create_database_schema(db_path: str = "dienstplan.db"):
 
 
 def initialize_default_roles(db_path: str = "dienstplan.db"):
-    """Initialize default roles (Admin, Mitarbeiter)"""
+    """Initialize default roles (Admin, Mitarbeiter, Disponent)"""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     roles = [
         ("admin-role-id", "Admin", "ADMIN"),
-        ("mitarbeiter-role-id", "Mitarbeiter", "MITARBEITER")
+        ("mitarbeiter-role-id", "Mitarbeiter", "MITARBEITER"),
+        ("disponent-role-id", "Disponent", "DISPONENT"),
     ]
     
     for role_id, name, normalized in roles:
@@ -633,7 +634,7 @@ def initialize_default_roles(db_path: str = "dienstplan.db"):
     
     conn.commit()
     conn.close()
-    logger.info("Default roles initialized (Admin, Mitarbeiter)")
+    logger.info("Default roles initialized (Admin, Mitarbeiter, Disponent)")
 
 
 def hash_password(password: str) -> str:

@@ -133,11 +133,28 @@ def get_current_user():
     """Get currently authenticated user"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
-    
+
+    user_roles = session.get('user_roles')
+    # Session created before user_roles were stored (old cookie) – reload from DB
+    if user_roles is None:
+        try:
+            db = get_db()
+            employee = get_employee_by_email(db, session.get('user_email', ''))
+            if employee:
+                user_roles = employee['roles']
+                session['user_roles'] = user_roles
+                if not session.get('user_fullname'):
+                    session['user_fullname'] = employee['fullName']
+            else:
+                user_roles = []
+        except Exception as e:
+            current_app.logger.warning(f"Could not reload user roles: {e}")
+            user_roles = []
+
     return jsonify({
         'email': session.get('user_email'),
         'fullName': session.get('user_fullname'),
-        'roles': session.get('user_roles', [])
+        'roles': user_roles
     })
 
 
@@ -277,7 +294,7 @@ def create_user():
             return jsonify({'error': 'Passwort ist erforderlich wenn E-Mail angegeben wird'}), 400
         
         # Validate roles
-        valid_roles = ['Admin', 'Mitarbeiter']
+        valid_roles = ['Admin', 'Mitarbeiter', 'Disponent']
         if not isinstance(roles, list):
             roles = [roles]
         for role in roles:
@@ -388,7 +405,7 @@ def update_user(user_id):
             return jsonify({'error': 'Vorname, Name und Personalnummer sind erforderlich'}), 400
         
         # Validate roles
-        valid_roles = ['Admin', 'Mitarbeiter']
+        valid_roles = ['Admin', 'Mitarbeiter', 'Disponent']
         if not isinstance(roles, list):
             roles = [roles]
         for role in roles:

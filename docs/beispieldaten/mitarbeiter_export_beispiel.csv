@@ -1,0 +1,16 @@
+Vorname,Name,Personalnummer,Email,Geburtsdatum,Funktion,TeamId,IsFerienjobber,IsBrandmeldetechniker,IsBrandschutzbeauftragter,IsTdQualified,IsTeamLeader,IsActive
+Max,Müller,PN001,max.mueller@beispiel.de,1985-03-15,Mitarbeiter,1,0,0,0,0,0,1
+Anna,Schmidt,PN002,anna.schmidt@beispiel.de,1990-07-22,Mitarbeiter,1,0,0,0,0,0,1
+Peter,Weber,PN003,peter.weber@beispiel.de,1988-11-03,Mitarbeiter,1,0,0,0,0,0,1
+Lisa,Meyer,PN004,lisa.meyer@beispiel.de,1992-05-18,Mitarbeiter,1,0,0,0,0,0,1
+Robert,Franke,PN005,robert.franke@beispiel.de,1983-05-08,Mitarbeiter,1,0,0,0,0,0,1
+Julia,Becker,PN006,julia.becker@beispiel.de,1991-01-10,Mitarbeiter,2,0,0,0,0,0,1
+Michael,Schulz,PN007,michael.schulz@beispiel.de,1986-06-14,Mitarbeiter,2,0,0,0,0,0,1
+Sarah,Hoffmann,PN008,sarah.hoffmann@beispiel.de,1989-12-08,Mitarbeiter,2,0,0,0,0,0,1
+Daniel,Koch,PN009,daniel.koch@beispiel.de,1993-04-25,Mitarbeiter,2,0,0,0,0,0,1
+Thomas,Zimmermann,PN010,thomas.zimmermann@beispiel.de,1987-12-11,Mitarbeiter,2,0,0,0,0,0,1
+Markus,Richter,PN011,markus.richter@beispiel.de,1984-02-20,Mitarbeiter,3,0,0,0,0,0,1
+Stefanie,Klein,PN012,stefanie.klein@beispiel.de,1992-10-05,Mitarbeiter,3,0,0,0,0,0,1
+Andreas,Wolf,PN013,andreas.wolf@beispiel.de,1988-07-12,Mitarbeiter,3,0,0,0,0,0,1
+Nicole,Schröder,PN014,nicole.schroeder@beispiel.de,1991-03-29,Mitarbeiter,3,0,0,0,0,0,1
+Maria,Lange,PN015,maria.lange@beispiel.de,1990-09-24,Mitarbeiter,3,0,0,0,0,0,1

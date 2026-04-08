@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast } from './utils.js';
+import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
@@ -675,7 +675,8 @@ export async function executePlanShifts(event) {
             `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}&timeLimit=${timeLimit}`,
             {
                 method: 'POST',
-                credentials: 'include'
+                credentials: 'include',
+                headers: { 'X-CSRF-Token': getCsrfToken() || '' }
             }
         );
 
@@ -777,7 +778,8 @@ export async function cancelPlanning() {
     try {
         await fetch(`${API_BASE}/shifts/plan/${_currentPlanJobId}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
     } catch (e) {
         // ignore

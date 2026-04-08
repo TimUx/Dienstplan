@@ -155,6 +155,8 @@ export async function logout() {
             credentials: 'include'
         });
 
+        await fetchCsrfToken();
+
         updateUIForAnonymousUser();
         if (window.showView) {
             window.showView('schedule');

@@ -1,0 +1,16 @@
+Vorname,Name,Personalnummer,Email,Geburtsdatum,Funktion,TeamId,IsFerienjobber,IsBrandmeldetechniker,IsBrandschutzbeauftragter,IsTdQualified,IsTeamLeader,IsActive
+Max,Müller,PN001,max.mueller@feuerwehr-beispiel.de,1985-03-15,Brandmeister,1,0,0,0,0,1,1
+Anna,Schmidt,PN002,anna.schmidt@feuerwehr-beispiel.de,1990-07-22,Oberbrandmeister,1,0,0,0,0,0,1
+Peter,Weber,PN003,peter.weber@feuerwehr-beispiel.de,1988-11-03,Hauptbrandmeister,1,0,1,0,1,0,1
+Lisa,Meyer,PN004,lisa.meyer@feuerwehr-beispiel.de,1992-05-18,Brandmeister,1,0,0,0,0,0,1
+Robert,Franke,PN005,robert.franke@feuerwehr-beispiel.de,1983-05-08,Oberbrandmeister,1,0,0,1,1,0,1
+Julia,Becker,PN006,julia.becker@feuerwehr-beispiel.de,1991-01-10,Hauptbrandmeister,2,0,0,0,0,1,1
+Michael,Schulz,PN007,michael.schulz@feuerwehr-beispiel.de,1986-06-14,Brandmeister,2,0,0,0,0,0,1
+Sarah,Hoffmann,PN008,sarah.hoffmann@feuerwehr-beispiel.de,1989-12-08,Oberbrandmeister,2,0,1,0,1,0,1
+Daniel,Koch,PN009,daniel.koch@feuerwehr-beispiel.de,1993-04-25,Brandmeister,2,0,0,0,0,0,1
+Thomas,Zimmermann,PN010,thomas.zimmermann@feuerwehr-beispiel.de,1987-12-11,Hauptbrandmeister,2,0,0,0,0,0,1
+Markus,Richter,PN011,markus.richter@feuerwehr-beispiel.de,1984-02-20,Hauptbrandmeister,3,0,0,0,0,1,1
+Stefanie,Klein,PN012,stefanie.klein@feuerwehr-beispiel.de,1992-10-05,Brandmeister,3,0,0,0,0,0,1
+Andreas,Wolf,PN013,andreas.wolf@feuerwehr-beispiel.de,1988-07-12,Oberbrandmeister,3,0,1,0,1,0,1
+Nicole,Schröder,PN014,nicole.schroeder@feuerwehr-beispiel.de,1991-03-29,Brandmeister,3,0,0,0,0,0,1
+Maria,Lange,PN015,maria.lange@feuerwehr-beispiel.de,1990-09-24,Oberbrandmeister,3,0,0,1,1,0,1

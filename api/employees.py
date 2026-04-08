@@ -1629,7 +1629,7 @@ def import_teams_csv():
                     # Insert new team
                     cursor.execute("""
                         INSERT INTO Teams (Name, Description, Email)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (?, ?, ?)
                     """, (
                         values['Name'], values['Description'],
                         values['Email']

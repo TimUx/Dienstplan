@@ -763,6 +763,15 @@ select {
     font-size: 0.9rem;
 }
 
+.warning-message {
+    background: #fff8e1;
+    color: #f57f17;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
 
 /* Footer Styles */
 .footer {

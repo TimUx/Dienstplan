@@ -61,8 +61,11 @@ export function sanitizeColorCode(colorCode) {
 
 // Helper function to format import result with error details
 export function formatImportResult(result) {
+    const errorCount = (result.errors && result.errors.length) || 0;
+    const successCount = (result.imported || 0) + (result.updated || 0);
+
     let errorDetails = '';
-    if (result.errors && result.errors.length > 0) {
+    if (errorCount > 0) {
         errorDetails = '<div class="error-list"><p><strong>Fehler Details:</strong></p><ul>';
         result.errors.forEach(err => {
             errorDetails += `<li>${escapeHtml(err)}</li>`;
@@ -70,9 +73,24 @@ export function formatImportResult(result) {
         errorDetails += '</ul></div>';
     }
 
+    let cssClass, icon, heading;
+    if (errorCount === 0) {
+        cssClass = 'success-message';
+        icon = '✓';
+        heading = 'Import erfolgreich!';
+    } else if (successCount > 0) {
+        cssClass = 'warning-message';
+        icon = '⚠';
+        heading = 'Import teilweise erfolgreich!';
+    } else {
+        cssClass = 'error-message';
+        icon = '✗';
+        heading = 'Import fehlgeschlagen!';
+    }
+
     return `
-        <div class="success-message">
-            <p><strong>✓ Import erfolgreich!</strong></p>
+        <div class="${cssClass}">
+            <p><strong>${icon} ${heading}</strong></p>
             <p>Gesamt in Datei gefunden: ${result.total || 0}</p>
             <p>Neu importiert: ${result.imported || 0}</p>
             <p>Aktualisiert: ${result.updated || 0}</p>

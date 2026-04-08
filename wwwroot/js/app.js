@@ -151,10 +151,14 @@ function initImportFormHandlers() {
                 const result = await response.json();
                 if (response.ok) {
                     resultDiv.innerHTML = utils.formatImportResult(result);
-                    setTimeout(() => {
+                    if (!result.errors || result.errors.length === 0) {
+                        setTimeout(() => {
+                            employees.loadEmployees();
+                            employees.closeImportEmployeesModal();
+                        }, 2000);
+                    } else {
                         employees.loadEmployees();
-                        employees.closeImportEmployeesModal();
-                    }, 2000);
+                    }
                 } else {
                     resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler beim Import:</strong></p><p>${result.error || 'Unbekannter Fehler'}</p></div>`;
                 }
@@ -189,10 +193,14 @@ function initImportFormHandlers() {
                 const result = await response.json();
                 if (response.ok) {
                     resultDiv.innerHTML = utils.formatImportResult(result);
-                    setTimeout(() => {
+                    if (!result.errors || result.errors.length === 0) {
+                        setTimeout(() => {
+                            employees.loadTeams();
+                            employees.closeImportTeamsModal();
+                        }, 2000);
+                    } else {
                         employees.loadTeams();
-                        employees.closeImportTeamsModal();
-                    }, 2000);
+                    }
                 } else {
                     resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler beim Import:</strong></p><p>${result.error || 'Unbekannter Fehler'}</p></div>`;
                 }

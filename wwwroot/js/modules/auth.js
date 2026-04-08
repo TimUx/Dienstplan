@@ -320,7 +320,8 @@ export async function markNotificationRead(notificationId) {
     try {
         const response = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
             method: 'POST',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -343,7 +344,8 @@ export async function markAllNotificationsRead() {
     try {
         const response = await fetch(`${API_BASE}/notifications/mark-all-read`, {
             method: 'POST',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -477,7 +479,7 @@ export async function submitForgotPassword(event) {
     try {
         const response = await fetch(`${API_BASE}/auth/forgot-password`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({ email: email })
         });
@@ -527,7 +529,7 @@ export async function validateResetToken(token) {
     try {
         const response = await fetch(`${API_BASE}/auth/validate-reset-token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({ token: token })
         });
@@ -576,7 +578,7 @@ export async function submitResetPassword(event) {
     try {
         const response = await fetch(`${API_BASE}/auth/reset-password`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({
                 token: token,

@@ -1091,7 +1091,7 @@ export async function saveShiftAssignment(event) {
 
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify(shiftData)
         });
@@ -1135,7 +1135,8 @@ export async function deleteShiftAssignment() {
     try {
         const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}`, {
             method: 'DELETE',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok || response.status === 204) {
@@ -1290,7 +1291,7 @@ export async function saveQuickEntry() {
 
             const response = await fetch(`${API_BASE}/shifts/assignments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
                 credentials: 'include',
                 body: JSON.stringify(shiftData)
             });
@@ -1328,7 +1329,7 @@ export async function saveQuickEntry() {
 
             const response = await fetch(`${API_BASE}/absences`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
                 credentials: 'include',
                 body: JSON.stringify(absenceData)
             });
@@ -1361,7 +1362,8 @@ export async function toggleShiftFixed(shiftId) {
     try {
         const response = await fetch(`${API_BASE}/shifts/assignments/${shiftId}/toggle-fixed`, {
             method: 'PUT',
-            credentials: 'include'
+            credentials: 'include',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' }
         });
 
         if (response.ok) {
@@ -1533,7 +1535,7 @@ export async function saveBulkEdit(event) {
     try {
         const response = await fetch(`${API_BASE}/shifts/assignments/bulk`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
             credentials: 'include',
             body: JSON.stringify({
                 shiftIds: Array.from(selectedShifts),
@@ -1652,7 +1654,8 @@ export async function togglePlanApproval() {
         const response = await fetch(`${API_BASE}/shifts/plan/approvals/${year}/${month}`, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken() || ''
             },
             credentials: 'include',
             body: JSON.stringify({

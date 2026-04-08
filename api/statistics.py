@@ -5,7 +5,7 @@ Statistics Blueprint: dashboard stats, audit logs, notifications.
 from flask import Blueprint, jsonify, request, session, current_app
 from datetime import date, timedelta
 
-from .shared import get_db, require_role
+from .shared import get_db, require_role, require_csrf
 
 bp = Blueprint('statistics', __name__)
 
@@ -537,6 +537,7 @@ def get_notification_count_endpoint():
 
 @bp.route('/api/notifications/<int:id>/read', methods=['POST'])
 @require_role('Admin', 'Disponent')
+@require_csrf
 def mark_notification_read(id):
     """Mark notification as read"""
     try:
@@ -558,6 +559,7 @@ def mark_notification_read(id):
 
 @bp.route('/api/notifications/mark-all-read', methods=['POST'])
 @require_role('Admin', 'Disponent')
+@require_csrf
 def mark_all_notifications_read():
     """Mark all notifications as read"""
     try:

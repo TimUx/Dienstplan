@@ -145,6 +145,7 @@ function initImportFormHandlers() {
                 const response = await fetch(`${utils.API_BASE}/employees/import/csv?conflict_mode=${conflictResolution}`, {
                     method: 'POST',
                     credentials: 'include',
+                    headers: { 'X-CSRF-Token': utils.getCsrfToken() || '' },
                     body: formData
                 });
                 const result = await response.json();
@@ -182,6 +183,7 @@ function initImportFormHandlers() {
                 const response = await fetch(`${utils.API_BASE}/teams/import/csv?conflict_mode=${conflictResolution}`, {
                     method: 'POST',
                     credentials: 'include',
+                    headers: { 'X-CSRF-Token': utils.getCsrfToken() || '' },
                     body: formData
                 });
                 const result = await response.json();

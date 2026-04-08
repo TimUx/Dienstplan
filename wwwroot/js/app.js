@@ -526,7 +526,6 @@ function registerGlobals() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    utils.fetchCsrfToken();
     registerGlobals();
     initEventDelegation();
     initImportFormHandlers();

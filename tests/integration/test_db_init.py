@@ -4,8 +4,6 @@ import pytest
 import sqlite3
 import os
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from db_init import initialize_database, create_database_schema
 from entities import STANDARD_SHIFT_TYPES

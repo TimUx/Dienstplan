@@ -11,8 +11,6 @@ import pytest
 from datetime import date, timedelta
 from collections import Counter
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from entities import (
     Employee, Team, Absence, AbsenceType, ShiftAssignment,

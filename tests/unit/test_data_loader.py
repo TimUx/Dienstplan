@@ -3,8 +3,6 @@
 import pytest
 from datetime import date
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from data_loader import generate_sample_data
 from entities import AbsenceType, Employee, Team, Absence

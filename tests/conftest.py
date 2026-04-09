@@ -2,9 +2,7 @@
 
 import pytest
 import os
-import sys
 
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from datetime import date
 from entities import (

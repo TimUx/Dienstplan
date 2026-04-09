@@ -2,8 +2,6 @@
 
 import pytest
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 ADMIN_EMAIL = "admin@fritzwinter.de"
 ADMIN_PASSWORD = "Admin123!"

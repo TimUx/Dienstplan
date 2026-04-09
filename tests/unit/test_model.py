@@ -3,8 +3,6 @@
 import pytest
 from datetime import date, timedelta
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from entities import STANDARD_SHIFT_TYPES
 from model import ShiftPlanningModel, create_shift_planning_model

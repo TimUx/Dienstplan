@@ -3,8 +3,6 @@
 import pytest
 from datetime import date, time
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from entities import (
     Employee, Team, Absence, AbsenceType, ShiftType, ShiftAssignment,

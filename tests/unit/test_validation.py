@@ -4,8 +4,6 @@ import pytest
 from datetime import date, timedelta
 from collections import defaultdict
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 from entities import (
     Employee, Absence, AbsenceType, ShiftAssignment, STANDARD_SHIFT_TYPES,

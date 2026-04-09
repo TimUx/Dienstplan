@@ -2,8 +2,6 @@
 
 import pytest
 
-import sys
-sys.path.insert(0, '/home/runner/work/Dienstplan/Dienstplan')
 
 
 class TestGetEmployees:

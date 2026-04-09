@@ -1358,7 +1358,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_
 
 @bp.route('/api/shifts/plan', methods=['POST'])
 @limiter.limit("5 per hour")
-@require_role('Admin')
+@require_role('Admin', 'Disponent')
 @require_csrf
 def plan_shifts():
     """
@@ -1409,7 +1409,7 @@ def plan_shifts():
 
 
 @bp.route('/api/shifts/plan/status/<job_id>', methods=['GET'])
-@require_role('Admin')
+@require_role('Admin', 'Disponent')
 def get_plan_status(job_id):
     """
     Poll the status of a background planning job.
@@ -1447,7 +1447,7 @@ def get_plan_status(job_id):
 
 
 @bp.route('/api/shifts/plan/<job_id>', methods=['DELETE'])
-@require_role('Admin')
+@require_role('Admin', 'Disponent')
 @require_csrf
 def cancel_plan_job(job_id):
     """

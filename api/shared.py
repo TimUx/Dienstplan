@@ -210,11 +210,31 @@ def require_role(*required_roles):
         def decorated_function(*args, **kwargs):
             if 'user_id' not in session:
                 return jsonify({'error': 'Authentication required'}), 401
-            
-            user_roles = session.get('user_roles', [])
+
+            user_roles = session.get('user_roles')
+            # Session created before roles were stored (e.g. old cookie) – reload from DB
+            if not user_roles:
+                try:
+                    db = get_db()
+                    with db.connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """SELECT GROUP_CONCAT(r.Name) as roles
+                               FROM AspNetUserRoles ur
+                               JOIN AspNetRoles r ON ur.RoleId = r.Id
+                               WHERE ur.UserId = ?""",
+                            (str(session['user_id']),)
+                        )
+                        row = cursor.fetchone()
+                    user_roles = row['roles'].split(',') if row and row['roles'] else []
+                    session['user_roles'] = user_roles
+                except Exception as e:
+                    logger.warning(f"Could not refresh user roles from DB: {e}")
+                    user_roles = []
+
             if not any(role in user_roles for role in required_roles):
                 return jsonify({'error': 'Insufficient permissions'}), 403
-            
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator

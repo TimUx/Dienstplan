@@ -481,14 +481,17 @@ export function showToast(message, type = 'info', duration = 4000) {
 let _csrfToken = null;
 
 export async function fetchCsrfToken() {
-    try {
-        const resp = await fetch(`${API_BASE}/csrf-token`, { credentials: 'include' });
-        if (resp.ok) {
-            const data = await resp.json();
-            _csrfToken = data.token;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const resp = await fetch(`${API_BASE}/csrf-token`, { credentials: 'include' });
+            if (resp.ok) {
+                const data = await resp.json();
+                _csrfToken = data.token;
+                return;
+            }
+        } catch (e) {
+            console.warn('Could not fetch CSRF token', e);
         }
-    } catch (e) {
-        console.warn('Could not fetch CSRF token', e);
     }
 }
 
@@ -497,7 +500,11 @@ export function getCsrfToken() { return _csrfToken; }
 export async function apiCall(url, options = {}) {
     const method = (options.method || 'GET').toUpperCase();
     const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
-    
+
+    if (isMutating && !_csrfToken) {
+        await fetchCsrfToken();
+    }
+
     const headers = { ...(options.headers || {}) };
     if (isMutating && _csrfToken) {
         headers['X-CSRF-Token'] = _csrfToken;

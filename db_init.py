@@ -505,6 +505,18 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         )
     """)
 
+    # PlanningJobs table (tracks async planning job status and results)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS PlanningJobs (
+            id          TEXT PRIMARY KEY,
+            status      TEXT NOT NULL DEFAULT 'pending',
+            message     TEXT,
+            started_at  TEXT,
+            finished_at TEXT,
+            result_json TEXT
+        )
+    """)
+
     # Create indexes for performance
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_employees_personalnummer 

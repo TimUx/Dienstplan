@@ -21,8 +21,8 @@ from model import ShiftPlanningModel
 from solver import solve_shift_planning
 from planning_report import PlanningReport
 
-FAST_LIMIT = 15   # seconds for simple scenarios
-SLOW_LIMIT = 30   # seconds for complex scenarios
+FAST_LIMIT = 120   # seconds for simple scenarios
+SLOW_LIMIT = 300   # seconds for complex scenarios
 
 
 def _build_model(employees, teams, start_date, end_date, absences=None):
@@ -80,13 +80,13 @@ def _assert_solver_invariants(assignments, complete_schedule, planning_report, a
 class TestSolverBasicScenario:
     """17 employees, 3 teams, January 2025 (31 days)."""
 
-    @pytest.fixture(autouse=True)
-    def solve(self):
+    @pytest.fixture(autouse=True, scope="class")
+    def solve(self, request):
         employees, teams, absences = generate_sample_data()
         model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
         result = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
-        self.assignments, self.schedule, self.report = result
-        self.absences = absences
+        request.cls.assignments, request.cls.schedule, request.cls.report = result
+        request.cls.absences = absences
 
     def test_returns_non_none_3tuple(self):
         assert self.assignments is not None

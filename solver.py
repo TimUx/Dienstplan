@@ -1511,8 +1511,8 @@ class ShiftPlanningSolver:
                         break
                 
                 if absence:
-                    # Show absence code (U, AU, or L)
-                    complete_schedule[(emp.id, d)] = absence.get_code()
+                    # Mark as ABSENT (consistent with complete_schedule contract)
+                    complete_schedule[(emp.id, d)] = "ABSENT"
                     continue
                 
                 # PRIORITY 2: Check if employee has a shift assignment
@@ -1963,8 +1963,7 @@ def _create_greedy_emergency_plan(
     for emp in employees:
         for d in dates:
             if (emp.id, d) in absence_lookup:
-                absence = absence_lookup[(emp.id, d)]
-                complete_schedule[(emp.id, d)] = absence.get_code()
+                complete_schedule[(emp.id, d)] = "ABSENT"
             elif (emp.id, d) in already_assigned:
                 complete_schedule[(emp.id, d)] = already_assigned[(emp.id, d)]
             else:

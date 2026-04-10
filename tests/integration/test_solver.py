@@ -357,3 +357,228 @@ def test_solver_forbidden_spaet_to_frueh_not_in_result():
             assert next_a is None or next_a.shift_type_id != f_id, (
                 f"Employee {a.employee_id}: S on {a.date} followed by F on {next_day}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Stress / Fehler-Situationen
+# ---------------------------------------------------------------------------
+
+@pytest.mark.slow
+def test_solver_too_few_employees_infeasible():
+    """Scenario 1: Only 2 employees in 1 team – structurally understaffed.
+
+    Standard min_staff_weekday=3 cannot be met with just 2 employees.
+    The solver must gracefully fall back instead of crashing or returning None.
+    """
+    team = Team(id=1, name="Tiny Team", employees=[], allowed_shift_type_ids=[])
+    employees = []
+    for i in range(1, 3):
+        emp = Employee(id=i, vorname=f"X{i}", name="Y", personalnummer=f"P{i:04d}", team_id=1)
+        employees.append(emp)
+        team.employees.append(emp)
+
+    model = _build_model(employees, [team], date(2025, 1, 1), date(2025, 1, 31))
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+
+    # FIX SUGGESTION: Mindestens so viele Mitarbeiter konfigurieren wie
+    # min_staff_weekday + min_staff_weekend über alle Schichttypen gefordert werden.
+    _assert_solver_invariants(assignments, schedule, report)
+    assert report.status in {"FALLBACK_L1", "FALLBACK_L2", "EMERGENCY"}, (
+        f"Expected a fallback status for structurally understaffed scenario, got: {report.status!r}"
+    )
+
+
+@pytest.mark.slow
+def test_solver_all_employees_absent_entire_week():
+    """Scenario 2: All 17 employees on vacation for one full week (2025-01-13 to 2025-01-19).
+
+    The solver cannot assign any shifts during that week.
+    complete_schedule must show 'ABSENT' for every employee on every absence day.
+    """
+    employees, teams, _ = generate_sample_data()
+    absence_start = date(2025, 1, 13)
+    absence_end = date(2025, 1, 19)
+    absences = [
+        Absence(
+            id=i + 1,
+            employee_id=employees[i].id,
+            absence_type=AbsenceType.U,
+            start_date=absence_start,
+            end_date=absence_end,
+        )
+        for i in range(len(employees))
+    ]
+    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
+    # Use a short per-stage budget: with 0 available staff the OR-Tools stages will
+    # time-out (UNKNOWN) or prove INFEASIBLE quickly, then the greedy emergency plan
+    # handles the absent week.  3 stages × 30s = ≤90s, well inside the 360s timeout.
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=30)
+
+    # FIX SUGGESTION: Prüfe vor dem Solve, ob in einer Woche < min_staff_weekday
+    # verfügbare Mitarbeiter existieren, und warne den Dispatcher vorab.
+    _assert_solver_invariants(assignments, schedule, report, absences)
+    assert report.status is not None, "Planning report must always have a non-None status"
+
+    emp_ids = {e.id for e in employees}
+    for day_offset in range((absence_end - absence_start).days + 1):
+        check_date = absence_start + timedelta(days=day_offset)
+        for emp_id in emp_ids:
+            code = schedule.get((emp_id, check_date))
+            assert code == "ABSENT", (
+                f"Employee {emp_id} on full-absence day {check_date}: "
+                f"expected 'ABSENT', got {code!r}"
+            )
+
+
+@pytest.mark.slow
+def test_solver_rest_time_cross_month_boundary():
+    """Scenario 3: 4 employees had S-shift on the last day of the previous month.
+
+    previous_employee_shifts signals that they ended January with Spätdienst.
+    The solver must respect the 11h rest-time rule and NOT assign an F-shift
+    on the first day of February for those employees.
+    """
+    employees, teams, _ = generate_sample_data()
+    plan_start = date(2025, 2, 1)
+    plan_end = date(2025, 2, 28)
+    last_day_prev = date(2025, 1, 31)
+
+    previous_shifts = {
+        (employees[i].id, last_day_prev): "S"
+        for i in range(4)
+    }
+
+    model = ShiftPlanningModel(
+        employees=employees,
+        teams=teams,
+        start_date=plan_start,
+        end_date=plan_end,
+        absences=[],
+        shift_types=list(STANDARD_SHIFT_TYPES),
+        previous_employee_shifts=previous_shifts,
+    )
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+
+    # FIX SUGGESTION: Übergib dem Solver stets previous_employee_shifts mit dem
+    # vollständigen letzten Monat, damit Ruhezeit-Grenzen über Monatsgrenzen
+    # korrekt eingehalten werden.
+    _assert_solver_invariants(assignments, schedule, report)
+
+    f_id = get_shift_type_by_code("F").id
+    by_emp_date = {(a.employee_id, a.date): a for a in assignments}
+    for i in range(4):
+        emp_id = employees[i].id
+        first_day_assignment = by_emp_date.get((emp_id, plan_start))
+        assert first_day_assignment is None or first_day_assignment.shift_type_id != f_id, (
+            f"Employee {emp_id} had S on {last_day_prev} but received F on {plan_start} "
+            f"(violates 11h rest-time rule across month boundary)"
+        )
+
+
+@pytest.mark.slow
+def test_solver_duplicate_absence_ids():
+    """Scenario 4: Two Absence objects share the same ID for the same employee with overlapping dates.
+
+    The solver must not crash. No shift may be assigned to the affected employee
+    on any day covered by either absence.
+    """
+    employees, teams, _ = generate_sample_data()
+    emp = employees[0]
+    absences = [
+        Absence(
+            id=999, employee_id=emp.id, absence_type=AbsenceType.U,
+            start_date=date(2025, 1, 6), end_date=date(2025, 1, 10),
+        ),
+        Absence(
+            id=999, employee_id=emp.id, absence_type=AbsenceType.AU,
+            start_date=date(2025, 1, 8), end_date=date(2025, 1, 14),
+        ),
+    ]
+    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+
+    # FIX SUGGESTION: Im Preprocessing (vor ShiftPlanningModel-Konstruktion) Absence-Duplikate
+    # per {employee_id, date}-Set deduplizieren, um doppelte Constraint-Registrierungen im
+    # CP-SAT Modell zu vermeiden.
+    _assert_solver_invariants(assignments, schedule, report)
+
+    covered_days = set()
+    for absence in absences:
+        for i in range((absence.end_date - absence.start_date).days + 1):
+            covered_days.add(absence.start_date + timedelta(days=i))
+
+    for assignment in assignments:
+        if assignment.employee_id == emp.id:
+            assert assignment.date not in covered_days, (
+                f"Employee {emp.id} assigned on absence day {assignment.date} "
+                f"despite overlapping duplicate absences"
+            )
+
+
+@pytest.mark.slow
+def test_solver_single_day_planning_period():
+    """Scenario 5: Planning period of exactly 1 day (Wednesday 2025-01-15).
+
+    The week-extension logic in ShiftPlanningModel must handle a 1-day span
+    without producing a negative date range. complete_schedule must contain
+    an entry for every employee on that specific day.
+    """
+    employees, teams, _ = generate_sample_data()
+    single_day = date(2025, 1, 15)  # Wednesday
+    model = _build_model(employees, teams, single_day, single_day)
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+
+    # FIX SUGGESTION: Sicherstellen, dass die Wochenerweiterungslogik in ShiftPlanningModel
+    # auch für 0- oder 1-Tages-Spannen korrekt funktioniert (kein negativer Datumsbereich).
+    _assert_solver_invariants(assignments, schedule, report)
+
+    emp_ids = {e.id for e in employees}
+    for emp_id in emp_ids:
+        assert (emp_id, single_day) in schedule, (
+            f"Employee {emp_id} missing from complete_schedule on the single planning day {single_day}"
+        )
+
+
+@pytest.mark.slow
+def test_solver_all_employees_without_team():
+    """Scenario 6: All employees have team_id=None and the teams list is empty.
+
+    Extreme Springer scenario – every employee is detached from any team.
+    The solver must not abort; it must return a valid (possibly empty) result.
+    """
+    employees, _, _ = generate_sample_data()
+    for emp in employees:
+        emp.team_id = None
+
+    model = _build_model(employees, [], date(2025, 1, 1), date(2025, 1, 31))
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+
+    # FIX SUGGESTION: Mindestens 1 Fallback-Team oder generische Springer-Schicht-Zuweisung
+    # für teamlose Mitarbeiter implementieren, um die Planungsqualität zu verbessern.
+    _assert_solver_invariants(assignments, schedule, report)
+
+
+@pytest.mark.slow
+def test_solver_time_limit_exhaustion():
+    """Scenario 7: time_limit_seconds=1 on a standard 17-employee, 1-month dataset.
+
+    Under extreme time pressure the solver must always return a valid 3-tuple.
+    No None return, no exception. Status must be one of the recognised values
+    (the solver falls back through its stages, ultimately to the emergency greedy plan).
+    """
+    employees, teams, _ = generate_sample_data()
+    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
+    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=1)
+
+    # FIX SUGGESTION: Für Produktionsanfragen immer mindestens 60 Sekunden Budget
+    # einplanen; bei time_limit_seconds < 30 eine Warnung an den Dispatcher loggen.
+    assert assignments is not None, "assignments must not be None even under extreme time pressure"
+    assert schedule is not None, "complete_schedule must not be None even under extreme time pressure"
+    assert report is not None, "planning_report must not be None even under extreme time pressure"
+    assert isinstance(assignments, list), "assignments must be a list"
+    assert isinstance(schedule, dict), "complete_schedule must be a dict"
+    assert isinstance(report, PlanningReport), "planning_report must be a PlanningReport"
+    assert hasattr(report, 'status'), "planning_report must have a status attribute"
+    assert report.status in {"OPTIMAL", "FEASIBLE", "FALLBACK_L1", "FALLBACK_L2", "EMERGENCY"}, (
+        f"Unexpected status under extreme time pressure: {report.status!r}"
+    )

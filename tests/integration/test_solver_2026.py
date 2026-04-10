@@ -379,8 +379,7 @@ class TestSolverFebruary2026Standard:
                 )
 
     def test_february_has_28_days_only(self):
-        """Ensure no assignment falls on 2026-02-29 (not a leap year)."""
-        feb_29 = date(2026, 2, 28) + timedelta(days=1)  # 2026-03-01
+        """Ensure no assignment falls beyond 2026-02-28 (not a leap year)."""
         for a in self.assignments:
             assert a.date <= date(2026, 2, 28), (
                 f"Assignment on {a.date} is outside February 2026"

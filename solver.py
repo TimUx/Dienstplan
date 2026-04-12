@@ -1220,7 +1220,7 @@ class ShiftPlanningSolver:
         print("\n" + "=" * 60)
         print("STARTING SOLVER")
         print("=" * 60)
-        print(f"Time limit: {self.time_limit_seconds if self.time_limit_seconds is not None else 'unlimited'} seconds")
+        print(f"Time limit: {'unlimited' if self.time_limit_seconds is None else f'{self.time_limit_seconds} seconds'}")
         print(f"Parallel workers: {self.num_workers}")
         print(f"Search strategy: {self.search_strategy}")
 

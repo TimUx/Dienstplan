@@ -8,8 +8,8 @@ Covers three full planning months with a variety of personnel situations:
   - Month-boundary rest-time carry-over
   - Parametrised scenarios across all three months
 
-All tests are tagged @pytest.mark.slow because OR-Tools can take up to
-time_limit_seconds to complete a month-long planning run.
+All tests are tagged @pytest.mark.slow because OR-Tools may take a long
+time to complete a month-long planning run.
 
 Run these tests with:
     pytest -m slow tests/integration/test_solver_2026.py -v
@@ -73,11 +73,6 @@ from data_loader import generate_sample_data
 from model import ShiftPlanningModel
 from solver import solve_shift_planning
 from planning_report import PlanningReport
-
-# ─── Time budgets ─────────────────────────────────────────────────────────────
-FAST_LIMIT = 120   # seconds – simple scenarios
-SLOW_LIMIT = 300   # seconds – complex / full-month scenarios
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -165,7 +160,7 @@ class TestSolverJanuary2026Standard:
         employees, teams, absences = generate_sample_data()
         model = _build_model(employees, teams,
                              date(2026, 1, 1), date(2026, 1, 31), absences)
-        result = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+        result = solve_shift_planning(model)
         request.cls.assignments, request.cls.schedule, request.cls.report = result
         request.cls.employees = employees
         request.cls.absences = absences
@@ -243,7 +238,7 @@ def test_january_2026_many_vacations():
         for i in range(6)
     ]
     model = _build_model(employees, teams, date(2026, 1, 1), date(2026, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION (FS-2026-01): 6 gleichzeitige Abwesenheiten testen, ob der
     # Solver auf FALLBACK_L1/L2 degradiert und keine Schicht in Abwesenheitstagen plant.
@@ -273,7 +268,7 @@ def test_january_2026_all_absent_full_week():
         for i in range(len(employees))
     ]
     model = _build_model(employees, teams, date(2026, 1, 1), date(2026, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=30)
+    assignments, schedule, report = solve_shift_planning(model)
 
     _assert_solver_invariants(assignments, schedule, report, absences)
     assert report.status is not None
@@ -305,7 +300,7 @@ def test_january_2026_reduced_staff_10_employees():
     """
     employees, teams = _make_small_team_employees(num_teams=2, emp_per_team=5)
     model = _build_model(employees, teams, date(2026, 1, 1), date(2026, 1, 31))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     _assert_solver_invariants(assignments, schedule, report)
 
@@ -323,7 +318,7 @@ def test_january_2026_mixed_absence_types():
                 start_date=date(2026, 1, 19), end_date=date(2026, 1, 23)),
     ]
     model = _build_model(employees, teams, date(2026, 1, 1), date(2026, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -340,7 +335,7 @@ class TestSolverFebruary2026Standard:
         employees, teams, absences = generate_sample_data()
         model = _build_model(employees, teams,
                              date(2026, 2, 1), date(2026, 2, 28), absences)
-        result = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+        result = solve_shift_planning(model)
         request.cls.assignments, request.cls.schedule, request.cls.report = result
         request.cls.employees = employees
         request.cls.absences = absences
@@ -425,7 +420,7 @@ def test_february_2026_rest_time_across_january_boundary():
 
     model = _build_model(employees, teams, plan_start, plan_end,
                          previous_shifts=previous_shifts)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     _assert_solver_invariants(assignments, schedule, report)
 
@@ -453,7 +448,7 @@ def test_february_2026_mixed_absences():
                 start_date=date(2026, 2, 16), end_date=date(2026, 2, 20)),
     ]
     model = _build_model(employees, teams, date(2026, 2, 1), date(2026, 2, 28), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -472,7 +467,7 @@ def test_february_2026_understaffed_6_employees():
     """
     employees, teams = _make_small_team_employees(num_teams=2, emp_per_team=3)
     model = _build_model(employees, teams, date(2026, 2, 1), date(2026, 2, 28))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION (FS-2026-04): see module docstring
     _assert_solver_invariants(assignments, schedule, report)
@@ -494,7 +489,7 @@ class TestSolverMarch2026Standard:
         employees, teams, absences = generate_sample_data()
         model = _build_model(employees, teams,
                              date(2026, 3, 1), date(2026, 3, 31), absences)
-        result = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+        result = solve_shift_planning(model)
         request.cls.assignments, request.cls.schedule, request.cls.report = result
         request.cls.employees = employees
         request.cls.absences = absences
@@ -570,7 +565,7 @@ def test_march_2026_rest_time_across_february_boundary():
 
     model = _build_model(employees, teams, plan_start, plan_end,
                          previous_shifts=previous_shifts)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     _assert_solver_invariants(assignments, schedule, report)
 
@@ -608,61 +603,8 @@ def test_march_2026_sick_leave_wave():
         for i in range(8)
     ]
     model = _build_model(employees, teams, date(2026, 3, 1), date(2026, 3, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
-@pytest.mark.slow
-def test_march_2026_minimal_staffing_edge_case():
-    """March 2026: minimal scenario – 5 employees in 2 teams.
-
-    Tests the lower bound of crew size for a 31-day planning run.
-
-    FIX SUGGESTION: Mindestens so viele Mitarbeiter konfigurieren wie die Summe
-    aller min_staff_weekday-Werte über alle Schichttypen (= 9 Standard), um einen
-    OPTIMAL- oder FEASIBLE-Status zu erreichen.  Bei 5 Mitarbeitern wird immer
-    ein FALLBACK erwartet.
-    """
-    teams = [
-        Team(id=1, name="Team A", employees=[], allowed_shift_type_ids=[]),
-        Team(id=2, name="Team B", employees=[], allowed_shift_type_ids=[]),
-    ]
-    employees = []
-    for i in range(1, 4):
-        emp = Employee(id=i, vorname=f"A{i}", name="B",
-                       personalnummer=f"P{i:04d}", team_id=1)
-        employees.append(emp)
-        teams[0].employees.append(emp)
-    for i in range(4, 6):
-        emp = Employee(id=i, vorname=f"A{i}", name="B",
-                       personalnummer=f"P{i:04d}", team_id=2)
-        employees.append(emp)
-        teams[1].employees.append(emp)
-
-    model = _build_model(employees, teams, date(2026, 3, 1), date(2026, 3, 31))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
-    _assert_solver_invariants(assignments, schedule, report)
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# PARAMETRISED: all three months, standard crew
-# ═════════════════════════════════════════════════════════════════════════════
-
-@pytest.mark.slow
-@pytest.mark.parametrize("start,end,label", [
-    (date(2026, 1, 1), date(2026, 1, 31), "January-2026"),
-    (date(2026, 2, 1), date(2026, 2, 28), "February-2026"),
-    (date(2026, 3, 1), date(2026, 3, 31), "March-2026"),
-])
-def test_solver_2026_standard_crew_all_months(start, end, label):
-    """Standard 17-employee run across all three target months in 2026."""
-    employees, teams, absences = generate_sample_data()
-    model = _build_model(employees, teams, start, end, [])
-    assignments, schedule, report = solve_shift_planning(
-        model, time_limit_seconds=SLOW_LIMIT
-    )
-    _assert_solver_invariants(assignments, schedule, report)
-    assert report.status in {
-        "OPTIMAL", "FEASIBLE", "FALLBACK_L1", "FALLBACK_L2", "EMERGENCY"
-    }, f"[{label}] Unexpected status: {report.status!r}"

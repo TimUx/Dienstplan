@@ -164,7 +164,7 @@ class ShiftPlanningSolver:
     def __init__(
         self,
         planning_model: ShiftPlanningModel,
-        time_limit_seconds: int = 300,
+        time_limit_seconds: Optional[int] = None,
         num_workers: int = 8,
         global_settings: Dict = None,
         db_path: str = "dienstplan.db",
@@ -177,7 +177,7 @@ class ShiftPlanningSolver:
         
         Args:
             planning_model: The shift planning model
-            time_limit_seconds: Maximum time for solver (default 5 minutes)
+            time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
             num_workers: Number of parallel workers for solver
             global_settings: Dict with global settings from database (optional)
                 - min_rest_hours: Min rest hours between shifts (default 11)
@@ -1198,7 +1198,8 @@ class ShiftPlanningSolver:
         
         # Configure solver
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = self.time_limit_seconds
+        if self.time_limit_seconds is not None:
+            solver.parameters.max_time_in_seconds = self.time_limit_seconds
         solver.parameters.num_search_workers = self.num_workers
         solver.parameters.log_search_progress = True
 
@@ -1219,7 +1220,7 @@ class ShiftPlanningSolver:
         print("\n" + "=" * 60)
         print("STARTING SOLVER")
         print("=" * 60)
-        print(f"Time limit: {self.time_limit_seconds} seconds")
+        print(f"Time limit: {'unlimited' if self.time_limit_seconds is None else f'{self.time_limit_seconds} seconds'}")
         print(f"Parallel workers: {self.num_workers}")
         print(f"Search strategy: {self.search_strategy}")
 
@@ -2128,7 +2129,7 @@ def _build_planning_report(
 
 def solve_shift_planning(
     planning_model: ShiftPlanningModel,
-    time_limit_seconds: int = 300,
+    time_limit_seconds: Optional[int] = None,
     num_workers: int = 8,
     global_settings: Dict = None,
     search_strategy: str = "PORTFOLIO",
@@ -2140,7 +2141,7 @@ def solve_shift_planning(
     
     Args:
         planning_model: The shift planning model
-        time_limit_seconds: Maximum time for solver
+        time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
         num_workers: Number of parallel workers
         global_settings: Dict with global settings from database (optional)
         search_strategy: Search branching strategy. Options:

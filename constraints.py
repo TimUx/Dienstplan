@@ -1716,7 +1716,7 @@ def add_rest_time_constraints(
                         for sc in shift_codes:
                             if (team.id, week_idx, sc) in team_shift:
                                 bv = model.NewBoolVar(
-                                    f"bnd_{emp.id}_{sc}_{first_day}"
+                                    f"bnd_{emp.id}_{sc}_{first_day}_wd"
                                 )
                                 model.AddMultiplicationEquality(
                                     bv,
@@ -1739,7 +1739,7 @@ def add_rest_time_constraints(
                         for sc in shift_codes:
                             if (team.id, week_idx, sc) in team_shift:
                                 bv = model.NewBoolVar(
-                                    f"bnd_{emp.id}_{sc}_{first_day}"
+                                    f"bnd_{emp.id}_{sc}_{first_day}_we"
                                 )
                                 model.AddMultiplicationEquality(
                                     bv,
@@ -1768,12 +1768,14 @@ def add_rest_time_constraints(
 
             # Apply penalty for each forbidden transition: prev_shift_code → "F"
             # Since prev_shift_code is a known constant, violation = first_day_has_F variable
+            _SUNDAY = 6
+            _MONDAY = 0
             for i_fd, fd_sc in enumerate(first_day_shift_codes):
                 if (prev_shift_code == "S" and fd_sc == "F") or (
                     prev_shift_code == "N" and fd_sc == "F"
                 ):
                     is_sunday_monday = (
-                        prev_day.weekday() == 6 and first_day.weekday() == 0
+                        prev_day.weekday() == _SUNDAY and first_day.weekday() == _MONDAY
                     )
                     penalty_weight = 5000 if is_sunday_monday else 50000
                     violation = first_day_shifts[i_fd]

@@ -76,7 +76,7 @@ class ShiftPlanningModel:
         # (employee_id, date) pair not already covered by a previously-seen absence.
         # This prevents duplicate constraint registrations in the CP-SAT model when
         # the same employee has overlapping or identical absence records.
-        seen_absence_days: set = set()
+        seen_absence_days: Set[Tuple[int, date]] = set()
         deduplicated_absences = []
         for absence in (absences or []):
             # Check if this absence has any day not already covered

@@ -319,7 +319,8 @@ class ShiftPlanningSolver:
         print("  - Rest time constraints (11h min, soft penalties for violations)")
         rest_violation_penalties = add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
                                  employee_cross_team_shift, employee_cross_team_weekend, 
-                                 employees, dates, weeks, shift_codes, teams)
+                                 employees, dates, weeks, shift_codes, teams,
+                                 previous_employee_shifts=self.planning_model.previous_employee_shifts)
         
         # Shift stability constraint (prevent shift hopping)
         print("  - Shift stability constraints (prevent rapid shift changes like N→S→N)")

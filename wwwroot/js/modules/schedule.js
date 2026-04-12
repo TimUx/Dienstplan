@@ -639,8 +639,6 @@ export async function executePlanShifts(event) {
     const month = document.getElementById('planMonth').value;
     const year = document.getElementById('planMonthYear').value;
     const force = document.getElementById('planForceOverwrite').checked;
-    const timeLimit = parseInt(document.getElementById('planTimeLimit')?.value || '120', 10);
-
     if (!month || !year) {
         showToast('Bitte wählen Sie Monat und Jahr aus.', 'warning');
         return;
@@ -677,7 +675,7 @@ export async function executePlanShifts(event) {
 
         // Start the async planning job
         const startResponse = await fetch(
-            `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}&timeLimit=${timeLimit}`,
+            `${API_BASE}/shifts/plan?startDate=${startDateStr}&endDate=${endDateStr}&force=${force}`,
             {
                 method: 'POST',
                 credentials: 'include',

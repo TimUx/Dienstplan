@@ -851,7 +851,7 @@ def _get_job(db, job_id: str):
         return cursor.fetchone()
 
 
-def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_limit_seconds: int = 120):
+def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
     """
     Background worker that executes the shift planning solver and stores
     the result in the PlanningJobs DB table under *job_id*.
@@ -1184,7 +1184,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app, time_
                 return
 
             # Solve
-            result = solve_shift_planning(planning_model, time_limit_seconds=time_limit_seconds, global_settings=global_settings, db_path=db.db_path)
+            result = solve_shift_planning(planning_model, global_settings=global_settings, db_path=db.db_path)
             
             if not result:
                 # Get diagnostic information to help user understand the issue
@@ -1370,12 +1370,6 @@ def plan_shifts():
     start_date_str = request.args.get('startDate')
     end_date_str = request.args.get('endDate')
     force = request.args.get('force', 'false').lower() == 'true'
-    try:
-        time_limit = int(request.args.get('timeLimit', 120))
-        time_limit = max(30, min(300, time_limit))  # Clamp to 30-300 seconds
-    except (ValueError, TypeError):
-        time_limit = 120
-
     if not start_date_str or not end_date_str:
         return jsonify({'error': 'startDate and endDate are required'}), 400
 
@@ -1396,7 +1390,7 @@ def plan_shifts():
         app = current_app._get_current_object()
         t = threading.Thread(
             target=_run_planning_job,
-            args=(job_id, start_date, end_date, force, app, time_limit),
+            args=(job_id, start_date, end_date, force, app),
             daemon=True,
             name=f'planning-{job_id[:8]}'
         )

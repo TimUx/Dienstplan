@@ -1,7 +1,7 @@
 """Integration tests for the shift solver.
 
-All solver tests are marked @pytest.mark.slow because OR-Tools can take
-up to time_limit_seconds to complete.
+All solver tests are marked @pytest.mark.slow because OR-Tools may take
+a long time to complete.
 
 Run fast tests only:  pytest -m "not slow"
 Run all tests:        pytest -m slow tests/integration/test_solver.py
@@ -20,9 +20,6 @@ from data_loader import generate_sample_data
 from model import ShiftPlanningModel
 from solver import solve_shift_planning
 from planning_report import PlanningReport
-
-FAST_LIMIT = 120   # seconds for simple scenarios
-SLOW_LIMIT = 300   # seconds for complex scenarios
 
 
 def _build_model(employees, teams, start_date, end_date, absences=None):
@@ -84,7 +81,7 @@ class TestSolverBasicScenario:
     def solve(self, request):
         employees, teams, absences = generate_sample_data()
         model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-        result = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+        result = solve_shift_planning(model)
         request.cls.assignments, request.cls.schedule, request.cls.report = result
         request.cls.absences = absences
 
@@ -130,9 +127,7 @@ def test_solver_various_periods(start, end, label):
     """Solver works for different planning period lengths."""
     employees, teams, absences = generate_sample_data()
     model = _build_model(employees, teams, start, end, [])
-    assignments, schedule, report = solve_shift_planning(
-        model, time_limit_seconds=FAST_LIMIT
-    )
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report)
 
 
@@ -153,7 +148,7 @@ def test_solver_many_vacations():
         for i in range(6)
     ]
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -169,7 +164,7 @@ def test_solver_multiple_sick_leaves():
         for i in range(4)
     ]
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -186,7 +181,7 @@ def test_solver_training_absences():
                 start_date=date(2025, 1, 6), end_date=date(2025, 1, 8)),
     ]
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -203,7 +198,7 @@ def test_solver_combined_absences():
                 start_date=date(2025, 1, 13), end_date=date(2025, 1, 17)),
     ]
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -229,7 +224,7 @@ def test_solver_minimum_staffing_edge_case():
         teams[1].employees.append(emp)
 
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report)
 
 
@@ -247,7 +242,7 @@ def test_solver_with_springer():
 
     try:
         model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-        assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+        assignments, schedule, report = solve_shift_planning(model)
         _assert_solver_invariants(assignments, schedule, report)
     finally:
         # Restore for other tests
@@ -266,7 +261,7 @@ def test_solver_cross_team_assignment():
         team.allowed_shift_type_ids = [f_id, s_id, n_id]
 
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
@@ -279,12 +274,12 @@ def test_solver_returns_consistent_results():
     """Running the solver twice both return non-None 3-tuples."""
     employees, teams, _ = generate_sample_data()
     model1 = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    r1 = solve_shift_planning(model1, time_limit_seconds=FAST_LIMIT)
+    r1 = solve_shift_planning(model1)
     assert r1 is not None
     assert len(r1) == 3
 
     model2 = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    r2 = solve_shift_planning(model2, time_limit_seconds=FAST_LIMIT)
+    r2 = solve_shift_planning(model2)
     assert r2 is not None
     assert len(r2) == 3
 
@@ -295,7 +290,7 @@ def test_solver_complete_schedule_contains_all_employees():
     employees, teams, _ = generate_sample_data()
     start, end = date(2025, 1, 1), date(2025, 1, 31)
     model = _build_model(employees, teams, start, end)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     emp_ids = {e.id for e in employees}
     # Check at least a few days within the original planning period
@@ -312,7 +307,7 @@ def test_solver_schedule_values_are_valid():
     """complete_schedule values are one of the expected codes."""
     employees, teams, _ = generate_sample_data()
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    _, schedule, _ = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    _, schedule, _ = solve_shift_planning(model)
 
     valid_codes = {st.code for st in STANDARD_SHIFT_TYPES} | {"OFF", "ABSENT"}
     for (emp_id, d), code in schedule.items():
@@ -324,7 +319,7 @@ def test_solver_forbidden_nacht_to_frueh_not_in_result():
     """After N shift, no F shift assigned next day (0h rest violates 11h rule)."""
     employees, teams, _ = generate_sample_data()
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    assignments, _, _ = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, _, _ = solve_shift_planning(model)
 
     n_id = get_shift_type_by_code("N").id
     f_id = get_shift_type_by_code("F").id
@@ -344,7 +339,7 @@ def test_solver_forbidden_spaet_to_frueh_not_in_result():
     """After S shift, no F shift assigned next day (8h rest < 11h minimum)."""
     employees, teams, _ = generate_sample_data()
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    assignments, _, _ = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, _, _ = solve_shift_planning(model)
 
     s_id = get_shift_type_by_code("S").id
     f_id = get_shift_type_by_code("F").id
@@ -378,7 +373,7 @@ def test_solver_too_few_employees_infeasible():
         team.employees.append(emp)
 
     model = _build_model(employees, [team], date(2025, 1, 1), date(2025, 1, 31))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION: Mindestens so viele Mitarbeiter konfigurieren wie
     # min_staff_weekday + min_staff_weekend über alle Schichttypen gefordert werden.
@@ -409,10 +404,7 @@ def test_solver_all_employees_absent_entire_week():
         for i in range(len(employees))
     ]
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    # Use a short per-stage budget: with 0 available staff the OR-Tools stages will
-    # time-out (UNKNOWN) or prove INFEASIBLE quickly, then the greedy emergency plan
-    # handles the absent week.  3 stages × 30s = ≤90s, well inside the 360s timeout.
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=30)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION: Prüfe vor dem Solve, ob in einer Woche < min_staff_weekday
     # verfügbare Mitarbeiter existieren, und warne den Dispatcher vorab.
@@ -457,7 +449,7 @@ def test_solver_rest_time_cross_month_boundary():
         shift_types=list(STANDARD_SHIFT_TYPES),
         previous_employee_shifts=previous_shifts,
     )
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION: Übergib dem Solver stets previous_employee_shifts mit dem
     # vollständigen letzten Monat, damit Ruhezeit-Grenzen über Monatsgrenzen
@@ -495,7 +487,7 @@ def test_solver_duplicate_absence_ids():
         ),
     ]
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=SLOW_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION: Im Preprocessing (vor ShiftPlanningModel-Konstruktion) Absence-Duplikate
     # per {employee_id, date}-Set deduplizieren, um doppelte Constraint-Registrierungen im
@@ -526,7 +518,7 @@ def test_solver_single_day_planning_period():
     employees, teams, _ = generate_sample_data()
     single_day = date(2025, 1, 15)  # Wednesday
     model = _build_model(employees, teams, single_day, single_day)
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION: Sicherstellen, dass die Wochenerweiterungslogik in ShiftPlanningModel
     # auch für 0- oder 1-Tages-Spannen korrekt funktioniert (kein negativer Datumsbereich).
@@ -551,34 +543,10 @@ def test_solver_all_employees_without_team():
         emp.team_id = None
 
     model = _build_model(employees, [], date(2025, 1, 1), date(2025, 1, 31))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=FAST_LIMIT)
+    assignments, schedule, report = solve_shift_planning(model)
 
     # FIX SUGGESTION: Mindestens 1 Fallback-Team oder generische Springer-Schicht-Zuweisung
     # für teamlose Mitarbeiter implementieren, um die Planungsqualität zu verbessern.
     _assert_solver_invariants(assignments, schedule, report)
 
 
-@pytest.mark.slow
-def test_solver_time_limit_exhaustion():
-    """Scenario 7: time_limit_seconds=1 on a standard 17-employee, 1-month dataset.
-
-    Under extreme time pressure the solver must always return a valid 3-tuple.
-    No None return, no exception. Status must be one of the recognised values
-    (the solver falls back through its stages, ultimately to the emergency greedy plan).
-    """
-    employees, teams, _ = generate_sample_data()
-    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    assignments, schedule, report = solve_shift_planning(model, time_limit_seconds=1)
-
-    # FIX SUGGESTION: Für Produktionsanfragen immer mindestens 60 Sekunden Budget
-    # einplanen; bei time_limit_seconds < 30 eine Warnung an den Dispatcher loggen.
-    assert assignments is not None, "assignments must not be None even under extreme time pressure"
-    assert schedule is not None, "complete_schedule must not be None even under extreme time pressure"
-    assert report is not None, "planning_report must not be None even under extreme time pressure"
-    assert isinstance(assignments, list), "assignments must be a list"
-    assert isinstance(schedule, dict), "complete_schedule must be a dict"
-    assert isinstance(report, PlanningReport), "planning_report must be a PlanningReport"
-    assert hasattr(report, 'status'), "planning_report must have a status attribute"
-    assert report.status in {"OPTIMAL", "FEASIBLE", "FALLBACK_L1", "FALLBACK_L2", "EMERGENCY"}, (
-        f"Unexpected status under extreme time pressure: {report.status!r}"
-    )

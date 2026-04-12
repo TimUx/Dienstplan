@@ -71,7 +71,29 @@ class ShiftPlanningModel:
         self.teams = teams
         self.start_date = start_date
         self.end_date = end_date
-        self.absences = absences
+
+        # Deduplicate absences: keep only absence objects that cover at least one
+        # (employee_id, date) pair not already covered by a previously-seen absence.
+        # This prevents duplicate constraint registrations in the CP-SAT model when
+        # the same employee has overlapping or identical absence records.
+        seen_absence_days: set = set()
+        deduplicated_absences = []
+        for absence in (absences or []):
+            # Check if this absence has any day not already covered
+            has_new_day = False
+            for day_offset in range((absence.end_date - absence.start_date).days + 1):
+                key = (absence.employee_id, absence.start_date + timedelta(days=day_offset))
+                if key not in seen_absence_days:
+                    has_new_day = True
+                    break
+            if has_new_day:
+                # Mark all days of this absence so subsequent absences can skip duplicates
+                for day_offset in range((absence.end_date - absence.start_date).days + 1):
+                    seen_absence_days.add(
+                        (absence.employee_id, absence.start_date + timedelta(days=day_offset))
+                    )
+                deduplicated_absences.append(absence)
+        self.absences = deduplicated_absences
         # shift_types is REQUIRED and must be loaded from database
         # STANDARD_SHIFT_TYPES should only be used for DB initialization, not at runtime
         if not shift_types:

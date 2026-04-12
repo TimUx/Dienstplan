@@ -1470,7 +1470,8 @@ def add_rest_time_constraints(
     weeks: List[List[date]],
     shift_codes: List[str],
     teams: List[Team] = None,
-    violation_tracker=None
+    violation_tracker=None,
+    previous_employee_shifts: Dict[Tuple[int, date], str] = None,
 ):
     """
     SOFT CONSTRAINT: Minimum 11 hours rest between shifts (allows violations for feasibility).
@@ -1684,7 +1685,104 @@ def add_rest_time_constraints(
                         penalty_var = model.NewIntVar(0, penalty_weight, f"rest_penalty_{emp.id}_{today}_{tomorrow}")
                         model.AddMultiplicationEquality(penalty_var, [violation, penalty_weight])
                         rest_violation_penalties.append(penalty_var)
-    
+
+    # Handle month-boundary: enforce rest-time between the last known shift of the
+    # previous planning period and the first day of the current planning period.
+    # previous_employee_shifts maps (emp_id, date) -> shift_code for dates BEFORE dates[0].
+    if previous_employee_shifts and dates:
+        first_day = dates[0]
+        prev_day = first_day - timedelta(days=1)
+        for emp in employees:
+            if not emp.team_id:
+                continue
+            prev_shift_code = previous_employee_shifts.get((emp.id, prev_day))
+            # Only S and N cause forbidden transitions into F the next day
+            if prev_shift_code not in ("S", "N"):
+                continue
+
+            # Collect CP-SAT indicator vars for each possible shift on the first day
+            first_day_shifts = []
+            first_day_shift_codes = []
+
+            if first_day.weekday() < 5 and (emp.id, first_day) in employee_active:
+                week_idx = next(
+                    (w for w, wd in enumerate(weeks) if first_day in wd), None
+                )
+                if week_idx is not None:
+                    team = next(
+                        (t for t in (teams or []) if t.id == emp.team_id), None
+                    )
+                    if team:
+                        for sc in shift_codes:
+                            if (team.id, week_idx, sc) in team_shift:
+                                bv = model.NewBoolVar(
+                                    f"bnd_{emp.id}_{sc}_{first_day}"
+                                )
+                                model.AddMultiplicationEquality(
+                                    bv,
+                                    [
+                                        employee_active[(emp.id, first_day)],
+                                        team_shift[(team.id, week_idx, sc)],
+                                    ],
+                                )
+                                first_day_shifts.append(bv)
+                                first_day_shift_codes.append(sc)
+            elif first_day.weekday() >= 5 and (emp.id, first_day) in employee_weekend_shift:
+                week_idx = next(
+                    (w for w, wd in enumerate(weeks) if first_day in wd), None
+                )
+                if week_idx is not None:
+                    team = next(
+                        (t for t in (teams or []) if t.id == emp.team_id), None
+                    )
+                    if team:
+                        for sc in shift_codes:
+                            if (team.id, week_idx, sc) in team_shift:
+                                bv = model.NewBoolVar(
+                                    f"bnd_{emp.id}_{sc}_{first_day}"
+                                )
+                                model.AddMultiplicationEquality(
+                                    bv,
+                                    [
+                                        employee_weekend_shift[(emp.id, first_day)],
+                                        team_shift[(team.id, week_idx, sc)],
+                                    ],
+                                )
+                                first_day_shifts.append(bv)
+                                first_day_shift_codes.append(sc)
+
+            # Cross-team shifts on first day
+            for sc in shift_codes:
+                if (
+                    first_day.weekday() < 5
+                    and (emp.id, first_day, sc) in employee_cross_team_shift
+                ):
+                    first_day_shifts.append(employee_cross_team_shift[(emp.id, first_day, sc)])
+                    first_day_shift_codes.append(sc)
+                elif (
+                    first_day.weekday() >= 5
+                    and (emp.id, first_day, sc) in employee_cross_team_weekend
+                ):
+                    first_day_shifts.append(employee_cross_team_weekend[(emp.id, first_day, sc)])
+                    first_day_shift_codes.append(sc)
+
+            # Apply penalty for each forbidden transition: prev_shift_code → "F"
+            # Since prev_shift_code is a known constant, violation = first_day_has_F variable
+            for i_fd, fd_sc in enumerate(first_day_shift_codes):
+                if (prev_shift_code == "S" and fd_sc == "F") or (
+                    prev_shift_code == "N" and fd_sc == "F"
+                ):
+                    is_sunday_monday = (
+                        prev_day.weekday() == 6 and first_day.weekday() == 0
+                    )
+                    penalty_weight = 5000 if is_sunday_monday else 50000
+                    violation = first_day_shifts[i_fd]
+                    penalty_var = model.NewIntVar(
+                        0, penalty_weight, f"bnd_penalty_{emp.id}_{first_day}"
+                    )
+                    model.AddMultiplicationEquality(penalty_var, [violation, penalty_weight])
+                    rest_violation_penalties.append(penalty_var)
+
     return rest_violation_penalties
 
 

@@ -1184,7 +1184,15 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 return
 
             # Solve
-            result = solve_shift_planning(planning_model, global_settings=global_settings, db_path=db.db_path)
+            # SOLVER_TIME_LIMIT_SECONDS can be set in Flask config for test environments.
+            # Production leaves it unset (None = unlimited).
+            solver_time_limit = current_app.config.get('SOLVER_TIME_LIMIT_SECONDS')
+            result = solve_shift_planning(
+                planning_model,
+                global_settings=global_settings,
+                db_path=db.db_path,
+                time_limit_seconds=solver_time_limit,
+            )
             
             if not result:
                 # Get diagnostic information to help user understand the issue

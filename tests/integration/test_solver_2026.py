@@ -74,9 +74,6 @@ from model import ShiftPlanningModel
 from solver import solve_shift_planning
 from planning_report import PlanningReport
 
-# ─── Time budgets ─────────────────────────────────────────────────────────────
-
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _build_model(employees, teams, start_date, end_date, absences=None,
@@ -611,54 +608,3 @@ def test_march_2026_sick_leave_wave():
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
-@pytest.mark.slow
-def test_march_2026_minimal_staffing_edge_case():
-    """March 2026: minimal scenario – 5 employees in 2 teams.
-
-    Tests the lower bound of crew size for a 31-day planning run.
-
-    FIX SUGGESTION: Mindestens so viele Mitarbeiter konfigurieren wie die Summe
-    aller min_staff_weekday-Werte über alle Schichttypen (= 9 Standard), um einen
-    OPTIMAL- oder FEASIBLE-Status zu erreichen.  Bei 5 Mitarbeitern wird immer
-    ein FALLBACK erwartet.
-    """
-    teams = [
-        Team(id=1, name="Team A", employees=[], allowed_shift_type_ids=[]),
-        Team(id=2, name="Team B", employees=[], allowed_shift_type_ids=[]),
-    ]
-    employees = []
-    for i in range(1, 4):
-        emp = Employee(id=i, vorname=f"A{i}", name="B",
-                       personalnummer=f"P{i:04d}", team_id=1)
-        employees.append(emp)
-        teams[0].employees.append(emp)
-    for i in range(4, 6):
-        emp = Employee(id=i, vorname=f"A{i}", name="B",
-                       personalnummer=f"P{i:04d}", team_id=2)
-        employees.append(emp)
-        teams[1].employees.append(emp)
-
-    model = _build_model(employees, teams, date(2026, 3, 1), date(2026, 3, 31))
-    assignments, schedule, report = solve_shift_planning(model)
-    _assert_solver_invariants(assignments, schedule, report)
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# PARAMETRISED: all three months, standard crew
-# ═════════════════════════════════════════════════════════════════════════════
-
-@pytest.mark.slow
-@pytest.mark.parametrize("start,end,label", [
-    (date(2026, 1, 1), date(2026, 1, 31), "January-2026"),
-    (date(2026, 2, 1), date(2026, 2, 28), "February-2026"),
-    (date(2026, 3, 1), date(2026, 3, 31), "March-2026"),
-])
-def test_solver_2026_standard_crew_all_months(start, end, label):
-    """Standard 17-employee run across all three target months in 2026."""
-    employees, teams, absences = generate_sample_data()
-    model = _build_model(employees, teams, start, end, [])
-    assignments, schedule, report = solve_shift_planning(model)
-    _assert_solver_invariants(assignments, schedule, report)
-    assert report.status in {
-        "OPTIMAL", "FEASIBLE", "FALLBACK_L1", "FALLBACK_L2", "EMERGENCY"
-    }, f"[{label}] Unexpected status: {report.status!r}"

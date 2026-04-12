@@ -84,6 +84,7 @@ class TestSolverBasicScenario:
         result = solve_shift_planning(model)
         request.cls.assignments, request.cls.schedule, request.cls.report = result
         request.cls.absences = absences
+        request.cls.employees = employees
 
     def test_returns_non_none_3tuple(self):
         assert self.assignments is not None
@@ -114,6 +115,51 @@ class TestSolverBasicScenario:
         }
         for assignment in self.assignments:
             assert (assignment.employee_id, assignment.date) not in absence_days
+
+    def test_schedule_covers_all_employees(self):
+        """complete_schedule has an entry for every employee on every planning day."""
+        emp_ids = {e.id for e in self.employees}
+        start = date(2025, 1, 1)
+        for day_offset in range(0, 31, 7):
+            check_date = start + timedelta(days=day_offset)
+            for emp_id in emp_ids:
+                assert (emp_id, check_date) in self.schedule, (
+                    f"Employee {emp_id} missing from schedule on {check_date}"
+                )
+
+    def test_schedule_values_are_valid(self):
+        """complete_schedule values are one of the expected codes."""
+        valid_codes = {st.code for st in STANDARD_SHIFT_TYPES} | {"OFF", "ABSENT"}
+        for (emp_id, d), code in self.schedule.items():
+            assert code in valid_codes, (
+                f"Unexpected schedule code '{code}' for employee {emp_id} on {d}"
+            )
+
+    def test_no_n_followed_by_f(self):
+        """After N shift, no F shift assigned next day (violates 11h rest rule)."""
+        n_id = get_shift_type_by_code("N").id
+        f_id = get_shift_type_by_code("F").id
+        by_emp_date = {(a.employee_id, a.date): a for a in self.assignments}
+        for a in self.assignments:
+            if a.shift_type_id == n_id:
+                next_day = a.date + timedelta(days=1)
+                next_a = by_emp_date.get((a.employee_id, next_day))
+                assert next_a is None or next_a.shift_type_id != f_id, (
+                    f"Employee {a.employee_id}: N on {a.date} followed by F on {next_day}"
+                )
+
+    def test_no_s_followed_by_f(self):
+        """After S shift, no F shift assigned next day (8h rest < 11h minimum)."""
+        s_id = get_shift_type_by_code("S").id
+        f_id = get_shift_type_by_code("F").id
+        by_emp_date = {(a.employee_id, a.date): a for a in self.assignments}
+        for a in self.assignments:
+            if a.shift_type_id == s_id:
+                next_day = a.date + timedelta(days=1)
+                next_a = by_emp_date.get((a.employee_id, next_day))
+                assert next_a is None or next_a.shift_type_id != f_id, (
+                    f"Employee {a.employee_id}: S on {a.date} followed by F on {next_day}"
+                )
 
 
 @pytest.mark.slow
@@ -263,95 +309,6 @@ def test_solver_cross_team_assignment():
     model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31), absences)
     assignments, schedule, report = solve_shift_planning(model)
     _assert_solver_invariants(assignments, schedule, report, absences)
-
-
-# ---------------------------------------------------------------------------
-# Consistency and validity checks
-# ---------------------------------------------------------------------------
-
-@pytest.mark.slow
-def test_solver_returns_consistent_results():
-    """Running the solver twice both return non-None 3-tuples."""
-    employees, teams, _ = generate_sample_data()
-    model1 = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    r1 = solve_shift_planning(model1)
-    assert r1 is not None
-    assert len(r1) == 3
-
-    model2 = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    r2 = solve_shift_planning(model2)
-    assert r2 is not None
-    assert len(r2) == 3
-
-
-@pytest.mark.slow
-def test_solver_complete_schedule_contains_all_employees():
-    """complete_schedule has an entry for every employee on every planning day."""
-    employees, teams, _ = generate_sample_data()
-    start, end = date(2025, 1, 1), date(2025, 1, 31)
-    model = _build_model(employees, teams, start, end)
-    assignments, schedule, report = solve_shift_planning(model)
-
-    emp_ids = {e.id for e in employees}
-    # Check at least a few days within the original planning period
-    for day_offset in range(0, 31, 7):
-        check_date = start + timedelta(days=day_offset)
-        for emp_id in emp_ids:
-            assert (emp_id, check_date) in schedule, (
-                f"Employee {emp_id} missing from schedule on {check_date}"
-            )
-
-
-@pytest.mark.slow
-def test_solver_schedule_values_are_valid():
-    """complete_schedule values are one of the expected codes."""
-    employees, teams, _ = generate_sample_data()
-    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    _, schedule, _ = solve_shift_planning(model)
-
-    valid_codes = {st.code for st in STANDARD_SHIFT_TYPES} | {"OFF", "ABSENT"}
-    for (emp_id, d), code in schedule.items():
-        assert code in valid_codes, f"Unexpected schedule code '{code}' for employee {emp_id} on {d}"
-
-
-@pytest.mark.slow
-def test_solver_forbidden_nacht_to_frueh_not_in_result():
-    """After N shift, no F shift assigned next day (0h rest violates 11h rule)."""
-    employees, teams, _ = generate_sample_data()
-    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    assignments, _, _ = solve_shift_planning(model)
-
-    n_id = get_shift_type_by_code("N").id
-    f_id = get_shift_type_by_code("F").id
-
-    by_emp_date = {(a.employee_id, a.date): a for a in assignments}
-    for a in assignments:
-        if a.shift_type_id == n_id:
-            next_day = a.date + timedelta(days=1)
-            next_a = by_emp_date.get((a.employee_id, next_day))
-            assert next_a is None or next_a.shift_type_id != f_id, (
-                f"Employee {a.employee_id}: N on {a.date} followed by F on {next_day}"
-            )
-
-
-@pytest.mark.slow
-def test_solver_forbidden_spaet_to_frueh_not_in_result():
-    """After S shift, no F shift assigned next day (8h rest < 11h minimum)."""
-    employees, teams, _ = generate_sample_data()
-    model = _build_model(employees, teams, date(2025, 1, 1), date(2025, 1, 31))
-    assignments, _, _ = solve_shift_planning(model)
-
-    s_id = get_shift_type_by_code("S").id
-    f_id = get_shift_type_by_code("F").id
-
-    by_emp_date = {(a.employee_id, a.date): a for a in assignments}
-    for a in assignments:
-        if a.shift_type_id == s_id:
-            next_day = a.date + timedelta(days=1)
-            next_a = by_emp_date.get((a.employee_id, next_day))
-            assert next_a is None or next_a.shift_type_id != f_id, (
-                f"Employee {a.employee_id}: S on {a.date} followed by F on {next_day}"
-            )
 
 
 # ---------------------------------------------------------------------------

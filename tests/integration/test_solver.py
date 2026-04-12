@@ -90,6 +90,7 @@ class TestSolverBasicScenario:
         assert self.assignments is not None
         assert self.schedule is not None
         assert self.report is not None
+        assert self.employees, "employees list must not be empty"
 
     def test_assignments_is_list(self):
         assert isinstance(self.assignments, list)

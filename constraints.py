@@ -1962,7 +1962,7 @@ def add_shift_sequence_grouping_constraints(
 ):
     """
     SOFT CONSTRAINT: Prevent isolated shift types in sequences of working days.
-    
+
     Requirements:
     - When an employee works multiple shift types in a period, they should be grouped
     - No single days or small groups of one shift type isolated between days of another shift type
@@ -1971,307 +1971,188 @@ def add_shift_sequence_grouping_constraints(
       * INVALID: S - F S S S S (working days: S F S S S S - F isolated at beginning)
       * VALID: F F F S S S (shifts properly grouped)
       * VALID: S S S - - F F F (shifts properly grouped, free days don't matter)
-    
-    Implementation:
-    - Check each week for shift type patterns
-    - Penalize patterns where a shift type appears, then another shift type, then the first type again
-    - This enforces grouping: all days of type A should come before or after all days of type B
-    
+
+    Implementation (O(n * WINDOW) per employee):
+    - Use a sliding window of WINDOW calendar days.
+    - For each potential "middle" day (shift_B), look backwards and forwards within
+      WINDOW days for days with a different shift (shift_A) to detect A-B-A patterns.
+    - This replaces the previous O(n³) global check with an O(n) scan.
+
     Returns:
         List of penalty variables for shift sequence grouping violations
     """
     grouping_penalties = []
-    
-    # Very high penalty for isolated shift types - must be higher than other shift stability constraints
-    # This is critical to prevent patterns like N-N-N-S-N-N or S-S-F-S-S
-    # Increased even further to ensure this constraint dominates over other soft constraints
-    ISOLATION_PENALTY = 100000  # Dramatically increased to make shift grouping the highest priority (10x increase)
-    
-    # Helper to get shift type for a specific day
-    def get_shift_type_for_day(emp_id, d):
-        """Returns the shift code if employee works on day d, None otherwise"""
-        result = {}  # Dict of shift_code -> list of constraint variables
+
+    # Penalty weights – kept high so the solver strongly avoids isolated shifts,
+    # but split into two tiers:
+    #   close-range (≤7 days apart): ULTRA_HIGH_PENALTY – almost forbidden
+    #   medium-range (8-14 days apart): ISOLATION_PENALTY – strongly discouraged
+    ISOLATION_PENALTY = 100_000
+    ULTRA_HIGH_PENALTY = 200_000
+    WINDOW_CLOSE = 7    # calendar-day radius for ultra-high penalty
+    WINDOW_FAR = 14     # calendar-day radius for normal isolation penalty
+
+    # Pre-compute employee→team and date→week-index lookups once
+    emp_to_team: Dict[int, "Team"] = {}
+    if teams:
+        for emp in employees:
+            if emp.team_id:
+                for t in teams:
+                    if t.id == emp.team_id:
+                        emp_to_team[emp.id] = t
+                        break
+
+    date_to_week: Dict[date, int] = {}
+    for w_idx, week_dates in enumerate(weeks):
+        for d in week_dates:
+            date_to_week[d] = w_idx
+
+    def get_shift_type_for_day(emp_id: int, d: date) -> Dict[str, List]:
+        """
+        Returns {shift_code: [list_of_cp_sat_vars]} for the given employee and date.
+        The shift is "active" iff all variables in the list are 1.
+        """
+        result: Dict[str, List] = {}
         weekday = d.weekday()
-        
-        # Team shift (weekday)
+        week_idx = date_to_week.get(d)
+        if week_idx is None:
+            return result
+
+        team = emp_to_team.get(emp_id)
+
+        # Team shift on a weekday
         if weekday < 5 and (emp_id, d) in employee_active:
-            week_idx = None
-            for w_idx, week_dates in enumerate(weeks):
-                if d in week_dates:
-                    week_idx = w_idx
-                    break
-            
-            if week_idx is not None:
-                team = None
-                for emp in employees:
-                    if emp.id == emp_id:
-                        for t in teams:
-                            if t.id == emp.team_id:
-                                team = t
-                                break
-                        break
-                
-                if team:
-                    for shift_code in shift_codes:
-                        if (team.id, week_idx, shift_code) in team_shift:
-                            if shift_code not in result:
-                                result[shift_code] = []
-                            result[shift_code].extend([
-                                team_shift[(team.id, week_idx, shift_code)],
-                                employee_active[(emp_id, d)]
-                            ])
-        
-        # Team shift (weekend)
+            if team:
+                for sc in shift_codes:
+                    if (team.id, week_idx, sc) in team_shift:
+                        if sc not in result:
+                            result[sc] = []
+                        result[sc].extend([
+                            team_shift[(team.id, week_idx, sc)],
+                            employee_active[(emp_id, d)],
+                        ])
+
+        # Team shift on a weekend
         elif weekday >= 5 and (emp_id, d) in employee_weekend_shift:
-            week_idx = None
-            for w_idx, week_dates in enumerate(weeks):
-                if d in week_dates:
-                    week_idx = w_idx
-                    break
-            
-            if week_idx is not None:
-                team = None
-                for emp in employees:
-                    if emp.id == emp_id:
-                        for t in teams:
-                            if t.id == emp.team_id:
-                                team = t
-                                break
-                        break
-                
-                if team:
-                    for shift_code in shift_codes:
-                        if (team.id, week_idx, shift_code) in team_shift:
-                            if shift_code not in result:
-                                result[shift_code] = []
-                            result[shift_code].extend([
-                                team_shift[(team.id, week_idx, shift_code)],
-                                employee_weekend_shift[(emp_id, d)]
-                            ])
-        
+            if team:
+                for sc in shift_codes:
+                    if (team.id, week_idx, sc) in team_shift:
+                        if sc not in result:
+                            result[sc] = []
+                        result[sc].extend([
+                            team_shift[(team.id, week_idx, sc)],
+                            employee_weekend_shift[(emp_id, d)],
+                        ])
+
         # Cross-team shifts (weekday)
         if weekday < 5:
-            for shift_code in shift_codes:
-                if (emp_id, d, shift_code) in employee_cross_team_shift:
-                    if shift_code not in result:
-                        result[shift_code] = []
-                    result[shift_code].append(employee_cross_team_shift[(emp_id, d, shift_code)])
-        
+            for sc in shift_codes:
+                if (emp_id, d, sc) in employee_cross_team_shift:
+                    if sc not in result:
+                        result[sc] = []
+                    result[sc].append(employee_cross_team_shift[(emp_id, d, sc)])
+
         # Cross-team shifts (weekend)
-        # BUGFIX: Changed from 'elif' to 'if' - Previously was 'elif weekday >= 5' which would
-        # never execute after the 'elif weekday >= 5' block at line 1128 (Team shift weekend).
-        # The team shift weekend block (lines 1128-1154) handles team assignments using employee_weekend_shift.
-        # This cross-team block handles cross-team weekend assignments using employee_cross_team_weekend.
-        # Both blocks need to execute for weekend days to capture both team and cross-team possibilities.
         if weekday >= 5:
-            for shift_code in shift_codes:
-                if (emp_id, d, shift_code) in employee_cross_team_weekend:
-                    if shift_code not in result:
-                        result[shift_code] = []
-                    result[shift_code].append(employee_cross_team_weekend[(emp_id, d, shift_code)])
-        
+            for sc in shift_codes:
+                if (emp_id, d, sc) in employee_cross_team_weekend:
+                    if sc not in result:
+                        result[sc] = []
+                    result[sc].append(employee_cross_team_weekend[(emp_id, d, sc)])
+
         return result
-    
-    # Check patterns across the entire planning period to catch patterns that span free days
-    # We need to check beyond single weeks to catch patterns like: N - F N N N
-    # where the free day creates gaps within the week
+
     for emp in employees:
         if not emp.team_id:
             continue
-        
-        # Check patterns across the ENTIRE planning period for each employee
-        # This ensures we catch all A-B-A patterns regardless of week boundaries or free days
-        # Get shift assignments for each day in the entire period
+
+        # Build sorted list of (date, shift_data) for all potential working days
         period_shift_data = []
         for d in dates:
             shift_data = get_shift_type_for_day(emp.id, d)
-            # Only include days where the employee COULD work (has potential shift assignments)
-            if shift_data:  # If shift_data is not empty, employee could work this day
+            if shift_data:
                 period_shift_data.append((d, shift_data))
-        
-        # NOTE: period_shift_data is sorted by date because we iterate through 'dates' which is sorted
-        # This assumption is used in the optimization below where we break early when days are > 10 apart
-        
-        # Now check for problematic patterns across all working days
-        # Pattern to detect: shift_A appears, then shift B appears, then shift_A appears again
-        # This means shifts are not properly grouped
-        # KEY FIX: We now only look at POTENTIAL WORKING DAYS, not all calendar days
-        
-        # For each pair of shift types
-        for shift_A in shift_codes:
+
+        n = len(period_shift_data)
+        if n < 3:
+            continue
+
+        # Sliding-window A-B-A detection:
+        # For each "middle" day (day_mid with shift_B), scan a window of WINDOW_FAR
+        # calendar days before AND after for an "outer" day with a different shift_A.
+        # This is O(n * WINDOW) instead of O(n³).
+        for mid_idx in range(n):
+            day_mid, shifts_mid = period_shift_data[mid_idx]
+
             for shift_B in shift_codes:
-                if shift_A == shift_B:
+                if shift_B not in shifts_mid:
                     continue
-                
-                # Find all working days where each shift could be assigned
-                days_with_A = [(d, data[shift_A]) for d, data in period_shift_data if shift_A in data]
-                days_with_B = [(d, data[shift_B]) for d, data in period_shift_data if shift_B in data]
-                
-                if len(days_with_A) < 2 or len(days_with_B) < 1:
-                    continue  # Not enough days for a violation pattern
-                
-                # Check if there's a day with shift_B that falls between two days with shift_A
-                for i, (day_A1, vars_A1) in enumerate(days_with_A[:-1]):
-                    for day_B, vars_B in days_with_B:
-                        for day_A2, vars_A2 in days_with_A[i+1:]:
-                            # Check if day_B is between day_A1 and day_A2
-                            if day_A1 < day_B < day_A2:
-                                # This is a potential violation: A ... B ... A pattern
-                                # Create constraint: penalize if A1, B, and A2 all occur
-                                all_active = []
-                                all_active.extend(vars_A1)
-                                all_active.extend(vars_B)
-                                all_active.extend(vars_A2)
-                                
-                                # Create boolean: is_violation = (all variables are 1)
-                                violation_var = model.NewBoolVar(
-                                    f"seq_group_{emp.id}_{day_A1.isoformat()}_{day_B.isoformat()}_{day_A2.isoformat()}_{shift_A}_{shift_B}"
-                                )
-                                model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
-                                model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
-                                
-                                # Add penalty
-                                penalty_var = model.NewIntVar(
-                                    0, ISOLATION_PENALTY,
-                                    f"seq_group_pen_{emp.id}_{day_A1.isoformat()}_{day_B.isoformat()}_{day_A2.isoformat()}_{shift_A}_{shift_B}"
-                                )
-                                model.Add(penalty_var == violation_var * ISOLATION_PENALTY)
-                                grouping_penalties.append(penalty_var)
-        
-        # ADDITIONAL CHECK: Strict enforcement for patterns within a 10-day window
-        # This adds an even stronger penalty for short-range violations (same week or adjacent weeks)
-        # to make them nearly impossible to occur
-        ULTRA_HIGH_PENALTY = 200000  # Double the normal penalty for close-range violations (10x increase)
-        
-        for shift_A in shift_codes:
-            for shift_B in shift_codes:
-                if shift_A == shift_B:
-                    continue
-                
-                # Check every consecutive pair of days where the employee could work
-                for i in range(len(period_shift_data)):
-                    for j in range(i + 1, len(period_shift_data)):
-                        day_i, shifts_i = period_shift_data[i]
-                        day_j, shifts_j = period_shift_data[j]
-                        
-                        # Only check pairs within 10 calendar days
-                        if (day_j - day_i).days > 10:
-                            break  # No need to check further since list is sorted
-                        
-                        # Check for A-B pattern (day_i has shift_A, day_j has shift_B)
-                        if shift_A not in shifts_i or shift_B not in shifts_j:
-                            continue
-                        
-                        # Now check if there's any later day within 10 days that has shift_A again
-                        for k in range(j + 1, len(period_shift_data)):
-                            day_k, shifts_k = period_shift_data[k]
-                            
-                            # Check if day_k is within 10 days of day_i
-                            if (day_k - day_i).days > 10:
-                                break
-                            
-                            # Check if day_k has shift_A
-                            if shift_A not in shifts_k:
-                                continue
-                            
-                            # Found A-B-A pattern within 10-day window - apply ultra-high penalty
-                            all_active = []
-                            all_active.extend(shifts_i[shift_A])
-                            all_active.extend(shifts_j[shift_B])
-                            all_active.extend(shifts_k[shift_A])
-                            
-                            violation_var = model.NewBoolVar(
-                                f"seq_ultra_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
-                            )
-                            model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
-                            model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
-                            
-                            penalty_var = model.NewIntVar(
-                                0, ULTRA_HIGH_PENALTY,
-                                f"seq_ultra_pen_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
-                            )
-                            model.Add(penalty_var == violation_var * ULTRA_HIGH_PENALTY)
-                            grouping_penalties.append(penalty_var)
-        
-        # ADDITIONAL CHECK: Detect A-B-B-A patterns (two consecutive days of shift B between shift A days)
-        # This addresses cases like S-F-F-S or S-N-N-S which violate shift grouping
-        # Even higher penalty since this is a clear violation of the grouping principle
-        A_B_B_A_PATTERN_PENALTY = 500000  # EXTREMELY high priority - prevent sandwiched shift patterns (10x increase)
-        
-        for shift_A in shift_codes:
-            for shift_B in shift_codes:
-                if shift_A == shift_B:
-                    continue
-                
-                # Check for A-B-B-A pattern: day_i has shift_A, day_j and day_j1 have shift_B, day_k has shift_A
-                # We need to ensure day_j and day_j1 are consecutive OR near-consecutive calendar days
-                # NOTE: This creates O(n^4) complexity in worst case, but is mitigated by:
-                # - Breaking early when days exceed 10-day window
-                # - Breaking when day_j1 is more than 3 days from day_j
-                # - Only checking days where employee could potentially work
-                for i in range(len(period_shift_data)):
-                    day_i, shifts_i = period_shift_data[i]
-                    
-                    if shift_A not in shifts_i:
+
+                for shift_A in shift_codes:
+                    if shift_A == shift_B:
                         continue
-                    
-                    # Look for pairs of days with shift_B (not necessarily adjacent in the list)
-                    for j in range(i + 1, len(period_shift_data)):
-                        day_j, shifts_j = period_shift_data[j]
-                        
-                        # Only check within 10 calendar days from day_i
-                        if (day_j - day_i).days > 10:
+
+                    # Collect candidate "before" days with shift_A within WINDOW_FAR
+                    before_candidates = []
+                    for before_idx in range(mid_idx - 1, -1, -1):
+                        day_before, shifts_before = period_shift_data[before_idx]
+                        gap = (day_mid - day_before).days
+                        if gap > WINDOW_FAR:
                             break
-                        
-                        # Check if day_j has shift_B
-                        if shift_B not in shifts_j:
-                            continue
-                        
-                        # Look for another day with shift_B that's within 3 calendar days of day_j
-                        for j1_idx in range(j + 1, len(period_shift_data)):
-                            day_j1, shifts_j1 = period_shift_data[j1_idx]
-                            
-                            # Only check if day_j1 is within 3 calendar days of day_j
-                            # This allows for patterns like: Mon(B), Tue(B) or Mon(B), Wed(B) with Tue off
-                            if (day_j1 - day_j).days > 3:
-                                break
-                            
-                            # Check if day_j1 has shift_B
-                            if shift_B not in shifts_j1:
-                                continue
-                            
-                            # Now check if there's a later day with shift_A after these two B days
-                            for k in range(j1_idx + 1, len(period_shift_data)):
-                                day_k, shifts_k = period_shift_data[k]
-                                
-                                # Only check within 10 calendar days from day_i
-                                if (day_k - day_i).days > 10:
-                                    break
-                                
-                                # Check if day_k has shift_A
-                                if shift_A not in shifts_k:
-                                    continue
-                                
-                                # Found A-B-B-A pattern - this is a serious violation
-                                # Pattern: shift_A on day_i, shift_B on day_j, shift_B on day_j1, shift_A on day_k
-                                all_active = []
-                                all_active.extend(shifts_i[shift_A])
-                                all_active.extend(shifts_j[shift_B])
-                                all_active.extend(shifts_j1[shift_B])
-                                all_active.extend(shifts_k[shift_A])
-                                
-                                violation_var = model.NewBoolVar(
-                                    f"a_b_b_a_pattern_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
-                                )
-                                model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
-                                model.AddBoolOr([v.Not() for v in all_active]).OnlyEnforceIf(violation_var.Not())
-                                
-                                penalty_var = model.NewIntVar(
-                                    0, A_B_B_A_PATTERN_PENALTY,
-                                    f"a_b_b_a_penalty_{emp.id}_{day_i.isoformat()}_{day_j.isoformat()}_{day_j1.isoformat()}_{day_k.isoformat()}_{shift_A}_{shift_B}"
-                                )
-                                model.Add(penalty_var == violation_var * A_B_B_A_PATTERN_PENALTY)
-                                grouping_penalties.append(penalty_var)
+                        if shift_A in shifts_before:
+                            before_candidates.append((day_before, shifts_before, gap))
+
+                    if not before_candidates:
+                        continue
+
+                    # Collect candidate "after" days with shift_A within WINDOW_FAR
+                    after_candidates = []
+                    for after_idx in range(mid_idx + 1, n):
+                        day_after, shifts_after = period_shift_data[after_idx]
+                        gap = (day_after - day_mid).days
+                        if gap > WINDOW_FAR:
+                            break
+                        if shift_A in shifts_after:
+                            after_candidates.append((day_after, shifts_after, gap))
+
+                    if not after_candidates:
+                        continue
+
+                    # For every (before, after) pair create one violation variable.
+                    # Use the penalty tier based on the total span of the pattern.
+                    for day_before, shifts_before, gap_before in before_candidates:
+                        for day_after, shifts_after, gap_after in after_candidates:
+                            total_span = (day_after - day_before).days
+                            penalty_weight = (
+                                ULTRA_HIGH_PENALTY if total_span <= WINDOW_CLOSE
+                                else ISOLATION_PENALTY
+                            )
+
+                            all_active = (
+                                list(shifts_before[shift_A])
+                                + list(shifts_mid[shift_B])
+                                + list(shifts_after[shift_A])
+                            )
+
+                            vname = (
+                                f"sg_{emp.id}_{day_before.isoformat()}"
+                                f"_{day_mid.isoformat()}_{day_after.isoformat()}"
+                                f"_{shift_A}{shift_B}"
+                            )
+                            violation_var = model.NewBoolVar(vname)
+                            model.AddBoolAnd(all_active).OnlyEnforceIf(violation_var)
+                            model.AddBoolOr(
+                                [v.Not() for v in all_active]
+                            ).OnlyEnforceIf(violation_var.Not())
+
+                            penalty_var = model.NewIntVar(
+                                0, penalty_weight,
+                                f"sg_pen_{emp.id}_{day_before.isoformat()}"
+                                f"_{day_mid.isoformat()}_{day_after.isoformat()}"
+                                f"_{shift_A}{shift_B}"
+                            )
+                            model.Add(penalty_var == violation_var * penalty_weight)
+                            grouping_penalties.append(penalty_var)
     
     return grouping_penalties
 

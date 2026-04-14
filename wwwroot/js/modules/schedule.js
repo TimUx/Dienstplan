@@ -666,6 +666,10 @@ export async function executePlanShifts(event) {
     planningOverlay.classList.add('active');
     statusEl.textContent = 'Planung wird gestartet…';
     elapsedEl.textContent = '';
+    // Reset step indicators
+    document.querySelectorAll('#planningStepsList .planning-step').forEach(el => {
+        el.classList.remove('done', 'active');
+    });
 
     try {
         // Ensure CSRF token is available before the mutating request
@@ -701,7 +705,19 @@ export async function executePlanShifts(event) {
 
         // Poll for status
         const pollInterval = 2000; // 2 seconds
-        let elapsed = 0;
+
+        const updatePlanningSteps = (currentStep, totalSteps) => {
+            const stepItems = document.querySelectorAll('#planningStepsList .planning-step');
+            stepItems.forEach(item => {
+                const stepNum = parseInt(item.getAttribute('data-step'), 10);
+                item.classList.remove('done', 'active');
+                if (stepNum < currentStep) {
+                    item.classList.add('done');
+                } else if (stepNum === currentStep) {
+                    item.classList.add('active');
+                }
+            });
+        };
 
         const poll = async () => {
             try {
@@ -717,7 +733,7 @@ export async function executePlanShifts(event) {
                 }
 
                 const job = await statusResponse.json();
-                elapsed = job.elapsedSeconds || 0;
+                const elapsed = job.elapsedSeconds || 0;
 
                 // Update status message
                 if (statusEl) statusEl.textContent = job.message || 'Schichten werden geplant…';
@@ -729,13 +745,12 @@ export async function executePlanShifts(event) {
                         : `${secs} Sek. vergangen`;
                 }
 
+                // Update step progress indicators
+                if (job.planningStep) {
+                    updatePlanningSteps(job.planningStep, job.planningTotalSteps || 4);
+                }
+
                 if (job.status === 'running') {
-                    if (elapsed >= 600) {
-                        // Safety timeout: stop polling after 10 minutes
-                        planningOverlay.classList.remove('active');
-                        showToast('Die Planung dauert ungewöhnlich lange. Bitte überprüfen Sie den Server.', 'warning');
-                        return;
-                    }
                     setTimeout(poll, pollInterval);
                     return;
                 }

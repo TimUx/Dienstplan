@@ -2366,6 +2366,57 @@ body.disponent button.admin-only.admin-strict {
     text-align: center;
 }
 
+/* Planning progress steps */
+.planning-steps-list {
+    list-style: none;
+    padding: 0;
+    margin: 14px 0 0 0;
+    width: 100%;
+    max-width: 320px;
+}
+
+.planning-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 13px;
+    color: #a0aec0;
+    position: relative;
+}
+
+.planning-step::before {
+    content: '○';
+    font-size: 15px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.planning-step.done {
+    color: #38a169;
+}
+
+.planning-step.done::before {
+    content: '✓';
+    color: #38a169;
+}
+
+.planning-step.active {
+    color: var(--primary-color, #4a90d9);
+    font-weight: 600;
+}
+
+.planning-step.active::before {
+    content: '●';
+    color: var(--primary-color, #4a90d9);
+    animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }

@@ -2175,9 +2175,20 @@ def solve_shift_planning(
                            relaxed constraints for this planning run
     """
 
-    def _make_solver(model: ShiftPlanningModel, level: int) -> "ShiftPlanningSolver":
+    # Production default time limit for Stage 1: 20 minutes.
+    # CP-SAT returns the best FEASIBLE solution found when the limit is reached,
+    # so quality degrades gracefully instead of running forever.
+    # Pass time_limit_seconds=0 to disable the time limit entirely; None uses this default.
+    DEFAULT_STAGE1_TIME_LIMIT_SECONDS = 20 * 60  # 20 minutes
+    stage1_limit = (
+        None if time_limit_seconds == 0
+        else (time_limit_seconds if time_limit_seconds is not None
+              else DEFAULT_STAGE1_TIME_LIMIT_SECONDS)
+    )
+
+    def _make_solver(model: ShiftPlanningModel, level: int, limit=None) -> "ShiftPlanningSolver":
         return ShiftPlanningSolver(
-            model, time_limit_seconds, num_workers, global_settings,
+            model, limit, num_workers, global_settings,
             db_path=db_path,
             search_strategy=search_strategy,
             warm_start_shifts=warm_start_shifts,
@@ -2209,8 +2220,11 @@ def solve_shift_planning(
     # ------------------------------------------------------------------ #
     print("\n" + "=" * 60)
     print("STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)")
+    if stage1_limit:
+        print(f"  Zeit-Limit: {stage1_limit} Sekunden "
+              f"(beste FEASIBLE-Lösung wird bei Ablauf zurückgegeben)")
     print("=" * 60)
-    s1 = _make_solver(planning_model, level=0)
+    s1 = _make_solver(planning_model, level=0, limit=stage1_limit)
     s1.add_all_constraints()
     if s1.solve():
         result = s1.extract_solution()
@@ -2235,7 +2249,7 @@ def solve_shift_planning(
     print("  Grund: Stufe 1 war INFEASIBLE")
     print("=" * 60)
     m2 = _rebuild_model()
-    s2 = _make_solver(m2, level=1)
+    s2 = _make_solver(m2, level=1, limit=time_limit_seconds)
     s2.add_all_constraints()
     if s2.solve():
         result = s2.extract_solution()
@@ -2260,7 +2274,7 @@ def solve_shift_planning(
     print("  Grund: Stufe 2 war INFEASIBLE")
     print("=" * 60)
     m3 = _rebuild_model()
-    s3 = _make_solver(m3, level=2)
+    s3 = _make_solver(m3, level=2, limit=time_limit_seconds)
     s3.add_all_constraints()
     if s3.solve():
         result = s3.extract_solution()

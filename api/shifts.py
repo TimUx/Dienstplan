@@ -860,11 +860,19 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
         try:
             db = get_db()
 
-            def _update(status: str, message: str, **kwargs):
-                result_json = json.dumps(kwargs) if kwargs else None
+            # Planning steps for progress display (1-based, shown in UI)
+            _TOTAL_STEPS = 4
+
+            def _update(status: str, message: str, step: int = None, **kwargs):
+                data = {}
+                if step is not None:
+                    data['planningStep'] = step
+                    data['planningTotalSteps'] = _TOTAL_STEPS
+                data.update(kwargs)
+                result_json = json.dumps(data) if data else None
                 _update_job(db, job_id, status, message, result_json)
 
-            _update('running', 'Daten werden geladen…')
+            _update('running', 'Daten werden geladen…', step=1)
 
             # Extend planning dates to complete weeks (may extend into next month)
             extended_start, extended_end = extend_planning_dates_to_complete_weeks(start_date, end_date)
@@ -1168,6 +1176,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                         current_app.logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
             
             # Create model with extended dates and locked constraints
+            _update('running', 'Planungsmodell wird erstellt…', step=2)
             from model import create_shift_planning_model
             from solver import solve_shift_planning, get_infeasibility_diagnostics
             planning_model = create_shift_planning_model(
@@ -1186,6 +1195,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             # Solve
             # SOLVER_TIME_LIMIT_SECONDS can be set in Flask config for test environments.
             # Production leaves it unset (None = unlimited).
+            _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
             solver_time_limit = current_app.config.get('SOLVER_TIME_LIMIT_SECONDS')
             result = solve_shift_planning(
                 planning_model,
@@ -1344,6 +1354,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             conn.close()
 
             # Serialize and persist the PlanningReport so it can be retrieved later
+            _update('running', 'Schichten werden gespeichert…', step=4)
             _save_planning_report(db, start_date.year, start_date.month, planning_report)
 
             report_url = f"/api/planning/report/{start_date.year}/{start_date.month}"

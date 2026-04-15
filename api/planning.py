@@ -1,13 +1,14 @@
 """
-Planning Blueprint: endpoints for retrieving PlanningReport data.
+Planning Router: endpoints for retrieving PlanningReport data.
 """
 
-from flask import Blueprint, jsonify, make_response
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse, Response
 from datetime import date
 
 from .shared import get_db, require_auth
 
-bp = Blueprint('planning', __name__)
+router = APIRouter()
 
 
 def _deserialize_report(report_json: str) -> dict:
@@ -22,16 +23,15 @@ def _deserialize_report(report_json: str) -> dict:
     return json.loads(report_json)
 
 
-@bp.route('/api/planning/report/<int:year>/<int:month>', methods=['GET'])
-@require_auth
-def get_planning_report(year: int, month: int):
+@router.get('/api/planning/report/{year}/{month}', dependencies=[Depends(require_auth)])
+def get_planning_report(request: Request, year: int, month: int):
     """
     Return the stored PlanningReport for the given year/month as JSON.
 
     Returns 404 if no report has been saved yet for that month.
     """
     if month < 1 or month > 12:
-        return jsonify({'error': 'Invalid month (must be 1–12)'}), 400
+        return JSONResponse(content={'error': 'Invalid month (must be 1–12)'}, status_code=400)
 
     db = get_db()
     conn = db.get_connection()
@@ -46,22 +46,21 @@ def get_planning_report(year: int, month: int):
         conn.close()
 
     if row is None:
-        return jsonify({'error': f'No planning report found for {year}/{month:02d}'}), 404
+        return JSONResponse(content={'error': f'No planning report found for {year}/{month:02d}'}, status_code=404)
 
     report_dict = _deserialize_report(row['report_json'])
-    return jsonify(report_dict)
+    return report_dict
 
 
-@bp.route('/api/planning/report/<int:year>/<int:month>/summary', methods=['GET'])
-@require_auth
-def get_planning_report_summary(year: int, month: int):
+@router.get('/api/planning/report/{year}/{month}/summary', dependencies=[Depends(require_auth)])
+def get_planning_report_summary(request: Request, year: int, month: int):
     """
     Return the text summary of the stored PlanningReport as plain text.
 
     Returns 404 if no report has been saved yet for that month.
     """
     if month < 1 or month > 12:
-        return jsonify({'error': 'Invalid month (must be 1–12)'}), 400
+        return JSONResponse(content={'error': 'Invalid month (must be 1–12)'}, status_code=400)
 
     db = get_db()
     conn = db.get_connection()
@@ -76,7 +75,7 @@ def get_planning_report_summary(year: int, month: int):
         conn.close()
 
     if row is None:
-        return jsonify({'error': f'No planning report found for {year}/{month:02d}'}), 404
+        return JSONResponse(content={'error': f'No planning report found for {year}/{month:02d}'}, status_code=404)
 
     report_dict = _deserialize_report(row['report_json'])
 
@@ -145,6 +144,4 @@ def get_planning_report_summary(year: int, month: int):
     )
 
     summary = report.generate_text_summary()
-    response = make_response(summary)
-    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
-    return response
+    return Response(content=summary, media_type='text/plain; charset=utf-8')

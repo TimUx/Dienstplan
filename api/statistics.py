@@ -1,20 +1,24 @@
 """
-Statistics Blueprint: dashboard stats, audit logs, notifications.
+Statistics APIRouter: dashboard stats, audit logs, notifications.
 """
 
-from flask import Blueprint, jsonify, request, session, current_app
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse
 from datetime import date, timedelta
+import logging
 
-from .shared import get_db, require_role, require_csrf
+from .shared import get_db, require_role, require_csrf, check_csrf
 
-bp = Blueprint('statistics', __name__)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
 
 
-@bp.route('/api/statistics/dashboard', methods=['GET'])
-def get_dashboard_stats():
+@router.get('/api/statistics/dashboard')
+async def get_dashboard_stats(request: Request):
     """Get dashboard statistics"""
-    start_date_str = request.args.get('startDate')
-    end_date_str = request.args.get('endDate')
+    start_date_str = request.query_params.get('startDate')
+    end_date_str = request.query_params.get('endDate')
     
     if not start_date_str or not end_date_str:
         # Default to current month
@@ -290,7 +294,7 @@ def get_dashboard_stats():
     
     conn.close()
     
-    return jsonify({
+    return {
         'startDate': start_date.isoformat(),
         'endDate': end_date.isoformat(),
         'employeeWorkHours': employee_work_hours,
@@ -305,17 +309,16 @@ def get_dashboard_stats():
 # AUDIT LOG ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/auditlogs', methods=['GET'])
-@require_role('Admin')
-def get_audit_logs():
+@router.get('/api/auditlogs', dependencies=[Depends(require_role('Admin'))])
+async def get_audit_logs(request: Request):
     """Get audit logs with pagination and filters"""
     try:
         # Get and validate pagination parameters
         try:
-            page = int(request.args.get('page', 1))
-            page_size = int(request.args.get('pageSize', 50))
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('pageSize', 50))
         except (ValueError, TypeError):
-            return jsonify({'error': 'Invalid pagination parameters'}), 400
+            return JSONResponse(content={'error': 'Invalid pagination parameters'}, status_code=400)
         
         # Validate pagination ranges
         if page < 1:
@@ -324,10 +327,10 @@ def get_audit_logs():
             page_size = min(max(page_size, 1), 100)
         
         # Get filter parameters
-        entity_name = request.args.get('entityName')
-        action = request.args.get('action')
-        start_date = request.args.get('startDate')
-        end_date = request.args.get('endDate')
+        entity_name = request.query_params.get('entityName')
+        action = request.query_params.get('action')
+        start_date = request.query_params.get('startDate')
+        end_date = request.query_params.get('endDate')
         
         db = get_db()
         conn = db.get_connection()
@@ -391,7 +394,7 @@ def get_audit_logs():
         
         conn.close()
         
-        return jsonify({
+        return {
             'items': items,
             'page': page,
             'pageSize': page_size,
@@ -399,16 +402,15 @@ def get_audit_logs():
             'totalPages': total_pages,
             'hasPreviousPage': page > 1,
             'hasNextPage': page < total_pages
-        })
+        }
         
     except Exception as e:
-        current_app.logger.error(f"Get audit logs error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}), 500
+        logger.error(f"Get audit logs error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/auditlogs/recent/<int:count>', methods=['GET'])
-@require_role('Admin')
-def get_recent_audit_logs(count):
+@router.get('/api/auditlogs/recent/{count}', dependencies=[Depends(require_role('Admin'))])
+async def get_recent_audit_logs(request: Request, count: int):
     """Get recent audit logs (simplified endpoint for backwards compatibility)"""
     try:
         db = get_db()
@@ -436,24 +438,23 @@ def get_recent_audit_logs(count):
             })
         
         conn.close()
-        return jsonify(logs)
+        return logs
         
     except Exception as e:
-        current_app.logger.error(f"Get recent audit logs error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}), 500
+        logger.error(f"Get recent audit logs error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden der Audit-Logs: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # NOTIFICATION ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/notifications', methods=['GET'])
-@require_role('Admin', 'Disponent')
-def get_notifications():
+@router.get('/api/notifications', dependencies=[Depends(require_role('Admin', 'Disponent'))])
+async def get_notifications(request: Request):
     """Get admin notifications (for Admins and Disponents only)"""
     try:
-        unread_only = request.args.get('unreadOnly', 'false').lower() == 'true'
-        limit = int(request.args.get('limit', 50))
+        unread_only = request.query_params.get('unreadOnly', 'false').lower() == 'true'
+        limit = int(request.query_params.get('limit', 50))
         
         db = get_db()
         conn = db.get_connection()
@@ -510,16 +511,15 @@ def get_notifications():
             })
         
         conn.close()
-        return jsonify(notifications)
+        return notifications
         
     except Exception as e:
-        current_app.logger.error(f"Get notifications error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden der Benachrichtigungen: {str(e)}'}), 500
+        logger.error(f"Get notifications error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden der Benachrichtigungen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/notifications/count', methods=['GET'])
-@require_role('Admin', 'Disponent')
-def get_notification_count_endpoint():
+@router.get('/api/notifications/count', dependencies=[Depends(require_role('Admin', 'Disponent'))])
+async def get_notification_count_endpoint(request: Request):
     """Get count of unread notifications"""
     try:
         db = get_db()
@@ -528,39 +528,35 @@ def get_notification_count_endpoint():
         count = get_notification_count(conn, unread_only=True)
         conn.close()
         
-        return jsonify({'count': count})
+        return {'count': count}
         
     except Exception as e:
-        current_app.logger.error(f"Get notification count error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Get notification count error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/notifications/<int:id>/read', methods=['POST'])
-@require_role('Admin', 'Disponent')
-@require_csrf
-def mark_notification_read(id):
+@router.post('/api/notifications/{id}/read', dependencies=[Depends(require_role('Admin', 'Disponent')), Depends(check_csrf)])
+async def mark_notification_read(request: Request, id: int):
     """Mark notification as read"""
     try:
         db = get_db()
         conn = db.get_connection()
         from notification_manager import mark_notification_as_read
-        success = mark_notification_as_read(conn, id, session.get('user_email'))
+        success = mark_notification_as_read(conn, id, request.session.get('user_email'))
         conn.close()
         
         if success:
-            return jsonify({'success': True})
+            return {'success': True}
         else:
-            return jsonify({'error': 'Benachrichtigung nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Benachrichtigung nicht gefunden'}, status_code=404)
         
     except Exception as e:
-        current_app.logger.error(f"Mark notification read error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Mark notification read error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/notifications/mark-all-read', methods=['POST'])
-@require_role('Admin', 'Disponent')
-@require_csrf
-def mark_all_notifications_read():
+@router.post('/api/notifications/mark-all-read', dependencies=[Depends(require_role('Admin', 'Disponent')), Depends(check_csrf)])
+async def mark_all_notifications_read(request: Request):
     """Mark all notifications as read"""
     try:
         db = get_db()
@@ -571,14 +567,14 @@ def mark_all_notifications_read():
             UPDATE AdminNotifications
             SET IsRead = 1, ReadAt = CURRENT_TIMESTAMP, ReadBy = ?
             WHERE IsRead = 0
-        """, (session.get('user_email'),))
+        """, (request.session.get('user_email'),))
         
         conn.commit()
         count = cursor.rowcount
         conn.close()
         
-        return jsonify({'success': True, 'count': count})
+        return {'success': True, 'count': count}
         
     except Exception as e:
-        current_app.logger.error(f"Mark all notifications read error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Mark all notifications read error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)

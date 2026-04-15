@@ -1,27 +1,41 @@
 """
-Shifts Blueprint: shift types, schedule, planning, assignments, exports, shift exchanges.
+Shifts router: shift types, schedule, planning, assignments, exports, shift exchanges.
 """
 
-from flask import Blueprint, jsonify, request, session, current_app, send_file, make_response
+import logging
+import threading as _threading
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, date, timedelta
 from typing import Optional
-import threading
 import json
 import uuid
+
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse, Response
 
 from .shared import (
     get_db, require_auth, require_role, log_audit,
     get_row_value, _paginate,
     extend_planning_dates_to_complete_weeks, validate_monthly_date_range,
-    limiter, require_csrf
+    check_csrf, parse_json_body
 )
 from .repositories.shift_repository import ShiftRepository
 
-bp = Blueprint('shifts', __name__)
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+# ============================================================================
+# PROCESS POOL – replaces threading.Thread for solver jobs.
+# max_workers=4 limits concurrent solver processes; the GIL is bypassed entirely.
+# ============================================================================
+_solver_pool = ProcessPoolExecutor(max_workers=4)
+_active_futures: dict = {}
+_futures_lock = _threading.Lock()
+MAX_CONCURRENT_JOBS = 4
 
 
-@bp.route('/api/shifttypes', methods=['GET'])
-def get_shift_types():
+@router.get('/api/shifttypes')
+def get_shift_types(request: Request):
     """Get all shift types"""
     db = get_db()
     conn = db.get_connection()
@@ -60,22 +74,19 @@ def get_shift_types():
         })
     
     conn.close()
-    return jsonify(shift_types)
+    return shift_types
 
 
-@bp.route('/api/shifttypes', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_shift_type():
+@router.post('/api/shifttypes', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_shift_type(request: Request, data: dict = Depends(parse_json_body)):
     """Create new shift type (Admin only)"""
     try:
-        data = request.get_json()
         
         # Validate required fields
         required_fields = ['code', 'name', 'startTime', 'endTime', 'durationHours']
         for field in required_fields:
             if not data.get(field):
-                return jsonify({'error': f'{field} ist Pflichtfeld'}), 400
+                return JSONResponse(content={'error': f'{field} ist Pflichtfeld'}, status_code=400)
         
         # Validate staffing requirements
         min_staff_weekday = data.get('minStaffWeekday', 3)
@@ -85,11 +96,11 @@ def create_shift_type():
         max_consecutive_days = data.get('maxConsecutiveDays', 6)
         
         if min_staff_weekday > max_staff_weekday:
-            return jsonify({'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}), 400
+            return JSONResponse(content={'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}, status_code=400)
         if min_staff_weekend > max_staff_weekend:
-            return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
+            return JSONResponse(content={'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}, status_code=400)
         if max_consecutive_days < 1 or max_consecutive_days > 10:
-            return jsonify({'error': 'Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen'}), 400
+            return JSONResponse(content={'error': 'Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -99,7 +110,7 @@ def create_shift_type():
         cursor.execute("SELECT Id FROM ShiftTypes WHERE Code = ?", (data.get('code'),))
         if cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
+            return JSONResponse(content={'error': 'Schichtkürzel bereits vorhanden'}, status_code=400)
         
         # Insert shift type
         cursor.execute("""
@@ -129,7 +140,7 @@ def create_shift_type():
             min_staff_weekend,
             max_staff_weekend,
             max_consecutive_days,
-            session.get('user_email', 'system')
+            request.session.get('user_email', 'system')
         ))
         
         shift_type_id = cursor.lastrowid
@@ -141,15 +152,16 @@ def create_shift_type():
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': shift_type_id}), 201
+        return JSONResponse(content={'success': True, 'id': shift_type_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create shift type error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create shift type error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifttypes/<int:id>', methods=['GET'])
-def get_shift_type(id):
+@router.get('/api/shifttypes/{id:int}')
+
+def get_shift_type(request: Request, id):
     """Get single shift type by ID"""
     db = get_db()
     conn = db.get_connection()
@@ -159,7 +171,7 @@ def get_shift_type(id):
     
     if not row:
         conn.close()
-        return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+        return JSONResponse(content={'error': 'Schichttyp nicht gefunden'}, status_code=404)
     
     shift_type = {
         'id': row['Id'],
@@ -191,16 +203,14 @@ def get_shift_type(id):
         shift_type['maxConsecutiveDays'] = 6  # Default value
     
     conn.close()
-    return jsonify(shift_type)
+    return shift_type
 
 
-@bp.route('/api/shifttypes/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_shift_type(id):
+@router.put('/api/shifttypes/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_shift_type(request: Request, id):
     """Update shift type (Admin only)"""
     try:
-        data = request.get_json()
         
         db = get_db()
         conn = db.get_connection()
@@ -211,7 +221,7 @@ def update_shift_type(id):
         old_row = cursor.fetchone()
         if not old_row:
             conn.close()
-            return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Schichttyp nicht gefunden'}, status_code=404)
         
         # Check if new code conflicts with existing
         if data.get('code') and data.get('code') != old_row['Code']:
@@ -219,7 +229,7 @@ def update_shift_type(id):
                          (data.get('code'), id))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'Schichtkürzel bereits vorhanden'}), 400
+                return JSONResponse(content={'error': 'Schichtkürzel bereits vorhanden'}, status_code=400)
         
         # Validate staffing requirements using the helper function
         min_staff_weekday = data.get('minStaffWeekday', get_row_value(old_row, 'MinStaffWeekday', 3))
@@ -230,13 +240,13 @@ def update_shift_type(id):
         
         if min_staff_weekday > max_staff_weekday:
             conn.close()
-            return jsonify({'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}), 400
+            return JSONResponse(content={'error': 'Minimale Personalstärke an Wochentagen darf nicht größer sein als die maximale Personalstärke'}, status_code=400)
         if min_staff_weekend > max_staff_weekend:
             conn.close()
-            return jsonify({'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}), 400
+            return JSONResponse(content={'error': 'Minimale Personalstärke am Wochenende darf nicht größer sein als die maximale Personalstärke'}, status_code=400)
         if max_consecutive_days < 1 or max_consecutive_days > 10:
             conn.close()
-            return jsonify({'error': 'Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen'}), 400
+            return JSONResponse(content={'error': 'Maximale aufeinanderfolgende Tage muss zwischen 1 und 10 liegen'}, status_code=400)
         
         # Update shift type
         cursor.execute("""
@@ -270,7 +280,7 @@ def update_shift_type(id):
             max_staff_weekend,
             max_consecutive_days,
             datetime.utcnow().isoformat(),
-            session.get('user_email', 'system'),
+            request.session.get('user_email', 'system'),
             id
         ))
         
@@ -306,18 +316,16 @@ def update_shift_type(id):
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update shift type error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update shift type error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifttypes/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_shift_type(id):
+@router.delete('/api/shifttypes/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def delete_shift_type(request: Request, id):
     """Delete shift type (Admin only)"""
     try:
         db = get_db()
@@ -329,7 +337,7 @@ def delete_shift_type(id):
         shift_row = cursor.fetchone()
         if not shift_row:
             conn.close()
-            return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Schichttyp nicht gefunden'}, status_code=404)
         
         # Check if shift type is used in assignments
         cursor.execute("SELECT COUNT(*) as count FROM ShiftAssignments WHERE ShiftTypeId = ?", (id,))
@@ -337,7 +345,7 @@ def delete_shift_type(id):
         
         if assignment_count > 0:
             conn.close()
-            return jsonify({'error': f'Schichttyp wird in {assignment_count} Zuweisungen verwendet und kann nicht gelöscht werden'}), 400
+            return JSONResponse(content={'error': f'Schichttyp wird in {assignment_count} Zuweisungen verwendet und kann nicht gelöscht werden'}, status_code=400)
         
         # Delete shift type (cascade will delete relationships and team assignments)
         cursor.execute("DELETE FROM ShiftTypes WHERE Id = ?", (id,))
@@ -349,16 +357,17 @@ def delete_shift_type(id):
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete shift type error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete shift type error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # Team-Shift Assignment endpoints
-@bp.route('/api/shifttypes/<int:shift_id>/teams', methods=['GET'])
-def get_shift_type_teams(shift_id):
+@router.get('/api/shifttypes/{shift_id:int}/teams')
+
+def get_shift_type_teams(request: Request, shift_id):
     """Get teams assigned to a shift type"""
     db = get_db()
     conn = db.get_connection()
@@ -380,16 +389,14 @@ def get_shift_type_teams(shift_id):
         })
     
     conn.close()
-    return jsonify(teams)
+    return teams
 
 
-@bp.route('/api/shifttypes/<int:shift_id>/teams', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_shift_type_teams(shift_id):
+@router.put('/api/shifttypes/{shift_id:int}/teams', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_shift_type_teams(request: Request, shift_id):
     """Update teams assigned to a shift type (Admin only)"""
     try:
-        data = request.get_json()
         team_ids = data.get('teamIds', [])
         
         db = get_db()
@@ -400,7 +407,7 @@ def update_shift_type_teams(shift_id):
         cursor.execute("SELECT Id FROM ShiftTypes WHERE Id = ?", (shift_id,))
         if not cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Schichttyp nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Schichttyp nicht gefunden'}, status_code=404)
         
         # Delete all existing assignments for this shift
         cursor.execute("DELETE FROM TeamShiftAssignments WHERE ShiftTypeId = ?", (shift_id,))
@@ -410,7 +417,7 @@ def update_shift_type_teams(shift_id):
             cursor.execute("""
                 INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId, CreatedBy)
                 VALUES (?, ?, ?)
-            """, (team_id, shift_id, session.get('user_email', 'system')))
+            """, (team_id, shift_id, request.session.get('user_email', 'system')))
         
         # Log audit entry
         changes = json.dumps({'shiftTypeId': shift_id, 'teamIds': team_ids}, ensure_ascii=False)
@@ -419,15 +426,16 @@ def update_shift_type_teams(shift_id):
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update shift type teams error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update shift type teams error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/teams/<int:team_id>/shifttypes', methods=['GET'])
-def get_team_shift_types(team_id):
+@router.get('/api/teams/{team_id:int}/shifttypes')
+
+def get_team_shift_types(request: Request, team_id):
     """Get shift types assigned to a team"""
     db = get_db()
     conn = db.get_connection()
@@ -451,16 +459,14 @@ def get_team_shift_types(team_id):
         })
     
     conn.close()
-    return jsonify(shift_types)
+    return shift_types
 
 
-@bp.route('/api/teams/<int:team_id>/shifttypes', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_team_shift_types(team_id):
+@router.put('/api/teams/{team_id:int}/shifttypes', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_team_shift_types(request: Request, team_id):
     """Update shift types assigned to a team (Admin only)"""
     try:
-        data = request.get_json()
         shift_type_ids = data.get('shiftTypeIds', [])
         
         db = get_db()
@@ -471,7 +477,7 @@ def update_team_shift_types(team_id):
         cursor.execute("SELECT Id FROM Teams WHERE Id = ?", (team_id,))
         if not cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Team nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Team nicht gefunden'}, status_code=404)
         
         # Delete all existing assignments for this team
         cursor.execute("DELETE FROM TeamShiftAssignments WHERE TeamId = ?", (team_id,))
@@ -481,7 +487,7 @@ def update_team_shift_types(team_id):
             cursor.execute("""
                 INSERT INTO TeamShiftAssignments (TeamId, ShiftTypeId, CreatedBy)
                 VALUES (?, ?, ?)
-            """, (team_id, shift_type_id, session.get('user_email', 'system')))
+            """, (team_id, shift_type_id, request.session.get('user_email', 'system')))
         
         # Log audit entry
         changes = json.dumps({'teamId': team_id, 'shiftTypeIds': shift_type_ids}, ensure_ascii=False)
@@ -490,44 +496,45 @@ def update_team_shift_types(team_id):
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update team shift types error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update team shift types error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # SHIFT SCHEDULE ENDPOINT
 # ============================================================================
 
-@bp.route('/api/shifts/schedule', methods=['GET'])
-def get_schedule():
+@router.get('/api/shifts/schedule')
+
+def get_schedule(request: Request):
     """Get shift schedule for a date range.
 
     Optional pagination query parameters:
       - page  (int, default 1): 1-based page number for assignments
       - limit (int, default 0): assignments per page; 0 means return all
     """
-    start_date_str = request.args.get('startDate')
-    end_date_str = request.args.get('endDate')
-    view = request.args.get('view', 'week')
+    start_date_str = request.query_params.get('startDate')
+    end_date_str = request.query_params.get('endDate')
+    view = request.query_params.get('view', 'week')
 
     # Parse pagination parameters
     try:
-        page = max(1, int(request.args.get('page', 1)))
-        limit = max(0, int(request.args.get('limit', 0)))
+        page = max(1, int(request.query_params.get('page', 1)))
+        limit = max(0, int(request.query_params.get('limit', 0)))
     except (ValueError, TypeError):
-        return jsonify({'error': 'page and limit must be integers'}), 400
+        return JSONResponse(content={'error': 'page and limit must be integers'}, status_code=400)
 
     if not start_date_str:
-        return jsonify({'error': 'startDate is required'}), 400
+        return JSONResponse(content={'error': 'startDate is required'}, status_code=400)
     
     # Validate and parse dates
     try:
         start_date = date.fromisoformat(start_date_str)
     except (ValueError, TypeError):
-        return jsonify({'error': 'Invalid startDate format. Use YYYY-MM-DD'}), 400
+        return JSONResponse(content={'error': 'Invalid startDate format. Use YYYY-MM-DD'}, status_code=400)
     
     # Calculate end date based on view
     if not end_date_str:
@@ -560,7 +567,7 @@ def get_schedule():
         try:
             end_date = date.fromisoformat(end_date_str)
         except (ValueError, TypeError):
-            return jsonify({'error': 'Invalid endDate format. Use YYYY-MM-DD'}), 400
+            return JSONResponse(content={'error': 'Invalid endDate format. Use YYYY-MM-DD'}, status_code=400)
     
     conn = None
     try:
@@ -569,7 +576,7 @@ def get_schedule():
         cursor = conn.cursor()
         
         # Check if user is admin (can see unapproved plans)
-        user_roles = session.get('user_roles', [])
+        user_roles = request.session.get('user_roles', [])
         is_admin = 'Admin' in user_roles
         
         # Get approved months if user is not admin
@@ -701,7 +708,7 @@ def get_schedule():
         
         pagination = _paginate(assignments, page, limit)
 
-        return jsonify({
+        return {
             'startDate': start_date.isoformat(),
             'endDate': end_date.isoformat(),
             'assignments': pagination['data'],
@@ -716,7 +723,7 @@ def get_schedule():
         })
         
     except Exception as e:
-        return jsonify({'error': f'Database error: {str(e)}'}), 500
+        return JSONResponse(content={'error': f'Database error: {str(e)}'}, status_code=500)
     finally:
         if conn:
             conn.close()
@@ -811,7 +818,7 @@ def _save_planning_report(db, year: int, month: int, report) -> None:
         finally:
             conn.close()
     except Exception as exc:
-        current_app.logger.warning(f"Failed to save PlanningReport for {year}/{month}: {exc}")
+        logger.warning(f"Failed to save PlanningReport for {year}/{month}: {exc}")
 
 
 def _cleanup_old_jobs(db):
@@ -851,62 +858,73 @@ def _get_job(db, job_id: str):
         return cursor.fetchone()
 
 
-def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
+def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: str):
     """
-    Background worker that executes the shift planning solver and stores
-    the result in the PlanningJobs DB table under *job_id*.
+    Standalone worker executed in a subprocess via ProcessPoolExecutor.
+    Must not reference any FastAPI context objects – all imports are done locally
+    and db is accessed directly via Database(db_path).
     """
-    with app.app_context():
-        try:
-            db = get_db()
+    import logging as _logging
+    import json as _json
+    import sqlite3 as _sqlite3
+    from datetime import datetime as _datetime, date as _date, timedelta as _timedelta
 
-            # Planning steps for progress display (1-based, shown in UI)
-            _TOTAL_STEPS = 4
+    _logging.basicConfig(
+        level=_logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    )
+    _logger = _logging.getLogger(__name__)
 
-            def _update(status: str, message: str, step: int = None, **kwargs):
-                data = {}
+    try:
+        from api.shared import Database, extend_planning_dates_to_complete_weeks
+        db = Database(db_path)
+
+        # Planning steps for progress display (1-based, shown in UI)
+        _TOTAL_STEPS = 4
+
+        def _update(status: str, message: str, step: int = None, **kwargs):
                 if step is not None:
-                    data['planningStep'] = step
-                    data['planningTotalSteps'] = _TOTAL_STEPS
-                data.update(kwargs)
-                result_json = json.dumps(data) if data else None
-                _update_job(db, job_id, status, message, result_json)
+                data['planningStep'] = step
+                data['planningTotalSteps'] = _TOTAL_STEPS
+            data.update(kwargs)
+            result_json = _json.dumps(data) if data else None
+            _update_job(db, job_id, status, message, result_json)
 
-            _update('running', 'Daten werden geladen…', step=1)
+        _update('running', 'Daten werden geladen…', step=1)
 
-            # Extend planning dates to complete weeks (may extend into next month)
-            extended_start, extended_end = extend_planning_dates_to_complete_weeks(start_date, end_date)
+        # Extend planning dates to complete weeks (may extend into next month)
+        extended_start, extended_end = extend_planning_dates_to_complete_weeks(start_date, end_date)
+    
+        # Log the extension for transparency
+        _logger.info(f"Planning for {start_date} to {end_date}")
+        if extended_end > end_date:
+            _logger.info(f"Extended to complete week: {extended_start} to {extended_end} (added {(extended_end - end_date).days} days from next month)")
         
-            # Log the extension for transparency
-            current_app.logger.info(f"Planning for {start_date} to {end_date}")
-            if extended_end > end_date:
-                current_app.logger.info(f"Extended to complete week: {extended_start} to {extended_end} (added {(extended_end - end_date).days} days from next month)")
-            
-            # Load data
-            from data_loader import load_from_database, load_global_settings
-            employees, teams, absences, shift_types = load_from_database(db.db_path)
-            
-            # Load global settings (consecutive shifts limits, rest time, etc.)
-            global_settings = load_global_settings(db.db_path)
-            
-            # Load existing assignments for the extended period (to lock days from adjacent months)
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            
-            # Get existing assignments for days that extend beyond the current month
-            # These will be locked so we don't overwrite already-planned shifts
-            locked_team_shift = {}
-            locked_employee_weekend = {}
-            locked_employee_shift = {}  # NEW: Lock individual employee shifts to prevent double shifts
-            
-            # Query ALL existing shift assignments in the extended planning period
-            # This prevents double shifts when planning across months
-            # NOTE: This is separate from the team-level locking below because we need to
-            # lock individual employee assignments for the ENTIRE period, not just adjacent months
-            cursor.execute("""
-                SELECT sa.EmployeeId, sa.Date, st.Code
-                FROM ShiftAssignments sa
-                INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+        # Load data
+        from data_loader import load_from_database, load_global_settings
+        employees, teams, absences, shift_types = load_from_database(db.db_path)
+        
+        # Load global settings (consecutive shifts limits, rest time, etc.)
+        global_settings = load_global_settings(db.db_path)
+        
+        # Load existing assignments for the extended period (to lock days from adjacent months)
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Get existing assignments for days that extend beyond the current month
+        # These will be locked so we don't overwrite already-planned shifts
+        locked_team_shift = {}
+        locked_employee_weekend = {}
+        locked_employee_shift = {}  # NEW: Lock individual employee shifts to prevent double shifts
+        
+        # Query ALL existing shift assignments in the extended planning period
+        # This prevents double shifts when planning across months
+        # NOTE: This is separate from the team-level locking below because we need to
+        # lock individual employee assignments for the ENTIRE period, not just adjacent months
+        cursor.execute("""
+            SELECT sa.EmployeeId, sa.Date, st.Code
+            FROM ShiftAssignments sa
+            INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
                 WHERE sa.Date >= ? AND sa.Date <= ?
             """, (extended_start.isoformat(), extended_end.isoformat()))
             
@@ -942,7 +960,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 # If week spans the boundary, mark all its dates as boundary dates
                 if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
                     boundary_week_dates.update(week_dates)
-                    current_app.logger.info(f"Boundary week detected: {week_dates[0]} to {week_dates[-1]} - employee locks will be skipped")
+                    logger.info(f"Boundary week detected: {week_dates[0]} to {week_dates[-1]} - employee locks will be skipped")
             
             # Lock existing employee assignments
             # CRITICAL FIX: Skip locking employee assignments in boundary weeks
@@ -953,7 +971,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 
                 # Skip assignments in boundary weeks - they will be re-planned to match current config
                 if assignment_date in boundary_week_dates:
-                    current_app.logger.info(f"Skipping lock for Employee {emp_id}, Date {date_str} (in boundary week)")
+                    logger.info(f"Skipping lock for Employee {emp_id}, Date {date_str} (in boundary week)")
                     continue
                 
                 # CRITICAL FIX: Convert emp_id to int to match assignment.employee_id type
@@ -964,7 +982,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                     # If conversion fails, use as-is (for backward compatibility with non-numeric IDs)
                     emp_id_int = emp_id
                 locked_employee_shift[(emp_id_int, assignment_date)] = shift_code
-                current_app.logger.info(f"Locked: Employee {emp_id_int}, Date {date_str} -> {shift_code} (existing assignment)")
+                logger.info(f"Locked: Employee {emp_id_int}, Date {date_str} -> {shift_code} (existing assignment)")
             
             if extended_end > end_date or extended_start < start_date:
                 # Query existing shift assignments for extended dates ONLY (not the main month)
@@ -1026,7 +1044,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                     # If week spans the boundary, don't lock it
                     if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
                         boundary_weeks.add(week_idx)
-                        current_app.logger.info(f"Week {week_idx} spans month boundary - will NOT be locked (dates: {week_dates[0]} to {week_dates[-1]})")
+                        logger.info(f"Week {week_idx} spans month boundary - will NOT be locked (dates: {week_dates[0]} to {week_dates[-1]})")
                 
                 # First pass: identify conflicts and boundary weeks
                 conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
@@ -1044,7 +1062,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                             existing_shift = locked_team_shift[(team_id, week_idx)]
                             if existing_shift != shift_code:
                                 # Conflict detected: different shift codes for same team/week
-                                current_app.logger.warning(f"CONFLICT: Team {team_id}, Week {week_idx} has conflicting shifts: {existing_shift} vs {shift_code}")
+                                logger.warning(f"CONFLICT: Team {team_id}, Week {week_idx} has conflicting shifts: {existing_shift} vs {shift_code}")
                                 conflicting_team_weeks.add((team_id, week_idx))
                         else:
                             # No conflict yet - tentatively add this lock
@@ -1053,12 +1071,12 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 # Second pass: remove all conflicting locks
                 for team_id, week_idx in conflicting_team_weeks:
                     if (team_id, week_idx) in locked_team_shift:
-                        current_app.logger.warning(f"  Removing team lock for Team {team_id}, Week {week_idx} to avoid INFEASIBLE")
+                        logger.warning(f"  Removing team lock for Team {team_id}, Week {week_idx} to avoid INFEASIBLE")
                         del locked_team_shift[(team_id, week_idx)]
                 
                 # Log remaining locks
                 for (team_id, week_idx), shift_code in locked_team_shift.items():
-                    current_app.logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignments)")
+                    logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignments)")
             
             conn.close()
             
@@ -1138,7 +1156,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
                 extended_lookback_end = initial_lookback_start - timedelta(days=1)
                 
-                current_app.logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
+                logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
                 
                 # Query extended period for these employees only
                 # Use parameterized query to prevent SQL injection
@@ -1164,16 +1182,16 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             
             conn.close()
             
-            current_app.logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
+            logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
             if previous_employee_shifts:
                 # Find actual date range
                 all_dates = [d for (_, d) in previous_employee_shifts.keys()]
                 if all_dates:
                     actual_lookback_start = min(all_dates)
                     actual_lookback_end = max(all_dates)
-                    current_app.logger.info(f"  Previous shifts date range: {actual_lookback_start} to {actual_lookback_end}")
+                    logger.info(f"  Previous shifts date range: {actual_lookback_start} to {actual_lookback_end}")
                     if employees_to_extend:
-                        current_app.logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
+                        logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
             
             # Create model with extended dates and locked constraints
             _update('running', 'Planungsmodell wird erstellt…', step=2)
@@ -1196,7 +1214,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             # SOLVER_TIME_LIMIT_SECONDS can be set in Flask config for test environments.
             # Production leaves it unset (None = unlimited).
             _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
-            solver_time_limit = current_app.config.get('SOLVER_TIME_LIMIT_SECONDS')
+            solver_time_limit = None  # use default
             result = solve_shift_planning(
                 planning_model,
                 global_settings=global_settings,
@@ -1275,12 +1293,12 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
             future_extended_count = len([a for a in filtered_assignments if a.date > end_date])
             past_excluded_count = len([a for a in assignments if a.date < start_date])
             
-            current_app.logger.info(f"Total assignments generated: {len(assignments)}")
-            current_app.logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
+            logger.info(f"Total assignments generated: {len(assignments)}")
+            logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
             if future_extended_count > 0:
-                current_app.logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
+                logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
             if past_excluded_count > 0:
-                current_app.logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
+                logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
             
             # Save to database
             conn = db.get_connection()
@@ -1334,7 +1352,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                 ))
                 inserted += 1
             
-            current_app.logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
+            logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
             
             # TD (Tag Dienst / Day Duty) assignments have been removed from the system
             # This section is no longer used
@@ -1371,26 +1389,23 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, app):
                     })
 
         except Exception as exc:
-            current_app.logger.exception(f"Planning job {job_id} failed")
+            _logger.exception(f"Planning job {job_id} failed")
             _update('error', 'Unbekannter Fehler', details=str(exc))
 
 
-@bp.route('/api/shifts/plan', methods=['POST'])
-@limiter.limit("5 per hour")
-@require_role('Admin', 'Disponent')
-@require_csrf
-def plan_shifts():
+@router.post('/api/shifts/plan', dependencies=[Depends(require_role('Admin', 'Disponent')), Depends(check_csrf)])
+def plan_shifts(request: Request):
     """
-    Start asynchronous shift planning using OR-Tools (Admin only).
+    Start asynchronous shift planning using OR-Tools.
 
     Returns a job_id immediately; the caller should poll
-    GET /api/shifts/plan/status/<job_id> for progress and result.
+    GET /api/shifts/plan/status/{job_id} for progress and result.
     """
-    start_date_str = request.args.get('startDate')
-    end_date_str = request.args.get('endDate')
-    force = request.args.get('force', 'false').lower() == 'true'
+    start_date_str = request.query_params.get('startDate')
+    end_date_str = request.query_params.get('endDate')
+    force = request.query_params.get('force', 'false').lower() == 'true'
     if not start_date_str or not end_date_str:
-        return jsonify({'error': 'startDate and endDate are required'}), 400
+        return JSONResponse(content={'error': 'startDate and endDate are required'}, status_code=400)
 
     try:
         start_date = date.fromisoformat(start_date_str)
@@ -1399,31 +1414,38 @@ def plan_shifts():
         # Validate that planning is for a complete single month
         is_valid, error_msg = validate_monthly_date_range(start_date, end_date)
         if not is_valid:
-            return jsonify({'error': error_msg}), 400
+            return JSONResponse(content={'error': error_msg}, status_code=400)
 
-        # Create job entry and start background thread
+        # Enforce max concurrent job limit
+        with _futures_lock:
+            running = sum(1 for f in _active_futures.values() if not f.done())
+            if running >= MAX_CONCURRENT_JOBS:
+                return JSONResponse(
+                    content={'error': f'Maximale Anzahl gleichzeitiger Planungsjobs ({MAX_CONCURRENT_JOBS}) erreicht. Bitte warten Sie, bis ein Job abgeschlossen ist.'},
+                    status_code=503
+                )
+
+        # Create job entry and submit to process pool
         job_id = str(uuid.uuid4())
         db = get_db()
         _create_job(db, job_id)
 
-        app = current_app._get_current_object()
-        t = threading.Thread(
-            target=_run_planning_job,
-            args=(job_id, start_date, end_date, force, app),
-            daemon=True,
-            name=f'planning-{job_id[:8]}'
+        future = _solver_pool.submit(
+            _run_planning_job,
+            job_id, start_date, end_date, force, db.db_path
         )
-        t.start()
+        with _futures_lock:
+            _active_futures[job_id] = future
 
-        return jsonify({'jobId': job_id, 'status': 'running'}), 202
+
+        return JSONResponse(content={'jobId': job_id, 'status': 'running'}, status_code=202)
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/shifts/plan/status/<job_id>', methods=['GET'])
-@require_role('Admin', 'Disponent')
-def get_plan_status(job_id):
+@router.get('/api/shifts/plan/status/{job_id}', dependencies=[Depends(require_role('Admin', 'Disponent'))])
+def get_plan_status(request: Request, job_id: str):
     """
     Poll the status of a background planning job.
 
@@ -1436,7 +1458,7 @@ def get_plan_status(job_id):
     db = get_db()
     job = _get_job(db, job_id)
     if job is None:
-        return jsonify({'error': 'Job not found'}), 404
+        return JSONResponse(content={'error': 'Job not found'}, status_code=404)
 
     result = {
         'status': job['status'],
@@ -1456,13 +1478,12 @@ def get_plan_status(job_id):
         except Exception:
             result['elapsedSeconds'] = 0
 
-    return jsonify(result)
+    return result
 
 
-@bp.route('/api/shifts/plan/<job_id>', methods=['DELETE'])
-@require_role('Admin', 'Disponent')
-@require_csrf
-def cancel_plan_job(job_id):
+@router.delete('/api/shifts/plan/{job_id}', dependencies=[Depends(require_role('Admin', 'Disponent')), Depends(check_csrf)])
+
+def cancel_plan_job(request: Request, job_id):
     """
     Request cancellation of a background planning job.
 
@@ -1472,16 +1493,16 @@ def cancel_plan_job(job_id):
     db = get_db()
     job = _get_job(db, job_id)
     if job is None:
-        return jsonify({'error': 'Job not found'}), 404
+        return JSONResponse(content={'error': 'Job not found'}, status_code=404)
     if job['status'] != 'running':
-        return jsonify({'error': 'Job is not running'}), 400
+        return JSONResponse(content={'error': 'Job is not running'}, status_code=400)
     _update_job(db, job_id, 'cancelled', 'Planung wurde abgebrochen.')
-    return jsonify({'success': True, 'message': 'Planung wird abgebrochen.'})
+    return {'success': True, 'message': 'Planung wird abgebrochen.'}
 
 
-@bp.route('/api/shifts/plan/approvals', methods=['GET'])
-@require_role('Admin')
-def get_plan_approvals():
+@router.get('/api/shifts/plan/approvals', dependencies=[Depends(require_role('Admin'))])
+
+def get_plan_approvals(request: Request):
     """Get all shift plan approvals (Admin only)"""
     try:
         db = get_db()
@@ -1508,14 +1529,15 @@ def get_plan_approvals():
             })
         
         conn.close()
-        return jsonify(approvals)
+        return approvals
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/shifts/plan/approvals/<int:year>/<int:month>', methods=['GET'])
-def get_plan_approval_status(year, month):
+@router.get('/api/shifts/plan/approvals/{year:int}/{month:int}')
+
+def get_plan_approval_status(request: Request, year, month):
     """Get approval status for a specific month"""
     try:
         db = get_db()
@@ -1531,14 +1553,14 @@ def get_plan_approval_status(year, month):
         conn.close()
         
         if not row:
-            return jsonify({
+            return {
                 'year': year,
                 'month': month,
                 'isApproved': False,
                 'exists': False
             })
         
-        return jsonify({
+        return {
             'id': row['Id'],
             'year': row['Year'],
             'month': row['Month'],
@@ -1552,25 +1574,23 @@ def get_plan_approval_status(year, month):
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/shifts/plan/approvals/<int:year>/<int:month>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def approve_plan(year, month):
+@router.put('/api/shifts/plan/approvals/{year:int}/{month:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def approve_plan(request: Request, year, month):
     """Approve or unapprove a shift plan for a specific month (Admin only)"""
     try:
-        data = request.get_json()
         is_approved = data.get('isApproved', True)
         notes = data.get('notes', '')
         
         # Get current user info
-        user_id = session.get('user_id')
-        user_name = session.get('user_fullname', 'Unknown Admin')
+        user_id = request.session.get('user_id')
+        user_name = request.session.get('user_fullname', 'Unknown Admin')
         
         if not user_id:
-            return jsonify({'error': 'User not authenticated'}), 401
+            return JSONResponse(content={'error': 'User not authenticated'}, status_code=401)
         
         db = get_db()
         conn = db.get_connection()
@@ -1606,22 +1626,20 @@ def approve_plan(year, month):
         conn.close()
         
         action = 'freigegeben' if is_approved else 'Freigabe aufgehoben'
-        return jsonify({
+        return {
             'success': True,
             'message': f'Dienstplan für {month:02d}/{year} wurde {action}.'
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_shift_assignment(id):
+@router.put('/api/shifts/assignments/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_shift_assignment(request: Request, id):
     """Update a shift assignment (manual edit)"""
     try:
-        data = request.get_json()
         
         # Validate data types
         try:
@@ -1629,7 +1647,7 @@ def update_shift_assignment(id):
             shift_type_id = int(data.get('shiftTypeId'))
             assignment_date = date.fromisoformat(data.get('date'))
         except (ValueError, TypeError) as e:
-            return jsonify({'error': f'Ungültige Daten: {str(e)}'}), 400
+            return JSONResponse(content={'error': f'Ungültige Daten: {str(e)}'}, status_code=400)
         
         conn = None
         try:
@@ -1644,7 +1662,7 @@ def update_shift_assignment(id):
             """, (id,))
             old_row = cursor.fetchone()
             if not old_row:
-                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+                return JSONResponse(content={'error': 'Schichtzuweisung nicht gefunden'}, status_code=404)
             
             # Update assignment
             cursor.execute("""
@@ -1660,7 +1678,7 @@ def update_shift_assignment(id):
                 1 if data.get('isFixed') else 0,
                 data.get('notes'),
                 datetime.utcnow().isoformat(),
-                session.get('user_email'),
+                request.session.get('user_email'),
                 id
             ))
             
@@ -1684,28 +1702,26 @@ def update_shift_assignment(id):
             
             conn.commit()
             
-            return jsonify({'success': True})
+            return {'success': True}
             
         finally:
             if conn:
                 conn.close()
         
     except Exception as e:
-        current_app.logger.error(f"Update shift assignment error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update shift assignment error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_shift_assignment():
+@router.post('/api/shifts/assignments', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def create_shift_assignment(request: Request):
     """Create a shift assignment manually"""
     try:
-        data = request.get_json()
         
         # Validate required fields
         if not data.get('employeeId') or not data.get('shiftTypeId') or not data.get('date'):
-            return jsonify({'error': 'EmployeeId, ShiftTypeId und Date sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'EmployeeId, ShiftTypeId und Date sind erforderlich'}, status_code=400)
         
         # Validate data types
         try:
@@ -1713,7 +1729,7 @@ def create_shift_assignment():
             shift_type_id = int(data.get('shiftTypeId'))
             assignment_date = date.fromisoformat(data.get('date'))
         except (ValueError, TypeError) as e:
-            return jsonify({'error': f'Ungültige Daten: {str(e)}'}), 400
+            return JSONResponse(content={'error': f'Ungültige Daten: {str(e)}'}, status_code=400)
         
         conn = None
         try:
@@ -1728,7 +1744,7 @@ def create_shift_assignment():
             """, (employee_id, assignment_date.isoformat(), shift_type_id))
             
             if cursor.fetchone():
-                return jsonify({'error': 'Diese Schichtzuweisung existiert bereits'}), 400
+                return JSONResponse(content={'error': 'Diese Schichtzuweisung existiert bereits'}, status_code=400)
             
             # Create assignment
             cursor.execute("""
@@ -1742,7 +1758,7 @@ def create_shift_assignment():
                 1 if data.get('isFixed') else 0,
                 data.get('notes'),
                 datetime.utcnow().isoformat(),
-                session.get('user_email')
+                request.session.get('user_email')
             ))
             
             assignment_id = cursor.lastrowid
@@ -1759,22 +1775,20 @@ def create_shift_assignment():
             
             conn.commit()
             
-            return jsonify({'success': True, 'id': assignment_id}), 201
+            return JSONResponse(content={'success': True, 'id': assignment_id}, status_code=201)
             
         finally:
             if conn:
                 conn.close()
         
     except Exception as e:
-        current_app.logger.error(f"Create shift assignment error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create shift assignment error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_shift_assignment(id):
+@router.delete('/api/shifts/assignments/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def delete_shift_assignment(request: Request, id):
     """Delete a shift assignment"""
     try:
         conn = None
@@ -1791,11 +1805,11 @@ def delete_shift_assignment(id):
             row = cursor.fetchone()
             
             if not row:
-                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+                return JSONResponse(content={'error': 'Schichtzuweisung nicht gefunden'}, status_code=404)
             
             # Warn if trying to delete a fixed assignment
             if row['IsFixed']:
-                return jsonify({'error': 'Fixierte Schichtzuweisungen können nicht gelöscht werden. Bitte erst entsperren.'}), 400
+                return JSONResponse(content={'error': 'Fixierte Schichtzuweisungen können nicht gelöscht werden. Bitte erst entsperren.'}, status_code=400)
             
             # Delete assignment
             cursor.execute("DELETE FROM ShiftAssignments WHERE Id = ?", (id,))
@@ -1810,47 +1824,45 @@ def delete_shift_assignment(id):
             
             conn.commit()
             
-            return jsonify({'success': True})
+            return {'success': True}
             
         finally:
             if conn:
                 conn.close()
         
     except Exception as e:
-        current_app.logger.error(f"Delete shift assignment error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete shift assignment error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/bulk', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def bulk_update_shift_assignments():
+@router.put('/api/shifts/assignments/bulk', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def bulk_update_shift_assignments(request: Request):
     """Bulk update multiple shift assignments"""
     try:
-        data = request.get_json()
         
         # Validate required fields
         if not data.get('shiftIds') or not isinstance(data.get('shiftIds'), list):
-            return jsonify({'error': 'ShiftIds array ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'ShiftIds array ist erforderlich'}, status_code=400)
         
         if not data.get('changes') or not isinstance(data.get('changes'), dict):
-            return jsonify({'error': 'Changes object ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'Changes object ist erforderlich'}, status_code=400)
         
         shift_ids = data['shiftIds']
         changes = data['changes']
         
         if len(shift_ids) == 0:
-            return jsonify({'error': 'Keine Schichten zum Aktualisieren ausgewählt'}), 400
+            return JSONResponse(content={'error': 'Keine Schichten zum Aktualisieren ausgewählt'}, status_code=400)
         
         # Validate that at least one field is being changed
         allowed_fields = {'employeeId', 'shiftTypeId', 'isFixed', 'notes'}
         if not any(key in changes for key in allowed_fields):
-            return jsonify({'error': 'Mindestens ein Feld muss geändert werden'}), 400
+            return JSONResponse(content={'error': 'Mindestens ein Feld muss geändert werden'}, status_code=400)
         
         # Validate that only allowed fields are present
         invalid_fields = set(changes.keys()) - allowed_fields
         if invalid_fields:
-            return jsonify({'error': f'Ungültige Felder: {", ".join(invalid_fields)}'}), 400
+            return JSONResponse(content={'error': f'Ungültige Felder: {", ".join(invalid_fields)}'}, status_code=400)
         
         conn = None
         updated_count = 0
@@ -1872,7 +1884,7 @@ def bulk_update_shift_assignments():
                 # Verify shift exists
                 cursor.execute("SELECT Id FROM ShiftAssignments WHERE Id = ?", (shift_id,))
                 if not cursor.fetchone():
-                    current_app.logger.warning(f"Shift {shift_id} not found, skipping")
+                    logger.warning(f"Shift {shift_id} not found, skipping")
                     continue
                 
                 # Build UPDATE query dynamically based on changes
@@ -1908,7 +1920,7 @@ def bulk_update_shift_assignments():
                 update_fields.append("ModifiedAt = ?")
                 update_fields.append("ModifiedBy = ?")
                 update_values.append(datetime.utcnow().isoformat())
-                update_values.append(session.get('user_email'))
+                update_values.append(request.session.get('user_email'))
                 
                 # Add shift ID as last parameter
                 update_values.append(shift_id)
@@ -1930,7 +1942,7 @@ def bulk_update_shift_assignments():
             
             conn.commit()
             
-            return jsonify({
+            return {
                 'success': True,
                 'updated': updated_count,
                 'total': len(shift_ids)
@@ -1941,17 +1953,16 @@ def bulk_update_shift_assignments():
                 conn.close()
         
     except ValueError as e:
-        current_app.logger.error(f"Bulk update validation error: {str(e)}")
-        return jsonify({'error': f'Validierungsfehler: {str(e)}'}), 400
+        logger.error(f"Bulk update validation error: {str(e)}")
+        return JSONResponse(content={'error': f'Validierungsfehler: {str(e)}'}, status_code=400)
     except Exception as e:
-        current_app.logger.error(f"Bulk update shift assignments error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Bulk update shift assignments error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/<int:id>/toggle-fixed', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def toggle_fixed_assignment(id):
+@router.put('/api/shifts/assignments/{id:int}/toggle-fixed', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def toggle_fixed_assignment(request: Request, id):
     """Toggle the IsFixed flag on an assignment (lock/unlock)"""
     try:
         conn = None
@@ -1965,7 +1976,7 @@ def toggle_fixed_assignment(id):
             row = cursor.fetchone()
             
             if not row:
-                return jsonify({'error': 'Schichtzuweisung nicht gefunden'}), 404
+                return JSONResponse(content={'error': 'Schichtzuweisung nicht gefunden'}, status_code=404)
             
             # Toggle fixed status
             new_fixed_status = 0 if row['IsFixed'] else 1
@@ -1977,13 +1988,13 @@ def toggle_fixed_assignment(id):
             """, (
                 new_fixed_status,
                 datetime.utcnow().isoformat(),
-                session.get('user_email'),
+                request.session.get('user_email'),
                 id
             ))
             
             conn.commit()
             
-            return jsonify({
+            return {
                 'success': True,
                 'isFixed': bool(new_fixed_status)
             })
@@ -1993,23 +2004,23 @@ def toggle_fixed_assignment(id):
                 conn.close()
         
     except Exception as e:
-        current_app.logger.error(f"Toggle fixed assignment error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Sperren/Entsperren: {str(e)}'}), 500
+        logger.error(f"Toggle fixed assignment error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Sperren/Entsperren: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # EXPORT ROUTES
 # ============================================================================
 
-@bp.route('/api/shifts/export/csv', methods=['GET'])
-@limiter.limit("20 per hour")
-def export_schedule_csv():
+@router.get('/api/shifts/export/csv')
+
+def export_schedule_csv(request: Request):
     """Export schedule to CSV format"""
-    start_date_str = request.args.get('startDate')
-    end_date_str = request.args.get('endDate')
+    start_date_str = request.query_params.get('startDate')
+    end_date_str = request.query_params.get('endDate')
     
     if not start_date_str or not end_date_str:
-        return jsonify({'error': 'startDate and endDate are required'}), 400
+        return JSONResponse(content={'error': 'startDate and endDate are required'}, status_code=400)
     
     try:
         start_date = date.fromisoformat(start_date_str)
@@ -2046,14 +2057,11 @@ def export_schedule_csv():
         csv_data = output.getvalue()
         output.close()
         
-        response = make_response(csv_data)
-        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-        response.headers['Content-Disposition'] = f'attachment; filename=Dienstplan_{start_date_str}_bis_{end_date_str}.csv'
-        return response
+        return Response(content=csv_data, media_type='text/csv; charset=utf-8', headers={'Content-Disposition': f'attachment; filename=Dienstplan_{start_date_str}_bis_{end_date_str}.csv'})
         
     except Exception as e:
-        current_app.logger.error(f"CSV export error: {str(e)}")
-        return jsonify({'error': f'Export-Fehler: {str(e)}'}), 500
+        logger.error(f"CSV export error: {str(e)}")
+        return JSONResponse(content={'error': f'Export-Fehler: {str(e)}'}, status_code=500)
 
 
 def _get_shift_color(shift_code: str) -> tuple:
@@ -2210,16 +2218,16 @@ def _get_absence_code(absence_type: int) -> str:
     return codes.get(absence_type, 'U')
 
 
-@bp.route('/api/shifts/export/pdf', methods=['GET'])
-@limiter.limit("20 per hour")
-def export_schedule_pdf():
+@router.get('/api/shifts/export/pdf')
+
+def export_schedule_pdf(request: Request):
     """Export schedule to PDF format matching the UI view structure"""
-    start_date_str = request.args.get('startDate')
-    end_date_str = request.args.get('endDate')
-    view_type = request.args.get('view', 'week')  # week, month, or year
+    start_date_str = request.query_params.get('startDate')
+    end_date_str = request.query_params.get('endDate')
+    view_type = request.query_params.get('view', 'week')  # week, month, or year
     
     if not start_date_str or not end_date_str:
-        return jsonify({'error': 'startDate and endDate are required'}), 400
+        return JSONResponse(content={'error': 'startDate and endDate are required'}, status_code=400)
     
     try:
         start_date = date.fromisoformat(start_date_str)
@@ -2406,30 +2414,26 @@ def export_schedule_pdf():
         
         # Return PDF
         buffer.seek(0)
-        return send_file(
-            buffer,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'Dienstplan_{start_date_str}_bis_{end_date_str}.pdf'
-        )
+        pdf_bytes = buffer.getvalue()
+        return Response(content=pdf_bytes, media_type='application/pdf', headers={'Content-Disposition': f'attachment; filename=Dienstplan_{start_date_str}_bis_{end_date_str}.pdf'})
         
     except Exception as e:
-        current_app.logger.error(f"PDF export error: {str(e)}")
+        logger.error(f"PDF export error: {str(e)}")
         import traceback
-        current_app.logger.error(traceback.format_exc())
-        return jsonify({'error': f'PDF-Export-Fehler: {str(e)}'}), 500
+        logger.error(traceback.format_exc())
+        return JSONResponse(content={'error': f'PDF-Export-Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/export/excel', methods=['GET'])
-@limiter.limit("20 per hour")
-def export_schedule_excel():
+@router.get('/api/shifts/export/excel')
+
+def export_schedule_excel(request: Request):
     """Export schedule to Excel format matching the UI view structure"""
-    start_date_str = request.args.get('startDate')
-    end_date_str = request.args.get('endDate')
-    view_type = request.args.get('view', 'week')  # week, month, or year
+    start_date_str = request.query_params.get('startDate')
+    end_date_str = request.query_params.get('endDate')
+    view_type = request.query_params.get('view', 'week')  # week, month, or year
     
     if not start_date_str or not end_date_str:
-        return jsonify({'error': 'startDate and endDate are required'}), 400
+        return JSONResponse(content={'error': 'startDate and endDate are required'}, status_code=400)
     
     try:
         # Import Excel library
@@ -2437,7 +2441,7 @@ def export_schedule_excel():
             import openpyxl
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         except ImportError:
-            return jsonify({
+            return {
                 'error': 'Excel-Export erfordert openpyxl. Bitte installieren Sie es mit: pip install openpyxl'
             }), 501
         
@@ -2592,26 +2596,23 @@ def export_schedule_excel():
         output.seek(0)
         
         # Return Excel file
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=f'Dienstplan_{start_date_str}_bis_{end_date_str}.xlsx'
-        )
+        xl_bytes = output.getvalue()
+        return Response(content=xl_bytes, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': f'attachment; filename=Dienstplan_{start_date_str}_bis_{end_date_str}.xlsx'})
         
     except Exception as e:
-        current_app.logger.error(f"Excel export error: {str(e)}")
+        logger.error(f"Excel export error: {str(e)}")
         import traceback
-        current_app.logger.error(traceback.format_exc())
-        return jsonify({'error': f'Excel-Export-Fehler: {str(e)}'}), 500
+        logger.error(traceback.format_exc())
+        return JSONResponse(content={'error': f'Excel-Export-Fehler: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # SHIFT EXCHANGE ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/shiftexchanges/available', methods=['GET'])
-def get_available_shift_exchanges():
+@router.get('/api/shiftexchanges/available')
+
+def get_available_shift_exchanges(request: Request):
     """Get available shift exchanges"""
     db = get_db()
     conn = db.get_connection()
@@ -2647,12 +2648,12 @@ def get_available_shift_exchanges():
         })
     
     conn.close()
-    return jsonify(exchanges)
+    return exchanges
 
 
-@bp.route('/api/shiftexchanges/pending', methods=['GET'])
-@require_role('Admin')
-def get_pending_shift_exchanges():
+@router.get('/api/shiftexchanges/pending', dependencies=[Depends(require_role('Admin'))])
+
+def get_pending_shift_exchanges(request: Request):
     """Get pending shift exchanges (Admin only)"""
     db = get_db()
     conn = db.get_connection()
@@ -2691,19 +2692,17 @@ def get_pending_shift_exchanges():
         })
     
     conn.close()
-    return jsonify(exchanges)
+    return exchanges
 
 
-@bp.route('/api/shiftexchanges', methods=['POST'])
-@require_auth
-@require_csrf
-def create_shift_exchange():
+@router.post('/api/shiftexchanges', dependencies=[Depends(require_auth), Depends(check_csrf)])
+
+def create_shift_exchange(request: Request):
     """Create new shift exchange offer"""
     try:
-        data = request.get_json()
         
         if not data.get('shiftAssignmentId') or not data.get('offeringEmployeeId'):
-            return jsonify({'error': 'ShiftAssignmentId und OfferingEmployeeId sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'ShiftAssignmentId und OfferingEmployeeId sind erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -2724,24 +2723,22 @@ def create_shift_exchange():
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': exchange_id}), 201
+        return JSONResponse(content={'success': True, 'id': exchange_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create shift exchange error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create shift exchange error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shiftexchanges/<int:id>/request', methods=['POST'])
-@require_auth
-@require_csrf
-def request_shift_exchange(id):
+@router.post('/api/shiftexchanges/{id:int}/request', dependencies=[Depends(require_auth), Depends(check_csrf)])
+
+def request_shift_exchange(request: Request, id):
     """Request a shift exchange"""
     try:
-        data = request.get_json()
         requesting_employee_id = data.get('requestingEmployeeId')
         
         if not requesting_employee_id:
-            return jsonify({'error': 'RequestingEmployeeId ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'RequestingEmployeeId ist erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -2755,30 +2752,28 @@ def request_shift_exchange(id):
         
         if cursor.rowcount == 0:
             conn.close()
-            return jsonify({'error': 'Tauschangebot nicht verfügbar'}), 404
+            return JSONResponse(content={'error': 'Tauschangebot nicht verfügbar'}, status_code=404)
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Request shift exchange error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Anfragen: {str(e)}'}), 500
+        logger.error(f"Request shift exchange error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Anfragen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shiftexchanges/<int:id>/process', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def process_shift_exchange(id):
+@router.put('/api/shiftexchanges/{id:int}/process', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def process_shift_exchange(request: Request, id):
     """Process shift exchange (approve/reject)"""
     try:
-        data = request.get_json()
         status = data.get('status')
         notes = data.get('notes')
         
         if status not in ['Genehmigt', 'Abgelehnt']:
-            return jsonify({'error': 'Status muss Genehmigt oder Abgelehnt sein'}), 400
+            return JSONResponse(content={'error': 'Status muss Genehmigt oder Abgelehnt sein'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -2794,7 +2789,7 @@ def process_shift_exchange(id):
         row = cursor.fetchone()
         if not row:
             conn.close()
-            return jsonify({'error': 'Tauschangebot nicht gefunden oder bereits bearbeitet'}), 404
+            return JSONResponse(content={'error': 'Tauschangebot nicht gefunden oder bereits bearbeitet'}, status_code=404)
         
         shift_assignment_id = row['ShiftAssignmentId']
         requesting_employee_id = row['RequestingEmployeeId']
@@ -2808,7 +2803,7 @@ def process_shift_exchange(id):
             status,
             notes,
             datetime.utcnow().isoformat(),
-            session.get('user_email'),
+            request.session.get('user_email'),
             id
         ))
         
@@ -2821,15 +2816,15 @@ def process_shift_exchange(id):
             """, (
                 requesting_employee_id,
                 datetime.utcnow().isoformat(),
-                session.get('user_email'),
+                request.session.get('user_email'),
                 shift_assignment_id
             ))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Process shift exchange error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Bearbeiten: {str(e)}'}), 500
+        logger.error(f"Process shift exchange error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Bearbeiten: {str(e)}'}, status_code=500)

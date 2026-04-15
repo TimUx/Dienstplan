@@ -2,17 +2,21 @@
 Absences Blueprint: absences, absence types, vacation requests, vacation year approvals/plan.
 """
 
-from flask import Blueprint, jsonify, request, session, current_app
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse
 from datetime import datetime
 import json
+import logging
 
-from .shared import get_db, require_auth, require_role, log_audit, limiter, require_csrf, get_absence_type_defaults
+from .shared import get_db, require_auth, require_role, log_audit, require_csrf, get_absence_type_defaults, check_csrf, parse_json_body
 
-bp = Blueprint('absences', __name__)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
 
 
-@bp.route('/api/absences', methods=['GET'])
-def get_absences():
+@router.get('/api/absences')
+def get_absences(request: Request):
     """Get all absences with their type information"""
     db = get_db()
     conn = db.get_connection()
@@ -58,26 +62,22 @@ def get_absences():
         })
     
     conn.close()
-    return jsonify(absences)
+    return absences
 
 
-@bp.route('/api/absences', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_absence():
+@router.post('/api/absences', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_absence(request: Request, data: dict = Depends(parse_json_body)):
     """Create new absence with support for custom absence types"""
     try:
-        data = request.get_json()
-        
         # Support both legacy 'type' and new 'absenceTypeId'
         absence_type_id = data.get('absenceTypeId')
         legacy_type = data.get('type')
         
         if not data.get('employeeId') or not data.get('startDate') or not data.get('endDate'):
-            return jsonify({'error': 'EmployeeId, StartDate und EndDate sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'EmployeeId, StartDate und EndDate sind erforderlich'}, status_code=400)
         
         if not absence_type_id and not legacy_type:
-            return jsonify({'error': 'AbsenceTypeId oder Type ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'AbsenceTypeId oder Type ist erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -90,7 +90,7 @@ def create_absence():
             type_row = cursor.fetchone()
             if not type_row:
                 conn.close()
-                return jsonify({'error': 'Ungültiger Abwesenheitstyp'}), 400
+                return JSONResponse(content={'error': 'Ungültiger Abwesenheitstyp'}, status_code=400)
             
             # Determine legacy type from code for backward compatibility
             type_code = type_row['Code']
@@ -118,7 +118,7 @@ def create_absence():
             data.get('endDate'),
             data.get('notes'),
             datetime.utcnow().isoformat(),
-            session.get('user_email')
+            request.session.get('user_email')
         ))
         
         absence_id = cursor.lastrowid
@@ -132,7 +132,7 @@ def create_absence():
             'endDate': data.get('endDate'),
             'notes': data.get('notes')
         }, ensure_ascii=False)
-        log_audit(conn, 'Absence', absence_id, 'Created', changes)
+        log_audit(conn, 'Absence', absence_id, 'Created', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         # Check for understaffing and create notifications
         try:
@@ -148,11 +148,11 @@ def create_absence():
                 start_date_obj,
                 end_date_obj,
                 data.get('type'),
-                session.get('user_email')
+                request.session.get('user_email')
             )
             
             if notification_ids:
-                current_app.logger.info(f"Created {len(notification_ids)} understaffing notifications for absence {absence_id}")
+                logger.info(f"Created {len(notification_ids)} understaffing notifications for absence {absence_id}")
             
             # Automatically assign replacements for affected shifts
             from springer_replacement import process_absence_with_springer_assignment
@@ -163,18 +163,18 @@ def create_absence():
                 start_date_obj,
                 end_date_obj,
                 data.get('type'),
-                session.get('user_email')
+                request.session.get('user_email')
             )
             
             # Log shift removal and replacement assignments
             shifts_removed = replacement_results.get('shiftsRemoved', 0)
             if shifts_removed > 0:
-                current_app.logger.info(
+                logger.info(
                     f"Removed {shifts_removed} shift assignment(s) for absent employee (Absence ID: {absence_id})"
                 )
             
             if replacement_results['assignmentsCreated'] > 0:
-                current_app.logger.info(
+                logger.info(
                     f"Automatically assigned {replacement_results['assignmentsCreated']} replacements "
                     f"for {replacement_results['shiftsNeedingCoverage']} affected shifts (Absence ID: {absence_id})"
                 )
@@ -183,7 +183,7 @@ def create_absence():
                 conn.commit()
                 conn.close()
                 
-                return jsonify({
+                return JSONResponse(content={
                     'success': True,
                     'id': absence_id,
                     'replacementAssignments': {
@@ -193,27 +193,24 @@ def create_absence():
                         'shiftsRemoved': shifts_removed,
                         'details': replacement_results['details']
                     }
-                }), 201
+                }, status_code=201)
                 
         except Exception as notif_error:
             # Log notification error but don't fail the absence creation
-            current_app.logger.error(f"Error processing absence notifications/replacements: {notif_error}")
+            logger.error(f"Error processing absence notifications/replacements: {notif_error}")
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': absence_id}), 201
+        return JSONResponse(content={'success': True, 'id': absence_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create absence error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create absence error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/absences/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_absence(id):
+@router.delete('/api/absences/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_absence(request: Request, id: int):
     """Delete an absence"""
     try:
         db = get_db()
@@ -229,7 +226,7 @@ def delete_absence(id):
         
         if not absence_row:
             conn.close()
-            return jsonify({'error': 'Abwesenheit nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Abwesenheit nicht gefunden'}, status_code=404)
         
         cursor.execute("DELETE FROM Absences WHERE Id = ?", (id,))
         
@@ -240,24 +237,24 @@ def delete_absence(id):
             'startDate': absence_row['StartDate'],
             'endDate': absence_row['EndDate']
         }, ensure_ascii=False)
-        log_audit(conn, 'Absence', id, 'Deleted', changes)
+        log_audit(conn, 'Absence', id, 'Deleted', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete absence error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete absence error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # ABSENCE TYPE ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/absencetypes', methods=['GET'])
-def get_absence_types():
+@router.get('/api/absencetypes')
+def get_absence_types(request: Request):
     """Get all absence types (system and custom)"""
     db = get_db()
     conn = db.get_connection()
@@ -284,24 +281,20 @@ def get_absence_types():
         })
     
     conn.close()
-    return jsonify(absence_types)
+    return absence_types
 
 
-@bp.route('/api/absencetypes', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_absence_type():
+@router.post('/api/absencetypes', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_absence_type(request: Request, data: dict = Depends(parse_json_body)):
     """Create new custom absence type (Admin only)"""
     try:
-        data = request.get_json()
-        
         if not data.get('name') or not data.get('code'):
-            return jsonify({'error': 'Name und Code sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'Name und Code sind erforderlich'}, status_code=400)
         
         # Validate code doesn't conflict with system types
         code = data.get('code').upper()
         if code in ['U', 'AU', 'L']:
-            return jsonify({'error': 'Code U, AU und L sind für Systemtypen reserviert'}), 400
+            return JSONResponse(content={'error': 'Code U, AU und L sind für Systemtypen reserviert'}, status_code=400)
         
         # Set default color if not provided
         color_code = data.get('colorCode', '#E0E0E0')
@@ -314,7 +307,7 @@ def create_absence_type():
         cursor.execute("SELECT Id FROM AbsenceTypes WHERE Code = ?", (code,))
         if cursor.fetchone():
             conn.close()
-            return jsonify({'error': f'Ein Abwesenheitstyp mit dem Kürzel "{code}" existiert bereits'}), 400
+            return JSONResponse(content={'error': f'Ein Abwesenheitstyp mit dem Kürzel "{code}" existiert bereits'}, status_code=400)
         
         cursor.execute("""
             INSERT INTO AbsenceTypes 
@@ -325,7 +318,7 @@ def create_absence_type():
             code,
             color_code,
             datetime.utcnow().isoformat(),
-            session.get('user_email')
+            request.session.get('user_email')
         ))
         
         absence_type_id = cursor.lastrowid
@@ -336,26 +329,22 @@ def create_absence_type():
             'code': code,
             'colorCode': color_code
         }, ensure_ascii=False)
-        log_audit(conn, 'AbsenceType', absence_type_id, 'Created', changes)
+        log_audit(conn, 'AbsenceType', absence_type_id, 'Created', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': absence_type_id}), 201
+        return JSONResponse(content={'success': True, 'id': absence_type_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create absence type error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create absence type error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/absencetypes/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_absence_type(id):
+@router.put('/api/absencetypes/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_absence_type(request: Request, id: int, data: dict = Depends(parse_json_body)):
     """Update custom absence type (Admin only)"""
     try:
-        data = request.get_json()
-        
         db = get_db()
         conn = db.get_connection()
         cursor = conn.cursor()
@@ -366,11 +355,11 @@ def update_absence_type(id):
         
         if not type_row:
             conn.close()
-            return jsonify({'error': 'Abwesenheitstyp nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Abwesenheitstyp nicht gefunden'}, status_code=404)
         
         if type_row['IsSystemType']:
             conn.close()
-            return jsonify({'error': 'Systemtypen (U, AU, L) können nicht geändert werden'}), 400
+            return JSONResponse(content={'error': 'Systemtypen (U, AU, L) können nicht geändert werden'}, status_code=400)
         
         # Build update query dynamically based on provided fields
         update_fields = []
@@ -384,13 +373,13 @@ def update_absence_type(id):
             new_code = data.get('code').upper()
             if new_code in ['U', 'AU', 'L']:
                 conn.close()
-                return jsonify({'error': 'Code U, AU und L sind für Systemtypen reserviert'}), 400
+                return JSONResponse(content={'error': 'Code U, AU und L sind für Systemtypen reserviert'}, status_code=400)
             
             # Check if code already exists for a different type
             cursor.execute("SELECT Id FROM AbsenceTypes WHERE Code = ? AND Id != ?", (new_code, id))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': f'Ein Abwesenheitstyp mit dem Kürzel "{new_code}" existiert bereits'}), 400
+                return JSONResponse(content={'error': f'Ein Abwesenheitstyp mit dem Kürzel "{new_code}" existiert bereits'}, status_code=400)
             
             update_fields.append("Code = ?")
             params.append(new_code)
@@ -401,13 +390,13 @@ def update_absence_type(id):
         
         if not update_fields:
             conn.close()
-            return jsonify({'error': 'Keine Felder zum Aktualisieren'}), 400
+            return JSONResponse(content={'error': 'Keine Felder zum Aktualisieren'}, status_code=400)
         
         update_fields.append("ModifiedAt = ?")
         params.append(datetime.utcnow().isoformat())
         
         update_fields.append("ModifiedBy = ?")
-        params.append(session.get('user_email'))
+        params.append(request.session.get('user_email'))
         
         params.append(id)
         
@@ -418,23 +407,20 @@ def update_absence_type(id):
         """, params)
         
         # Log audit entry
-        log_audit(conn, 'AbsenceType', id, 'Updated', json.dumps(data, ensure_ascii=False))
+        log_audit(conn, 'AbsenceType', id, 'Updated', json.dumps(data, ensure_ascii=False), user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update absence type error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update absence type error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/absencetypes/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_absence_type(id):
+@router.delete('/api/absencetypes/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_absence_type(request: Request, id: int):
     """Delete custom absence type (Admin only)"""
     try:
         db = get_db()
@@ -447,11 +433,11 @@ def delete_absence_type(id):
         
         if not type_row:
             conn.close()
-            return jsonify({'error': 'Abwesenheitstyp nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Abwesenheitstyp nicht gefunden'}, status_code=404)
         
         if type_row['IsSystemType']:
             conn.close()
-            return jsonify({'error': 'Systemtypen (U, AU, L) können nicht gelöscht werden'}), 400
+            return JSONResponse(content={'error': 'Systemtypen (U, AU, L) können nicht gelöscht werden'}, status_code=400)
         
         # Check if any absences use this type
         cursor.execute("SELECT COUNT(*) FROM Absences WHERE AbsenceTypeId = ?", (id,))
@@ -459,9 +445,9 @@ def delete_absence_type(id):
         
         if usage_count > 0:
             conn.close()
-            return jsonify({
+            return JSONResponse(content={
                 'error': f'Dieser Abwesenheitstyp kann nicht gelöscht werden, da er von {usage_count} Abwesenheit(en) verwendet wird'
-            }), 400
+            }, status_code=400)
         
         cursor.execute("DELETE FROM AbsenceTypes WHERE Id = ?", (id,))
         
@@ -470,26 +456,26 @@ def delete_absence_type(id):
             'code': type_row['Code'],
             'name': type_row['Name']
         }, ensure_ascii=False)
-        log_audit(conn, 'AbsenceType', id, 'Deleted', changes)
+        log_audit(conn, 'AbsenceType', id, 'Deleted', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete absence type error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete absence type error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # VACATION REQUEST ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/vacationrequests', methods=['GET'])
-def get_vacation_requests():
+@router.get('/api/vacationrequests')
+def get_vacation_requests(request: Request):
     """Get all vacation requests or pending ones"""
-    status_filter = request.args.get('status')
+    status_filter = request.query_params.get('status')
     
     db = get_db()
     conn = db.get_connection()
@@ -528,19 +514,15 @@ def get_vacation_requests():
         })
     
     conn.close()
-    return jsonify(requests)
+    return requests
 
 
-@bp.route('/api/vacationrequests', methods=['POST'])
-@require_auth
-@require_csrf
-def create_vacation_request():
+@router.post('/api/vacationrequests', dependencies=[Depends(require_auth), Depends(check_csrf)])
+def create_vacation_request(request: Request, data: dict = Depends(parse_json_body)):
     """Create new vacation request"""
     try:
-        data = request.get_json()
-        
         if not data.get('employeeId') or not data.get('startDate') or not data.get('endDate'):
-            return jsonify({'error': 'EmployeeId, StartDate und EndDate sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'EmployeeId, StartDate und EndDate sind erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -556,32 +538,29 @@ def create_vacation_request():
             data.get('endDate'),
             data.get('notes'),
             datetime.utcnow().isoformat(),
-            session.get('user_email')
+            request.session.get('user_email')
         ))
         
         request_id = cursor.lastrowid
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': request_id}), 201
+        return JSONResponse(content={'success': True, 'id': request_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create vacation request error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create vacation request error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacationrequests/<int:id>/status', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_vacation_request_status(id):
+@router.put('/api/vacationrequests/{id}/status', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_vacation_request_status(request: Request, id: int, data: dict = Depends(parse_json_body)):
     """Update vacation request status (Admin only)"""
     try:
-        data = request.get_json()
         status = data.get('status')
         response = data.get('response')
         
         if status not in ['Genehmigt', 'Abgelehnt', 'InBearbeitung']:
-            return jsonify({'error': 'Ungültiger Status'}), 400
+            return JSONResponse(content={'error': 'Ungültiger Status'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -595,25 +574,22 @@ def update_vacation_request_status(id):
             status,
             response,
             datetime.utcnow().isoformat(),
-            session.get('user_email'),
+            request.session.get('user_email'),
             id
         ))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update vacation request error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update vacation request error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacationrequests/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_vacation_request(id):
+@router.delete('/api/vacationrequests/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_vacation_request(request: Request, id: int):
     """Delete vacation request (Admin only) - allows cancellation of approved requests"""
     try:
         db = get_db()
@@ -631,7 +607,7 @@ def delete_vacation_request(id):
         row = cursor.fetchone()
         if not row:
             conn.close()
-            return jsonify({'error': 'Urlaubsantrag nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Urlaubsantrag nicht gefunden'}, status_code=404)
         
         employee_name = f"{row['Vorname']} {row['Name']}"
         status = row['Status']
@@ -646,24 +622,24 @@ def delete_vacation_request(id):
             'endDate': row['EndDate'],
             'status': status
         }, ensure_ascii=False)
-        log_audit(conn, 'VacationRequest', id, 'Deleted', changes)
+        log_audit(conn, 'VacationRequest', id, 'Deleted', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete vacation request error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete vacation request error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # VACATION YEAR APPROVAL ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/vacationyearapprovals', methods=['GET'])
-def get_vacation_year_approvals():
+@router.get('/api/vacationyearapprovals')
+def get_vacation_year_approvals(request: Request):
     """Get all vacation year approvals"""
     db = get_db()
     conn = db.get_connection()
@@ -688,11 +664,11 @@ def get_vacation_year_approvals():
         })
     
     conn.close()
-    return jsonify(approvals)
+    return approvals
 
 
-@bp.route('/api/vacationyearapprovals/<int:year>', methods=['GET'])
-def get_vacation_year_approval(year):
+@router.get('/api/vacationyearapprovals/{year}')
+def get_vacation_year_approval(request: Request, year: int):
     """Get vacation year approval status for a specific year"""
     db = get_db()
     conn = db.get_connection()
@@ -706,13 +682,13 @@ def get_vacation_year_approval(year):
     conn.close()
     
     if not row:
-        return jsonify({
+        return {
             'year': year,
             'isApproved': False,
             'exists': False
-        })
+        }
     
-    return jsonify({
+    return {
         'id': row['Id'],
         'year': row['Year'],
         'isApproved': bool(row['IsApproved']),
@@ -722,22 +698,19 @@ def get_vacation_year_approval(year):
         'modifiedAt': row['ModifiedAt'],
         'notes': row['Notes'],
         'exists': True
-    })
+    }
 
 
-@bp.route('/api/vacationyearapprovals', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_or_update_vacation_year_approval():
+@router.post('/api/vacationyearapprovals', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_or_update_vacation_year_approval(request: Request, data: dict = Depends(parse_json_body)):
     """Create or update vacation year approval (Admin only)"""
     try:
-        data = request.get_json()
         year = data.get('year')
         is_approved = data.get('isApproved', False)
         notes = data.get('notes')
         
         if not year:
-            return jsonify({'error': 'Jahr ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'Jahr ist erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -763,7 +736,7 @@ def create_or_update_vacation_year_approval():
             """, (
                 1 if is_approved else 0,
                 datetime.utcnow().isoformat() if is_approved else None,
-                session.get('user_email') if is_approved else None,
+                request.session.get('user_email') if is_approved else None,
                 datetime.utcnow().isoformat(),
                 notes,
                 year
@@ -781,7 +754,7 @@ def create_or_update_vacation_year_approval():
                 year,
                 1 if is_approved else 0,
                 datetime.utcnow().isoformat() if is_approved else None,
-                session.get('user_email') if is_approved else None,
+                request.session.get('user_email') if is_approved else None,
                 datetime.utcnow().isoformat(),
                 notes
             ))
@@ -795,20 +768,20 @@ def create_or_update_vacation_year_approval():
             'isApproved': is_approved,
             'notes': notes
         }, ensure_ascii=False)
-        log_audit(conn, 'VacationYearApproval', approval_id, action, changes)
+        log_audit(conn, 'VacationYearApproval', approval_id, action, changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': approval_id, 'year': year}), 201
+        return JSONResponse(content={'success': True, 'id': approval_id, 'year': year}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create/update vacation year approval error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Speichern: {str(e)}'}), 500
+        logger.error(f"Create/update vacation year approval error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Speichern: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacationyearplan/<int:year>', methods=['GET'])
-def get_vacation_year_plan(year):
+@router.get('/api/vacationyearplan/{year}')
+def get_vacation_year_plan(request: Request, year: int):
     """
     Get vacation plan for a specific year.
     Returns vacation data only if the year is approved by admin.
@@ -828,12 +801,12 @@ def get_vacation_year_plan(year):
     # If year is not approved, return empty data
     if not approval_row or not approval_row['IsApproved']:
         conn.close()
-        return jsonify({
+        return {
             'year': year,
             'isApproved': False,
             'vacations': [],
             'message': 'Urlaubsdaten für dieses Jahr wurden noch nicht freigegeben.'
-        })
+        }
     
     # Get all vacation data for the year (from VacationRequests and Absences)
     start_date = f"{year}-01-01"
@@ -913,9 +886,9 @@ def get_vacation_year_plan(year):
     
     conn.close()
     
-    return jsonify({
+    return {
         'year': year,
         'isApproved': True,
         'vacationRequests': vacation_requests,
         'absences': absences
-    })
+    }

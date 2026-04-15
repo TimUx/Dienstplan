@@ -1,56 +1,58 @@
 """
-Authentication Blueprint: login, logout, users, roles, password management.
+Authentication Router: login, logout, users, roles, password management.
 """
 
-from flask import Blueprint, jsonify, request, session, current_app
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
 import json
+import logging
 import secrets
 
 from .shared import (
     get_db, require_auth, require_role, log_audit, limiter,
-    hash_password, verify_password, get_employee_by_email, require_csrf
+    hash_password, verify_password, get_employee_by_email, require_csrf,
+    check_csrf, parse_json_body
 )
 
-bp = Blueprint('auth', __name__)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
 
 
-@bp.route('/api/csrf-token', methods=['GET'])
-def get_csrf_token():
+@router.get('/api/csrf-token')
+def get_csrf_token(request: Request):
     from .shared import generate_csrf_token
-    return jsonify({'token': generate_csrf_token()})
+    return {'token': generate_csrf_token(request)}
 
 
-@bp.route('/api/auth/login', methods=['POST'])
-@limiter.limit("5 per minute")
-@require_csrf
-def login():
+@router.post('/api/auth/login', dependencies=[Depends(check_csrf)])
+def login(request: Request, data: dict = Depends(parse_json_body)):
     """Authenticate employee and create session"""
     try:
-        data = request.get_json()
         email = data.get('email')
         password = data.get('password')
         remember_me = data.get('rememberMe', False)
         
         if not email or not password:
-            return jsonify({'error': 'Email und Passwort sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'Email und Passwort sind erforderlich'}, status_code=400)
         
         db = get_db()
         # Get employee from database (employees now have auth data)
         employee = get_employee_by_email(db, email)
         
         if not employee:
-            return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
+            return JSONResponse(content={'error': 'Ung\u00fcltige Anmeldedaten'}, status_code=401)
         
         # Check if password is set
         if not employee.get('passwordHash'):
-            return jsonify({'error': 'Kein Passwort gesetzt. Bitte Administrator kontaktieren.'}), 401
+            return JSONResponse(content={'error': 'Kein Passwort gesetzt. Bitte Administrator kontaktieren.'}, status_code=401)
         
         # Check if account is locked
         if employee['lockoutEnd']:
             lockout_end = datetime.fromisoformat(employee['lockoutEnd'])
             if lockout_end > datetime.utcnow():
-                return jsonify({'error': 'Konto ist gesperrt'}), 403
+                return JSONResponse(content={'error': 'Konto ist gesperrt'}, status_code=403)
         
         # Verify password
         if not verify_password(password, employee['passwordHash']):
@@ -65,7 +67,7 @@ def login():
             conn.commit()
             conn.close()
             
-            return jsonify({'error': 'Ungültige Anmeldedaten'}), 401
+            return JSONResponse(content={'error': 'Ung\u00fcltige Anmeldedaten'}, status_code=401)
         
         # Reset failed attempts on successful login and migrate legacy SHA256
         # hash to bcrypt transparently so the next login uses the stronger hash.
@@ -90,13 +92,13 @@ def login():
         conn.close()
         
         # Create session
-        session['user_id'] = employee['id']
-        session['user_email'] = employee['email']
-        session['user_fullname'] = employee['fullName']
-        session['user_roles'] = employee['roles']
+        request.session['user_id'] = employee['id']
+        request.session['user_email'] = employee['email']
+        request.session['user_fullname'] = employee['fullName']
+        request.session['user_roles'] = employee['roles']
         
         if remember_me:
-            session.permanent = True
+            request.session['_permanent'] = True
         
         conn2 = db.get_connection()
         cursor2 = conn2.cursor()
@@ -105,7 +107,7 @@ def login():
         conn2.close()
         must_change = bool(row_mcp and row_mcp[0])
 
-        return jsonify({
+        return {
             'success': True,
             'requiresPasswordChange': must_change,
             'user': {
@@ -113,54 +115,52 @@ def login():
                 'fullName': employee['fullName'],
                 'roles': employee['roles']
             }
-        })
+        }
         
     except Exception as e:
-        current_app.logger.error(f"Login error: {str(e)}")
-        return jsonify({'error': 'Anmeldefehler aufgetreten'}), 500
+        logger.error(f"Login error: {str(e)}")
+        return JSONResponse(content={'error': 'Anmeldefehler aufgetreten'}, status_code=500)
 
 
-@bp.route('/api/auth/logout', methods=['POST'])
-@require_csrf
-def logout():
+@router.post('/api/auth/logout', dependencies=[Depends(check_csrf)])
+def logout(request: Request):
     """Logout user and clear session"""
-    session.clear()
-    return jsonify({'success': True})
+    request.session.clear()
+    return {'success': True}
 
 
-@bp.route('/api/auth/current-user', methods=['GET'])
-def get_current_user():
+@router.get('/api/auth/current-user')
+def get_current_user(request: Request):
     """Get currently authenticated user"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
+    if 'user_id' not in request.session:
+        return JSONResponse(content={'error': 'Not authenticated'}, status_code=401)
 
-    user_roles = session.get('user_roles')
-    # Session created before user_roles were stored (old cookie) – reload from DB
+    user_roles = request.session.get('user_roles')
+    # Session created before user_roles were stored (old cookie) \u2013 reload from DB
     if user_roles is None:
         try:
             db = get_db()
-            employee = get_employee_by_email(db, session.get('user_email', ''))
+            employee = get_employee_by_email(db, request.session.get('user_email', ''))
             if employee:
                 user_roles = employee['roles']
-                session['user_roles'] = user_roles
-                if not session.get('user_fullname'):
-                    session['user_fullname'] = employee['fullName']
+                request.session['user_roles'] = user_roles
+                if not request.session.get('user_fullname'):
+                    request.session['user_fullname'] = employee['fullName']
             else:
                 user_roles = []
         except Exception as e:
-            current_app.logger.warning(f"Could not reload user roles: {e}")
+            logger.warning(f"Could not reload user roles: {e}")
             user_roles = []
 
-    return jsonify({
-        'email': session.get('user_email'),
-        'fullName': session.get('user_fullname'),
+    return {
+        'email': request.session.get('user_email'),
+        'fullName': request.session.get('user_fullname'),
         'roles': user_roles
-    })
+    }
 
 
-@bp.route('/api/users', methods=['GET'])
-@require_role('Admin')
-def get_all_users():
+@router.get('/api/users', dependencies=[Depends(require_role('Admin'))])
+def get_all_users(request: Request):
     """Get all employees with authentication/roles (Admin only)"""
     db = get_db()
     conn = db.get_connection()
@@ -207,12 +207,11 @@ def get_all_users():
         })
     
     conn.close()
-    return jsonify(users)
+    return users
 
 
-@bp.route('/api/users/<int:user_id>', methods=['GET'])
-@require_role('Admin')
-def get_user(user_id):
+@router.get('/api/users/{user_id}', dependencies=[Depends(require_role('Admin'))])
+def get_user(request: Request, user_id: int):
     """Get single employee/user by ID (Admin only)"""
     db = get_db()
     conn = db.get_connection()
@@ -233,9 +232,9 @@ def get_user(user_id):
     conn.close()
     
     if not row:
-        return jsonify({'error': 'Mitarbeiter/Benutzer nicht gefunden'}), 404
+        return JSONResponse(content={'error': 'Mitarbeiter/Benutzer nicht gefunden'}, status_code=404)
     
-    return jsonify({
+    return {
         'id': row['Id'],
         'email': row['Email'],
         'vorname': row['Vorname'],
@@ -255,17 +254,13 @@ def get_user(user_id):
         'isBrandschutzbeauftragter': bool(row['IsBrandschutzbeauftragter']),
         'isTdQualified': bool(row['IsTdQualified']),
         'isTeamLeader': bool(row['IsTeamLeader'])
-    })
+    }
 
 
-@bp.route('/api/users', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_user():
+@router.post('/api/users', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_user(request: Request, data: dict = Depends(parse_json_body)):
     """Create new employee with authentication credentials (Admin only)"""
     try:
-        data = request.get_json()
-        
         # Required fields
         vorname = data.get('vorname')
         name = data.get('name')
@@ -288,10 +283,10 @@ def create_user():
         
         # Validation
         if not vorname or not name or not personalnummer:
-            return jsonify({'error': 'Vorname, Name und Personalnummer sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'Vorname, Name und Personalnummer sind erforderlich'}, status_code=400)
         
         if email and not password:
-            return jsonify({'error': 'Passwort ist erforderlich wenn E-Mail angegeben wird'}), 400
+            return JSONResponse(content={'error': 'Passwort ist erforderlich wenn E-Mail angegeben wird'}, status_code=400)
         
         # Validate roles
         valid_roles = ['Admin', 'Mitarbeiter', 'Disponent']
@@ -299,7 +294,7 @@ def create_user():
             roles = [roles]
         for role in roles:
             if role not in valid_roles:
-                return jsonify({'error': f'Ungültige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}), 400
+                return JSONResponse(content={'error': f'Ung\u00fcltige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -309,14 +304,14 @@ def create_user():
         cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ?", (personalnummer,))
         if cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Personalnummer bereits vorhanden'}), 400
+            return JSONResponse(content={'error': 'Personalnummer bereits vorhanden'}, status_code=400)
         
         # Check if email already exists
         if email:
             cursor.execute("SELECT Id FROM Employees WHERE Email = ?", (email,))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
+                return JSONResponse(content={'error': 'E-Mail wird bereits verwendet'}, status_code=400)
         
         # Create employee with authentication data
         password_hash = hash_password(password) if password else None
@@ -362,26 +357,23 @@ def create_user():
             'teamId': team_id,
             'roles': roles
         }, ensure_ascii=False)
-        log_audit(conn, 'Employee', employee_id, 'Created', changes)
+        log_audit(conn, 'Employee', employee_id, 'Created', changes,
+                  user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'userId': employee_id, 'employeeId': employee_id}), 201
+        return JSONResponse(content={'success': True, 'userId': employee_id, 'employeeId': employee_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create employee/user error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create employee/user error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/users/<int:user_id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_user(user_id):
+@router.put('/api/users/{user_id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_user(request: Request, user_id: int, data: dict = Depends(parse_json_body)):
     """Update employee with authentication data (Admin only)"""
     try:
-        data = request.get_json()
-        
         # Employee data
         vorname = data.get('vorname')
         name = data.get('name')
@@ -402,7 +394,7 @@ def update_user(user_id):
         
         # Validation
         if not vorname or not name or not personalnummer:
-            return jsonify({'error': 'Vorname, Name und Personalnummer sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'Vorname, Name und Personalnummer sind erforderlich'}, status_code=400)
         
         # Validate roles
         valid_roles = ['Admin', 'Mitarbeiter', 'Disponent']
@@ -410,7 +402,7 @@ def update_user(user_id):
             roles = [roles]
         for role in roles:
             if role not in valid_roles:
-                return jsonify({'error': f'Ungültige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}), 400
+                return JSONResponse(content={'error': f'Ung\u00fcltige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -424,21 +416,21 @@ def update_user(user_id):
         old_row = cursor.fetchone()
         if not old_row:
             conn.close()
-            return jsonify({'error': 'Mitarbeiter/Benutzer nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Mitarbeiter/Benutzer nicht gefunden'}, status_code=404)
         
         # Check if personalnummer is taken by another employee
         cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ? AND Id != ?", 
                       (personalnummer, user_id))
         if cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}), 400
+            return JSONResponse(content={'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}, status_code=400)
         
         # Check if email is taken by another employee
         if email:
             cursor.execute("SELECT Id FROM Employees WHERE Email = ? AND Id != ?", (email, user_id))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
+                return JSONResponse(content={'error': 'E-Mail wird bereits verwendet'}, status_code=400)
         
         # Update employee
         if password:
@@ -501,22 +493,21 @@ def update_user(user_id):
         
         if changes_dict:
             changes = json.dumps(changes_dict, ensure_ascii=False)
-            log_audit(conn, 'Employee', user_id, 'Updated', changes)
+            log_audit(conn, 'Employee', user_id, 'Updated', changes,
+                      user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update employee/user error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update employee/user error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/users/<int:user_id>', methods=['DELETE'])
-@require_role('Admin')
-@require_csrf
-def delete_user(user_id):
+@router.delete('/api/users/{user_id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_user(request: Request, user_id: int):
     """Delete employee/user (Admin only)"""
     try:
         db = get_db()
@@ -528,7 +519,7 @@ def delete_user(user_id):
         employee_row = cursor.fetchone()
         if not employee_row:
             conn.close()
-            return jsonify({'error': 'Mitarbeiter/Benutzer nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Mitarbeiter/Benutzer nicht gefunden'}, status_code=404)
         
         # Prevent deleting the last admin
         cursor.execute("""
@@ -550,7 +541,7 @@ def delete_user(user_id):
         
         if is_admin and admin_count <= 1:
             conn.close()
-            return jsonify({'error': 'Der letzte Administrator kann nicht gelöscht werden'}), 400
+            return JSONResponse(content={'error': 'Der letzte Administrator kann nicht gel\u00f6scht werden'}, status_code=400)
         
         # Delete roles first (foreign key constraint)
         cursor.execute("DELETE FROM AspNetUserRoles WHERE UserId = ?", (str(user_id),))
@@ -564,21 +555,21 @@ def delete_user(user_id):
             'name': employee_row['Name'],
             'email': employee_row['Email']
         }, ensure_ascii=False)
-        log_audit(conn, 'Employee', user_id, 'Deleted', changes)
+        log_audit(conn, 'Employee', user_id, 'Deleted', changes,
+                  user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete employee/user error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete employee/user error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim L\u00f6schen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/roles', methods=['GET'])
-@require_role('Admin')
-def get_roles():
+@router.get('/api/roles', dependencies=[Depends(require_role('Admin'))])
+def get_roles(request: Request):
     """Get all available roles (Admin only)"""
     db = get_db()
     conn = db.get_connection()
@@ -594,26 +585,23 @@ def get_roles():
         })
     
     conn.close()
-    return jsonify(roles)
+    return roles
 
 
-@bp.route('/api/auth/change-password', methods=['POST'])
-@require_auth
-@require_csrf
-def change_password():
+@router.post('/api/auth/change-password', dependencies=[Depends(require_auth), Depends(check_csrf)])
+def change_password(request: Request, data: dict = Depends(parse_json_body)):
     """Change password for currently logged in user"""
     try:
-        data = request.get_json()
         current_password = data.get('currentPassword')
         new_password = data.get('newPassword')
         
         if not current_password or not new_password:
-            return jsonify({'error': 'Aktuelles und neues Passwort sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'Aktuelles und neues Passwort sind erforderlich'}, status_code=400)
         
         if len(new_password) < 8:
-            return jsonify({'error': 'Neues Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            return JSONResponse(content={'error': 'Neues Passwort muss mindestens 8 Zeichen lang sein'}, status_code=400)
         
-        user_id = session.get('user_id')
+        user_id = request.session.get('user_id')
         
         db = get_db()
         conn = db.get_connection()
@@ -625,12 +613,12 @@ def change_password():
         
         if not row or not row[0]:
             conn.close()
-            return jsonify({'error': 'Benutzer hat kein Passwort gesetzt'}), 400
+            return JSONResponse(content={'error': 'Benutzer hat kein Passwort gesetzt'}, status_code=400)
         
         # Verify current password
         if not verify_password(current_password, row[0]):
             conn.close()
-            return jsonify({'error': 'Aktuelles Passwort ist falsch'}), 401
+            return JSONResponse(content={'error': 'Aktuelles Passwort ist falsch'}, status_code=401)
         
         # Update password
         new_password_hash = hash_password(new_password)
@@ -644,29 +632,28 @@ def change_password():
         
         # Log audit entry
         log_audit(conn, 'Employee', user_id, 'PasswordChanged', 
-                 json.dumps({'action': 'User changed own password'}, ensure_ascii=False))
+                 json.dumps({'action': 'User changed own password'}, ensure_ascii=False),
+                 user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         cursor.execute("UPDATE Employees SET MustChangePassword = 0 WHERE Id = ?", (user_id,))
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Change password error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Change password error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/auth/forgot-password', methods=['POST'])
-@require_csrf
-def forgot_password():
+@router.post('/api/auth/forgot-password', dependencies=[Depends(check_csrf)])
+def forgot_password(request: Request, data: dict = Depends(parse_json_body)):
     """Request password reset link"""
     try:
-        data = request.get_json()
         email = data.get('email')
         
         if not email:
-            return jsonify({'error': 'E-Mail-Adresse ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'E-Mail-Adresse ist erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -684,7 +671,7 @@ def forgot_password():
         # Always return success to prevent email enumeration
         if not employee:
             conn.close()
-            return jsonify({'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zurücksetzen des Passworts gesendet.'})
+            return {'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zur\u00fccksetzen des Passworts gesendet.'}
         
         # Generate reset token
         import secrets as sec
@@ -702,7 +689,7 @@ def forgot_password():
         # Send reset email
         from email_service import send_password_reset_email
         employee_name = f"{employee[1]} {employee[2]}"
-        base_url = request.host_url.rstrip('/')
+        base_url = str(request.base_url).rstrip('/')
         
         success, error = send_password_reset_email(
             conn, employee[3], reset_token, employee_name, base_url
@@ -711,30 +698,28 @@ def forgot_password():
         conn.close()
         
         if not success:
-            current_app.logger.error(f"Failed to send password reset email: {error}")
+            logger.error(f"Failed to send password reset email: {error}")
             # Don't expose email errors to user
         
-        return jsonify({'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zurücksetzen des Passworts gesendet.'})
+        return {'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zur\u00fccksetzen des Passworts gesendet.'}
         
     except Exception as e:
-        current_app.logger.error(f"Forgot password error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Forgot password error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/auth/reset-password', methods=['POST'])
-@require_csrf
-def reset_password():
+@router.post('/api/auth/reset-password', dependencies=[Depends(check_csrf)])
+def reset_password(request: Request, data: dict = Depends(parse_json_body)):
     """Reset password using token"""
     try:
-        data = request.get_json()
         token = data.get('token')
         new_password = data.get('newPassword')
         
         if not token or not new_password:
-            return jsonify({'error': 'Token und neues Passwort sind erforderlich'}), 400
+            return JSONResponse(content={'error': 'Token und neues Passwort sind erforderlich'}, status_code=400)
         
         if len(new_password) < 8:
-            return jsonify({'error': 'Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            return JSONResponse(content={'error': 'Passwort muss mindestens 8 Zeichen lang sein'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -751,7 +736,7 @@ def reset_password():
         
         if not token_row:
             conn.close()
-            return jsonify({'error': 'Ungültiger oder bereits verwendeter Token'}), 400
+            return JSONResponse(content={'error': 'Ung\u00fcltiger oder bereits verwendeter Token'}, status_code=400)
         
         token_id = token_row[0]
         employee_id = token_row[1]
@@ -760,7 +745,7 @@ def reset_password():
         # Check if token is expired
         if expires_at < datetime.utcnow():
             conn.close()
-            return jsonify({'error': 'Token ist abgelaufen'}), 400
+            return JSONResponse(content={'error': 'Token ist abgelaufen'}, status_code=400)
         
         # Update password
         new_password_hash = hash_password(new_password)
@@ -781,28 +766,27 @@ def reset_password():
         
         # Log audit entry
         log_audit(conn, 'Employee', employee_id, 'PasswordReset', 
-                 json.dumps({'action': 'Password reset via email token'}, ensure_ascii=False))
+                 json.dumps({'action': 'Password reset via email token'}, ensure_ascii=False),
+                 user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Reset password error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Reset password error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/auth/validate-reset-token', methods=['POST'])
-@require_csrf
-def validate_reset_token():
+@router.post('/api/auth/validate-reset-token', dependencies=[Depends(check_csrf)])
+def validate_reset_token(request: Request, data: dict = Depends(parse_json_body)):
     """Validate if reset token is valid"""
     try:
-        data = request.get_json()
         token = data.get('token')
         
         if not token:
-            return jsonify({'valid': False})
+            return {'valid': False}
         
         db = get_db()
         conn = db.get_connection()
@@ -818,14 +802,14 @@ def validate_reset_token():
         conn.close()
         
         if not row:
-            return jsonify({'valid': False})
+            return {'valid': False}
         
         expires_at = datetime.fromisoformat(row[0])
         if expires_at < datetime.utcnow():
-            return jsonify({'valid': False})
+            return {'valid': False}
         
-        return jsonify({'valid': True})
+        return {'valid': True}
         
     except Exception as e:
-        current_app.logger.error(f"Validate reset token error: {str(e)}")
-        return jsonify({'valid': False})
+        logger.error(f"Validate reset token error: {str(e)}")
+        return {'valid': False}

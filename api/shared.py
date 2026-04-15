@@ -1,7 +1,7 @@
 """
 Shared utilities for the Dienstplan API blueprints.
 
-Contains: Database class, decorators, helper functions, rate limiter.
+Contains: Database class, dependencies, helper functions, rate limiter.
 """
 
 import logging
@@ -16,38 +16,42 @@ from functools import wraps
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict
 
-from flask import jsonify, session, current_app, request
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
-# Module-level limiter (init_app called in create_app)
-limiter = Limiter(get_remote_address, default_limits=["200 per minute", "2000 per hour"], storage_uri="memory://")
+# Module-level rate limiter – attached to app in create_app()
+limiter = Limiter(key_func=get_remote_address, default_limits=["200 per minute", "2000 per hour"])
+
+# Module-level DB instance set by create_app()
+_db_instance: Optional["Database"] = None
 
 
 # ============================================================================
 # CSRF PROTECTION
 # ============================================================================
 
-def generate_csrf_token() -> str:
-    if 'csrf_token' not in session:
-        session['csrf_token'] = secrets.token_hex(32)
-    return session['csrf_token']
+def generate_csrf_token(request: Request) -> str:
+    if 'csrf_token' not in request.session:
+        request.session['csrf_token'] = secrets.token_hex(32)
+    return request.session['csrf_token']
 
 
-def validate_csrf_token(token: str) -> bool:
-    return bool(token and token == session.get('csrf_token'))
+def validate_csrf_token(request: Request, token: str) -> bool:
+    return bool(token and token == request.session.get('csrf_token'))
 
 
-def require_csrf(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        token = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token')
-        if not validate_csrf_token(token):
-            return jsonify({'error': 'CSRF token invalid or missing'}), 403
-        return f(*args, **kwargs)
-    return decorated_function
+async def check_csrf(request: Request):
+    """FastAPI dependency – blocks request if CSRF token is missing or invalid."""
+    token = request.headers.get('X-CSRF-Token') or (await request.form()).get('csrf_token')
+    if not validate_csrf_token(request, token):
+        raise HTTPException(status_code=403, detail={'error': 'CSRF token invalid or missing'})
+
+# Keep old name as alias for backwards compatibility
+require_csrf = check_csrf
 
 
 def get_row_value(row: sqlite3.Row, key: str, default):
@@ -95,9 +99,17 @@ class Database:
             conn.close()
 
 
-def get_db() -> Database:
-    """Get the Database instance from the current app config."""
-    return current_app.config['db']
+def get_db() -> "Database":
+    """Return the global Database instance configured at startup."""
+    if _db_instance is None:
+        raise RuntimeError("Database not initialised. Call set_db() first.")
+    return _db_instance
+
+
+def set_db(db: "Database") -> None:
+    """Set the global Database instance (called from create_app)."""
+    global _db_instance
+    _db_instance = db
 
 
 def hash_password(password: str) -> str:
@@ -193,51 +205,42 @@ def get_employee_by_email(db: Database, email: str) -> Optional[Dict]:
     }
 
 
-def require_auth(f):
-    """Decorator to require authentication"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Authentication required'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
+def require_auth(request: Request):
+    """FastAPI dependency – requires authenticated session."""
+    if 'user_id' not in request.session:
+        raise HTTPException(status_code=401, detail={'error': 'Authentication required'})
 
 
-def require_role(*required_roles):
-    """Decorator to require specific role(s)"""
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'user_id' not in session:
-                return jsonify({'error': 'Authentication required'}), 401
+def require_role(*required_roles: str):
+    """Factory that returns a FastAPI dependency checking for specific role(s)."""
+    def _check(request: Request):
+        if 'user_id' not in request.session:
+            raise HTTPException(status_code=401, detail={'error': 'Authentication required'})
 
-            user_roles = session.get('user_roles')
-            # Session created before roles were stored (e.g. old cookie) – reload from DB
-            if not user_roles:
-                try:
-                    db = get_db()
-                    with db.connection() as conn:
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            """SELECT GROUP_CONCAT(r.Name) as roles
-                               FROM AspNetUserRoles ur
-                               JOIN AspNetRoles r ON ur.RoleId = r.Id
-                               WHERE ur.UserId = ?""",
-                            (str(session['user_id']),)
-                        )
-                        row = cursor.fetchone()
-                    user_roles = row['roles'].split(',') if row and row['roles'] else []
-                    session['user_roles'] = user_roles
-                except Exception as e:
-                    logger.warning(f"Could not refresh user roles from DB: {e}")
-                    user_roles = []
+        user_roles = request.session.get('user_roles')
+        if not user_roles:
+            try:
+                db = get_db()
+                with db.connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """SELECT GROUP_CONCAT(r.Name) as roles
+                           FROM AspNetUserRoles ur
+                           JOIN AspNetRoles r ON ur.RoleId = r.Id
+                           WHERE ur.UserId = ?""",
+                        (str(request.session['user_id']),)
+                    )
+                    row = cursor.fetchone()
+                user_roles = row['roles'].split(',') if row and row['roles'] else []
+                request.session['user_roles'] = user_roles
+            except Exception as e:
+                logger.warning(f"Could not refresh user roles from DB: {e}")
+                user_roles = []
 
-            if not any(role in user_roles for role in required_roles):
-                return jsonify({'error': 'Insufficient permissions'}), 403
+        if not any(role in user_roles for role in required_roles):
+            raise HTTPException(status_code=403, detail={'error': 'Insufficient permissions'})
 
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
+    return _check
 
 
 def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Optional[str] = None, 
@@ -251,20 +254,13 @@ def log_audit(conn, entity_name: str, entity_id: str, action: str, changes: Opti
         entity_id: ID of the entity being modified
         action: Action performed (e.g., 'Create', 'Update', 'Delete')
         changes: Optional JSON string with details of changes
-        user_id: Optional user ID (will try to get from session if not provided)
-        user_name: Optional user name (will try to get from session if not provided)
+        user_id: User ID performing the action
+        user_name: User name/email performing the action
     
     Note: Audit logging failures are logged but do not prevent the main operation from succeeding.
     """
     try:
         cursor = conn.cursor()
-        
-        # Get user info from session if not provided
-        if user_id is None:
-            user_id = session.get('user_id')
-        if user_name is None:
-            user_name = session.get('user_email')
-        
         cursor.execute("""
             INSERT INTO AuditLogs (Timestamp, UserId, UserName, EntityName, EntityId, Action, Changes)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -348,6 +344,14 @@ def validate_monthly_date_range(start_date: date, end_date: date) -> tuple:
         return False, f'Planning must cover the entire month. Expected: {first_day.isoformat()} to {last_day.isoformat()}'
     
     return True, ''
+
+
+async def parse_json_body(request: Request) -> dict:
+    """FastAPI dependency – parse JSON request body (works with sync handlers)."""
+    try:
+        return await request.json()
+    except Exception:
+        return {}
 
 
 def ensure_absence_types_table(db_path: str):

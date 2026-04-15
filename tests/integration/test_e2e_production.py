@@ -135,17 +135,10 @@ def prod_db(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def prod_flask_app(prod_db):
-    """Flask app wired to the production-equivalent SQLite database.
-
-    Sets ``SOLVER_TIME_LIMIT_SECONDS`` so the background planning thread
-    finishes within a reasonable CI budget.  Production leaves this config
-    key absent (None = unlimited).
-    """
+    """FastAPI app wired to the production-equivalent SQLite database."""
     from web_api import create_app
-    flask_app = create_app(prod_db)
-    flask_app.config["TESTING"] = True
-    flask_app.config["SOLVER_TIME_LIMIT_SECONDS"] = _TEST_SOLVER_TIME_LIMIT_S
-    return flask_app
+    app = create_app(prod_db)
+    return app
 
 
 @pytest.fixture(scope="module")
@@ -155,16 +148,17 @@ def prod_admin_client(prod_flask_app):
 
     Logs in once; the session cookie is reused across all tests in this file.
     """
-    client = prod_flask_app.test_client()
+    from fastapi.testclient import TestClient
+    client = TestClient(prod_flask_app, raise_server_exceptions=False)
     resp = client.get("/api/csrf-token")
-    csrf = resp.get_json()["token"]
+    csrf = resp.json()["token"]
     login = client.post(
         "/api/auth/login",
         json={"email": "admin@fritzwinter.de", "password": "Admin123!"},
         headers={"X-CSRF-Token": csrf},
     )
     assert login.status_code == 200, (
-        f"Admin login failed ({login.status_code}): {login.get_json()}"
+        f"Admin login failed ({login.status_code}): {login.json()}"
     )
     client.csrf_token = csrf
     return client
@@ -473,9 +467,9 @@ class TestHttpApiPlanningE2E:
             headers={"X-CSRF-Token": prod_admin_client.csrf_token},
         )
         assert resp.status_code == 202, (
-            f"Expected HTTP 202 Accepted, got {resp.status_code}: {resp.get_json()}"
+            f"Expected HTTP 202 Accepted, got {resp.status_code}: {resp.json()}"
         )
-        job_id = resp.get_json().get("jobId")
+        job_id = resp.json().get("jobId")
         assert job_id, "Response missing 'jobId' field"
 
         # ── Step 2: poll GET /api/shifts/plan/status/{jobId} ────────────────
@@ -494,7 +488,7 @@ class TestHttpApiPlanningE2E:
                 f"/api/shifts/plan/status/{job_id}",
                 headers={"X-CSRF-Token": prod_admin_client.csrf_token},
             )
-            job_data   = poll.get_json() or {}
+            job_data   = poll.json() or {}
             job_status = job_data.get("status", "running")
 
         request.cls.client     = prod_admin_client
@@ -612,7 +606,7 @@ class TestHttpApiPlanningE2E:
             f"/api/shifts/schedule?startDate={self.PLAN_START_STR}&view=month"
         )
         assert resp.status_code == 200, (
-            f"Expected 200, got {resp.status_code}: {resp.get_json()}"
+            f"Expected 200, got {resp.status_code}: {resp.json()}"
         )
 
     def test_get_schedule_contains_assignments(self):
@@ -620,7 +614,7 @@ class TestHttpApiPlanningE2E:
         resp = self.client.get(
             f"/api/shifts/schedule?startDate={self.PLAN_START_STR}&view=month"
         )
-        data = resp.get_json()
+        data = resp.json()
         assert isinstance(data, dict), f"Expected dict, got {type(data)}: {data}"
 
     def test_status_endpoint_returns_404_for_unknown_job(self):

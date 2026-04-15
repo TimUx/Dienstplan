@@ -10,36 +10,36 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
 
     def test_health_status_is_healthy(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert data['status'] == 'healthy'
 
     def test_health_has_db_field(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert 'db' in data
 
     def test_health_db_is_ok(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert data['db'] == 'ok'
 
     def test_health_has_python_field(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert 'python' in data
 
     def test_health_has_ortools_field(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert 'ortools' in data
 
     def test_health_python_version_is_string(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert isinstance(data['python'], str)
         assert len(data['python']) > 0
 
     def test_health_ortools_version_is_string(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert isinstance(data['ortools'], str)
 
     def test_health_has_version_field(self, client):
-        data = client.get('/api/health').get_json()
+        data = client.get('/api/health').json()
         assert 'version' in data
 
     def test_health_no_auth_required(self, client):

@@ -1,19 +1,24 @@
 """
-Flask Web API for shift planning system.
-Provides REST API endpoints compatible with the existing .NET Web UI.
+FastAPI Web API for shift planning system.
+Provides REST API endpoints compatible with the existing Web UI.
 
-Routes are organized into Flask Blueprints in the api/ package.
+Routes are organised into FastAPI routers in the api/ package.
 """
 
 import logging
 import os
 
-from flask import Flask, make_response, request
-from flask_cors import CORS
-from flask_compress import Compress
+from fastapi import FastAPI, Request
+from fastapi.responses import Response, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from api import shared as _shared
-from api.shared import Database, ensure_absence_types_table
+from api.shared import Database, ensure_absence_types_table, set_db, limiter
 
 
 def configure_logging(debug: bool = False):
@@ -59,36 +64,14 @@ def _get_or_create_secret_key(db_path: str) -> str:
         return _secrets2.token_hex(32)
 
 
-def _configure_cors(app):
-    allowed_str = os.environ.get('ALLOWED_ORIGINS', '')
-    if allowed_str:
-        allowed_origins = [o.strip() for o in allowed_str.split(',') if o.strip()]
-    else:
-        allowed_origins = []
-
-    if allowed_origins:
-        CORS(app, origins=allowed_origins, supports_credentials=True)
-    else:
-        CORS(app, origins=[], supports_credentials=True)
-
-
-def configure_session_security(app):
-    from datetime import timedelta
-    app.config['SESSION_COOKIE_HTTPONLY'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
-    if os.environ.get('HTTPS_ENABLED', '').lower() == 'true':
-        app.config['SESSION_COOKIE_SECURE'] = True
-
-
-def _compute_asset_versions(app):
+def _compute_asset_versions(static_folder: str) -> dict:
     import hashlib
     versions = {}
     assets = {
-        'css': os.path.join(app.static_folder, 'css', 'styles.css'),
-        'js': os.path.join(app.static_folder, 'js', 'app.js'),
+        'css': os.path.join(static_folder, 'css', 'styles.css'),
+        'js': os.path.join(static_folder, 'js', 'app.js'),
     }
-    min_css = os.path.join(app.static_folder, 'css', 'styles.min.css')
+    min_css = os.path.join(static_folder, 'css', 'styles.min.css')
     if os.path.exists(min_css):
         assets['css_min'] = min_css
 
@@ -98,116 +81,157 @@ def _compute_asset_versions(app):
                 versions[key] = hashlib.sha256(f.read()).hexdigest()
         else:
             versions[key] = 'unknown'
-    app.config['asset_versions'] = versions
+    return versions
 
 
-def create_app(db_path: str = "dienstplan.db") -> Flask:
+def create_app(db_path: str = "dienstplan.db") -> FastAPI:
     """
-    Create and configure Flask application.
+    Create and configure FastAPI application.
 
     Args:
         db_path: Path to SQLite database
 
     Returns:
-        Configured Flask app
+        Configured FastAPI app
     """
-    app = Flask(__name__, static_folder='wwwroot', static_url_path='')
+    configure_logging()
 
-    debug_mode = app.debug
+    app = FastAPI(title="Dienstplan API", docs_url=None, redoc_url=None)
 
-    configure_logging(debug=debug_mode)
+    # Session middleware (must be added before other middleware that reads session)
+    secret_key = _get_or_create_secret_key(db_path)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=secret_key,
+        session_cookie='dienstplan_session',
+        max_age=43200,  # 12 hours
+        same_site='lax',
+        https_only=os.environ.get('HTTPS_ENABLED', '').lower() == 'true',
+    )
 
-    # Configure session
-    app.config['SECRET_KEY'] = _get_or_create_secret_key(db_path)
-    app.config['SESSION_COOKIE_NAME'] = 'dienstplan_session'
-    configure_session_security(app)
+    # GZip compression
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-    _configure_cors(app)
+    # CORS
+    allowed_str = os.environ.get('ALLOWED_ORIGINS', '')
+    allowed_origins = [o.strip() for o in allowed_str.split(',') if o.strip()] if allowed_str else []
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-    # Enable Gzip compression for all responses
-    Compress(app)
+    # Rate limiter
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    # Rate limiter – keyed by remote IP address
-    _shared.limiter.init_app(app)
+    # Custom HTTP exception handler – return {"error": ...} instead of {"detail": ...}
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
 
-    # Ensure AbsenceTypes table exists (for existing databases)
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        if isinstance(exc.detail, dict):
+            return JSONResponse(content=exc.detail, status_code=exc.status_code)
+        return JSONResponse(content={'error': exc.detail}, status_code=exc.status_code)
+
+    # Initialise database
     ensure_absence_types_table(db_path)
+    db = Database(db_path)
+    set_db(db)
+    app.state.db = db
 
-    # Store db instance in app config so blueprints can access it via get_db()
-    app.config['db'] = Database(db_path)
+    # Compute asset versions for cache-busting
+    static_folder = os.path.join(os.path.dirname(__file__), 'wwwroot')
+    asset_versions = _compute_asset_versions(static_folder)
+    app.state.asset_versions = asset_versions
 
-    # Compute asset version hashes for cache-busting
-    _compute_asset_versions(app)
+    # Register routers
+    from api.auth import router as auth_router
+    from api.employees import router as employees_router
+    from api.shifts import router as shifts_router
+    from api.absences import router as absences_router
+    from api.statistics import router as statistics_router
+    from api.settings import router as settings_router
+    from api.planning import router as planning_router
+    from api.health import router as health_router
+    from api.audit import router as audit_router
 
-    # Register blueprints
-    from api.auth import bp as auth_bp
-    from api.employees import bp as employees_bp
-    from api.shifts import bp as shifts_bp
-    from api.absences import bp as absences_bp
-    from api.statistics import bp as statistics_bp
-    from api.settings import bp as settings_bp
-    from api.planning import bp as planning_bp
-    from api.health import bp as health_bp
-    from api.audit import bp as audit_bp
-
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(employees_bp)
-    app.register_blueprint(shifts_bp)
-    app.register_blueprint(absences_bp)
-    app.register_blueprint(statistics_bp)
-    app.register_blueprint(settings_bp)
-    app.register_blueprint(planning_bp)
-    app.register_blueprint(health_bp)
-    app.register_blueprint(audit_bp)
+    app.include_router(auth_router)
+    app.include_router(employees_router)
+    app.include_router(shifts_router)
+    app.include_router(absences_router)
+    app.include_router(statistics_router)
+    app.include_router(settings_router)
+    app.include_router(planning_router)
+    app.include_router(health_router)
+    app.include_router(audit_router)
 
     # ============================================================================
     # STATIC FILES (Web UI)
     # ============================================================================
 
-    @app.route('/')
-    def index():
-        """Serve the main web UI (no-cache so users always get the latest version)"""
-        response = make_response(app.send_static_file('index.html'))
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        return response
+    @app.get('/')
+    async def index():
+        """Serve main Web UI (no-cache so users always get the latest version)."""
+        index_path = os.path.join(static_folder, 'index.html')
+        headers = {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        }
+        return FileResponse(index_path, headers=headers)
 
-    @app.route('/css/styles.css')
-    def serve_styles():
-        """Serve styles - minified in production, full version in development"""
-        min_css_path = os.path.join(app.static_folder, 'css', 'styles.min.css')
-        if not app.debug and os.path.exists(min_css_path):
-            response = make_response(app.send_static_file('css/styles.min.css'))
-            etag = app.config.get('asset_versions', {}).get('css_min', 'unknown')[:8]
+    @app.get('/css/styles.css')
+    async def serve_styles(req: Request):
+        """Serve CSS – minified in production, full version otherwise."""
+        min_css_path = os.path.join(static_folder, 'css', 'styles.min.css')
+        debug_mode = os.environ.get('FASTAPI_DEBUG', '').lower() == 'true'
+        if not debug_mode and os.path.exists(min_css_path):
+            etag = app.state.asset_versions.get('css_min', 'unknown')[:8]
+            file_path = min_css_path
         else:
-            response = make_response(app.send_static_file('css/styles.css'))
-            etag = app.config.get('asset_versions', {}).get('css', 'unknown')[:8]
+            etag = app.state.asset_versions.get('css', 'unknown')[:8]
+            file_path = os.path.join(static_folder, 'css', 'styles.css')
 
-        if_none_match = request.headers.get('If-None-Match', '')
-        if if_none_match == etag:
-            return make_response('', 304)
+        if req.headers.get('If-None-Match') == etag:
+            return Response(status_code=304)
 
-        response.headers['Cache-Control'] = 'public, max-age=86400, must-revalidate'
-        response.headers['ETag'] = etag
-        return response
+        return FileResponse(
+            file_path,
+            headers={
+                'Cache-Control': 'public, max-age=86400, must-revalidate',
+                'ETag': etag,
+            },
+            media_type='text/css',
+        )
 
-    @app.route('/js/app.js')
-    def serve_app_js():
-        """Serve app.js with cache-busting via ETag"""
-        etag = app.config.get('asset_versions', {}).get('js', 'unknown')[:8]
-        if_none_match = request.headers.get('If-None-Match', '')
-        if if_none_match == etag:
-            return make_response('', 304)
-        response = make_response(app.send_static_file('js/app.js'))
-        response.headers['Cache-Control'] = 'public, max-age=86400, must-revalidate'
-        response.headers['ETag'] = etag
-        return response
+    @app.get('/js/app.js')
+    async def serve_app_js(req: Request):
+        """Serve app.js with ETag cache-busting."""
+        etag = app.state.asset_versions.get('js', 'unknown')[:8]
+        if req.headers.get('If-None-Match') == etag:
+            return Response(status_code=304)
+        js_path = os.path.join(static_folder, 'js', 'app.js')
+        return FileResponse(
+            js_path,
+            headers={
+                'Cache-Control': 'public, max-age=86400, must-revalidate',
+                'ETag': etag,
+            },
+            media_type='application/javascript',
+        )
+
+    # Serve remaining static files
+    app.mount('/', StaticFiles(directory=static_folder), name='static')
 
     return app
 
 
 if __name__ == "__main__":
-    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    import uvicorn
+    debug_mode = os.environ.get('FASTAPI_DEBUG', '').lower() == 'true'
     app = create_app()
-    app.run(debug=debug_mode, port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5000, log_level='debug' if debug_mode else 'info')

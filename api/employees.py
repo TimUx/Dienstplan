@@ -2,22 +2,26 @@
 Employees Blueprint: employees, teams, vacation-periods, rotation groups, CSV import/export.
 """
 
-from flask import Blueprint, jsonify, request, session, current_app, send_file
+from fastapi import APIRouter, Request, Depends, UploadFile, File
+from fastapi.responses import JSONResponse, StreamingResponse
 from datetime import datetime, date
 import json
 import secrets
+import logging
 
 from .shared import (
     get_db, require_auth, require_role, log_audit,
-    hash_password, _paginate, limiter, require_csrf
+    hash_password, _paginate, limiter, require_csrf, check_csrf, parse_json_body
 )
 from .repositories.employee_repository import EmployeeRepository
 
-bp = Blueprint('employees', __name__)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
 
 
-@bp.route('/api/employees', methods=['GET'])
-def get_employees():
+@router.get('/api/employees')
+def get_employees(request: Request):
     """Get all employees (now includes authentication data).
 
     Optional query parameters:
@@ -28,10 +32,10 @@ def get_employees():
     try:
         # Parse pagination parameters
         try:
-            page = max(1, int(request.args.get('page', 1)))
-            limit = max(0, int(request.args.get('limit', 0)))
+            page = max(1, int(request.query_params.get('page', 1)))
+            limit = max(0, int(request.query_params.get('limit', 0)))
         except (ValueError, TypeError):
-            return jsonify({'error': 'page and limit must be integers'}), 400
+            return JSONResponse(content={'error': 'page and limit must be integers'}, status_code=400)
 
         db = get_db()
         conn = db.get_connection()
@@ -77,18 +81,18 @@ def get_employees():
             })
 
         if limit > 0:
-            return jsonify(_paginate(employees, page, limit))
+            return _paginate(employees, page, limit)
 
-        return jsonify(employees)
+        return employees
     except Exception as e:
-        return jsonify({'error': f'Database error: {str(e)}'}), 500
+        return JSONResponse(content={'error': f'Database error: {str(e)}'}, status_code=500)
     finally:
         if conn:
             conn.close()
 
 
-@bp.route('/api/employees/<int:id>', methods=['GET'])
-def get_employee(id):
+@router.get('/api/employees/{id}')
+def get_employee(request: Request, id: int):
     """Get employee by ID"""
     db = get_db()
     conn = db.get_connection()
@@ -109,7 +113,7 @@ def get_employee(id):
     conn.close()
     
     if not row:
-        return jsonify({'error': 'Employee not found'}), 404
+        return JSONResponse(content={'error': 'Employee not found'}, status_code=404)
     
     # Handle IsTdQualified field which may not exist in older databases
     try:
@@ -123,7 +127,7 @@ def get_employee(id):
     except (KeyError, IndexError):
         is_team_leader = False
     
-    return jsonify({
+    return {
         'id': row['Id'],
         'vorname': row['Vorname'],
         'name': row['Name'],
@@ -140,33 +144,29 @@ def get_employee(id):
         'teamName': row['TeamName'],
         'fullName': f"{row['Vorname']} {row['Name']}",
         'roles': row['roles'] if row['roles'] else ''
-    })
+    }
 
 
-@bp.route('/api/employees', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_employee():
+@router.post('/api/employees', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_employee(request: Request, data: dict = Depends(parse_json_body)):
     """Create new employee"""
     try:
-        data = request.get_json()
-        
         # Validate required fields
         if not data.get('vorname') or not data.get('name') or not data.get('personalnummer'):
-            return jsonify({'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}), 400
+            return JSONResponse(content={'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}, status_code=400)
         
         # Validate password - required for new employees
         password = data.get('password')
         if not password:
-            return jsonify({'error': 'Passwort ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'Passwort ist erforderlich'}, status_code=400)
         
         if len(password) < 8:
-            return jsonify({'error': 'Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            return JSONResponse(content={'error': 'Passwort muss mindestens 8 Zeichen lang sein'}, status_code=400)
         
         # Validate Funktion field - only allow specific values
         funktion = data.get('funktion')
         if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker']:
-            return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker'}), 400
+            return JSONResponse(content={'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker'}, status_code=400)
         
         # Use checkbox values directly from frontend for BMT/BSB flags
         is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
@@ -183,7 +183,7 @@ def create_employee():
         cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ?", (data.get('personalnummer'),))
         if cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Personalnummer bereits vorhanden'}), 400
+            return JSONResponse(content={'error': 'Personalnummer bereits vorhanden'}, status_code=400)
         
         # Check if email already exists
         email = data.get('email')
@@ -191,7 +191,7 @@ def create_employee():
             cursor.execute("SELECT Id FROM Employees WHERE Email = ?", (email,))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
+                return JSONResponse(content={'error': 'E-Mail wird bereits verwendet'}, status_code=400)
         
         # Hash password
         password_hash = hash_password(password)
@@ -228,8 +228,8 @@ def create_employee():
         mitarbeiter_role = cursor.fetchone()
         if not mitarbeiter_role:
             conn.close()
-            current_app.logger.error("Mitarbeiter role not found in database")
-            return jsonify({'error': 'System-Fehler: Mitarbeiter-Rolle nicht gefunden'}), 500
+            logger.error("Mitarbeiter role not found in database")
+            return JSONResponse(content={'error': 'System-Fehler: Mitarbeiter-Rolle nicht gefunden'}, status_code=500)
         
         cursor.execute("""
             INSERT INTO AspNetUserRoles (UserId, RoleId)
@@ -243,8 +243,8 @@ def create_employee():
             admin_role = cursor.fetchone()
             if not admin_role:
                 conn.close()
-                current_app.logger.error("Admin role not found in database")
-                return jsonify({'error': 'System-Fehler: Admin-Rolle nicht gefunden'}), 500
+                logger.error("Admin role not found in database")
+                return JSONResponse(content={'error': 'System-Fehler: Admin-Rolle nicht gefunden'}, status_code=500)
             
             cursor.execute("""
                 INSERT INTO AspNetUserRoles (UserId, RoleId)
@@ -261,39 +261,35 @@ def create_employee():
             'teamId': data.get('teamId'),
             'roles': ['Mitarbeiter', 'Admin'] if is_admin else ['Mitarbeiter']
         }, ensure_ascii=False)
-        log_audit(conn, 'Employee', employee_id, 'Created', changes)
+        log_audit(conn, 'Employee', employee_id, 'Created', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': employee_id}), 201
+        return JSONResponse(content={'success': True, 'id': employee_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create employee error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create employee error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/employees/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_employee(id):
+@router.put('/api/employees/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_employee(request: Request, id: int, data: dict = Depends(parse_json_body)):
     """Update employee"""
     try:
-        data = request.get_json()
-        
         # Validate required fields
         if not data.get('vorname') or not data.get('name') or not data.get('personalnummer'):
-            return jsonify({'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}), 400
+            return JSONResponse(content={'error': 'Vorname, Name und Personalnummer sind Pflichtfelder'}, status_code=400)
         
         # Validate password if provided
         password = data.get('password')
         if password and len(password) < 8:
-            return jsonify({'error': 'Passwort muss mindestens 8 Zeichen lang sein'}), 400
+            return JSONResponse(content={'error': 'Passwort muss mindestens 8 Zeichen lang sein'}, status_code=400)
         
         # Validate Funktion field
         funktion = data.get('funktion')
         if funktion and funktion not in ['Brandmeldetechniker', 'Brandschutzbeauftragter', 'Techniker']:
-            return jsonify({'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker'}), 400
+            return JSONResponse(content={'error': 'Ungültige Funktion. Erlaubt: Brandmeldetechniker, Brandschutzbeauftragter, Techniker'}, status_code=400)
         
         # Use checkbox values directly from frontend for BMT/BSB flags
         is_bmt = 1 if data.get('isBrandmeldetechniker') else 0
@@ -316,14 +312,14 @@ def update_employee(id):
         old_row = cursor.fetchone()
         if not old_row:
             conn.close()
-            return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Mitarbeiter nicht gefunden'}, status_code=404)
         
         # Check if Personalnummer is taken by another employee
         cursor.execute("SELECT Id FROM Employees WHERE Personalnummer = ? AND Id != ?", 
                       (data.get('personalnummer'), id))
         if cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}), 400
+            return JSONResponse(content={'error': 'Personalnummer bereits von anderem Mitarbeiter verwendet'}, status_code=400)
         
         # Check if email is taken by another employee
         email = data.get('email')
@@ -331,7 +327,7 @@ def update_employee(id):
             cursor.execute("SELECT Id FROM Employees WHERE Email = ? AND Id != ?", (email, id))
             if cursor.fetchone():
                 conn.close()
-                return jsonify({'error': 'E-Mail wird bereits verwendet'}), 400
+                return JSONResponse(content={'error': 'E-Mail wird bereits verwendet'}, status_code=400)
         
         # Update employee with or without password
         if password:
@@ -391,8 +387,8 @@ def update_employee(id):
         mitarbeiter_role = cursor.fetchone()
         if not mitarbeiter_role:
             conn.close()
-            current_app.logger.error("Mitarbeiter role not found in database")
-            return jsonify({'error': 'System-Fehler: Mitarbeiter-Rolle nicht gefunden'}), 500
+            logger.error("Mitarbeiter role not found in database")
+            return JSONResponse(content={'error': 'System-Fehler: Mitarbeiter-Rolle nicht gefunden'}, status_code=500)
         
         # Check if Mitarbeiter role exists, add if not
         cursor.execute("""
@@ -412,8 +408,8 @@ def update_employee(id):
         
         if not admin_role:
             conn.close()
-            current_app.logger.error("Admin role not found in database")
-            return jsonify({'error': 'System-Fehler: Admin-Rolle nicht gefunden'}), 500
+            logger.error("Admin role not found in database")
+            return JSONResponse(content={'error': 'System-Fehler: Admin-Rolle nicht gefunden'}, status_code=500)
         
         # Check if Admin role currently exists for this employee
         cursor.execute("""
@@ -470,23 +466,20 @@ def update_employee(id):
         
         if changes_dict:
             changes = json.dumps(changes_dict, ensure_ascii=False)
-            log_audit(conn, 'Employee', id, 'Updated', changes)
+            log_audit(conn, 'Employee', id, 'Updated', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update employee error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update employee error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/employees/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_employee(id):
+@router.delete('/api/employees/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_employee(request: Request, id: int):
     """Delete employee (Admin only)"""
     try:
         db = get_db()
@@ -498,7 +491,7 @@ def delete_employee(id):
         emp_row = cursor.fetchone()
         if not emp_row:
             conn.close()
-            return jsonify({'error': 'Mitarbeiter nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Mitarbeiter nicht gefunden'}, status_code=404)
         
         # Check if employee has assignments
         cursor.execute("SELECT COUNT(*) as count FROM ShiftAssignments WHERE EmployeeId = ?", (id,))
@@ -506,7 +499,7 @@ def delete_employee(id):
         
         if assignment_count > 0:
             conn.close()
-            return jsonify({'error': f'Mitarbeiter hat {assignment_count} Schichtzuweisungen und kann nicht gelöscht werden'}), 400
+            return JSONResponse(content={'error': f'Mitarbeiter hat {assignment_count} Schichtzuweisungen und kann nicht gelöscht werden'}, status_code=400)
         
         # Delete employee
         cursor.execute("DELETE FROM Employees WHERE Id = ?", (id,))
@@ -517,24 +510,24 @@ def delete_employee(id):
             'name': emp_row['Name'],
             'personalnummer': emp_row['Personalnummer']
         }, ensure_ascii=False)
-        log_audit(conn, 'Employee', id, 'Deleted', changes)
+        log_audit(conn, 'Employee', id, 'Deleted', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete employee error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete employee error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # TEAM ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/teams', methods=['GET'])
-def get_teams():
+@router.get('/api/teams')
+def get_teams(request: Request):
     """Get all teams with employee count"""
     db = get_db()
     conn = db.get_connection()
@@ -562,11 +555,11 @@ def get_teams():
         })
     
     conn.close()
-    return jsonify(teams)
+    return teams
 
 
-@bp.route('/api/teams/<int:id>', methods=['GET'])
-def get_team(id):
+@router.get('/api/teams/{id}')
+def get_team(request: Request, id: int):
     """Get single team by ID"""
     conn = None
     db = get_db()
@@ -586,33 +579,29 @@ def get_team(id):
         row = cursor.fetchone()
         
         if not row:
-            return jsonify({'error': 'Team nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Team nicht gefunden'}, status_code=404)
         
         employee_count = int(row['EmployeeCount'])
         
-        return jsonify({
+        return {
             'id': row['Id'],
             'name': row['Name'],
             'description': row['Description'],
             'email': row['Email'],
                             'employeeCount': employee_count
-        })
+        }
     finally:
         if conn:
             conn.close()
 
 
-@bp.route('/api/teams', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_team():
+@router.post('/api/teams', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_team(request: Request, data: dict = Depends(parse_json_body)):
     """Create new team"""
     try:
-        data = request.get_json()
-        
         # Validate required fields
         if not data.get('name'):
-            return jsonify({'error': 'Teamname ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Teamname ist Pflichtfeld'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -635,29 +624,25 @@ def create_team():
             'description': data.get('description'),
             'email': data.get('email'),
                         }, ensure_ascii=False)
-        log_audit(conn, 'Team', team_id, 'Created', changes)
+        log_audit(conn, 'Team', team_id, 'Created', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': team_id}), 201
+        return JSONResponse(content={'success': True, 'id': team_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create team error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create team error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/teams/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_team(id):
+@router.put('/api/teams/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_team(request: Request, id: int, data: dict = Depends(parse_json_body)):
     """Update team"""
     try:
-        data = request.get_json()
-        
         # Validate required fields
         if not data.get('name'):
-            return jsonify({'error': 'Teamname ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Teamname ist Pflichtfeld'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -668,7 +653,7 @@ def update_team(id):
         old_row = cursor.fetchone()
         if not old_row:
             conn.close()
-            return jsonify({'error': 'Team nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Team nicht gefunden'}, status_code=404)
         
         cursor.execute("""
             UPDATE Teams 
@@ -691,23 +676,20 @@ def update_team(id):
             changes_dict['email'] = {'old': old_row['Email'], 'new': data.get('email')}
         if changes_dict:
             changes = json.dumps(changes_dict, ensure_ascii=False)
-            log_audit(conn, 'Team', id, 'Updated', changes)
+            log_audit(conn, 'Team', id, 'Updated', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update team error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update team error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/teams/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_team(id):
+@router.delete('/api/teams/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_team(request: Request, id: int):
     """Delete team (Admin only)"""
     try:
         db = get_db()
@@ -719,7 +701,7 @@ def delete_team(id):
         team_row = cursor.fetchone()
         if not team_row:
             conn.close()
-            return jsonify({'error': 'Team nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Team nicht gefunden'}, status_code=404)
         
         # Check if team has employees
         cursor.execute("SELECT COUNT(*) as count FROM Employees WHERE TeamId = ?", (id,))
@@ -727,7 +709,7 @@ def delete_team(id):
         
         if employee_count > 0:
             conn.close()
-            return jsonify({'error': f'Team hat {employee_count} Mitarbeiter und kann nicht gelöscht werden'}), 400
+            return JSONResponse(content={'error': f'Team hat {employee_count} Mitarbeiter und kann nicht gelöscht werden'}, status_code=400)
         
         # Clear TeamId from AdminNotifications to avoid foreign key constraint violations
         # (AdminNotifications don't have CASCADE delete)
@@ -738,24 +720,24 @@ def delete_team(id):
         
         # Log audit entry
         changes = json.dumps({'name': team_row['Name']}, ensure_ascii=False)
-        log_audit(conn, 'Team', id, 'Deleted', changes)
+        log_audit(conn, 'Team', id, 'Deleted', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete team error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete team error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # VACATION PERIODS ENDPOINTS (Ferienzeiten)
 # ============================================================================
 
-@bp.route('/api/vacation-periods', methods=['GET'])
-def get_vacation_periods():
+@router.get('/api/vacation-periods')
+def get_vacation_periods(request: Request):
     """Get all vacation periods"""
     try:
         db = get_db()
@@ -784,15 +766,15 @@ def get_vacation_periods():
             })
         
         conn.close()
-        return jsonify(periods)
+        return periods
         
     except Exception as e:
-        current_app.logger.error(f"Get vacation periods error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+        logger.error(f"Get vacation periods error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacation-periods/<int:id>', methods=['GET'])
-def get_vacation_period(id):
+@router.get('/api/vacation-periods/{id}')
+def get_vacation_period(request: Request, id: int):
     """Get a specific vacation period"""
     try:
         db = get_db()
@@ -810,9 +792,9 @@ def get_vacation_period(id):
         conn.close()
         
         if not row:
-            return jsonify({'error': 'Ferienzeit nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Ferienzeit nicht gefunden'}, status_code=404)
         
-        return jsonify({
+        return {
             'id': row['Id'],
             'name': row['Name'],
             'startDate': row['StartDate'],
@@ -822,38 +804,34 @@ def get_vacation_period(id):
             'createdBy': row['CreatedBy'],
             'modifiedAt': row['ModifiedAt'],
             'modifiedBy': row['ModifiedBy']
-        })
+        }
         
     except Exception as e:
-        current_app.logger.error(f"Get vacation period error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+        logger.error(f"Get vacation period error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacation-periods', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_vacation_period():
+@router.post('/api/vacation-periods', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_vacation_period(request: Request, data: dict = Depends(parse_json_body)):
     """Create new vacation period"""
     try:
-        data = request.get_json()
-        
         # Validate required fields
         if not data.get('name'):
-            return jsonify({'error': 'Name ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Name ist Pflichtfeld'}, status_code=400)
         if not data.get('startDate'):
-            return jsonify({'error': 'Startdatum ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Startdatum ist Pflichtfeld'}, status_code=400)
         if not data.get('endDate'):
-            return jsonify({'error': 'Enddatum ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Enddatum ist Pflichtfeld'}, status_code=400)
         
         # Validate dates
         try:
             start_date = date.fromisoformat(data.get('startDate'))
             end_date = date.fromisoformat(data.get('endDate'))
         except (ValueError, TypeError):
-            return jsonify({'error': 'Ungültiges Datumsformat'}), 400
+            return JSONResponse(content={'error': 'Ungültiges Datumsformat'}, status_code=400)
         
         if end_date < start_date:
-            return jsonify({'error': 'Enddatum muss nach Startdatum liegen'}), 400
+            return JSONResponse(content={'error': 'Enddatum muss nach Startdatum liegen'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -868,7 +846,7 @@ def create_vacation_period():
             end_date.isoformat(),
             data.get('colorCode', '#E8F5E9'),
             datetime.utcnow().isoformat(),
-            session.get('user_email')
+            request.session.get('user_email')
         ))
         
         period_id = cursor.lastrowid
@@ -880,43 +858,39 @@ def create_vacation_period():
             'endDate': end_date.isoformat(),
             'colorCode': data.get('colorCode', '#E8F5E9')
         }, ensure_ascii=False)
-        log_audit(conn, 'VacationPeriod', period_id, 'Created', changes)
+        log_audit(conn, 'VacationPeriod', period_id, 'Created', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': period_id}), 201
+        return JSONResponse(content={'success': True, 'id': period_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create vacation period error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create vacation period error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacation-periods/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_vacation_period(id):
+@router.put('/api/vacation-periods/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_vacation_period(request: Request, id: int, data: dict = Depends(parse_json_body)):
     """Update vacation period"""
     try:
-        data = request.get_json()
-        
         # Validate required fields
         if not data.get('name'):
-            return jsonify({'error': 'Name ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Name ist Pflichtfeld'}, status_code=400)
         if not data.get('startDate'):
-            return jsonify({'error': 'Startdatum ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Startdatum ist Pflichtfeld'}, status_code=400)
         if not data.get('endDate'):
-            return jsonify({'error': 'Enddatum ist Pflichtfeld'}), 400
+            return JSONResponse(content={'error': 'Enddatum ist Pflichtfeld'}, status_code=400)
         
         # Validate dates
         try:
             start_date = date.fromisoformat(data.get('startDate'))
             end_date = date.fromisoformat(data.get('endDate'))
         except (ValueError, TypeError):
-            return jsonify({'error': 'Ungültiges Datumsformat'}), 400
+            return JSONResponse(content={'error': 'Ungültiges Datumsformat'}, status_code=400)
         
         if end_date < start_date:
-            return jsonify({'error': 'Enddatum muss nach Startdatum liegen'}), 400
+            return JSONResponse(content={'error': 'Enddatum muss nach Startdatum liegen'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -930,7 +904,7 @@ def update_vacation_period(id):
         old_row = cursor.fetchone()
         if not old_row:
             conn.close()
-            return jsonify({'error': 'Ferienzeit nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Ferienzeit nicht gefunden'}, status_code=404)
         
         cursor.execute("""
             UPDATE VacationPeriods 
@@ -943,7 +917,7 @@ def update_vacation_period(id):
             end_date.isoformat(),
             data.get('colorCode', '#E8F5E9'),
             datetime.utcnow().isoformat(),
-            session.get('user_email'),
+            request.session.get('user_email'),
             id
         ))
         
@@ -960,23 +934,20 @@ def update_vacation_period(id):
         
         if changes_dict:
             changes = json.dumps(changes_dict, ensure_ascii=False)
-            log_audit(conn, 'VacationPeriod', id, 'Updated', changes)
+            log_audit(conn, 'VacationPeriod', id, 'Updated', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update vacation period error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update vacation period error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/vacation-periods/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_vacation_period(id):
+@router.delete('/api/vacation-periods/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_vacation_period(request: Request, id: int):
     """Delete vacation period (Admin only)"""
     try:
         db = get_db()
@@ -988,31 +959,31 @@ def delete_vacation_period(id):
         period_row = cursor.fetchone()
         if not period_row:
             conn.close()
-            return jsonify({'error': 'Ferienzeit nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Ferienzeit nicht gefunden'}, status_code=404)
         
         # Delete period
         cursor.execute("DELETE FROM VacationPeriods WHERE Id = ?", (id,))
         
         # Log audit entry
         changes = json.dumps({'name': period_row['Name']}, ensure_ascii=False)
-        log_audit(conn, 'VacationPeriod', id, 'Deleted', changes)
+        log_audit(conn, 'VacationPeriod', id, 'Deleted', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete vacation period error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete vacation period error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # ROTATION GROUP ENDPOINTS
 # ============================================================================
 
-@bp.route('/api/rotationgroups', methods=['GET'])
-def get_rotation_groups():
+@router.get('/api/rotationgroups')
+def get_rotation_groups(request: Request):
     """Get all rotation groups"""
     try:
         db = get_db()
@@ -1059,27 +1030,24 @@ def get_rotation_groups():
             })
         
         conn.close()
-        return jsonify(groups)
+        return groups
         
     except Exception as e:
-        current_app.logger.error(f"Get rotation groups error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+        logger.error(f"Get rotation groups error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/rotationgroups', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_rotation_group():
+@router.post('/api/rotationgroups', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def create_rotation_group(request: Request, data: dict = Depends(parse_json_body)):
     """Create new rotation group (Admin only)"""
     try:
-        data = request.get_json()
         name = data.get('name')
         description = data.get('description', '')
         is_active = data.get('isActive', True)
         shifts = data.get('shifts', [])  # [{shiftTypeId, rotationOrder}]
         
         if not name:
-            return jsonify({'error': 'Name ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'Name ist erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -1089,7 +1057,7 @@ def create_rotation_group():
         cursor.execute("""
             INSERT INTO RotationGroups (Name, Description, IsActive, CreatedBy)
             VALUES (?, ?, ?, ?)
-        """, (name, description, 1 if is_active else 0, session.get('user_email', 'system')))
+        """, (name, description, 1 if is_active else 0, request.session.get('user_email', 'system')))
         
         group_id = cursor.lastrowid
         
@@ -1098,24 +1066,24 @@ def create_rotation_group():
             cursor.execute("""
                 INSERT INTO RotationGroupShifts (RotationGroupId, ShiftTypeId, RotationOrder, CreatedBy)
                 VALUES (?, ?, ?, ?)
-            """, (group_id, shift['shiftTypeId'], shift['rotationOrder'], session.get('user_email', 'system')))
+            """, (group_id, shift['shiftTypeId'], shift['rotationOrder'], request.session.get('user_email', 'system')))
         
         # Log audit entry
         changes = json.dumps({'name': name, 'shifts': shifts}, ensure_ascii=False)
-        log_audit(conn, 'RotationGroup', group_id, 'Created', changes)
+        log_audit(conn, 'RotationGroup', group_id, 'Created', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': group_id}), 201
+        return JSONResponse(content={'success': True, 'id': group_id}, status_code=201)
         
     except Exception as e:
-        current_app.logger.error(f"Create rotation group error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Erstellen: {str(e)}'}), 500
+        logger.error(f"Create rotation group error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/rotationgroups/<int:id>', methods=['GET'])
-def get_rotation_group(id):
+@router.get('/api/rotationgroups/{id}')
+def get_rotation_group(request: Request, id: int):
     """Get single rotation group by ID"""
     try:
         db = get_db()
@@ -1131,7 +1099,7 @@ def get_rotation_group(id):
         row = cursor.fetchone()
         if not row:
             conn.close()
-            return jsonify({'error': 'Rotationsgruppe nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Rotationsgruppe nicht gefunden'}, status_code=404)
         
         # Get shifts for this group
         cursor.execute("""
@@ -1165,27 +1133,24 @@ def get_rotation_group(id):
         }
         
         conn.close()
-        return jsonify(group)
+        return group
         
     except Exception as e:
-        current_app.logger.error(f"Get rotation group error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+        logger.error(f"Get rotation group error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/rotationgroups/<int:id>', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_rotation_group(id):
+@router.put('/api/rotationgroups/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_rotation_group(request: Request, id: int, data: dict = Depends(parse_json_body)):
     """Update rotation group (Admin only)"""
     try:
-        data = request.get_json()
         name = data.get('name')
         description = data.get('description', '')
         is_active = data.get('isActive', True)
         shifts = data.get('shifts', [])  # [{shiftTypeId, rotationOrder}]
         
         if not name:
-            return jsonify({'error': 'Name ist erforderlich'}), 400
+            return JSONResponse(content={'error': 'Name ist erforderlich'}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -1195,14 +1160,14 @@ def update_rotation_group(id):
         cursor.execute("SELECT Id FROM RotationGroups WHERE Id = ?", (id,))
         if not cursor.fetchone():
             conn.close()
-            return jsonify({'error': 'Rotationsgruppe nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Rotationsgruppe nicht gefunden'}, status_code=404)
         
         # Update rotation group
         cursor.execute("""
             UPDATE RotationGroups
             SET Name = ?, Description = ?, IsActive = ?, ModifiedAt = CURRENT_TIMESTAMP, ModifiedBy = ?
             WHERE Id = ?
-        """, (name, description, 1 if is_active else 0, session.get('user_email', 'system'), id))
+        """, (name, description, 1 if is_active else 0, request.session.get('user_email', 'system'), id))
         
         # Delete existing shifts
         cursor.execute("DELETE FROM RotationGroupShifts WHERE RotationGroupId = ?", (id,))
@@ -1212,27 +1177,24 @@ def update_rotation_group(id):
             cursor.execute("""
                 INSERT INTO RotationGroupShifts (RotationGroupId, ShiftTypeId, RotationOrder, CreatedBy)
                 VALUES (?, ?, ?, ?)
-            """, (id, shift['shiftTypeId'], shift['rotationOrder'], session.get('user_email', 'system')))
+            """, (id, shift['shiftTypeId'], shift['rotationOrder'], request.session.get('user_email', 'system')))
         
         # Log audit entry
         changes = json.dumps({'name': name, 'shifts': shifts}, ensure_ascii=False)
-        log_audit(conn, 'RotationGroup', id, 'Updated', changes)
+        log_audit(conn, 'RotationGroup', id, 'Updated', changes, user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update rotation group error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update rotation group error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/rotationgroups/<int:id>', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_rotation_group(id):
+@router.delete('/api/rotationgroups/{id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def delete_rotation_group(request: Request, id: int):
     """Delete rotation group (Admin only)"""
     try:
         db = get_db()
@@ -1244,7 +1206,7 @@ def delete_rotation_group(id):
         row = cursor.fetchone()
         if not row:
             conn.close()
-            return jsonify({'error': 'Rotationsgruppe nicht gefunden'}), 404
+            return JSONResponse(content={'error': 'Rotationsgruppe nicht gefunden'}, status_code=404)
         
         group_name = row['Name']
         
@@ -1252,25 +1214,24 @@ def delete_rotation_group(id):
         cursor.execute("DELETE FROM RotationGroups WHERE Id = ?", (id,))
         
         # Log audit entry
-        log_audit(conn, 'RotationGroup', id, 'Deleted', json.dumps({'name': group_name}, ensure_ascii=False))
+        log_audit(conn, 'RotationGroup', id, 'Deleted', json.dumps({'name': group_name}, ensure_ascii=False), user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Delete rotation group error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Löschen: {str(e)}'}), 500
+        logger.error(f"Delete rotation group error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
 # ============================================================================
 # DATA EXPORT/IMPORT (Admin only)
 # ============================================================================
 
-@bp.route('/api/employees/export/csv', methods=['GET'])
-@require_role('Admin')
-def export_employees_csv():
+@router.get('/api/employees/export/csv', dependencies=[Depends(require_role('Admin'))])
+def export_employees_csv(request: Request):
     """
     Export all employees to CSV format.
     
@@ -1318,21 +1279,19 @@ def export_employees_csv():
         output_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))  # UTF-8 with BOM for Excel
         output_bytes.seek(0)
         
-        return send_file(
+        return StreamingResponse(
             output_bytes,
-            mimetype='text/csv',
-            as_attachment=True,
-            download_name=f'employees_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            media_type='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=employees_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'}
         )
         
     except Exception as e:
-        current_app.logger.error(f"Export employees error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Export employees error: {str(e)}")
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/teams/export/csv', methods=['GET'])
-@require_role('Admin')
-def export_teams_csv():
+@router.get('/api/teams/export/csv', dependencies=[Depends(require_role('Admin'))])
+def export_teams_csv(request: Request):
     """
     Export all teams to CSV format.
     
@@ -1373,22 +1332,19 @@ def export_teams_csv():
         output_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))  # UTF-8 with BOM for Excel
         output_bytes.seek(0)
         
-        return send_file(
+        return StreamingResponse(
             output_bytes,
-            mimetype='text/csv',
-            as_attachment=True,
-            download_name=f'teams_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            media_type='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=teams_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'}
         )
         
     except Exception as e:
-        current_app.logger.error(f"Export teams error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Export teams error: {str(e)}")
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/employees/import/csv', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def import_employees_csv():
+@router.post('/api/employees/import/csv', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def import_employees_csv(request: Request, file: UploadFile = File(...)):
     """
     Import employees from CSV file.
     
@@ -1403,22 +1359,17 @@ def import_employees_csv():
     from io import StringIO
     
     try:
-        # Check if file was uploaded
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
-        
-        file = request.files['file']
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            return JSONResponse(content={'error': 'No file selected'}, status_code=400)
         
         # Get conflict mode from query parameter
-        conflict_mode = request.args.get('conflict_mode', 'skip')
+        conflict_mode = request.query_params.get('conflict_mode', 'skip')
         if conflict_mode not in ['overwrite', 'skip']:
-            return jsonify({'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}), 400
+            return JSONResponse(content={'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}, status_code=400)
         
         # Read CSV file
         # Try to detect encoding (UTF-8 with BOM, UTF-8, or Latin-1)
-        content = file.read()
+        content = file.file.read()
         try:
             text = content.decode('utf-8-sig')
         except UnicodeDecodeError:
@@ -1519,24 +1470,22 @@ def import_employees_csv():
         conn.commit()
         conn.close()
         
-        return jsonify({
+        return {
             'success': True,
             'total': total_rows,
             'imported': imported_count,
             'updated': updated_count,
             'skipped': skipped_count,
             'errors': errors
-        })
+        }
         
     except Exception as e:
-        current_app.logger.error(f"Import employees error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Import employees error: {str(e)}")
+        return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/teams/import/csv', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def import_teams_csv():
+@router.post('/api/teams/import/csv', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def import_teams_csv(request: Request, file: UploadFile = File(...)):
     """
     Import teams from CSV file.
     
@@ -1551,21 +1500,16 @@ def import_teams_csv():
     from io import StringIO
     
     try:
-        # Check if file was uploaded
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
-        
-        file = request.files['file']
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            return JSONResponse(content={'error': 'No file selected'}, status_code=400)
         
         # Get conflict mode from query parameter
-        conflict_mode = request.args.get('conflict_mode', 'skip')
+        conflict_mode = request.query_params.get('conflict_mode', 'skip')
         if conflict_mode not in ['overwrite', 'skip']:
-            return jsonify({'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}), 400
+            return JSONResponse(content={'error': 'Invalid conflict_mode. Use "overwrite" or "skip"'}, status_code=400)
         
         # Read CSV file
-        content = file.read()
+        content = file.file.read()
         try:
             text = content.decode('utf-8-sig')
         except UnicodeDecodeError:
@@ -1642,15 +1586,15 @@ def import_teams_csv():
         conn.commit()
         conn.close()
         
-        return jsonify({
+        return {
             'success': True,
             'total': total_rows,
             'imported': imported_count,
             'updated': updated_count,
             'skipped': skipped_count,
             'errors': errors
-        })
+        }
         
     except Exception as e:
-        current_app.logger.error(f"Import teams error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Import teams error: {str(e)}")
+        return JSONResponse(content={'error': str(e)}, status_code=500)

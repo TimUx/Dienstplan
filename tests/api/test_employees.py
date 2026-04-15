@@ -11,18 +11,18 @@ class TestGetEmployees:
 
     def test_get_employees_returns_list(self, client):
         resp = client.get('/api/employees')
-        data = resp.get_json()
+        data = resp.json()
         assert isinstance(data, list)
 
     def test_get_employees_has_sample_data(self, client):
         resp = client.get('/api/employees')
-        data = resp.get_json()
+        data = resp.json()
         # Sample data has at least 17 employees
         assert len(data) >= 17
 
     def test_get_employees_have_required_fields(self, client):
         resp = client.get('/api/employees')
-        employees = resp.get_json()
+        employees = resp.json()
         assert len(employees) > 0
         first = employees[0]
         assert 'id' in first
@@ -32,7 +32,7 @@ class TestGetEmployees:
 
     def test_get_employee_by_id(self, client):
         # Get all first then fetch one
-        employees = client.get('/api/employees').get_json()
+        employees = client.get('/api/employees').json()
         emp_id = employees[0]['id']
         resp = client.get(f'/api/employees/{emp_id}')
         assert resp.status_code == 200
@@ -53,7 +53,7 @@ class TestCreateEmployee:
         }
 
     def test_create_without_auth_returns_401(self, client):
-        csrf = client.get('/api/csrf-token').get_json()['token']
+        csrf = client.get('/api/csrf-token').json()['token']
         resp = client.post(
             '/api/employees',
             json=self._new_emp(),
@@ -75,7 +75,7 @@ class TestCreateEmployee:
             json=self._new_emp("003"),
             headers={'X-CSRF-Token': admin_client.csrf_token},
         )
-        data = resp.get_json()
+        data = resp.json()
         assert 'id' in data
 
     def test_missing_name_returns_400(self, admin_client):
@@ -127,10 +127,10 @@ class TestGetTeams:
 
     def test_get_teams_returns_list(self, client):
         resp = client.get('/api/teams')
-        data = resp.get_json()
+        data = resp.json()
         assert isinstance(data, list)
 
     def test_get_teams_has_sample_data(self, client):
         resp = client.get('/api/teams')
-        data = resp.get_json()
+        data = resp.json()
         assert len(data) >= 3

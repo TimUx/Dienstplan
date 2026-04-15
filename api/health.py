@@ -1,10 +1,11 @@
-"""Health check Blueprint."""
-from flask import Blueprint, jsonify
+"""Health check router."""
 import sys
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
-bp = Blueprint('health', __name__)
+router = APIRouter()
 
-@bp.route('/api/health', methods=['GET'])
+@router.get('/api/health')
 def health_check():
     from .shared import get_db
     try:
@@ -32,10 +33,10 @@ def health_check():
     python_version = sys.version.split()[0]
     
     status = 'healthy' if http_status == 200 else 'unhealthy'
-    return jsonify({
+    return JSONResponse(content={
         'status': status,
         'db': db_status,
         'version': app_version,
         'python': python_version,
         'ortools': ortools_version,
-    }), http_status
+    }, status_code=http_status)

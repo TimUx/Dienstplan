@@ -85,7 +85,10 @@ def main():
     # Import and start FastAPI app with Uvicorn (production ASGI server)
     try:
         from web_api import create_app
-        import uvicorn
+        try:
+            import uvicorn
+        except ImportError as e:
+            raise ImportError("uvicorn module not found") from e
         
         print(f"[OK] Server will be available at: {url}")
         print("[i] Using Uvicorn production ASGI server")
@@ -97,6 +100,9 @@ def main():
         app = create_app(db_path)
         # Use uvicorn production server
         uvicorn.run(app, host=host, port=port, log_level="info")
+        print("\n\n[*] Shutting down server...")
+        print("Thank you for using Dienstplan!")
+        sys.exit(0)
         
     except KeyboardInterrupt:
         print("\n\n[*] Shutting down server...")

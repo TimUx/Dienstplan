@@ -302,7 +302,7 @@ async def get_dashboard_stats(request: Request):
         'employeeAbsenceDays': employee_absence_days,
         'teamWorkload': team_workload,
         'employeeShiftDetails': employee_shift_details_list
-    })
+    }
 
 
 # ============================================================================

@@ -389,7 +389,7 @@ def export_shift_settings():
 
     except Exception as e:
         current_app.logger.error(f"Export shift settings error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Exportieren: {str(e)}'}), 500
+        return jsonify({'error': 'Fehler beim Exportieren der Schichteinstellungen'}), 500
 
 
 @bp.route('/api/settings/shifts/import', methods=['POST'])
@@ -424,8 +424,8 @@ def import_shift_settings():
     try:
         raw = uploaded_file.read().decode('utf-8')
         data = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return jsonify({'error': f'Ungültige JSON-Datei: {exc}'}), 400
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return jsonify({'error': 'Ungültige JSON-Datei: Datei konnte nicht gelesen werden'}), 400
 
     # Basic structure validation
     if not isinstance(data, dict):
@@ -630,4 +630,4 @@ def import_shift_settings():
 
     except Exception as e:
         current_app.logger.error(f"Import shift settings error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Importieren: {str(e)}'}), 500
+        return jsonify({'error': 'Fehler beim Importieren der Schichteinstellungen'}), 500

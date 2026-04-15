@@ -88,7 +88,7 @@ def main():
         try:
             import uvicorn
         except ImportError as e:
-            raise ImportError("uvicorn module not found") from e
+            raise ImportError("uvicorn module not found. Please install it with: pip install uvicorn[standard]") from e
         
         print(f"[OK] Server will be available at: {url}")
         print("[i] Using Uvicorn production ASGI server")

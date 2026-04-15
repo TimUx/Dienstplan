@@ -306,9 +306,9 @@ export function displayMonthView(data, employees) {
     }
 
     const weekGroups = groupDatesByWeek(dates);
-    const [fy, fm, fd] = dates[0].split('-').map(Number);
-    const firstDate = new Date(fy, fm - 1, fd);
-    const monthName = firstDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+    const selectedMonth = parseInt(document.getElementById('monthSelect').value, 10);
+    const selectedYear = parseInt(document.getElementById('monthYearSelect').value, 10);
+    const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 
     let html = `<div class="month-header"><h3>Monat: ${monthName}</h3></div>`;
     html += '<table class="calendar-table month-view"><thead>';

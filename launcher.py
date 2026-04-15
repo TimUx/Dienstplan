@@ -100,9 +100,6 @@ def main():
         app = create_app(db_path)
         # Use uvicorn production server
         uvicorn.run(app, host=host, port=port, log_level="info")
-        print("\n\n[*] Shutting down server...")
-        print("Thank you for using Dienstplan!")
-        sys.exit(0)
         
     except KeyboardInterrupt:
         print("\n\n[*] Shutting down server...")

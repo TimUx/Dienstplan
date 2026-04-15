@@ -10,11 +10,6 @@ import threading
 import time
 from pathlib import Path
 
-try:
-    from waitress import serve
-except ImportError:
-    serve = None
-
 def open_browser(url, delay=2):
     """Open browser after a short delay to let server start"""
     time.sleep(delay)
@@ -87,23 +82,24 @@ def main():
     browser_thread = threading.Thread(target=open_browser, args=(url,), daemon=True)
     browser_thread.start()
     
-    # Import and start Flask app with waitress (production WSGI server)
+    # Import and start FastAPI app with Uvicorn (production ASGI server)
     try:
         from web_api import create_app
-        
-        if serve is None:
-            raise ImportError("waitress module not found")
+        try:
+            import uvicorn
+        except ImportError as e:
+            raise ImportError("uvicorn module not found. Please install it with: pip install uvicorn[standard]") from e
         
         print(f"[OK] Server will be available at: {url}")
-        print("[i] Using Waitress production WSGI server")
+        print("[i] Using Uvicorn production ASGI server")
         print()
         print("[i] Tip: Close this window or press Ctrl+C to stop the server")
         print("=" * 60)
         print()
         
         app = create_app(db_path)
-        # Use waitress production server instead of Flask development server
-        serve(app, host=host, port=port, threads=4)
+        # Use uvicorn production server
+        uvicorn.run(app, host=host, port=port, log_level="info")
         
     except KeyboardInterrupt:
         print("\n\n[*] Shutting down server...")

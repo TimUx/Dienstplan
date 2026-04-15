@@ -720,7 +720,7 @@ def get_schedule(request: Request):
                 'limit': pagination['limit'],
                 'totalPages': pagination['totalPages'],
             }
-        })
+        }
         
     except Exception as e:
         return JSONResponse(content={'error': f'Database error: {str(e)}'}, status_code=500)
@@ -883,7 +883,8 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         _TOTAL_STEPS = 4
 
         def _update(status: str, message: str, step: int = None, **kwargs):
-                if step is not None:
+            data = {}
+            if step is not None:
                 data['planningStep'] = step
                 data['planningTotalSteps'] = _TOTAL_STEPS
             data.update(kwargs)
@@ -928,10 +929,82 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
                 WHERE sa.Date >= ? AND sa.Date <= ?
             """, (extended_start.isoformat(), extended_end.isoformat()))
             
-            existing_employee_assignments = cursor.fetchall()
+        existing_employee_assignments = cursor.fetchall()
+        
+        # Calculate weeks for boundary detection (needed for employee locks)
+        # We'll skip locking employee assignments in boundary weeks to avoid conflicts
+        from datetime import timedelta
+        dates_list = []
+        current = extended_start
+        while current <= extended_end:
+            dates_list.append(current)
+            current += timedelta(days=1)
+        
+        # Calculate weeks
+        weeks_for_boundary = []
+        current_week = []
+        for d in dates_list:
+            if d.weekday() == 6 and current_week:  # Sunday
+                weeks_for_boundary.append(current_week)
+                current_week = []
+            current_week.append(d)
+        if current_week:
+            weeks_for_boundary.append(current_week)
+        
+        # Identify boundary weeks (same logic as team lock boundary detection)
+        boundary_week_dates = set()
+        for week_dates in weeks_for_boundary:
+            has_dates_before_month = any(d < start_date for d in week_dates)
+            has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
+            has_dates_after_month = any(d > end_date for d in week_dates)
             
-            # Calculate weeks for boundary detection (needed for employee locks)
-            # We'll skip locking employee assignments in boundary weeks to avoid conflicts
+            # If week spans the boundary, mark all its dates as boundary dates
+            if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
+                boundary_week_dates.update(week_dates)
+                logger.info(f"Boundary week detected: {week_dates[0]} to {week_dates[-1]} - employee locks will be skipped")
+        
+        # Lock existing employee assignments
+        # CRITICAL FIX: Skip locking employee assignments in boundary weeks
+        # Boundary weeks span month boundaries and may have assignments that conflict
+        # with current shift configuration or team-based rotation requirements
+        for emp_id, date_str, shift_code in existing_employee_assignments:
+            assignment_date = date.fromisoformat(date_str)
+            
+            # Skip assignments in boundary weeks - they will be re-planned to match current config
+            if assignment_date in boundary_week_dates:
+                logger.info(f"Skipping lock for Employee {emp_id}, Date {date_str} (in boundary week)")
+                continue
+            
+            # CRITICAL FIX: Convert emp_id to int to match assignment.employee_id type
+            # Database returns TEXT ids as strings, but solver uses integers
+            try:
+                emp_id_int = int(emp_id)
+            except (ValueError, TypeError):
+                # If conversion fails, use as-is (for backward compatibility with non-numeric IDs)
+                emp_id_int = emp_id
+            locked_employee_shift[(emp_id_int, assignment_date)] = shift_code
+            logger.info(f"Locked: Employee {emp_id_int}, Date {date_str} -> {shift_code} (existing assignment)")
+        
+        if extended_end > end_date or extended_start < start_date:
+            # Query existing shift assignments for extended dates ONLY (not the main month)
+            # Join ShiftAssignments with Employees (for TeamId) and ShiftTypes (for Code)
+            # Logic: Get assignments within extended range that are OUTSIDE main month range
+            # This ensures we only lock assignments from adjacent months, not current month
+            cursor.execute("""
+                SELECT e.TeamId, sa.Date, st.Code
+                FROM ShiftAssignments sa
+                INNER JOIN Employees e ON sa.EmployeeId = e.Id
+                INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+                WHERE sa.Date >= ? AND sa.Date <= ?
+                AND (sa.Date < ? OR sa.Date > ?)
+                AND e.TeamId IS NOT NULL
+            """, (extended_start.isoformat(), extended_end.isoformat(),
+                  start_date.isoformat(), end_date.isoformat()))
+            
+            existing_team_assignments = cursor.fetchall()
+            
+            # Build locked constraints from existing assignments
+            # We need to map dates to week indices
             from datetime import timedelta
             dates_list = []
             current = extended_start
@@ -940,457 +1013,385 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
                 current += timedelta(days=1)
             
             # Calculate weeks
-            weeks_for_boundary = []
+            weeks = []
             current_week = []
             for d in dates_list:
                 if d.weekday() == 6 and current_week:  # Sunday
-                    weeks_for_boundary.append(current_week)
+                    weeks.append(current_week)
                     current_week = []
                 current_week.append(d)
             if current_week:
-                weeks_for_boundary.append(current_week)
+                weeks.append(current_week)
             
-            # Identify boundary weeks (same logic as team lock boundary detection)
-            boundary_week_dates = set()
-            for week_dates in weeks_for_boundary:
+            # Map dates to week indices
+            date_to_week = {}
+            for week_idx, week_dates in enumerate(weeks):
+                for d in week_dates:
+                    date_to_week[d] = week_idx
+            
+            # Lock existing team assignments
+            # CRITICAL FIX: Only lock team shifts for weeks entirely in adjacent months (not current month)
+            # Weeks that span the boundary between adjacent and current months should NOT be locked
+            # because they may have conflicting shifts (already-planned days vs. to-be-planned days)
+            
+            # Identify weeks that cross the month boundary
+            boundary_weeks = set()
+            for week_idx, week_dates in enumerate(weeks):
+                # Check if this week contains dates both inside AND outside the main planning month
                 has_dates_before_month = any(d < start_date for d in week_dates)
                 has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
                 has_dates_after_month = any(d > end_date for d in week_dates)
                 
-                # If week spans the boundary, mark all its dates as boundary dates
+                # If week spans the boundary, don't lock it
                 if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
-                    boundary_week_dates.update(week_dates)
-                    logger.info(f"Boundary week detected: {week_dates[0]} to {week_dates[-1]} - employee locks will be skipped")
+                    boundary_weeks.add(week_idx)
+                    logger.info(f"Week {week_idx} spans month boundary - will NOT be locked (dates: {week_dates[0]} to {week_dates[-1]})")
             
-            # Lock existing employee assignments
-            # CRITICAL FIX: Skip locking employee assignments in boundary weeks
-            # Boundary weeks span month boundaries and may have assignments that conflict
-            # with current shift configuration or team-based rotation requirements
-            for emp_id, date_str, shift_code in existing_employee_assignments:
+            # First pass: identify conflicts and boundary weeks
+            conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
+            for team_id, date_str, shift_code in existing_team_assignments:
                 assignment_date = date.fromisoformat(date_str)
-                
-                # Skip assignments in boundary weeks - they will be re-planned to match current config
-                if assignment_date in boundary_week_dates:
-                    logger.info(f"Skipping lock for Employee {emp_id}, Date {date_str} (in boundary week)")
-                    continue
-                
-                # CRITICAL FIX: Convert emp_id to int to match assignment.employee_id type
-                # Database returns TEXT ids as strings, but solver uses integers
-                try:
-                    emp_id_int = int(emp_id)
-                except (ValueError, TypeError):
-                    # If conversion fails, use as-is (for backward compatibility with non-numeric IDs)
-                    emp_id_int = emp_id
-                locked_employee_shift[(emp_id_int, assignment_date)] = shift_code
-                logger.info(f"Locked: Employee {emp_id_int}, Date {date_str} -> {shift_code} (existing assignment)")
-            
-            if extended_end > end_date or extended_start < start_date:
-                # Query existing shift assignments for extended dates ONLY (not the main month)
-                # Join ShiftAssignments with Employees (for TeamId) and ShiftTypes (for Code)
-                # Logic: Get assignments within extended range that are OUTSIDE main month range
-                # This ensures we only lock assignments from adjacent months, not current month
-                cursor.execute("""
-                    SELECT e.TeamId, sa.Date, st.Code
-                    FROM ShiftAssignments sa
-                    INNER JOIN Employees e ON sa.EmployeeId = e.Id
-                    INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-                    WHERE sa.Date >= ? AND sa.Date <= ?
-                    AND (sa.Date < ? OR sa.Date > ?)
-                    AND e.TeamId IS NOT NULL
-                """, (extended_start.isoformat(), extended_end.isoformat(),
-                      start_date.isoformat(), end_date.isoformat()))
-                
-                existing_team_assignments = cursor.fetchall()
-                
-                # Build locked constraints from existing assignments
-                # We need to map dates to week indices
-                from datetime import timedelta
-                dates_list = []
-                current = extended_start
-                while current <= extended_end:
-                    dates_list.append(current)
-                    current += timedelta(days=1)
-                
-                # Calculate weeks
-                weeks = []
-                current_week = []
-                for d in dates_list:
-                    if d.weekday() == 6 and current_week:  # Sunday
-                        weeks.append(current_week)
-                        current_week = []
-                    current_week.append(d)
-                if current_week:
-                    weeks.append(current_week)
-                
-                # Map dates to week indices
-                date_to_week = {}
-                for week_idx, week_dates in enumerate(weeks):
-                    for d in week_dates:
-                        date_to_week[d] = week_idx
-                
-                # Lock existing team assignments
-                # CRITICAL FIX: Only lock team shifts for weeks entirely in adjacent months (not current month)
-                # Weeks that span the boundary between adjacent and current months should NOT be locked
-                # because they may have conflicting shifts (already-planned days vs. to-be-planned days)
-                
-                # Identify weeks that cross the month boundary
-                boundary_weeks = set()
-                for week_idx, week_dates in enumerate(weeks):
-                    # Check if this week contains dates both inside AND outside the main planning month
-                    has_dates_before_month = any(d < start_date for d in week_dates)
-                    has_dates_in_month = any(start_date <= d <= end_date for d in week_dates)
-                    has_dates_after_month = any(d > end_date for d in week_dates)
+                if assignment_date in date_to_week:
+                    week_idx = date_to_week[assignment_date]
                     
-                    # If week spans the boundary, don't lock it
-                    if (has_dates_before_month and has_dates_in_month) or (has_dates_in_month and has_dates_after_month):
-                        boundary_weeks.add(week_idx)
-                        logger.info(f"Week {week_idx} spans month boundary - will NOT be locked (dates: {week_dates[0]} to {week_dates[-1]})")
-                
-                # First pass: identify conflicts and boundary weeks
-                conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
-                for team_id, date_str, shift_code in existing_team_assignments:
-                    assignment_date = date.fromisoformat(date_str)
-                    if assignment_date in date_to_week:
-                        week_idx = date_to_week[assignment_date]
-                        
-                        # Skip weeks that cross the month boundary
-                        if week_idx in boundary_weeks:
-                            continue
-                        
-                        # Check for conflicts
-                        if (team_id, week_idx) in locked_team_shift:
-                            existing_shift = locked_team_shift[(team_id, week_idx)]
-                            if existing_shift != shift_code:
-                                # Conflict detected: different shift codes for same team/week
-                                logger.warning(f"CONFLICT: Team {team_id}, Week {week_idx} has conflicting shifts: {existing_shift} vs {shift_code}")
-                                conflicting_team_weeks.add((team_id, week_idx))
-                        else:
-                            # No conflict yet - tentatively add this lock
-                            locked_team_shift[(team_id, week_idx)] = shift_code
-                
-                # Second pass: remove all conflicting locks
-                for team_id, week_idx in conflicting_team_weeks:
+                    # Skip weeks that cross the month boundary
+                    if week_idx in boundary_weeks:
+                        continue
+                    
+                    # Check for conflicts
                     if (team_id, week_idx) in locked_team_shift:
-                        logger.warning(f"  Removing team lock for Team {team_id}, Week {week_idx} to avoid INFEASIBLE")
-                        del locked_team_shift[(team_id, week_idx)]
+                        existing_shift = locked_team_shift[(team_id, week_idx)]
+                        if existing_shift != shift_code:
+                            # Conflict detected: different shift codes for same team/week
+                            logger.warning(f"CONFLICT: Team {team_id}, Week {week_idx} has conflicting shifts: {existing_shift} vs {shift_code}")
+                            conflicting_team_weeks.add((team_id, week_idx))
+                    else:
+                        # No conflict yet - tentatively add this lock
+                        locked_team_shift[(team_id, week_idx)] = shift_code
+            
+            # Second pass: remove all conflicting locks
+            for team_id, week_idx in conflicting_team_weeks:
+                if (team_id, week_idx) in locked_team_shift:
+                    logger.warning(f"  Removing team lock for Team {team_id}, Week {week_idx} to avoid INFEASIBLE")
+                    del locked_team_shift[(team_id, week_idx)]
+            
+            # Log remaining locks
+            for (team_id, week_idx), shift_code in locked_team_shift.items():
+                logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignments)")
+        
+        conn.close()
+        
+        # Load previous shifts for cross-month consecutive days checking
+        # CRITICAL FIX: Extended lookback to capture full consecutive chains
+        max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
+        
+        # Maximum lookback period to prevent excessive database queries
+        max_lookback_days = 60
+        
+        previous_employee_shifts = {}
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # First pass: Load initial lookback period (same as before)
+        initial_lookback_start = extended_start - timedelta(days=max_consecutive_limit)
+        initial_lookback_end = extended_start - timedelta(days=1)
+        
+        cursor.execute("""
+            SELECT sa.EmployeeId, sa.Date, st.Code
+            FROM ShiftAssignments sa
+            INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+            WHERE sa.Date >= ? AND sa.Date <= ?
+            ORDER BY sa.Date
+        """, (initial_lookback_start.isoformat(), initial_lookback_end.isoformat()))
+        
+        initial_shifts = cursor.fetchall()
+        
+        # Group shifts by employee for analysis
+        employee_shift_dates = {}
+        for emp_id, date_str, shift_code in initial_shifts:
+            shift_date = date.fromisoformat(date_str)
+            try:
+                emp_id_int = int(emp_id)
+            except (ValueError, TypeError):
+                emp_id_int = emp_id
                 
-                # Log remaining locks
-                for (team_id, week_idx), shift_code in locked_team_shift.items():
-                    logger.info(f"Locked: Team {team_id}, Week {week_idx} -> {shift_code} (from existing assignments)")
+            if emp_id_int not in employee_shift_dates:
+                employee_shift_dates[emp_id_int] = []
+            employee_shift_dates[emp_id_int].append((shift_date, shift_code))
+            previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
+        
+        # Second pass: For each employee with shifts at the start of lookback period,
+        # extend lookback to capture their full consecutive chain
+        employees_to_extend = []
+        for emp_id, shifts in employee_shift_dates.items():
+            if not shifts:
+                continue
             
-            conn.close()
+            # Sort by date
+            shifts.sort(key=lambda x: x[0])
             
-            # Load previous shifts for cross-month consecutive days checking
-            # CRITICAL FIX: Extended lookback to capture full consecutive chains
-            max_consecutive_limit = max((st.max_consecutive_days for st in shift_types), default=7)
+            # Check if employee has shifts at the very beginning of lookback period
+            # If so, they might have more consecutive days further back
+            earliest_shift_date = shifts[0][0]
             
-            # Maximum lookback period to prevent excessive database queries
-            max_lookback_days = 60
+            # Check if there's a consecutive chain leading up to extended_start
+            # Work backwards from extended_start - 1 to find consecutive days
+            consecutive_days = 0
+            check_date = extended_start - timedelta(days=1)
+            # Check max_consecutive_limit days to see if all have shifts
+            for _ in range(max_consecutive_limit):
+                has_shift = any(shift_date == check_date for shift_date, _ in shifts)
+                if has_shift:
+                    consecutive_days += 1
+                    check_date -= timedelta(days=1)
+                else:
+                    break
             
-            previous_employee_shifts = {}
-            conn = db.get_connection()
-            cursor = conn.cursor()
+            # If we found exactly max_consecutive_limit consecutive days without breaking,
+            # the chain might extend further back. We need extended lookback to find out.
+            if consecutive_days == max_consecutive_limit:
+                employees_to_extend.append(emp_id)
+        
+        # Extend lookback for employees who need it
+        if employees_to_extend:
+            extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
+            extended_lookback_end = initial_lookback_start - timedelta(days=1)
             
-            # First pass: Load initial lookback period (same as before)
-            initial_lookback_start = extended_start - timedelta(days=max_consecutive_limit)
-            initial_lookback_end = extended_start - timedelta(days=1)
+            logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
             
-            cursor.execute("""
+            # Query extended period for these employees only
+            # Use parameterized query to prevent SQL injection
+            placeholders = ','.join('?' * len(employees_to_extend))
+            query = f"""
                 SELECT sa.EmployeeId, sa.Date, st.Code
                 FROM ShiftAssignments sa
                 INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
                 WHERE sa.Date >= ? AND sa.Date <= ?
+                AND sa.EmployeeId IN ({placeholders})
                 ORDER BY sa.Date
-            """, (initial_lookback_start.isoformat(), initial_lookback_end.isoformat()))
+            """
+            params = [extended_lookback_start.isoformat(), extended_lookback_end.isoformat()] + employees_to_extend
+            cursor.execute(query, params)
             
-            initial_shifts = cursor.fetchall()
-            
-            # Group shifts by employee for analysis
-            employee_shift_dates = {}
-            for emp_id, date_str, shift_code in initial_shifts:
+            for emp_id, date_str, shift_code in cursor.fetchall():
                 shift_date = date.fromisoformat(date_str)
                 try:
                     emp_id_int = int(emp_id)
                 except (ValueError, TypeError):
                     emp_id_int = emp_id
-                    
-                if emp_id_int not in employee_shift_dates:
-                    employee_shift_dates[emp_id_int] = []
-                employee_shift_dates[emp_id_int].append((shift_date, shift_code))
                 previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
-            
-            # Second pass: For each employee with shifts at the start of lookback period,
-            # extend lookback to capture their full consecutive chain
-            employees_to_extend = []
-            for emp_id, shifts in employee_shift_dates.items():
-                if not shifts:
-                    continue
-                
-                # Sort by date
-                shifts.sort(key=lambda x: x[0])
-                
-                # Check if employee has shifts at the very beginning of lookback period
-                # If so, they might have more consecutive days further back
-                earliest_shift_date = shifts[0][0]
-                
-                # Check if there's a consecutive chain leading up to extended_start
-                # Work backwards from extended_start - 1 to find consecutive days
-                consecutive_days = 0
-                check_date = extended_start - timedelta(days=1)
-                # Check max_consecutive_limit days to see if all have shifts
-                for _ in range(max_consecutive_limit):
-                    has_shift = any(shift_date == check_date for shift_date, _ in shifts)
-                    if has_shift:
-                        consecutive_days += 1
-                        check_date -= timedelta(days=1)
-                    else:
-                        break
-                
-                # If we found exactly max_consecutive_limit consecutive days without breaking,
-                # the chain might extend further back. We need extended lookback to find out.
-                if consecutive_days == max_consecutive_limit:
-                    employees_to_extend.append(emp_id)
-            
-            # Extend lookback for employees who need it
-            if employees_to_extend:
-                extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
-                extended_lookback_end = initial_lookback_start - timedelta(days=1)
-                
-                logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
-                
-                # Query extended period for these employees only
-                # Use parameterized query to prevent SQL injection
-                placeholders = ','.join('?' * len(employees_to_extend))
-                query = f"""
-                    SELECT sa.EmployeeId, sa.Date, st.Code
-                    FROM ShiftAssignments sa
-                    INNER JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-                    WHERE sa.Date >= ? AND sa.Date <= ?
-                    AND sa.EmployeeId IN ({placeholders})
-                    ORDER BY sa.Date
-                """
-                params = [extended_lookback_start.isoformat(), extended_lookback_end.isoformat()] + employees_to_extend
-                cursor.execute(query, params)
-                
-                for emp_id, date_str, shift_code in cursor.fetchall():
-                    shift_date = date.fromisoformat(date_str)
-                    try:
-                        emp_id_int = int(emp_id)
-                    except (ValueError, TypeError):
-                        emp_id_int = emp_id
-                    previous_employee_shifts[(emp_id_int, shift_date)] = shift_code
-            
-            conn.close()
-            
-            logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
-            if previous_employee_shifts:
-                # Find actual date range
-                all_dates = [d for (_, d) in previous_employee_shifts.keys()]
-                if all_dates:
-                    actual_lookback_start = min(all_dates)
-                    actual_lookback_end = max(all_dates)
-                    logger.info(f"  Previous shifts date range: {actual_lookback_start} to {actual_lookback_end}")
-                    if employees_to_extend:
-                        logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
-            
-            # Create model with extended dates and locked constraints
-            _update('running', 'Planungsmodell wird erstellt…', step=2)
-            from model import create_shift_planning_model
-            from solver import solve_shift_planning, get_infeasibility_diagnostics
-            planning_model = create_shift_planning_model(
-                employees, teams, extended_start, extended_end, absences, 
-                shift_types=shift_types,
-                locked_team_shift=locked_team_shift if locked_team_shift else None,
-                locked_employee_shift=locked_employee_shift if locked_employee_shift else None,
-                previous_employee_shifts=previous_employee_shifts if previous_employee_shifts else None
-            )
-            
-            # Check if cancelled before starting the solve
-            row = _get_job(db, job_id)
-            if row and row['status'] == 'cancelled':
-                return
+        
+        conn.close()
+        
+        logger.info(f"Loaded {len(previous_employee_shifts)} previous shift assignments for consecutive days checking")
+        if previous_employee_shifts:
+            # Find actual date range
+            all_dates = [d for (_, d) in previous_employee_shifts.keys()]
+            if all_dates:
+                actual_lookback_start = min(all_dates)
+                actual_lookback_end = max(all_dates)
+                logger.info(f"  Previous shifts date range: {actual_lookback_start} to {actual_lookback_end}")
+                if employees_to_extend:
+                    logger.info(f"  Extended lookback for {len(employees_to_extend)} employees to capture full consecutive chains")
+        
+        # Create model with extended dates and locked constraints
+        _update('running', 'Planungsmodell wird erstellt…', step=2)
+        from model import create_shift_planning_model
+        from solver import solve_shift_planning, get_infeasibility_diagnostics
+        planning_model = create_shift_planning_model(
+            employees, teams, extended_start, extended_end, absences, 
+            shift_types=shift_types,
+            locked_team_shift=locked_team_shift if locked_team_shift else None,
+            locked_employee_shift=locked_employee_shift if locked_employee_shift else None,
+            previous_employee_shifts=previous_employee_shifts if previous_employee_shifts else None
+        )
+        
+        # Check if cancelled before starting the solve
+        row = _get_job(db, job_id)
+        if row and row['status'] == 'cancelled':
+            return
 
-            # Solve
-            # SOLVER_TIME_LIMIT_SECONDS can be set in Flask config for test environments.
-            # Production leaves it unset (None = unlimited).
-            _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
-            solver_time_limit = None  # use default
-            result = solve_shift_planning(
-                planning_model,
-                global_settings=global_settings,
-                db_path=db.db_path,
-                time_limit_seconds=solver_time_limit,
-            )
+        # Solve
+        # SOLVER_TIME_LIMIT_SECONDS can be set in Flask config for test environments.
+        # Production leaves it unset (None = unlimited).
+        _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
+        solver_time_limit = None  # use default
+        result = solve_shift_planning(
+            planning_model,
+            global_settings=global_settings,
+            db_path=db.db_path,
+            time_limit_seconds=solver_time_limit,
+        )
+        
+        if not result:
+            # Get diagnostic information to help user understand the issue
+            diagnostics = get_infeasibility_diagnostics(planning_model)
             
-            if not result:
-                # Get diagnostic information to help user understand the issue
-                diagnostics = get_infeasibility_diagnostics(planning_model)
-                
-                # Build helpful error message with root cause analysis
-                error_details = []
-                error_details.append(f"Planung für {start_date.strftime('%d.%m.%Y')} bis {end_date.strftime('%d.%m.%Y')} nicht möglich.")
+            # Build helpful error message with root cause analysis
+            error_details = []
+            error_details.append(f"Planung für {start_date.strftime('%d.%m.%Y')} bis {end_date.strftime('%d.%m.%Y')} nicht möglich.")
+            error_details.append("")
+            error_details.append("GRUNDINFORMATIONEN:")
+            error_details.append(f"• Mitarbeiter gesamt: {diagnostics['total_employees']}")
+            error_details.append(f"• Teams: {diagnostics['total_teams']}")
+            error_details.append(f"• Planungszeitraum: {diagnostics['planning_days']} Tage ({diagnostics['planning_weeks']:.1f} Wochen)")
+            
+            if diagnostics['employees_with_absences'] > 0:
+                error_details.append(f"• Mitarbeiter mit Abwesenheiten: {diagnostics['employees_with_absences']}")
+                error_details.append(f"• Abwesenheitstage gesamt: {diagnostics['total_absence_days']} von {diagnostics['total_employees'] * diagnostics['planning_days']} ({diagnostics['absence_ratio']*100:.1f}%)")
+            
+            # Add specific issues - these are the root causes
+            if diagnostics['potential_issues']:
                 error_details.append("")
-                error_details.append("GRUNDINFORMATIONEN:")
-                error_details.append(f"• Mitarbeiter gesamt: {diagnostics['total_employees']}")
-                error_details.append(f"• Teams: {diagnostics['total_teams']}")
-                error_details.append(f"• Planungszeitraum: {diagnostics['planning_days']} Tage ({diagnostics['planning_weeks']:.1f} Wochen)")
-                
-                if diagnostics['employees_with_absences'] > 0:
-                    error_details.append(f"• Mitarbeiter mit Abwesenheiten: {diagnostics['employees_with_absences']}")
-                    error_details.append(f"• Abwesenheitstage gesamt: {diagnostics['total_absence_days']} von {diagnostics['total_employees'] * diagnostics['planning_days']} ({diagnostics['absence_ratio']*100:.1f}%)")
-                
-                # Add specific issues - these are the root causes
-                if diagnostics['potential_issues']:
-                    error_details.append("")
-                    error_details.append("URSACHEN (Warum die Planung nicht möglich ist):")
-                    for i, issue in enumerate(diagnostics['potential_issues'], 1):
-                        error_details.append(f"{i}. {issue}")
-                else:
-                    error_details.append("")
-                    error_details.append("URSACHE:")
-                    error_details.append("Die genaue Ursache konnte nicht automatisch ermittelt werden.")
-                    error_details.append("Mögliche Gründe:")
-                    error_details.append("• Zu viele Abwesenheiten im Planungszeitraum")
-                    error_details.append("• Zu wenige Mitarbeiter für die erforderliche Schichtbesetzung")
-                    error_details.append("• Konflikte zwischen Ruhezeiten und Schichtzuweisungen")
-                    error_details.append("• Teams sind zu klein für die Rotationsanforderungen")
-                
-                # Add staffing analysis for shifts with issues
-                problem_shifts = [shift for shift, data in diagnostics['shift_analysis'].items() 
-                                 if not data['is_feasible']]
-                if problem_shifts:
-                    error_details.append("")
-                    error_details.append("SCHICHTBESETZUNGSPROBLEME:")
-                    for shift in problem_shifts:
-                        data = diagnostics['shift_analysis'][shift]
-                        error_details.append(f"• Schicht {shift}: Nur {data['eligible_employees']} Mitarbeiter verfügbar, aber {data['min_required']} erforderlich")
-                
-                error_message = "\n".join(error_details)
-                
-                _update('error',
-                        'Planung fehlgeschlagen',
-                        details=error_message,
-                        diagnostics={
-                            'total_employees': diagnostics['total_employees'],
-                            'available_employees': diagnostics['available_employees'],
-                            'employees_with_absences': diagnostics['employees_with_absences'],
-                            'absent_employees': diagnostics['absent_employees'],
-                            'potential_issues': diagnostics['potential_issues'],
-                            'shift_analysis': diagnostics.get('shift_analysis', {})
-                        })
-                return
+                error_details.append("URSACHEN (Warum die Planung nicht möglich ist):")
+                for i, issue in enumerate(diagnostics['potential_issues'], 1):
+                    error_details.append(f"{i}. {issue}")
+            else:
+                error_details.append("")
+                error_details.append("URSACHE:")
+                error_details.append("Die genaue Ursache konnte nicht automatisch ermittelt werden.")
+                error_details.append("Mögliche Gründe:")
+                error_details.append("• Zu viele Abwesenheiten im Planungszeitraum")
+                error_details.append("• Zu wenige Mitarbeiter für die erforderliche Schichtbesetzung")
+                error_details.append("• Konflikte zwischen Ruhezeiten und Schichtzuweisungen")
+                error_details.append("• Teams sind zu klein für die Rotationsanforderungen")
             
-            assignments, complete_schedule, planning_report = result
+            # Add staffing analysis for shifts with issues
+            problem_shifts = [shift for shift, data in diagnostics['shift_analysis'].items() 
+                             if not data['is_feasible']]
+            if problem_shifts:
+                error_details.append("")
+                error_details.append("SCHICHTBESETZUNGSPROBLEME:")
+                for shift in problem_shifts:
+                    data = diagnostics['shift_analysis'][shift]
+                    error_details.append(f"• Schicht {shift}: Nur {data['eligible_employees']} Mitarbeiter verfügbar, aber {data['min_required']} erforderlich")
             
-            # Filter assignments to include:
-            # 1. All days in the requested month (start_date to end_date)
-            # 2. Extended days into NEXT month (end_date < date <= extended_end) - to maintain rotation continuity
-            # 3. EXCLUDE extended days from PREVIOUS month (extended_start <= date < start_date) - these should already exist
-            filtered_assignments = [a for a in assignments if start_date <= a.date <= extended_end]
+            error_message = "\n".join(error_details)
             
-            # Count assignments by category for logging
-            current_month_count = len([a for a in filtered_assignments if start_date <= a.date <= end_date])
-            future_extended_count = len([a for a in filtered_assignments if a.date > end_date])
-            past_excluded_count = len([a for a in assignments if a.date < start_date])
-            
-            logger.info(f"Total assignments generated: {len(assignments)}")
-            logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
-            if future_extended_count > 0:
-                logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
-            if past_excluded_count > 0:
-                logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
-            
-            # Save to database
-            conn = db.get_connection()
-            cursor = conn.cursor()
-            
-            # Delete existing non-fixed assignments for current month AND future extended days
-            # (but NOT for past extended days - those were planned by previous month)
-            if force:
-                cursor.execute("""
-                    DELETE FROM ShiftAssignments 
-                    WHERE Date >= ? AND Date <= ? AND IsFixed = 0
-                """, (start_date.isoformat(), extended_end.isoformat()))
-            
-            # Insert new assignments (current month + future extended days)
-            # CRITICAL FIX: Skip assignments that are locked (already exist from previous planning)
-            # This prevents duplicate shifts when planning months that overlap with previously planned weeks
-            skipped_locked = 0
-            inserted = 0
-            for assignment in filtered_assignments:
-                # Check if this assignment was locked (already exists from previous month)
-                if (assignment.employee_id, assignment.date) in locked_employee_shift:
-                    # Skip inserting - this assignment already exists in the database
-                    # It was loaded as a locked constraint and should not be duplicated
-                    skipped_locked += 1
-                    continue
-                
-                # CRITICAL: Check if assignment already exists (safety against double shifts)
-                # With unique constraint on (EmployeeId, Date), this prevents database errors
-                cursor.execute("""
-                    SELECT Id FROM ShiftAssignments 
-                    WHERE EmployeeId = ? AND Date = ?
-                """, (assignment.employee_id, assignment.date.isoformat()))
-                
-                if cursor.fetchone():
-                    # Assignment already exists - skip to prevent duplicate
-                    skipped_locked += 1
-                    continue
-                
-                cursor.execute("""
-                    INSERT INTO ShiftAssignments 
-                    (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    assignment.employee_id,
-                    assignment.shift_type_id,
-                    assignment.date.isoformat(),
-                    0,
-                    0,
-                    datetime.utcnow().isoformat(),
-                    "Python-OR-Tools"
-                ))
-                inserted += 1
-            
-            logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
-            
-            # TD (Tag Dienst / Day Duty) assignments have been removed from the system
-            # This section is no longer used
-            
-            # Create or update approval record for this month (not approved by default)
-            cursor.execute("""
-                INSERT INTO ShiftPlanApprovals (Year, Month, IsApproved, CreatedAt)
-                VALUES (?, ?, 0, ?)
-                ON CONFLICT(Year, Month) DO UPDATE SET
-                    IsApproved = 0,
-                    ApprovedAt = NULL,
-                    ApprovedBy = NULL,
-                    ApprovedByName = NULL
-            """, (start_date.year, start_date.month, datetime.utcnow().isoformat()))
-            
-            conn.commit()
-            conn.close()
-
-            # Serialize and persist the PlanningReport so it can be retrieved later
-            _update('running', 'Schichten werden gespeichert…', step=4)
-            _save_planning_report(db, start_date.year, start_date.month, planning_report)
-
-            report_url = f"/api/planning/report/{start_date.year}/{start_date.month}"
-
-            _update('success',
-                    f'Erfolgreich! {len(filtered_assignments)} Schichten wurden geplant.',
-                    assignmentsCount=len(filtered_assignments),
-                    year=start_date.year,
-                    month=start_date.month,
-                    report_url=report_url,
-                    extendedPlanning={
-                        'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
-                        'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0
+            _update('error',
+                    'Planung fehlgeschlagen',
+                    details=error_message,
+                    diagnostics={
+                        'total_employees': diagnostics['total_employees'],
+                        'available_employees': diagnostics['available_employees'],
+                        'employees_with_absences': diagnostics['employees_with_absences'],
+                        'absent_employees': diagnostics['absent_employees'],
+                        'potential_issues': diagnostics['potential_issues'],
+                        'shift_analysis': diagnostics.get('shift_analysis', {})
                     })
+            return
+        
+        assignments, complete_schedule, planning_report = result
+        
+        # Filter assignments to include:
+        # 1. All days in the requested month (start_date to end_date)
+        # 2. Extended days into NEXT month (end_date < date <= extended_end) - to maintain rotation continuity
+        # 3. EXCLUDE extended days from PREVIOUS month (extended_start <= date < start_date) - these should already exist
+        filtered_assignments = [a for a in assignments if start_date <= a.date <= extended_end]
+        
+        # Count assignments by category for logging
+        current_month_count = len([a for a in filtered_assignments if start_date <= a.date <= end_date])
+        future_extended_count = len([a for a in filtered_assignments if a.date > end_date])
+        past_excluded_count = len([a for a in assignments if a.date < start_date])
+        
+        logger.info(f"Total assignments generated: {len(assignments)}")
+        logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
+        if future_extended_count > 0:
+            logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
+        if past_excluded_count > 0:
+            logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
+        
+        # Save to database
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # Delete existing non-fixed assignments for current month AND future extended days
+        # (but NOT for past extended days - those were planned by previous month)
+        if force:
+            cursor.execute("""
+                DELETE FROM ShiftAssignments 
+                WHERE Date >= ? AND Date <= ? AND IsFixed = 0
+            """, (start_date.isoformat(), extended_end.isoformat()))
+        
+        # Insert new assignments (current month + future extended days)
+        # CRITICAL FIX: Skip assignments that are locked (already exist from previous planning)
+        # This prevents duplicate shifts when planning months that overlap with previously planned weeks
+        skipped_locked = 0
+        inserted = 0
+        for assignment in filtered_assignments:
+            # Check if this assignment was locked (already exists from previous month)
+            if (assignment.employee_id, assignment.date) in locked_employee_shift:
+                # Skip inserting - this assignment already exists in the database
+                # It was loaded as a locked constraint and should not be duplicated
+                skipped_locked += 1
+                continue
+            
+            # CRITICAL: Check if assignment already exists (safety against double shifts)
+            # With unique constraint on (EmployeeId, Date), this prevents database errors
+            cursor.execute("""
+                SELECT Id FROM ShiftAssignments 
+                WHERE EmployeeId = ? AND Date = ?
+            """, (assignment.employee_id, assignment.date.isoformat()))
+            
+            if cursor.fetchone():
+                # Assignment already exists - skip to prevent duplicate
+                skipped_locked += 1
+                continue
+            
+            cursor.execute("""
+                INSERT INTO ShiftAssignments 
+                (EmployeeId, ShiftTypeId, Date, IsManual, IsFixed, CreatedAt, CreatedBy)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                assignment.employee_id,
+                assignment.shift_type_id,
+                assignment.date.isoformat(),
+                0,
+                0,
+                datetime.utcnow().isoformat(),
+                "Python-OR-Tools"
+            ))
+            inserted += 1
+        
+        logger.info(f"Inserted {inserted} new assignments, skipped {skipped_locked} locked assignments")
+        
+        # TD (Tag Dienst / Day Duty) assignments have been removed from the system
+        # This section is no longer used
+        
+        # Create or update approval record for this month (not approved by default)
+        cursor.execute("""
+            INSERT INTO ShiftPlanApprovals (Year, Month, IsApproved, CreatedAt)
+            VALUES (?, ?, 0, ?)
+            ON CONFLICT(Year, Month) DO UPDATE SET
+                IsApproved = 0,
+                ApprovedAt = NULL,
+                ApprovedBy = NULL,
+                ApprovedByName = NULL
+        """, (start_date.year, start_date.month, datetime.utcnow().isoformat()))
+        
+        conn.commit()
+        conn.close()
 
-        except Exception as exc:
-            _logger.exception(f"Planning job {job_id} failed")
-            _update('error', 'Unbekannter Fehler', details=str(exc))
+        # Serialize and persist the PlanningReport so it can be retrieved later
+        _update('running', 'Schichten werden gespeichert…', step=4)
+        _save_planning_report(db, start_date.year, start_date.month, planning_report)
+
+        report_url = f"/api/planning/report/{start_date.year}/{start_date.month}"
+
+        _update('success',
+                f'Erfolgreich! {len(filtered_assignments)} Schichten wurden geplant.',
+                assignmentsCount=len(filtered_assignments),
+                year=start_date.year,
+                month=start_date.month,
+                report_url=report_url,
+                extendedPlanning={
+                    'extendedEnd': extended_end.isoformat() if extended_end > end_date else None,
+                    'daysExtended': (extended_end - end_date).days if extended_end > end_date else 0
+                })
+
+    except Exception as exc:
+        _logger.exception(f"Planning job {job_id} failed")
+        _update('error', 'Unbekannter Fehler', details=str(exc))
 
 
 @router.post('/api/shifts/plan', dependencies=[Depends(require_role('Admin', 'Disponent')), Depends(check_csrf)])
@@ -1558,7 +1559,7 @@ def get_plan_approval_status(request: Request, year, month):
                 'month': month,
                 'isApproved': False,
                 'exists': False
-            })
+            }
         
         return {
             'id': row['Id'],
@@ -1571,7 +1572,7 @@ def get_plan_approval_status(request: Request, year, month):
             'notes': row['Notes'],
             'createdAt': row['CreatedAt'],
             'exists': True
-        })
+        }
         
     except Exception as e:
         return JSONResponse(content={'error': str(e)}, status_code=500)
@@ -1629,7 +1630,7 @@ def approve_plan(request: Request, year, month):
         return {
             'success': True,
             'message': f'Dienstplan für {month:02d}/{year} wurde {action}.'
-        })
+        }
         
     except Exception as e:
         return JSONResponse(content={'error': str(e)}, status_code=500)
@@ -1946,7 +1947,7 @@ def bulk_update_shift_assignments(request: Request):
                 'success': True,
                 'updated': updated_count,
                 'total': len(shift_ids)
-            })
+            }
             
         finally:
             if conn:
@@ -1997,7 +1998,7 @@ def toggle_fixed_assignment(request: Request, id):
             return {
                 'success': True,
                 'isFixed': bool(new_fixed_status)
-            })
+            }
             
         finally:
             if conn:
@@ -2441,9 +2442,10 @@ def export_schedule_excel(request: Request):
             import openpyxl
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         except ImportError:
-            return {
-                'error': 'Excel-Export erfordert openpyxl. Bitte installieren Sie es mit: pip install openpyxl'
-            }), 501
+            return JSONResponse(
+                content={'error': 'Excel-Export erfordert openpyxl. Bitte installieren Sie es mit: pip install openpyxl'},
+                status_code=501
+            )
         
         start_date = date.fromisoformat(start_date_str)
         end_date = date.fromisoformat(end_date_str)

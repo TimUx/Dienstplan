@@ -66,9 +66,9 @@ a = Analysis(
     binaries=ortools_binaries,  # Include OR-Tools binary dependencies
     datas=all_data_files,
     hiddenimports=[
-        'flask',
-        'flask_cors',
-        'waitress',
+        'fastapi',
+        'starlette',
+        'uvicorn',
         'ortools',
         'ortools.sat',
         'ortools.sat.python',

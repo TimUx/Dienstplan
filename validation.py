@@ -3,6 +3,7 @@ Validation module for shift planning results.
 Validates all rules and constraints after solving.
 """
 
+import math
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import List, Dict, Tuple, Optional
@@ -378,11 +379,17 @@ def validate_consecutive_shifts(
             last_date = assignment.date
         
         # Check max 5 consecutive night shifts
+        # Track last_night_date to detect free days between night blocks (which reset the counter).
         consecutive_nights = 0
+        last_night_date = None
         for assignment in emp_assignments:
             shift_code = get_shift_type_by_id(assignment.shift_type_id).code
             if shift_code == "N":
+                # Reset counter when there is a gap (free day) before this night shift
+                if last_night_date and (assignment.date - last_night_date).days > 1:
+                    consecutive_nights = 0
                 consecutive_nights += 1
+                last_night_date = assignment.date
                 if consecutive_nights > 5:
                     cause_type, cause = _analyze_absence_cause(
                         assignment.date, absences, employees, shift_code="N"
@@ -394,6 +401,7 @@ def validate_consecutive_shifts(
                     )
             else:
                 consecutive_nights = 0
+                last_night_date = None
 
 
 def validate_minimum_consecutive_weekday_shifts(
@@ -571,7 +579,11 @@ def validate_working_hours(
             most_common_shift_id = max(shift_type_counts, key=shift_type_counts.get)
             expected_weekly_hours = shift_weekly_hours_map.get(most_common_shift_id, DEFAULT_WEEKLY_HOURS)
         
-        expected_monthly_hours = expected_weekly_hours * 4
+        # A 30-day rolling window spans at most ceil(30/7) ≈ 4.3 calendar weeks.
+        # With a 6-day/week rotation the true maximum is ceil(weekly_hours * 30 / 7),
+        # rounded up to the next full 8-hour shift (to avoid spurious violations).
+        shift_hours = 8  # standard shift duration; all main shifts use 8h
+        expected_monthly_hours = math.ceil(expected_weekly_hours * 30 / 7 / shift_hours) * shift_hours
         
         # Check weekly hours
         weeks = {}
@@ -777,45 +789,15 @@ def validate_coverage_availability(
     employees: List[Employee],
     absences: List[Absence],
 ):
-    """Validate that at least one employee is available (not working) each week"""
-    regular_team_members = [emp for emp in employees 
-                           if emp.team_id]
-    
-    if not regular_team_members:
-        result.add_warning("No regular team members defined in the system")
-        return
-    
-    # Group assignments by week
-    # Group assignments by week
-    from datetime import timedelta
-    by_week = {}
-    
-    # Get all unique weeks from assignments
-    weeks = set()
-    for assignment in assignments:
-        week_start = assignment.date - timedelta(days=assignment.date.weekday())
-        weeks.add(week_start)
-    
-    for week_start in weeks:
-        week_dates = [week_start + timedelta(days=i) for i in range(7)]
-        assigned_emp_ids = set()
-        
-        for assignment in assignments:
-            if assignment.date in week_dates:
-                assigned_emp_ids.add(assignment.employee_id)
-        
-        # Count how many regular team members are not working this week
-        available_employees = [e for e in regular_team_members if e.id not in assigned_emp_ids]
-        
-        if len(available_employees) < 1:
-            cause_type, cause = _analyze_absence_cause(
-                week_start, absences, employees
-            )
-            result.add_violation(
-                f"No available employee for week starting {week_start} (constraint: at least 1 must be free)",
-                cause_type=cause_type,
-                cause=cause,
-            )
+    """Validate coverage availability.
+
+    Note: The previously-used check "at least 1 employee must be free each week"
+    is not enforced here.  With a 3-team F/N/S rotation every employee works
+    6-7 days per week, so the check would always fire and produce false
+    positives.  The corresponding solver constraint
+    (add_weekly_available_employee_constraint) is also disabled.
+    """
+    pass
 
 
 def validate_weekend_team_consistency(

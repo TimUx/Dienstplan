@@ -655,60 +655,59 @@ class ShiftPlanningSolver:
                 'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
             }
         
+        # Pre-build day→week_idx map for O(1) lookup (avoid re-scanning weeks per date)
+        date_to_week_idx: Dict[date, int] = {}
+        for w_idx, week_dates in enumerate(weeks):
+            for wd in week_dates:
+                date_to_week_idx[wd] = w_idx
+
+        # Pre-build per-team, per-day count of active members (constant — not a CP var)
+        # active_team_members[team_id][d] = number of employees in team that have an
+        # employee_active entry for date d (i.e., are not absent on that day).
+        active_team_members: Dict[int, Dict[date, int]] = {}
+        for team in teams:
+            active_team_members[team.id] = {}
+            for d in dates:
+                if d.weekday() >= 5:
+                    continue
+                count = sum(
+                    1 for emp in employees
+                    if emp.team_id == team.id and (emp.id, d) in employee_active
+                )
+                if count:
+                    active_team_members[team.id][d] = count
+
+        # Build shift preference objective using team-level linear terms.
+        # This replaces the previous per-employee bool × bool multiplication approach
+        # (O(employees × weekdays × shifts) non-linear constraints) with O(teams × weeks
+        # × shifts) linear coefficient additions — dramatically reducing model complexity.
         for d in dates:
             if d.weekday() >= 5:  # Skip weekends
                 continue
-                
-            # Find which week this date belongs to
-            week_idx = None
-            for w_idx, week_dates in enumerate(weeks):
-                if d in week_dates:
-                    week_idx = w_idx
-                    break
-            
+
+            week_idx = date_to_week_idx.get(d)
             if week_idx is None:
                 continue
-            
+
             for shift in shift_codes:
                 if shift not in shift_penalty_weights:
                     continue
-                    
-                # Count employees working this shift on this day
-                assigned = []
-                
+
+                weight = shift_penalty_weights[shift]
+
+                # Team-level contribution: team_shift[t,w,s] * active_count (linear)
                 for team in teams:
                     if (team.id, week_idx, shift) not in team_shift:
                         continue
-                    
-                    # Count active members of this team on this day
-                    for emp in employees:
-                        if emp.team_id != team.id:
-                            continue
-                        
-                        if (emp.id, d) not in employee_active:
-                            continue
-                        
-                        # Employee works this shift if team has shift AND employee is active
-                        is_on_shift = model.NewBoolVar(f"pref_emp{emp.id}_onshift{shift}_date{d}")
-                        model.AddMultiplicationEquality(
-                            is_on_shift,
-                            [employee_active[(emp.id, d)], team_shift[(team.id, week_idx, shift)]]
-                        )
-                        assigned.append(is_on_shift)
-                
-                # Add cross-team workers for this shift on this day
+                    count = active_team_members.get(team.id, {}).get(d, 0)
+                    if count:
+                        # team_shift is a BoolVar; multiplying by constant count is linear.
+                        objective_terms.append(team_shift[(team.id, week_idx, shift)] * (count * weight))
+
+                # Cross-team workers: these are individual BoolVars, add directly.
                 for emp in employees:
                     if (emp.id, d, shift) in employee_cross_team_shift:
-                        assigned.append(employee_cross_team_shift[(emp.id, d, shift)])
-                
-                if assigned:
-                    # Count total assigned to this shift
-                    total_assigned = model.NewIntVar(0, len(employees), f"pref_total_{shift}_{d}")
-                    model.Add(total_assigned == sum(assigned))
-                    
-                    # Apply priority weight (negative = reward, positive = penalty)
-                    weight = shift_penalty_weights[shift]
-                    objective_terms.append(total_assigned * weight)
+                        objective_terms.append(employee_cross_team_shift[(emp.id, d, shift)] * weight)
         
         # NEW: Add temporal penalty for weekend work (discourage working late-month weekends)
         # This encourages distributing weekend shifts earlier in the month
@@ -2179,12 +2178,26 @@ def solve_shift_planning(
     # CP-SAT returns the best FEASIBLE solution found when the limit is reached,
     # so quality degrades gracefully instead of running forever.
     # Pass time_limit_seconds=0 to disable the time limit entirely; None uses this default.
-    DEFAULT_STAGE1_TIME_LIMIT_SECONDS = 20 * 60  # 20 minutes
-    stage1_limit = (
-        None if time_limit_seconds == 0
-        else (time_limit_seconds if time_limit_seconds is not None
-              else DEFAULT_STAGE1_TIME_LIMIT_SECONDS)
-    )
+    DEFAULT_STAGE1_TIME_LIMIT_SECONDS = 15 * 60  # 15 minutes (reduced from 20 to react faster)
+    # Fallback stages get shorter individual limits so overall planning stays responsive.
+    # Each fallback uses progressively fewer constraints, so less time is needed.
+    DEFAULT_STAGE2_TIME_LIMIT_SECONDS = 8 * 60   # 8 minutes (min-staffing relaxed)
+    DEFAULT_STAGE3_TIME_LIMIT_SECONDS = 5 * 60   # 5 minutes (rotation also relaxed)
+
+    if time_limit_seconds == 0:
+        # Explicit 0 means "no limit at all" for all stages
+        stage1_limit = None
+        stage2_limit = None
+        stage3_limit = None
+    elif time_limit_seconds is not None:
+        # External override (e.g., test environments) applies to all stages
+        stage1_limit = time_limit_seconds
+        stage2_limit = time_limit_seconds
+        stage3_limit = time_limit_seconds
+    else:
+        stage1_limit = DEFAULT_STAGE1_TIME_LIMIT_SECONDS
+        stage2_limit = DEFAULT_STAGE2_TIME_LIMIT_SECONDS
+        stage3_limit = DEFAULT_STAGE3_TIME_LIMIT_SECONDS
 
     def _make_solver(model: ShiftPlanningModel, level: int, limit=None) -> "ShiftPlanningSolver":
         return ShiftPlanningSolver(
@@ -2246,10 +2259,12 @@ def solve_shift_planning(
     # ------------------------------------------------------------------ #
     print("\n" + "=" * 60)
     print("STUFE 2 (FALLBACK 1): Mindestbesetzung wird als Soft-Constraint behandelt")
-    print("  Grund: Stufe 1 war INFEASIBLE")
+    print("  Grund: Stufe 1 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
+    if stage2_limit:
+        print(f"  Zeit-Limit: {stage2_limit} Sekunden")
     print("=" * 60)
     m2 = _rebuild_model()
-    s2 = _make_solver(m2, level=1, limit=time_limit_seconds)
+    s2 = _make_solver(m2, level=1, limit=stage2_limit)
     s2.add_all_constraints()
     if s2.solve():
         result = s2.extract_solution()
@@ -2271,10 +2286,12 @@ def solve_shift_planning(
     # ------------------------------------------------------------------ #
     print("\n" + "=" * 60)
     print("STUFE 3 (FALLBACK 2): Mindestbesetzung soft + Teamrotation deaktiviert")
-    print("  Grund: Stufe 2 war INFEASIBLE")
+    print("  Grund: Stufe 2 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
+    if stage3_limit:
+        print(f"  Zeit-Limit: {stage3_limit} Sekunden")
     print("=" * 60)
     m3 = _rebuild_model()
-    s3 = _make_solver(m3, level=2, limit=time_limit_seconds)
+    s3 = _make_solver(m3, level=2, limit=stage3_limit)
     s3.add_all_constraints()
     if s3.solve():
         result = s3.extract_solution()

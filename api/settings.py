@@ -1,18 +1,22 @@
 """
-Settings Blueprint: global settings, email settings.
+Settings APIRouter: global settings, email settings.
 """
 
-from flask import Blueprint, jsonify, request, session, current_app
+from fastapi import APIRouter, Request, Depends, UploadFile, File
+from fastapi.responses import JSONResponse, Response
 from datetime import datetime
 import json
+import logging
 
-from .shared import get_db, require_auth, require_role, log_audit, require_csrf
+from .shared import get_db, require_auth, require_role, log_audit, require_csrf, check_csrf, parse_json_body
 
-bp = Blueprint('settings', __name__)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
 
 
-@bp.route('/api/settings/global', methods=['GET'])
-def get_global_settings():
+@router.get('/api/settings/global')
+def get_global_settings(request: Request):
     """Get global shift planning settings"""
     try:
         db = get_db()
@@ -25,32 +29,29 @@ def get_global_settings():
         
         if not row:
             # Return defaults if not found
-            return jsonify({
+            return {
                 'maxConsecutiveShifts': 6,
                 'maxConsecutiveNightShifts': 3,
                 'minRestHoursBetweenShifts': 11
-            })
+            }
         
-        return jsonify({
+        return {
             'maxConsecutiveShifts': row['MaxConsecutiveShifts'],
             'maxConsecutiveNightShifts': row['MaxConsecutiveNightShifts'],
             'minRestHoursBetweenShifts': row['MinRestHoursBetweenShifts'],
             'modifiedAt': row['ModifiedAt'],
             'modifiedBy': row['ModifiedBy']
-        })
+        }
         
     except Exception as e:
-        current_app.logger.error(f"Get global settings error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Laden: {str(e)}'}), 500
+        logger.error(f"Get global settings error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/settings/global', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_global_settings():
+@router.put('/api/settings/global', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_global_settings(request: Request, data: dict = Depends(parse_json_body)):
     """Update global shift planning settings (Admin only)"""
     try:
-        data = request.get_json()
         
         # Note: maxConsecutiveShifts and maxConsecutiveNightShifts are deprecated
         # These settings are now configured per shift type in the ShiftTypes table
@@ -73,7 +74,7 @@ def update_global_settings():
         
         # Validation
         if min_rest_hours < 8 or min_rest_hours > 24:
-            return jsonify({'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}), 400
+            return JSONResponse(content={'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}, status_code=400)
         
         # Update or insert settings (keeping deprecated fields as-is)
         cursor.execute("""
@@ -89,26 +90,26 @@ def update_global_settings():
             max_consecutive_night_shifts,
             min_rest_hours,
             datetime.utcnow().isoformat(),
-            session.get('user_email', 'system')
+            request.session.get('user_email', 'system')
         ))
         
         # Log audit entry
         changes = json.dumps({'minRestHoursBetweenShifts': min_rest_hours}, ensure_ascii=False)
-        log_audit(conn, 'GlobalSettings', 1, 'Updated', changes)
+        log_audit(conn, 'GlobalSettings', 1, 'Updated', changes,
+                  user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Update global settings error: {str(e)}")
-        return jsonify({'error': f'Fehler beim Aktualisieren: {str(e)}'}), 500
+        logger.error(f"Update global settings error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/email-settings', methods=['GET'])
-@require_role('Admin')
-def get_email_settings():
+@router.get('/api/email-settings', dependencies=[Depends(require_role('Admin'))])
+def get_email_settings(request: Request):
     """Get email settings (Admin only)"""
     try:
         db = get_db()
@@ -126,7 +127,7 @@ def get_email_settings():
         conn.close()
         
         if row:
-            return jsonify({
+            return {
                 'smtpHost': row[0],
                 'smtpPort': row[1],
                 'useSsl': bool(row[2]),
@@ -137,10 +138,10 @@ def get_email_settings():
                 'senderName': row[6],
                 'replyToEmail': row[7],
                 'isEnabled': bool(row[8])
-            })
+            }
         else:
             # Return default values if not configured
-            return jsonify({
+            return {
                 'smtpHost': '',
                 'smtpPort': 587,
                 'useSsl': True,
@@ -150,20 +151,17 @@ def get_email_settings():
                 'senderName': 'Dienstplan',
                 'replyToEmail': '',
                 'isEnabled': False
-            })
+            }
             
     except Exception as e:
-        current_app.logger.error(f"Get email settings error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Get email settings error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/email-settings', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def save_email_settings():
+@router.post('/api/email-settings', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def save_email_settings(request: Request, data: dict = Depends(parse_json_body)):
     """Save email settings (Admin only)"""
     try:
-        data = request.get_json()
         
         db = get_db()
         conn = db.get_connection()
@@ -195,7 +193,7 @@ def save_email_settings():
                     data.get('replyToEmail'),
                     1 if data.get('isEnabled') else 0,
                     datetime.utcnow().isoformat(),
-                    session.get('user_email')
+                    request.session.get('user_email')
                 ))
             else:
                 cursor.execute("""
@@ -215,7 +213,7 @@ def save_email_settings():
                     data.get('replyToEmail'),
                     1 if data.get('isEnabled') else 0,
                     datetime.utcnow().isoformat(),
-                    session.get('user_email')
+                    request.session.get('user_email')
                 ))
         else:
             # Insert new settings
@@ -236,30 +234,27 @@ def save_email_settings():
                 data.get('senderName'),
                 data.get('replyToEmail'),
                 1 if data.get('isEnabled') else 0,
-                session.get('user_email')
+                request.session.get('user_email')
             ))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True})
+        return {'success': True}
         
     except Exception as e:
-        current_app.logger.error(f"Save email settings error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Save email settings error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/email-settings/test', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def test_email_settings():
+@router.post('/api/email-settings/test', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def test_email_settings(request: Request, data: dict = Depends(parse_json_body)):
     """Send test email to verify settings (Admin only)"""
     try:
-        data = request.get_json()
         test_email = data.get('testEmail')
         
         if not test_email:
-            return jsonify({'error': 'Test-E-Mail-Adresse erforderlich'}), 400
+            return JSONResponse(content={'error': 'Test-E-Mail-Adresse erforderlich'}, status_code=400)
         
         from email_service import send_test_email
         
@@ -269,22 +264,21 @@ def test_email_settings():
         conn.close()
         
         if success:
-            return jsonify({'success': True})
+            return {'success': True}
         else:
-            return jsonify({'error': error}), 500
+            return JSONResponse(content={'error': error}, status_code=500)
             
     except Exception as e:
-        current_app.logger.error(f"Test email error: {str(e)}")
-        return jsonify({'error': f'Fehler: {str(e)}'}), 500
+        logger.error(f"Test email error: {str(e)}")
+        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shift-settings export / import
 # ─────────────────────────────────────────────────────────────────────────────
 
-@bp.route('/api/settings/shifts/export', methods=['GET'])
-@require_auth
-def export_shift_settings():
+@router.get('/api/settings/shifts/export', dependencies=[Depends(require_auth)])
+def export_shift_settings(request: Request):
     """Export all shift settings (shift types, rotation groups, global settings) as JSON.
 
     Returns a JSON file containing:
@@ -379,23 +373,20 @@ def export_shift_settings():
             'globalSettings': global_settings,
         }
 
-        from flask import Response
         filename = f"schichteinstellungen_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
         return Response(
-            json.dumps(export_data, ensure_ascii=False, indent=2),
-            mimetype='application/json',
+            content=json.dumps(export_data, ensure_ascii=False, indent=2),
+            media_type='application/json',
             headers={'Content-Disposition': f'attachment; filename="{filename}"'},
         )
 
     except Exception as e:
-        current_app.logger.error(f"Export shift settings error: {str(e)}")
-        return jsonify({'error': 'Fehler beim Exportieren der Schichteinstellungen'}), 500
+        logger.error(f"Export shift settings error: {str(e)}")
+        return JSONResponse(content={'error': 'Fehler beim Exportieren der Schichteinstellungen'}, status_code=500)
 
 
-@bp.route('/api/settings/shifts/import', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def import_shift_settings():
+@router.post('/api/settings/shifts/import', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+async def import_shift_settings(request: Request, file: UploadFile = File(...)):
     """Import shift settings from a previously exported JSON file.
 
     Accepts a multipart/form-data upload with a single ``file`` field containing
@@ -410,26 +401,22 @@ def import_shift_settings():
     Returns a JSON summary with counts of created / updated / skipped records
     and any errors.
     """
-    conflict_mode = request.args.get('conflict_mode', 'skip').lower()
+    conflict_mode = request.query_params.get('conflict_mode', 'skip').lower()
     if conflict_mode not in ('skip', 'update', 'replace'):
-        return jsonify({'error': 'Ungültiger conflict_mode. Erlaubt: skip, update, replace'}), 400
+        return JSONResponse(content={'error': 'Ungültiger conflict_mode. Erlaubt: skip, update, replace'}, status_code=400)
 
-    if 'file' not in request.files:
-        return jsonify({'error': 'Keine Datei hochgeladen'}), 400
-
-    uploaded_file = request.files['file']
-    if not uploaded_file.filename:
-        return jsonify({'error': 'Keine Datei ausgewählt'}), 400
+    if not file or not file.filename:
+        return JSONResponse(content={'error': 'Keine Datei hochgeladen'}, status_code=400)
 
     try:
-        raw = uploaded_file.read().decode('utf-8')
+        raw = (await file.read()).decode('utf-8')
         data = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return jsonify({'error': 'Ungültige JSON-Datei: Datei konnte nicht gelesen werden'}), 400
+        return JSONResponse(content={'error': 'Ungültige JSON-Datei: Datei konnte nicht gelesen werden'}, status_code=400)
 
     # Basic structure validation
     if not isinstance(data, dict):
-        return jsonify({'error': 'Ungültiges Dateiformat: erwartet JSON-Objekt'}), 400
+        return JSONResponse(content={'error': 'Ungültiges Dateiformat: erwartet JSON-Objekt'}, status_code=400)
 
     shift_types = data.get('shiftTypes', [])
     rotation_groups = data.get('rotationGroups', [])
@@ -446,7 +433,7 @@ def import_shift_settings():
         db = get_db()
         conn = db.get_connection()
         cursor = conn.cursor()
-        user = session.get('user_email', 'import')
+        user = request.session.get('user_email', 'import')
 
         if conflict_mode == 'replace':
             # Delete all existing rotation group data first (FK dependency)
@@ -621,13 +608,14 @@ def import_shift_settings():
                 result['errors'].append(f"Allgemeine Einstellungen: {e}")
 
         log_audit(conn, 'ShiftSettings', 0, 'Imported',
-                  json.dumps({'conflict_mode': conflict_mode, 'summary': result}, ensure_ascii=False))
+                  json.dumps({'conflict_mode': conflict_mode, 'summary': result}, ensure_ascii=False),
+                  user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
 
         conn.commit()
         conn.close()
 
-        return jsonify({'success': True, **result}), 200
+        return {'success': True, **result}
 
     except Exception as e:
-        current_app.logger.error(f"Import shift settings error: {str(e)}")
-        return jsonify({'error': 'Fehler beim Importieren der Schichteinstellungen'}), 500
+        logger.error(f"Import shift settings error: {str(e)}")
+        return JSONResponse(content={'error': 'Fehler beim Importieren der Schichteinstellungen'}, status_code=500)

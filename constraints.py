@@ -2868,6 +2868,13 @@ def add_consecutive_shifts_constraints(
             
             max_consecutive_days = shift_type.max_consecutive_days
             
+            # Penalty weight: proportional to how strict the limit is.
+            # Shifts with fewer allowed consecutive days (e.g., N with max=3) get a
+            # higher penalty than shifts with more generous limits (e.g., F/S with max=6).
+            # Formula: base / max_consecutive_days  (night: 18000/3=6000; day: 18000/6=3000)
+            # This makes consecutive-night violations as important as min-staffing issues.
+            consecutive_penalty_weight = max(2000, round(18000 / max_consecutive_days))
+            
             # CROSS-MONTH BOUNDARY CHECK:
             # Check if employee has consecutive shifts from BEFORE the planning period
             # that extend into the beginning of the planning period, creating a violation.
@@ -2972,9 +2979,9 @@ def add_consecutive_shifts_constraints(
                             model.Add(sum(period_shift_indicators) == num_days_in_period).OnlyEnforceIf(all_shifts_in_period)
                             model.Add(sum(period_shift_indicators) < num_days_in_period).OnlyEnforceIf(all_shifts_in_period.Not())
                             
-                            # Penalty: 400 points per violation (consistent with other consecutive constraints)
-                            prev_penalty = model.NewIntVar(0, 400, f"prev_{shift_code}_penalty_{emp.id}_{num_days_in_period}")
-                            model.AddMultiplicationEquality(prev_penalty, [all_shifts_in_period, 400])
+                            # Penalty: proportional to shift strictness (night=6000, day=3000)
+                            prev_penalty = model.NewIntVar(0, consecutive_penalty_weight, f"prev_{shift_code}_penalty_{emp.id}_{num_days_in_period}")
+                            model.AddMultiplicationEquality(prev_penalty, [all_shifts_in_period, consecutive_penalty_weight])
                             consecutive_violation_penalties.append(prev_penalty)
             
             # Check consecutive days for this specific shift type
@@ -3042,9 +3049,9 @@ def add_consecutive_shifts_constraints(
                     model.Add(sum(shift_indicators) == max_consecutive_days + 1).OnlyEnforceIf(shift_violation)
                     model.Add(sum(shift_indicators) < max_consecutive_days + 1).OnlyEnforceIf(shift_violation.Not())
                     
-                    # Penalty: 400 points per violation (high priority constraint)
-                    shift_penalty = model.NewIntVar(0, 400, f"{shift_code}_penalty_{emp.id}_{start_idx}")
-                    model.AddMultiplicationEquality(shift_penalty, [shift_violation, 400])
+                    # Penalty: proportional to shift strictness (night=6000, regular=3000)
+                    shift_penalty = model.NewIntVar(0, consecutive_penalty_weight, f"{shift_code}_penalty_{emp.id}_{start_idx}")
+                    model.AddMultiplicationEquality(shift_penalty, [shift_violation, consecutive_penalty_weight])
                     consecutive_violation_penalties.append(shift_penalty)
                     
                     # CROSS-SHIFT-TYPE ENFORCEMENT:
@@ -3116,9 +3123,9 @@ def add_consecutive_shifts_constraints(
                                 model.AddBoolAnd([first_n_days_this_shift, works_any_shift_last_day]).OnlyEnforceIf(cross_shift_violation)
                                 model.AddBoolOr([first_n_days_this_shift.Not(), works_any_shift_last_day.Not()]).OnlyEnforceIf(cross_shift_violation.Not())
                                 
-                                # Penalty: 400 points per violation (same priority as per-shift-type violations)
-                                cross_shift_penalty = model.NewIntVar(0, 400, f"cross_{shift_code}_penalty_{emp.id}_{start_idx}")
-                                model.AddMultiplicationEquality(cross_shift_penalty, [cross_shift_violation, 400])
+                                # Penalty: same weight as the per-shift-type violation
+                                cross_shift_penalty = model.NewIntVar(0, consecutive_penalty_weight, f"cross_{shift_code}_penalty_{emp.id}_{start_idx}")
+                                model.AddMultiplicationEquality(cross_shift_penalty, [cross_shift_violation, consecutive_penalty_weight])
                                 consecutive_violation_penalties.append(cross_shift_penalty)
     
     # TOTAL CONSECUTIVE WORKING DAYS CONSTRAINT:
@@ -3409,13 +3416,14 @@ def add_working_hours_constraints(
                                               f"emp{emp.id}_week{week_idx}_days")
                 model.Add(days_active == sum(active_days))
                 
-                # Multiply by team_shift to get conditional active days
+                # Conditional active days: non-zero only when team has this shift
+                # Use OnlyEnforceIf (linear) instead of AddMultiplicationEquality (non-linear)
+                # This is significantly faster for CP-SAT to solve.
+                team_shift_var = team_shift[(emp.team_id, week_idx, shift_code)]
                 conditional_days = model.NewIntVar(0, len(week_dates), 
                                                    f"emp{emp.id}_week{week_idx}_shift{shift_code}_days")
-                model.AddMultiplicationEquality(
-                    conditional_days,
-                    [team_shift[(emp.team_id, week_idx, shift_code)], days_active]
-                )
+                model.Add(conditional_days == days_active).OnlyEnforceIf(team_shift_var)
+                model.Add(conditional_days == 0).OnlyEnforceIf(team_shift_var.Not())
                 
                 # Multiply by hours (scaled by 10)
                 scaled_hours = int(shift_hours[shift_code] * 10)
@@ -3531,14 +3539,14 @@ def add_working_hours_constraints(
                                               f"emp{emp.id}_week{week_idx}_days_min")
                 model.Add(days_active == sum(active_days))
                 
-                # Multiply by team_shift to get conditional active days
-                # This is only non-zero when team actually has this shift this week
+                # Conditional active days: non-zero only when team has this shift
+                # Use OnlyEnforceIf (linear) instead of AddMultiplicationEquality (non-linear)
+                # This is significantly faster for CP-SAT to solve.
+                team_shift_var = team_shift[(emp.team_id, week_idx, shift_code)]
                 conditional_days = model.NewIntVar(0, len(week_dates), 
                                                    f"emp{emp.id}_week{week_idx}_shift{shift_code}_days_min")
-                model.AddMultiplicationEquality(
-                    conditional_days,
-                    [team_shift[(emp.team_id, week_idx, shift_code)], days_active]
-                )
+                model.Add(conditional_days == days_active).OnlyEnforceIf(team_shift_var)
+                model.Add(conditional_days == 0).OnlyEnforceIf(team_shift_var.Not())
                 
                 # Multiply by shift hours (from shift settings, scaled by 10)
                 scaled_hours = int(shift_hours[shift_code] * 10)

@@ -1939,3 +1939,53 @@ export function getEntityNameTranslation(entityName) {
 
     return translations[entityName] || entityName;
 }
+
+// ============================================================================
+// SHIFT SETTINGS EXPORT / IMPORT
+// ============================================================================
+
+/**
+ * Export all shift settings (shift types, rotation groups, global settings) as a JSON file.
+ */
+export async function exportShiftSettings() {
+    try {
+        const response = await fetch(`${API_BASE}/settings/shifts/export`, {
+            credentials: 'include',
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            showToast(err.error || 'Fehler beim Exportieren der Schichteinstellungen', 'error');
+            return;
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `schichteinstellungen_export_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Schichteinstellungen erfolgreich exportiert!', 'success');
+    } catch (error) {
+        console.error('Export shift settings error:', error);
+        showToast('Fehler beim Exportieren: ' + escapeHtml(error.message), 'error');
+    }
+}
+
+/**
+ * Open the shift settings import modal.
+ */
+export function showImportShiftSettingsModal() {
+    document.getElementById('importShiftSettingsModal').style.display = 'block';
+    document.getElementById('importShiftSettingsForm').reset();
+    document.getElementById('importShiftSettingsResult').innerHTML = '';
+}
+
+/**
+ * Close the shift settings import modal.
+ */
+export function closeImportShiftSettingsModal() {
+    document.getElementById('importShiftSettingsModal').style.display = 'none';
+}
+

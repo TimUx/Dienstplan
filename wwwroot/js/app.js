@@ -209,6 +209,50 @@ function initImportFormHandlers() {
                 resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${utils.escapeHtml(error.message)}</p></div>`;
             }
         }
+
+        if (form.id === 'importShiftSettingsForm') {
+            e.preventDefault();
+            const fileInput = document.getElementById('shiftSettingsFile');
+            const conflictResolution = document.getElementById('shiftSettingsConflictResolution').value;
+            const resultDiv = document.getElementById('importShiftSettingsResult');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showToast('Bitte wählen Sie eine JSON-Datei aus.', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            resultDiv.innerHTML = '<p class="loading">Importiere Schichteinstellungen...</p>';
+
+            try {
+                const response = await fetch(`${utils.API_BASE}/settings/shifts/import?conflict_mode=${conflictResolution}`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'X-CSRF-Token': utils.getCsrfToken() || '' },
+                    body: formData
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = utils.formatImportResult(result);
+                    if (!result.errors || result.errors.length === 0) {
+                        setTimeout(() => {
+                            employees.loadShiftTypesManagement();
+                            employees.loadRotationGroups();
+                            employees.closeImportShiftSettingsModal();
+                        }, 2000);
+                    } else {
+                        employees.loadShiftTypesManagement();
+                        employees.loadRotationGroups();
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler beim Import:</strong></p><p>${result.error || 'Unbekannter Fehler'}</p></div>`;
+                }
+            } catch (error) {
+                console.error('Import shift settings error:', error);
+                resultDiv.innerHTML = `<div class="error-message"><p><strong>✗ Fehler:</strong></p><p>${utils.escapeHtml(error.message)}</p></div>`;
+            }
+        }
     });
 }
 
@@ -274,6 +318,9 @@ function buildActionMap() {
         'loadRotationGroups': () => employees.loadRotationGroups(),
         'loadGlobalSettings': () => employees.loadGlobalSettings(),
         'saveGlobalSettings': () => employees.saveGlobalSettings(),
+        'exportShiftSettings': () => employees.exportShiftSettings(),
+        'showImportShiftSettingsModal': () => employees.showImportShiftSettingsModal(),
+        'closeImportShiftSettingsModal': () => employees.closeImportShiftSettingsModal(),
         'closeEmployeeModal': () => employees.closeEmployeeModal(),
         'saveEmployee': () => employees.saveEmployee(),
         'closeTeamModal': () => employees.closeTeamModal(),
@@ -464,6 +511,9 @@ function registerGlobals() {
     window.removeShiftFromRotation = employees.removeShiftFromRotation;
     window.loadGlobalSettings = employees.loadGlobalSettings;
     window.saveGlobalSettings = employees.saveGlobalSettings;
+    window.exportShiftSettings = employees.exportShiftSettings;
+    window.showImportShiftSettingsModal = employees.showImportShiftSettingsModal;
+    window.closeImportShiftSettingsModal = employees.closeImportShiftSettingsModal;
     // Admin / Users
     window.showAddUserModal = employees.showAddUserModal;
     window.closeUserModal = employees.closeUserModal;

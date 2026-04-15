@@ -1,20 +1,19 @@
-"""Audit Log Blueprint: view audit entries."""
-from flask import Blueprint, jsonify, request
+"""Audit Log router: view audit entries."""
+from fastapi import APIRouter, Request, Depends
 from .shared import get_db, require_role, _paginate
 
-bp = Blueprint('audit', __name__)
+router = APIRouter()
 
-@bp.route('/api/audit-logs', methods=['GET'])
-@require_role('Admin')
-def get_audit_logs():
+@router.get('/api/audit-logs', dependencies=[Depends(require_role('Admin'))])
+def get_audit_logs(request: Request):
     """Get audit logs with filtering and pagination (Admin only)."""
-    entity_name = request.args.get('entity_name', '')
-    user_id = request.args.get('user_id', '')
-    action = request.args.get('action', '')
-    start_date = request.args.get('startDate', '')
-    end_date = request.args.get('endDate', '')
-    page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 50))
+    entity_name = request.query_params.get('entity_name', '')
+    user_id = request.query_params.get('user_id', '')
+    action = request.query_params.get('action', '')
+    start_date = request.query_params.get('startDate', '')
+    end_date = request.query_params.get('endDate', '')
+    page = int(request.query_params.get('page', 1))
+    limit = int(request.query_params.get('limit', 50))
     
     query = "SELECT * FROM AuditLogs WHERE 1=1"
     params = []
@@ -53,4 +52,4 @@ def get_audit_logs():
         'changes': row['Changes'],
     } for row in rows]
     
-    return jsonify(_paginate(logs, page, limit))
+    return _paginate(logs, page, limit)

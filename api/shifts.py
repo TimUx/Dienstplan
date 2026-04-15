@@ -720,7 +720,7 @@ def get_schedule(request: Request):
                 'limit': pagination['limit'],
                 'totalPages': pagination['totalPages'],
             }
-        })
+        }
         
     except Exception as e:
         return JSONResponse(content={'error': f'Database error: {str(e)}'}, status_code=500)

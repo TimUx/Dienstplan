@@ -2285,8 +2285,7 @@ def export_schedule_pdf():
             year = first_date_obj.year
             title_text = f"Dienstplan - Woche: KW {week_num} {year}"
         elif view_type == 'month':
-            first_date_obj = datetime.fromisoformat(dates[0])
-            month_name = first_date_obj.strftime('%B %Y')
+            month_name = start_date.strftime('%B %Y')
             title_text = f"Dienstplan - Monat: {month_name}"
         else:  # year
             year = datetime.fromisoformat(dates[0]).year
@@ -2462,8 +2461,7 @@ def export_schedule_excel():
             year = first_date_obj.year
             ws.title = f"KW{week_num} {year}"
         elif view_type == 'month':
-            first_date_obj = datetime.fromisoformat(dates[0])
-            ws.title = first_date_obj.strftime('%B %Y')
+            ws.title = start_date.strftime('%B %Y')
         else:  # year
             year = datetime.fromisoformat(dates[0]).year
             ws.title = f"Jahr {year}"

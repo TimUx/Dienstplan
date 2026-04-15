@@ -18,13 +18,13 @@ class TestCsrfToken:
 
     def test_get_csrf_token_returns_token(self, client):
         resp = client.get('/api/csrf-token')
-        data = resp.get_json()
+        data = resp.json()
         assert 'token' in data
         assert len(data['token']) > 0
 
     def test_csrf_token_is_string(self, client):
         resp = client.get('/api/csrf-token')
-        assert isinstance(resp.get_json()['token'], str)
+        assert isinstance(resp.json()['token'], str)
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ class TestCsrfToken:
 
 class TestLogin:
     def _csrf(self, client):
-        return client.get('/api/csrf-token').get_json()['token']
+        return client.get('/api/csrf-token').json()['token']
 
     def test_valid_login_returns_200(self, client):
         csrf = self._csrf(client)
@@ -51,7 +51,7 @@ class TestLogin:
             json={'email': ADMIN_EMAIL, 'password': ADMIN_PASSWORD},
             headers={'X-CSRF-Token': csrf},
         )
-        data = resp.get_json()
+        data = resp.json()
         assert data.get('success') is True
 
     def test_valid_login_returns_user_data(self, client):
@@ -61,7 +61,7 @@ class TestLogin:
             json={'email': ADMIN_EMAIL, 'password': ADMIN_PASSWORD},
             headers={'X-CSRF-Token': csrf},
         )
-        data = resp.get_json()
+        data = resp.json()
         assert 'user' in data
         assert data['user']['email'] == ADMIN_EMAIL
 
@@ -124,11 +124,11 @@ class TestCurrentUser:
 
     def test_authenticated_returns_user_email(self, admin_client):
         resp = admin_client.get('/api/auth/current-user')
-        data = resp.get_json()
+        data = resp.json()
         assert 'email' in data or ('user' in data and 'email' in data['user'])
 
     def test_sets_session_on_login(self, client):
-        csrf = client.get('/api/csrf-token').get_json()['token']
+        csrf = client.get('/api/csrf-token').json()['token']
         client.post(
             '/api/auth/login',
             json={'email': ADMIN_EMAIL, 'password': ADMIN_PASSWORD},

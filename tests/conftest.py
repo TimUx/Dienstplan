@@ -35,24 +35,23 @@ def test_db(tmp_path):
 
 @pytest.fixture
 def app(test_db):
-    """Flask test application."""
+    """FastAPI test application."""
     from web_api import create_app
-    flask_app = create_app(test_db)
-    flask_app.config['TESTING'] = True
-    return flask_app
+    return create_app(test_db)
 
 
 @pytest.fixture
 def client(app):
-    """Flask test client."""
-    return app.test_client()
+    """FastAPI test client."""
+    from fastapi.testclient import TestClient
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
 def admin_client(client):
     """Authenticated admin test client with CSRF token."""
     resp = client.get('/api/csrf-token')
-    csrf = resp.get_json()['token']
+    csrf = resp.json()['token']
     client.post(
         '/api/auth/login',
         json={'email': 'admin@fritzwinter.de', 'password': 'Admin123!'},

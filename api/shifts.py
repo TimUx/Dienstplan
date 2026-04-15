@@ -206,10 +206,9 @@ def get_shift_type(request: Request, id):
     return shift_type
 
 
-@bp.route('/api/shifttypes/{id:int}', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_shift_type(id):
+@router.put('/api/shifttypes/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_shift_type(request: Request, id):
     """Update shift type (Admin only)"""
     try:
         
@@ -324,11 +323,9 @@ def update_shift_type(id):
         return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifttypes/{id:int}', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_shift_type(id):
+@router.delete('/api/shifttypes/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def delete_shift_type(request: Request, id):
     """Delete shift type (Admin only)"""
     try:
         db = get_db()
@@ -395,10 +392,9 @@ def get_shift_type_teams(request: Request, shift_id):
     return teams
 
 
-@bp.route('/api/shifttypes/{shift_id:int}/teams', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_shift_type_teams(shift_id):
+@router.put('/api/shifttypes/{shift_id:int}/teams', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_shift_type_teams(request: Request, shift_id):
     """Update teams assigned to a shift type (Admin only)"""
     try:
         team_ids = data.get('teamIds', [])
@@ -466,10 +462,9 @@ def get_team_shift_types(request: Request, team_id):
     return shift_types
 
 
-@bp.route('/api/teams/{team_id:int}/shifttypes', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_team_shift_types(team_id):
+@router.put('/api/teams/{team_id:int}/shifttypes', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_team_shift_types(request: Request, team_id):
     """Update shift types assigned to a team (Admin only)"""
     try:
         shift_type_ids = data.get('shiftTypeIds', [])
@@ -713,7 +708,7 @@ def get_schedule(request: Request):
         
         pagination = _paginate(assignments, page, limit)
 
-        return jsonify({
+        return {
             'startDate': start_date.isoformat(),
             'endDate': end_date.isoformat(),
             'assignments': pagination['data'],
@@ -1486,10 +1481,9 @@ def get_plan_status(request: Request, job_id: str):
     return result
 
 
-@bp.route('/api/shifts/plan/{job_id}', methods=['DELETE'])
-@require_role('Admin', 'Disponent')
-@require_csrf
-def cancel_plan_job(job_id):
+@router.delete('/api/shifts/plan/{job_id}', dependencies=[Depends(require_role('Admin', 'Disponent')), Depends(check_csrf)])
+
+def cancel_plan_job(request: Request, job_id):
     """
     Request cancellation of a background planning job.
 
@@ -1541,7 +1535,7 @@ def get_plan_approvals(request: Request):
         return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@router.get('/api/shifts/plan/approvals/<int:year>/{month:int}')
+@router.get('/api/shifts/plan/approvals/{year:int}/{month:int}')
 
 def get_plan_approval_status(request: Request, year, month):
     """Get approval status for a specific month"""
@@ -1559,14 +1553,14 @@ def get_plan_approval_status(request: Request, year, month):
         conn.close()
         
         if not row:
-            return jsonify({
+            return {
                 'year': year,
                 'month': month,
                 'isApproved': False,
                 'exists': False
             })
         
-        return jsonify({
+        return {
             'id': row['Id'],
             'year': row['Year'],
             'month': row['Month'],
@@ -1583,10 +1577,9 @@ def get_plan_approval_status(request: Request, year, month):
         return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/shifts/plan/approvals/<int:year>/{month:int}', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def approve_plan(year, month):
+@router.put('/api/shifts/plan/approvals/{year:int}/{month:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def approve_plan(request: Request, year, month):
     """Approve or unapprove a shift plan for a specific month (Admin only)"""
     try:
         is_approved = data.get('isApproved', True)
@@ -1633,7 +1626,7 @@ def approve_plan(year, month):
         conn.close()
         
         action = 'freigegeben' if is_approved else 'Freigabe aufgehoben'
-        return jsonify({
+        return {
             'success': True,
             'message': f'Dienstplan für {month:02d}/{year} wurde {action}.'
         })
@@ -1642,10 +1635,9 @@ def approve_plan(year, month):
         return JSONResponse(content={'error': str(e)}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/{id:int}', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def update_shift_assignment(id):
+@router.put('/api/shifts/assignments/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def update_shift_assignment(request: Request, id):
     """Update a shift assignment (manual edit)"""
     try:
         
@@ -1721,10 +1713,9 @@ def update_shift_assignment(id):
         return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments', methods=['POST'])
-@require_role('Admin')
-@require_csrf
-def create_shift_assignment():
+@router.post('/api/shifts/assignments', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def create_shift_assignment(request: Request):
     """Create a shift assignment manually"""
     try:
         
@@ -1795,11 +1786,9 @@ def create_shift_assignment():
         return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/{id:int}', methods=['DELETE'])
-@limiter.limit("30 per minute")
-@require_role('Admin')
-@require_csrf
-def delete_shift_assignment(id):
+@router.delete('/api/shifts/assignments/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def delete_shift_assignment(request: Request, id):
     """Delete a shift assignment"""
     try:
         conn = None
@@ -1846,10 +1835,9 @@ def delete_shift_assignment(id):
         return JSONResponse(content={'error': f'Fehler beim Löschen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/bulk', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def bulk_update_shift_assignments():
+@router.put('/api/shifts/assignments/bulk', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def bulk_update_shift_assignments(request: Request):
     """Bulk update multiple shift assignments"""
     try:
         
@@ -1954,7 +1942,7 @@ def bulk_update_shift_assignments():
             
             conn.commit()
             
-            return jsonify({
+            return {
                 'success': True,
                 'updated': updated_count,
                 'total': len(shift_ids)
@@ -1972,10 +1960,9 @@ def bulk_update_shift_assignments():
         return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shifts/assignments/{id:int}/toggle-fixed', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def toggle_fixed_assignment(id):
+@router.put('/api/shifts/assignments/{id:int}/toggle-fixed', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def toggle_fixed_assignment(request: Request, id):
     """Toggle the IsFixed flag on an assignment (lock/unlock)"""
     try:
         conn = None
@@ -2007,7 +1994,7 @@ def toggle_fixed_assignment(id):
             
             conn.commit()
             
-            return jsonify({
+            return {
                 'success': True,
                 'isFixed': bool(new_fixed_status)
             })
@@ -2454,7 +2441,7 @@ def export_schedule_excel(request: Request):
             import openpyxl
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         except ImportError:
-            return jsonify({
+            return {
                 'error': 'Excel-Export erfordert openpyxl. Bitte installieren Sie es mit: pip install openpyxl'
             }), 501
         
@@ -2708,10 +2695,9 @@ def get_pending_shift_exchanges(request: Request):
     return exchanges
 
 
-@bp.route('/api/shiftexchanges', methods=['POST'])
-@require_auth
-@require_csrf
-def create_shift_exchange():
+@router.post('/api/shiftexchanges', dependencies=[Depends(require_auth), Depends(check_csrf)])
+
+def create_shift_exchange(request: Request):
     """Create new shift exchange offer"""
     try:
         
@@ -2744,10 +2730,9 @@ def create_shift_exchange():
         return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shiftexchanges/{id:int}/request', methods=['POST'])
-@require_auth
-@require_csrf
-def request_shift_exchange(id):
+@router.post('/api/shiftexchanges/{id:int}/request', dependencies=[Depends(require_auth), Depends(check_csrf)])
+
+def request_shift_exchange(request: Request, id):
     """Request a shift exchange"""
     try:
         requesting_employee_id = data.get('requestingEmployeeId')
@@ -2779,10 +2764,9 @@ def request_shift_exchange(id):
         return JSONResponse(content={'error': f'Fehler beim Anfragen: {str(e)}'}, status_code=500)
 
 
-@bp.route('/api/shiftexchanges/{id:int}/process', methods=['PUT'])
-@require_role('Admin')
-@require_csrf
-def process_shift_exchange(id):
+@router.put('/api/shiftexchanges/{id:int}/process', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+
+def process_shift_exchange(request: Request, id):
     """Process shift exchange (approve/reject)"""
     try:
         status = data.get('status')

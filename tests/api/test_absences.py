@@ -6,7 +6,7 @@ import pytest
 
 def _get_first_employee_id(client):
     """Retrieve the first employee id from the API."""
-    employees = client.get('/api/employees').get_json()
+    employees = client.get('/api/employees').json()
     return employees[0]['id']
 
 
@@ -17,7 +17,7 @@ class TestGetAbsences:
 
     def test_get_absences_returns_list(self, client):
         resp = client.get('/api/absences')
-        data = resp.get_json()
+        data = resp.json()
         assert isinstance(data, list)
 
     def test_get_absences_no_auth_required(self, client):
@@ -32,17 +32,17 @@ class TestGetAbsenceTypes:
         assert resp.status_code == 200
 
     def test_get_absence_types_returns_list(self, client):
-        data = client.get('/api/absencetypes').get_json()
+        data = client.get('/api/absencetypes').json()
         assert isinstance(data, list)
 
     def test_absence_types_contain_standard_codes(self, client):
-        data = client.get('/api/absencetypes').get_json()
+        data = client.get('/api/absencetypes').json()
         codes = [item.get('code') for item in data]
         for expected in ('U', 'AU', 'L'):
             assert expected in codes, f"Standard absence code '{expected}' not found"
 
     def test_absence_types_have_required_fields(self, client):
-        data = client.get('/api/absencetypes').get_json()
+        data = client.get('/api/absencetypes').json()
         assert len(data) > 0
         first = data[0]
         assert 'id' in first or 'Id' in first
@@ -60,7 +60,7 @@ class TestCreateAbsence:
 
     def test_create_without_auth_returns_401(self, client):
         emp_id = _get_first_employee_id(client)
-        csrf = client.get('/api/csrf-token').get_json()['token']
+        csrf = client.get('/api/csrf-token').json()['token']
         resp = client.post(
             '/api/absences',
             json=self._absence_payload(emp_id),
@@ -84,7 +84,7 @@ class TestCreateAbsence:
             json=self._absence_payload(emp_id),
             headers={'X-CSRF-Token': admin_client.csrf_token},
         )
-        data = resp.get_json()
+        data = resp.json()
         assert 'id' in data
 
     def test_create_without_csrf_returns_403(self, admin_client):

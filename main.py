@@ -18,9 +18,9 @@ from solver import solve_shift_planning
 logger = logging.getLogger(__name__)
 
 try:
-    from waitress import serve as waitress_serve
+    import uvicorn
 except ImportError:
-    waitress_serve = None
+    uvicorn = None
 
 
 def run_cli_planning(
@@ -148,23 +148,23 @@ def save_assignments_to_database(assignments, db_path: str):
 
 def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "dienstplan.db", debug: bool = False):
     """
-    Start web server with REST API using Waitress production WSGI server.
-    This provides the backend for the existing .NET Web UI.
+    Start web server with REST API using Uvicorn (ASGI) production server.
+    This provides the backend for the existing Web UI.
     
     Args:
         host: Host to bind to
         port: Port to bind to
         db_path: Path to SQLite database
-        debug: Enable debug mode (uses Flask dev server, WARNING: Only use in development!)
+        debug: Enable debug/reload mode (WARNING: Only use in development!)
     """
     from web_api import create_app
     
     logger.info(f"SHIFT PLANNING WEB SERVER starting on http://{host}:{port}")
     logger.info(f"Database: {db_path}")
     if debug:
-        logger.warning("Debug mode enabled - Using Flask development server! DO NOT use in production!")
+        logger.warning("Debug mode enabled - auto-reload active! DO NOT use in production!")
     else:
-        logger.info("Using Waitress production WSGI server")
+        logger.info("Using Uvicorn production ASGI server")
 
     
     # Check if database exists, if not initialize it; otherwise run migrations
@@ -193,16 +193,19 @@ def start_web_server(host: str = "0.0.0.0", port: int = 5000, db_path: str = "di
     
     app = create_app(db_path)
     
-    if debug:
-        # Use Flask development server only in debug mode
-        app.run(host=host, port=port, debug=debug)
-    else:
-        # Use Waitress production WSGI server
-        if waitress_serve is None:
-            logger.warning("Waitress not available, falling back to Flask development server")
-            app.run(host=host, port=port, debug=False)
-        else:
-            waitress_serve(app, host=host, port=port, threads=4)
+    try:
+        import uvicorn
+    except ImportError:
+        logger.error("uvicorn is not installed. Please run: pip install uvicorn[standard]")
+        raise
+
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        log_level="debug" if debug else "info",
+        reload=debug,
+    )
 
 
 def main():

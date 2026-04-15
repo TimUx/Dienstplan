@@ -28,8 +28,8 @@ jobs:
     - name: Test Python modules
       run: |
         python -c "import importlib.metadata; print('OR-Tools:', importlib.metadata.version('ortools'))"
-        python -c "import importlib.metadata; print('Flask:', importlib.metadata.version('flask'))"
-        python -c "import importlib.metadata; print('Waitress:', importlib.metadata.version('waitress'))"
+        python -c "import importlib.metadata; print('FastAPI:', importlib.metadata.version('fastapi'))"
+        python -c "import importlib.metadata; print('Uvicorn:', importlib.metadata.version('uvicorn'))"
     
     - name: Get version
       id: version
@@ -76,8 +76,8 @@ jobs:
     - name: Test Python modules
       run: |
         python -c "import importlib.metadata; print('OR-Tools:', importlib.metadata.version('ortools'))"
-        python -c "import importlib.metadata; print('Flask:', importlib.metadata.version('flask'))"
-        python -c "import importlib.metadata; print('Waitress:', importlib.metadata.version('waitress'))"
+        python -c "import importlib.metadata; print('FastAPI:', importlib.metadata.version('fastapi'))"
+        python -c "import importlib.metadata; print('Uvicorn:', importlib.metadata.version('uvicorn'))"
     
     - name: Get version
       id: version

@@ -45,13 +45,14 @@ async function ensurePartialLoaded(partialUrl) {
 }
 
 function bindShiftSettingsJsonButtons() {
+    const shiftSettingsActionSelector = '[data-action="exportShiftSettings"], [data-action="showImportShiftSettingsModal"]';
     const handlers = {
         exportShiftSettings: () => employees.exportShiftSettings(),
         showImportShiftSettingsModal: () => employees.showImportShiftSettingsModal(),
     };
 
-    document.querySelectorAll('[data-action="exportShiftSettings"], [data-action="showImportShiftSettingsModal"]').forEach((button) => {
-        if (button.dataset.shiftSettingsBound === 'true') return;
+    document.querySelectorAll(shiftSettingsActionSelector).forEach((button) => {
+        if (button.dataset.shiftSettingsBound) return;
 
         const action = button.dataset.action;
         const handler = handlers[action];
@@ -62,7 +63,7 @@ function bindShiftSettingsJsonButtons() {
             event.stopPropagation();
             handler();
         });
-        button.dataset.shiftSettingsBound = 'true';
+        button.dataset.shiftSettingsBound = '1';
     });
 }
 

@@ -308,6 +308,7 @@ export function displayMonthView(data, employees) {
     const weekGroups = groupDatesByWeek(dates);
     const selectedMonth = parseInt(document.getElementById('monthSelect').value, 10);
     const selectedYear = parseInt(document.getElementById('monthYearSelect').value, 10);
+    const selectedMonthIndex = selectedMonth - 1;
     const monthName = new Date(selectedYear, selectedMonth - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 
     let html = `<div class="month-header"><h3>Monat: ${monthName}</h3></div>`;
@@ -331,7 +332,7 @@ export function displayMonthView(data, employees) {
             const isSunday = date.getDay() === 0;
             const isHoliday = isHessianHoliday(date);
             const columnClass = (isSunday || isHoliday) ? 'date-column sunday-column' : 'date-column';
-            const isOtherMonth = date.getMonth() !== firstDate.getMonth();
+            const isOtherMonth = date.getMonth() !== selectedMonthIndex || date.getFullYear() !== selectedYear;
             const dateClass = isOtherMonth ? ' other-month' : '';
             html += `<th class="${columnClass}${dateClass}">${dayName}<br>${dayNum}.${String(monthNum).padStart(2, '0')}</th>`;
         });

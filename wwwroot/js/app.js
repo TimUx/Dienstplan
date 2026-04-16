@@ -29,6 +29,7 @@ const VIEW_PARTIALS = {
 };
 
 const loadedPartials = new Set();
+const trackedShiftSettingsButtons = new WeakSet();
 
 async function ensurePartialLoaded(partialUrl) {
     if (loadedPartials.has(partialUrl)) return;
@@ -45,14 +46,17 @@ async function ensurePartialLoaded(partialUrl) {
 }
 
 function bindShiftSettingsJsonButtons() {
-    const shiftSettingsActionSelector = '[data-action="exportShiftSettings"], [data-action="showImportShiftSettingsModal"]';
     const handlers = {
         exportShiftSettings: () => employees.exportShiftSettings(),
         showImportShiftSettingsModal: () => employees.showImportShiftSettingsModal(),
     };
+    // Build selector from registered handler keys so action names stay in sync.
+    const shiftSettingsActionSelector = Object.keys(handlers)
+        .map((action) => `[data-action="${action}"]`)
+        .join(', ');
 
     document.querySelectorAll(shiftSettingsActionSelector).forEach((button) => {
-        if (button.dataset.shiftSettingsBound) return;
+        if (trackedShiftSettingsButtons.has(button)) return;
 
         const action = button.dataset.action;
         const handler = handlers[action];
@@ -63,7 +67,7 @@ function bindShiftSettingsJsonButtons() {
             event.stopPropagation();
             handler();
         });
-        button.dataset.shiftSettingsBound = '1';
+        trackedShiftSettingsButtons.add(button);
     });
 }
 

@@ -38,7 +38,32 @@ async function ensurePartialLoaded(partialUrl) {
     const html = await response.text();
     const container = document.getElementById('view-container');
     container.insertAdjacentHTML('beforeend', html);
+    if (partialUrl === '/partials/management.html') {
+        bindShiftSettingsJsonButtons();
+    }
     loadedPartials.add(partialUrl);
+}
+
+function bindShiftSettingsJsonButtons() {
+    const handlers = {
+        exportShiftSettings: () => employees.exportShiftSettings(),
+        showImportShiftSettingsModal: () => employees.showImportShiftSettingsModal(),
+    };
+
+    document.querySelectorAll('[data-action="exportShiftSettings"], [data-action="showImportShiftSettingsModal"]').forEach((button) => {
+        if (button.dataset.shiftSettingsBound === 'true') return;
+
+        const action = button.dataset.action;
+        const handler = handlers[action];
+        if (!handler) return;
+
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handler();
+        });
+        button.dataset.shiftSettingsBound = 'true';
+    });
 }
 
 async function showView(viewName) {

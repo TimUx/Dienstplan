@@ -111,7 +111,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    [],                              # binaries/datas go into COLLECT, not into the EXE
+    exclude_binaries=True,           # required by PyInstaller 6.x for onedir+COLLECT builds
     name='Dienstplan',
     debug=False,
     bootloader_ignore_signals=False,

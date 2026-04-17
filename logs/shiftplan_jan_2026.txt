@@ -1,0 +1,1175 @@
+============================================================
+STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)
+  Zeit-Limit: 900 Sekunden (beste FEASIBLE-Lösung wird bei Ablauf zurückgegeben)
+============================================================
+Adding constraints...
+  - Team shift assignment (exactly one shift per team per week)
+  - Team rotation (DATABASE-DRIVEN: 1 rotation pattern(s) loaded)
+    • Rotation group 1: F → N → S
+  - Employee weekly rotation order (enforce F → N → S transition order)
+  - Employee-team linkage (derive employee activity from team shifts)
+  - Staffing requirements (min hard / max soft, including cross-team)
+  - Total weekend staffing limit (max 12 employees across all shifts)
+  - Cross-shift capacity enforcement (prevent N overflow when F/S have capacity)
+  - Daily shift ratio constraints (ensure F >= S on weekdays)
+  - Rest time constraints (11h min, soft penalties for violations)
+  - Shift stability constraints (prevent rapid shift changes like N→S→N)
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+  - Shift sequence grouping constraints (prevent isolated shift types like S-S-F-S-S)
+    * Including ultra-high penalties (20000) for A-B-A patterns within 10-day windows
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+  - Minimum consecutive weekday shifts constraints (min 2 consecutive days for same shift Mon-Fri)
+  - Weekly shift type limit constraints (max 2 shift types per week)
+  - Weekend shift consistency constraints (prevent shift changes Fri→Sat/Sun)
+  - Team night shift consistency constraints (night shifts stay in night shift teams)
+  - Consecutive shifts constraints (soft - max consecutive days per shift type)
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+  - Working hours constraints (HARD: min 192h/month, SOFT: proportional target)
+  - Weekly block constraints (Mon-Fri blocks for cross-team assignments)
+  - Team member block constraints (prevent isolated days, encourage full blocks)
+  - Fairness objectives (per-employee, year-long, including block scheduling)
+  Adding block scheduling objectives...
+  Adding cross-team preference objectives...
+  Adding Mon-Fri weekend continuation preference...
+  Adding weekend fairness objectives (year-long)...
+  Adding night shift fairness objectives (year-long)...
+  Adding 150 block scheduling bonus objectives...
+  Adding 3135 consecutive shifts violation penalties...
+  Adding 4080 rest time violation penalties...
+  Adding 180 rotation order violation penalties...
+  Adding 23760 shift hopping penalties...
+  Adding 352800 shift grouping penalties...
+  Adding 3870 minimum consecutive weekday shift penalties...
+  Adding 75 weekly shift type diversity penalties...
+  Adding 900 weekend consistency penalties...
+  Adding 525 team night shift consistency penalties...
+  Adding 105 daily shift ratio penalties (enforce capacity-based ordering)...
+  Adding 15 target hours shortage penalties (weight 100x - HIGHEST PRIORITY)...
+  Adding 75 weekday overstaffing penalties (weight 1x - acceptable if needed)...
+  Adding 30 weekend overstaffing penalties (base weight 50x with temporal bias - STRONGLY avoid late month)...
+  Adding 10 total weekend staffing limit penalties (weight 150x - CRITICAL limit)...
+  Calculated dynamic shift priority weights based on max_staff: {'F': 22, 'S': 22, 'N': 22}
+  Adding 25 Früh (F) weekday understaffing penalties (base weight 22x with temporal bias)...
+  Adding 25 Nacht (N) weekday understaffing penalties (base weight 22x with temporal bias)...
+  Adding 25 Spät (S) weekday understaffing penalties (base weight 22x with temporal bias)...
+  Adding 105 team priority violation penalties (weight 50x)...
+  Adding shift type preference objectives (proportional to max_staff)...
+    Shift penalty/reward weights (negative=reward): {'F': -25, 'S': -25, 'N': -25}
+  Adding temporal weekend work penalties (discourage late-month weekends)...
+  Added 540 temporal weekend work penalties
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+All constraints added successfully!
+
+============================================================
+STARTING SOLVER
+============================================================
+Time limit: 900 seconds
+Parallel workers: 8
+Search strategy: PORTFOLIO
+No warmstart hints available (fresh planning run)
+
+
+Starting CP-SAT solver v9.14.6206
+Parameters: max_time_in_seconds: 900 log_search_progress: true search_branching: PORTFOLIO_SEARCH num_search_workers: 8
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+
+Initial optimization model '': (model_fingerprint: 0xf9dabf570b861640)
+#Variables: 841'000 (#bools: 1'935 #ints: 390'460 in objective) (414'559 primary variables)
+  - 448'170 Booleans in [0,1]
+  - 105 in [-35,35]
+  - 105 in [-10,10]
+  - 75 in [0,2]
+  - 570 in [0,3]
+  - 75 in [0,5]
+  - 1'350 in [0,7]
+  - 135 in [0,10]
+  - 210 in [0,15]
+  - 610 in [0,20]
+  - 150 in [0,35]
+  - 23'760 in [0,200]
+  - 900 in [0,300]
+  - 435 in [0,400]
+  - 75 in [0,500]
+  - 525 in [0,600]
+  - 15 in [0,2400]
+  - 1'845 in [0,3000]
+  - 600 in [0,5000]
+  - 2'760 in [0,6000]
+  - 2'070 in [0,8000]
+  - 180 in [0,10000]
+  - 3'480 in [0,50000]
+  - 296'730 in [0,100000]
+  - 56'070 in [0,200000]
+#kBoolAnd: 383'205 (#enforced: 383'205) (#literals: 3'700'305)
+#kBoolOr: 383'205 (#enforced: 383'205) (#literals: 3'317'100)
+#kIntProd: 67'560
+#kLinMax: 315 (#expressions: 630)
+#kLinear1: 3'400 (#enforced: 3'075)
+#kLinear2: 394'740 (#enforced: 26'070)
+#kLinear3: 8'595 (#enforced: 3'660)
+#kLinearN: 19'930 (#enforced: 16'740) (#terms: 137'920)
+
+Starting presolve at 0.90s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+  1.99e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.58e+00s  0.00e+00d  [PresolveToFixPoint] #num_loops=4 #num_dual_strengthening=2 
+  2.00e-02s  0.00e+00d  [ExtractEncodingFromLinear] #potential_supersets=300 #potential_subsets=855 
+  1.68e-02s  0.00e+00d  [DetectDuplicateColumns] 
+  1.98e-02s  0.00e+00d  [DetectDuplicateConstraints] 
+[Symmetry] Graph for symmetry has 915'014 nodes and 339'519 arcs.
+[Symmetry] Symmetry computation done. time: 0.124287 dtime: 0.117726
+[Symmetry] #generators: 1335, average support size: 2.60674
+[Symmetry] 930 orbits on 2670 variables with sizes: 6,6,6,6,6,6,6,6,6,6,...
+[Symmetry] Found orbitope of size 4 x 2
+INFO:     127.0.0.1:41860 - "GET /api/notifications/count HTTP/1.1" 200 OK
+[SAT presolve] num removable Booleans: 10335 / 722950
+[SAT presolve] num trivial clauses: 0
+[SAT presolve] [0s] clauses:106425 literals:274150 vars:23890 one_side_vars:75 simple_definition:14155 singleton_clauses:0
+[SAT presolve] [0.0156204s] clauses:99525 literals:225670 vars:23890 one_side_vars:6975 simple_definition:7255 singleton_clauses:0
+[SAT presolve] [0.048766s] clauses:85245 literals:200950 vars:18145 one_side_vars:6975 simple_definition:3835 singleton_clauses:0
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+  2.44e-02s  0.00e+00d  [DetectDuplicateConstraintsWithDifferentEnforcements] #without_enforcements=535 
+  7.06e-01s  2.37e-01d  [Probe] #probed=58'880 #fixed_bools=8'360 #new_bounds=299 #equiv=5'655 #new_binary_clauses=124'660 
+  8.33e-02s  2.66e-02d  [MaxClique] Merged 72'245(144'940 literals) into 54'329(110'944 literals) at_most_ones. 
+  1.69e-01s  0.00e+00d  [DetectDominanceRelations] 
+  4.13e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=3 #num_dual_strengthening=2 
+  7.39e-02s  0.00e+00d  [ProcessAtMostOneAndLinear] 
+  2.48e-02s  0.00e+00d  [DetectDuplicateConstraints] #duplicates=5'585 
+  1.45e-02s  0.00e+00d  [DetectDuplicateConstraintsWithDifferentEnforcements] 
+  2.16e-02s  4.92e-05d  [DetectDominatedLinearConstraints] #relevant_constraints=1'329 #num_inclusions=209 #num_redundant=105 
+  1.28e-02s  0.00e+00d  [DetectDifferentVariables] 
+  4.87e-02s  3.07e-04d  [ProcessSetPPC] #relevant_constraints=15'078 #num_inclusions=12'389 
+  1.64e-02s  2.84e-05d  [FindAlmostIdenticalLinearConstraints] #num_tested_pairs=1'773 
+  3.07e-02s  3.88e-03d  [FindBigAtMostOneAndLinearOverlap] 
+  1.61e-02s  5.41e-03d  [FindBigVerticalLinearOverlap] 
+  1.28e-02s  3.95e-05d  [FindBigHorizontalLinearOverlap] #linears=414 
+  3.29e-02s  1.29e-04d  [MergeClauses] #num_collisions=2'009 #num_merges=2'009 #num_saved_literals=7'617 
+  1.63e-01s  0.00e+00d  [DetectDominanceRelations] 
+  3.42e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=4 #num_dual_strengthening=2 
+  1.58e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.55e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=1 #num_dual_strengthening=1 
+  1.57e-02s  0.00e+00d  [DetectDuplicateColumns] 
+  1.40e-02s  0.00e+00d  [DetectDuplicateConstraints] 
+[Symmetry] Graph for symmetry has 858'211 nodes and 62'581 arcs.
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+[Symmetry] Symmetry computation done. time: 0.0668281 dtime: 0.0599207
+[Symmetry] #generators: 160, average support size: 2
+[Symmetry] 160 orbits on 320 variables with sizes: 2,2,2,2,2,2,2,2,2,2,...
+[Symmetry] Found orbitope of size 1 x 2
+[SAT presolve] num removable Booleans: 105 / 703265
+[SAT presolve] num trivial clauses: 0
+[SAT presolve] [0s] clauses:12888 literals:41596 vars:4130 one_side_vars:215 simple_definition:542 singleton_clauses:0
+[SAT presolve] [0.00340653s] clauses:12888 literals:41596 vars:4130 one_side_vars:215 simple_definition:542 singleton_clauses:0
+[SAT presolve] [0.0166573s] clauses:12873 literals:41566 vars:4130 one_side_vars:215 simple_definition:542 singleton_clauses:0
+  1.38e-02s  0.00e+00d  [DetectDuplicateConstraintsWithDifferentEnforcements] 
+  5.34e-01s  1.08e-01d  [Probe] #probed=59'030 #new_binary_clauses=11'604 
+  3.40e-02s  1.95e-02d  [MaxClique] Merged 9'099(19'524 literals) into 8'334(18'574 literals) at_most_ones. 
+  1.65e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.70e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=1 #num_dual_strengthening=1 
+  5.39e-02s  0.00e+00d  [ProcessAtMostOneAndLinear] #num_changes=50 
+  1.50e-02s  0.00e+00d  [DetectDuplicateConstraints] 
+  1.43e-02s  0.00e+00d  [DetectDuplicateConstraintsWithDifferentEnforcements] 
+  2.08e-02s  3.62e-05d  [DetectDominatedLinearConstraints] #relevant_constraints=1'174 
+  1.34e-02s  0.00e+00d  [DetectDifferentVariables] 
+  4.74e-02s  3.14e-04d  [ProcessSetPPC] #relevant_constraints=14'933 #num_inclusions=11'804 
+  1.68e-02s  2.65e-05d  [FindAlmostIdenticalLinearConstraints] #num_tested_pairs=1'648 
+  3.07e-02s  3.87e-03d  [FindBigAtMostOneAndLinearOverlap] 
+  1.61e-02s  5.40e-03d  [FindBigVerticalLinearOverlap] 
+  1.33e-02s  3.95e-05d  [FindBigHorizontalLinearOverlap] #linears=414 
+  3.28e-02s  1.29e-04d  [MergeClauses] #num_collisions=1'752 #num_merges=1'752 #num_saved_literals=5'444 
+  1.60e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.58e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=1 #num_dual_strengthening=1 
+  1.57e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.55e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=1 #num_dual_strengthening=1 
+  1.63e-02s  0.00e+00d  [DetectDuplicateColumns] 
+  1.42e-02s  0.00e+00d  [DetectDuplicateConstraints] 
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+[Symmetry] Graph for symmetry has 858'908 nodes and 63'759 arcs.
+[Symmetry] Symmetry computation done. time: 0.0646988 dtime: 0.0602499
+[Symmetry] #generators: 160, average support size: 2
+[Symmetry] 160 orbits on 320 variables with sizes: 2,2,2,2,2,2,2,2,2,2,...
+[Symmetry] Found orbitope of size 1 x 2
+[SAT presolve] num removable Booleans: 40 / 703265
+[SAT presolve] num trivial clauses: 0
+[SAT presolve] [0s] clauses:11653 literals:39126 vars:4130 one_side_vars:215 simple_definition:606 singleton_clauses:0
+[SAT presolve] [0.00315274s] clauses:11653 literals:39126 vars:4130 one_side_vars:215 simple_definition:606 singleton_clauses:0
+[SAT presolve] [0.0162866s] clauses:11653 literals:39126 vars:4130 one_side_vars:215 simple_definition:606 singleton_clauses:0
+  1.75e-02s  0.00e+00d  [DetectDuplicateConstraintsWithDifferentEnforcements] 
+  5.98e-01s  1.08e-01d  [Probe] #probed=59'130 #new_binary_clauses=11'500 
+  3.39e-02s  1.95e-02d  [MaxClique] 
+  1.63e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.68e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=1 #num_dual_strengthening=1 
+  5.42e-02s  0.00e+00d  [ProcessAtMostOneAndLinear] 
+  1.49e-02s  0.00e+00d  [DetectDuplicateConstraints] 
+  1.44e-02s  0.00e+00d  [DetectDuplicateConstraintsWithDifferentEnforcements] 
+  2.10e-02s  3.62e-05d  [DetectDominatedLinearConstraints] #relevant_constraints=1'174 
+  1.33e-02s  0.00e+00d  [DetectDifferentVariables] 
+  4.83e-02s  3.13e-04d  [ProcessSetPPC] #relevant_constraints=14'933 #num_inclusions=11'804 
+  1.67e-02s  2.36e-05d  [FindAlmostIdenticalLinearConstraints] #num_tested_pairs=1'450 
+  3.06e-02s  3.87e-03d  [FindBigAtMostOneAndLinearOverlap] 
+  1.64e-02s  5.40e-03d  [FindBigVerticalLinearOverlap] 
+  1.29e-02s  3.95e-05d  [FindBigHorizontalLinearOverlap] #linears=414 
+  3.23e-02s  1.29e-04d  [MergeClauses] #num_collisions=1'752 #num_merges=1'752 #num_saved_literals=5'444 
+  1.59e-01s  0.00e+00d  [DetectDominanceRelations] 
+  2.57e-01s  0.00e+00d  [PresolveToFixPoint] #num_loops=1 #num_dual_strengthening=1 
+  3.89e-02s  0.00e+00d  [ExpandObjective] #entries=12'210 #tight_variables=3'510 #tight_constraints=1'545 #expands=20 
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+
+Presolve summary:
+  - 381730 affine relations were detected.
+  - rule 'TODO dual: only one blocking constraint?' was applied 38'318 times.
+  - rule 'TODO dual: only one blocking enforced constraint?' was applied 200 times.
+  - rule 'TODO dual: only one unspecified blocking constraint?' was applied 2'808 times.
+  - rule 'TODO linear2: contains a Boolean.' was applied 34'030 times.
+  - rule 'affine: new relation' was applied 381'730 times.
+  - rule 'at_most_one: removed literals' was applied 45'835 times.
+  - rule 'at_most_one: size one' was applied 45'835 times.
+  - rule 'at_most_one: transformed into max clique.' was applied 2 times.
+  - rule 'bool and: always false' was applied 175 times.
+  - rule 'bool_and: always false' was applied 374'530 times.
+  - rule 'bool_and: fixed literals' was applied 100 times.
+  - rule 'bool_and: non-reified.' was applied 3'520 times.
+  - rule 'bool_and: x => x' was applied 4'670 times.
+  - rule 'bool_or: always true' was applied 374'900 times.
+  - rule 'bool_or: implications' was applied 10'180 times.
+  - rule 'bool_or: only one literal' was applied 382'610 times.
+  - rule 'bool_or: removed enforcement literal' was applied 12'060 times.
+  - rule 'deductions: 48525 stored' was applied 1 time.
+  - rule 'dual: enforced equivalence' was applied 2'335 times.
+  - rule 'dual: fix variable' was applied 75 times.
+  - rule 'dual: reduced domain' was applied 359 times.
+  - rule 'duplicate: removed constraint' was applied 5'585 times.
+  - rule 'duplicate: removed enforced constraint' was applied 535 times.
+  - rule 'enforcement: always false' was applied 150 times.
+  - rule 'enforcement: false literal' was applied 1'200 times.
+  - rule 'enforcement: true literal' was applied 11'725 times.
+  - rule 'int_prod: boolean affine term' was applied 180 times.
+  - rule 'int_prod: constant product' was applied 24'105 times.
+  - rule 'int_prod: linearize product by constant.' was applied 41'745 times.
+  - rule 'int_prod: removed constant expressions.' was applied 67'825 times.
+  - rule 'int_prod: unused affine target' was applied 1'530 times.
+  - rule 'lin_max: affine_max target domain reduced' was applied 150 times.
+  - rule 'lin_max: converted to equality' was applied 75 times.
+  - rule 'lin_max: removed exprs' was applied 75 times.
+  - rule 'lin_max: target domain reduced' was applied 180 times.
+  - rule 'linear + amo: extracted enforcement literal' was applied 100 times.
+  - rule 'linear inclusion: subset + singleton is equality' was applied 105 times.
+  - rule 'linear1: x in domain' was applied 15 times.
+  - rule 'linear2: implied ax + by = cte has only one solution' was applied 8'355 times.
+  - rule 'linear: always true' was applied 14'455 times.
+  - rule 'linear: doubleton free' was applied 120 times.
+  - rule 'linear: empty' was applied 28'060 times.
+  - rule 'linear: fixed or dup variables' was applied 120'720 times.
+  - rule 'linear: infeasible' was applied 7'905 times.
+  - rule 'linear: negative clause' was applied 3'475 times.
+  - rule 'linear: negative reified and' was applied 2'010 times.
+  - rule 'linear: positive at most one' was applied 375 times.
+  - rule 'linear: positive clause' was applied 17'750 times.
+  - rule 'linear: positive reified and' was applied 1'260 times.
+  - rule 'linear: reduced variable domains' was applied 391'450 times.
+  - rule 'linear: reduced variable domains in derived constraint' was applied 269 times.
+  - rule 'linear: remapped using affine relations' was applied 7'839 times.
+  - rule 'linear: small Boolean expression' was applied 180 times.
+  - rule 'linear: tightened into equality' was applied 1 time.
+  - rule 'linear: variable substitution 0' was applied 751 times.
+  - rule 'linear: variable substitution 1' was applied 495 times.
+  - rule 'linear: variable substitution 2' was applied 75 times.
+  - rule 'new_bool: var with 2 values' was applied 25 times.
+  - rule 'objective: expanded via tight equality' was applied 20 times.
+  - rule 'objective: shifted cost with exactly ones' was applied 140 times.
+  - rule 'presolve: 795655 unused variables removed.' was applied 1 time.
+  - rule 'presolve: iteration' was applied 3 times.
+  - rule 'probing: bool_or reduced to implication' was applied 1'925 times.
+  - rule 'probing: simplified clauses.' was applied 150 times.
+  - rule 'setppc: bool_or in at_most_one.' was applied 660 times.
+  - rule 'variables with 2 values: create encoding literal' was applied 25 times.
+  - rule 'variables with 2 values: new affine relation' was applied 25 times.
+  - rule 'variables: detect fully reified value encoding' was applied 75 times.
+  - rule 'variables: detect half reified value encoding' was applied 525 times.
+
+Presolved optimization model '': (model_fingerprint: 0xbf39078d63aa6bcb)
+#Variables: 5'594 (#bools: 2'700 #ints: 919 in objective) (3'898 primary variables)
+  - 4'205 Booleans in [0,1]
+  - 10 in [-25,25]
+  - 45 in [-15,15]
+  - 50 in [-15,25]
+  - 105 in [-10,10]
+  - 520 in [0,2]
+  - 135 in [0,5]
+  - 120 in [0,10]
+  - 30 in [0,13]
+  - 115 in [0,15]
+  - 10 in [0,20]
+  - 65 in [0,25]
+  - 15 in [0,35]
+  - 15 in [0,2400]
+  - 30 in [2,15]
+  - 50 in [3,5]
+  - 74 in [5,10]
+#kAtMostOne: 1'711 (#literals: 5'328)
+#kBoolAnd: 3'041 (#enforced: 3'041 #multi: 1'251) (#literals: 15'778)
+#kBoolOr: 2'027 (#literals: 13'071)
+#kExactlyOne: 660 (#literals: 2'280)
+#kLinMax: 240 (#expressions: 480)
+#kLinear1: 200 (#enforced: 200 #multi: 50)
+#kLinear3: 265
+#kLinearN: 909 (#terms: 9'884)
+[Symmetry] Graph for symmetry has 23'477 nodes and 63'759 arcs.
+[Symmetry] Symmetry computation done. time: 0.00601143 dtime: 0.00990358
+[Symmetry] #generators: 160, average support size: 2
+[Symmetry] 160 orbits on 320 variables with sizes: 2,2,2,2,2,2,2,2,2,2,...
+[Symmetry] Found orbitope of size 1 x 2
+
+Preloading model.
+#Bound  12.27s best:inf   next:[-1155,375828455] initial_domain
+#Model  12.27s var:5594/5594 constraints:9053/9053
+
+Starting search at 12.27s with 8 workers.
+6 full problem subsolvers: [core, default_lp, max_lp_sym, no_lp, quick_restart, reduced_costs]
+2 first solution subsolvers: [fj, fs_random_no_lp]
+9 interleaved subsolvers: [feasibility_pump, graph_arc_lns, graph_cst_lns, graph_dec_lns, graph_var_lns, ls, rins/rens, rnd_cst_lns, rnd_var_lns]
+3 helper subsolvers: [neighborhood_helper, synchronization_agent, update_gap_integral]
+
+#1      12.49s best:67158694 next:[-1155,67158693] fj_restart(batch:1 lin{mvs:14'001 evals:22'401} gen{mvs:17 evals:59} #w_updates:645 #perturb:0)
+  → Solution #1: objective=67158694, elapsed=0.0s
+#2      12.58s best:3174327 next:[-1155,3174326] no_lp (fixed_bools=0/4439)
+  → Solution #2: objective=3174327, elapsed=0.1s
+#Bound  12.58s best:3174327 next:[-430,3174326] quick_restart
+#Bound  12.59s best:3174327 next:[560,3174326] quick_restart
+#Bound  12.62s best:3174327 next:[1047,3174326] quick_restart
+#3      12.67s best:3098411 next:[1047,3098410] graph_var_lns (d=5.00e-01 s=11 t=0.10 p=0.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #3: objective=3098411, elapsed=0.2s
+#Bound  12.71s best:3098411 next:[1512,3098410] default_lp
+#4      12.83s best:3000509 next:[1512,3000508] graph_arc_lns (d=5.00e-01 s=12 t=0.10 p=0.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #4: objective=3000509, elapsed=0.3s
+#Bound  12.83s best:3000509 next:[1876,3000508] default_lp
+#5      12.89s best:2999909 next:[1876,2999908] graph_cst_lns (d=5.00e-01 s=13 t=0.10 p=0.00 stall=0 h=base) [hint] [combined with: graph_arc_lns (d=5.0...] (fixed_bools=0/4255)
+  → Solution #5: objective=2999909, elapsed=0.4s
+#6      13.02s best:2998309 next:[1876,2998308] graph_dec_lns (d=5.00e-01 s=15 t=0.10 p=0.00 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #6: objective=2998309, elapsed=0.5s
+#Bound  13.02s best:2998309 next:[5878,2998308] reduced_costs
+#7      13.07s best:2531257 next:[5878,2531256] rins_lp_lns (d=5.00e-01 s=14 t=0.10 p=0.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #7: objective=2531257, elapsed=0.6s
+#Bound  13.28s best:2531257 next:[35653,2531256] max_lp_sym
+#8      13.71s best:2419913 next:[35653,2419912] graph_var_lns (d=7.07e-01 s=18 t=0.10 p=1.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #8: objective=2419913, elapsed=1.2s
+#9      13.84s best:2419713 next:[35653,2419712] graph_cst_lns (d=7.07e-01 s=20 t=0.10 p=1.00 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #9: objective=2419713, elapsed=1.3s
+#10     14.02s best:2322815 next:[35653,2322814] rins_lp_lns (d=7.07e-01 s=22 t=0.10 p=1.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #10: objective=2322815, elapsed=1.5s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#11     14.13s best:2321601 next:[35653,2321600] rnd_var_lns (d=8.14e-01 s=24 t=0.10 p=1.00 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #11: objective=2321601, elapsed=1.6s
+#12     14.32s best:2297625 next:[35653,2297624] graph_dec_lns (d=8.14e-01 s=28 t=0.10 p=1.00 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #12: objective=2297625, elapsed=1.8s
+#Bound  14.47s best:2297625 next:[53376,2297624] max_lp_sym
+#13     15.02s best:2230585 next:[53376,2230584] graph_arc_lns (d=7.07e-01 s=25 t=0.10 p=1.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #13: objective=2230585, elapsed=2.5s
+#14     15.12s best:2190516 next:[53376,2190515] rnd_var_lns (d=8.76e-01 s=30 t=0.10 p=1.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #14: objective=2190516, elapsed=2.6s
+#15     15.61s best:2133966 next:[53376,2133965] graph_cst_lns (d=8.76e-01 s=32 t=0.10 p=1.00 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #15: objective=2133966, elapsed=3.1s
+#Bound  15.66s best:2133966 next:[71620,2133965] max_lp_sym
+#16     16.07s best:2121580 next:[71620,2121579] rnd_cst_lns (d=7.52e-01 s=36 t=0.10 p=0.75 stall=3 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #16: objective=2121580, elapsed=3.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#17     16.18s best:2121167 next:[71620,2121166] ls_restart_perturb(batch:1 lin{mvs:5 evals:3'174} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #17: objective=2121167, elapsed=3.7s
+#18     16.22s best:2049448 next:[71620,2049447] graph_dec_lns (d=8.76e-01 s=35 t=0.10 p=1.00 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #18: objective=2049448, elapsed=3.7s
+#19     16.32s best:2036398 next:[71620,2036397] rnd_cst_lns (d=8.24e-01 s=38 t=0.10 p=0.80 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #19: objective=2036398, elapsed=3.8s
+#20     16.38s best:2036248 next:[71620,2036247] ls_restart_perturb(batch:1 lin{mvs:3 evals:2'238} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #20: objective=2036248, elapsed=3.9s
+#Model  16.39s var:5592/5594 constraints:9053/9053
+#21     16.80s best:1992508 next:[71620,1992507] rnd_cst_lns (d=8.72e-01 s=42 t=0.10 p=0.83 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #21: objective=1992508, elapsed=4.3s
+#22     16.92s best:1991908 next:[71620,1991907] ls_restart_decay_compound_perturb(batch:1 lin{mvs:0 evals:5'144} gen{mvs:25 evals:770} comp{mvs:5 btracks:10} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #22: objective=1991908, elapsed=4.4s
+#Bound  16.96s best:1991908 next:[92547,1991907] max_lp_sym
+#Bound  17.06s best:1991908 next:[92640,1991907] max_lp_sym
+#23     17.34s best:1955454 next:[92640,1955453] graph_var_lns (d=6.92e-01 s=45 t=0.10 p=0.67 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #23: objective=1955454, elapsed=4.9s
+#24     17.41s best:1954854 next:[92640,1954853] ls_restart_decay_perturb(batch:1 lin{mvs:6 evals:4'504} gen{mvs:1 evals:85} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #24: objective=1954854, elapsed=4.9s
+#25     17.87s best:1944076 next:[92640,1944075] rnd_cst_lns (d=9.06e-01 s=49 t=0.10 p=0.86 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #25: objective=1944076, elapsed=5.4s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#26     18.19s best:1907625 next:[92640,1907624] graph_dec_lns (d=8.21e-01 s=51 t=0.10 p=0.75 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #26: objective=1907625, elapsed=5.7s
+#27     18.24s best:1907425 next:[92640,1907424] ls_restart_compound(batch:1 lin{mvs:0 evals:5'422} gen{mvs:23 evals:910} comp{mvs:3 btracks:10} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #27: objective=1907425, elapsed=5.8s
+#28     18.35s best:1839331 next:[92640,1839330] graph_arc_lns (d=5.38e-01 s=54 t=0.10 p=0.50 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #28: objective=1839331, elapsed=5.9s
+#Bound  18.36s best:1839331 next:[100278,1839330] max_lp_sym
+#29     18.94s best:1839305 next:[100278,1839304] graph_var_lns (d=5.54e-01 s=57 t=0.10 p=0.50 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #29: objective=1839305, elapsed=6.5s
+#30     19.22s best:1355614 next:[100278,1355613] rins_pump_lns (d=7.21e-01 s=55 t=0.10 p=0.67 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #30: objective=1355614, elapsed=6.7s
+#31     19.60s best:1329600 next:[100278,1329599] graph_arc_lns (d=6.92e-01 s=59 t=0.10 p=0.67 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #31: objective=1329600, elapsed=7.1s
+#Bound  19.85s best:1329600 next:[113960,1329599] max_lp_sym
+#32     20.08s best:1329548 next:[113960,1329547] rnd_cst_lns (d=8.74e-01 s=61 t=0.10 p=0.75 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #32: objective=1329548, elapsed=7.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#33     20.28s best:1329376 next:[113960,1329375] rnd_var_lns (d=8.73e-01 s=60 t=0.10 p=0.80 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #33: objective=1329376, elapsed=7.8s
+#Bound  20.32s best:1329376 next:[120030,1329375] max_lp_sym
+#34     21.07s best:1292246 next:[120030,1292245] graph_var_lns (d=6.83e-01 s=66 t=0.10 p=0.60 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #34: objective=1292246, elapsed=8.6s
+#35     21.56s best:1279416 next:[120030,1279415] graph_arc_lns (d=6.83e-01 s=70 t=0.10 p=0.60 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #35: objective=1279416, elapsed=9.1s
+#Bound  21.56s best:1279416 next:[131377,1279415] max_lp_sym
+#36     21.72s best:1279365 next:[131377,1279364] rnd_cst_lns (d=8.76e-01 s=72 t=0.10 p=0.70 stall=1 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #36: objective=1279365, elapsed=9.2s
+#37     22.00s best:1178649 next:[131377,1178648] graph_var_lns (d=5.64e-01 s=73 t=0.10 p=0.50 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #37: objective=1178649, elapsed=9.5s
+#38     22.07s best:1178049 next:[131377,1178048] ls_restart_decay_perturb(batch:1 lin{mvs:5 evals:2'625} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #38: objective=1178049, elapsed=9.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#39     22.33s best:1171276 next:[131377,1171275] rins_pump_lns (d=5.97e-01 s=77 t=0.10 p=0.50 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #39: objective=1171276, elapsed=9.8s
+#40     22.46s best:1171102 next:[131377,1171101] rnd_var_lns (d=8.25e-01 s=78 t=0.10 p=0.67 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #40: objective=1171102, elapsed=10.0s
+#Bound  22.84s best:1171102 next:[138200,1171101] max_lp_sym
+#41     23.08s best:1148737 next:[138200,1148736] graph_arc_lns (d=5.64e-01 s=83 t=0.10 p=0.50 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #41: objective=1148737, elapsed=10.6s
+#42     23.17s best:1148167 next:[138200,1148166] rnd_var_lns (d=8.70e-01 s=84 t=0.10 p=0.71 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #42: objective=1148167, elapsed=10.7s
+#43     23.23s best:1125802 next:[138200,1125801] rnd_var_lns (d=8.70e-01 s=84 t=0.10 p=0.71 stall=0 h=base) [combined with: graph_arc_lns (d=5.6...] (fixed_bools=0/4255)
+  → Solution #43: objective=1125802, elapsed=10.7s
+#44     23.28s best:1125602 next:[138200,1125601] graph_dec_lns (d=8.25e-01 s=85 t=0.10 p=0.67 stall=0 h=base) [hint] [combined with: rnd_var_lns (d=8.70e...] (fixed_bools=0/4255)
+  → Solution #44: objective=1125602, elapsed=10.8s
+#45     23.86s best:1125569 next:[138200,1125568] graph_arc_lns (d=4.17e-01 s=91 t=0.10 p=0.43 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #45: objective=1125569, elapsed=11.4s
+#46     23.94s best:1125369 next:[138200,1125368] ls_restart_decay_perturb(batch:1 lin{mvs:3 evals:1'842} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #46: objective=1125369, elapsed=11.5s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  24.23s best:1125369 next:[145631,1125368] max_lp_sym
+#47     24.48s best:1125002 next:[145631,1125001] graph_dec_lns (d=8.70e-01 s=92 t=0.10 p=0.71 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #47: objective=1125002, elapsed=12.0s
+#48     24.57s best:1124769 next:[145631,1124768] graph_dec_lns (d=8.70e-01 s=92 t=0.10 p=0.71 stall=0 h=base) [combined with: ls_restart_decay_per...] (fixed_bools=0/4255)
+  → Solution #48: objective=1124769, elapsed=12.1s
+#Bound  25.47s best:1124769 next:[155521,1124768] max_lp_sym
+#49     25.78s best:1124765 next:[155521,1124764] graph_cst_lns (d=8.82e-01 s=100 t=0.10 p=0.71 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #49: objective=1124765, elapsed=13.3s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#50     26.13s best:1115378 next:[155521,1115377] graph_var_lns (d=6.50e-01 s=103 t=0.10 p=0.55 stall=4 h=base) (fixed_bools=0/4255)
+  → Solution #50: objective=1115378, elapsed=13.6s
+#51     26.30s best:1115232 next:[155521,1115231] ls_restart_decay_compound_perturb(batch:1 lin{mvs:0 evals:106'251} gen{mvs:604 evals:23'946} comp{mvs:60 btracks:272} #w_updates:3 #perturb:0) (fixed_bools=0/4255)
+  → Solution #51: objective=1115232, elapsed=13.8s
+#Bound  26.54s best:1115232 next:[158851,1115231] max_lp_sym
+#52     27.01s best:1053404 next:[158851,1053403] rnd_var_lns (d=8.72e-01 s=108 t=0.10 p=0.67 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #52: objective=1053404, elapsed=14.5s
+#53     27.18s best:1053351 next:[158851,1053350] graph_arc_lns (d=3.16e-01 s=111 t=0.10 p=0.40 stall=2 h=base) (fixed_bools=0/4255)
+  → Solution #53: objective=1053351, elapsed=14.7s
+#54     27.94s best:1052955 next:[158851,1052954] graph_arc_lns (d=5.20e-01 s=116 t=0.10 p=0.50 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #54: objective=1052955, elapsed=15.5s
+#55     28.00s best:1048751 next:[158851,1048750] graph_cst_lns (d=8.80e-01 s=115 t=0.10 p=0.67 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #55: objective=1048751, elapsed=15.5s
+#56     28.06s best:1048355 next:[158851,1048354] graph_cst_lns (d=8.80e-01 s=115 t=0.10 p=0.67 stall=0 h=base) [hint] [combined with: graph_arc_lns (d=5.2...] (fixed_bools=0/4255)
+  → Solution #56: objective=1048355, elapsed=15.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#57     28.27s best:1040355 next:[158851,1040354] rins_pump_lns (d=7.31e-01 s=117 t=0.10 p=0.56 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #57: objective=1040355, elapsed=15.8s
+#58     28.58s best:1028356 next:[158851,1028355] graph_var_lns (d=4.37e-01 s=121 t=0.10 p=0.46 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #58: objective=1028356, elapsed=16.1s
+#59     28.70s best:1020082 next:[158851,1020081] graph_dec_lns (d=8.69e-01 s=122 t=0.10 p=0.67 stall=1 h=base) [combined with: graph_var_lns (d=4.3...] (fixed_bools=0/4255)
+  → Solution #59: objective=1020082, elapsed=16.2s
+#60     30.04s best:996881 next:[158851,996880] graph_var_lns (d=4.39e-01 s=130 t=0.10 p=0.47 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #60: objective=996881, elapsed=17.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#61     30.63s best:996855 next:[158851,996854] graph_cst_lns (d=9.08e-01 s=131 t=0.10 p=0.70 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #61: objective=996855, elapsed=18.1s
+#62     30.79s best:985109 next:[158851,985108] graph_dec_lns (d=8.99e-01 s=133 t=0.10 p=0.70 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #62: objective=985109, elapsed=18.3s
+#63     30.88s best:985083 next:[158851,985082] graph_dec_lns (d=8.99e-01 s=133 t=0.10 p=0.70 stall=0 h=base) [combined with: graph_cst_lns (d=9.0...] (fixed_bools=0/4255)
+  → Solution #63: objective=985083, elapsed=18.4s
+#Model  30.90s var:5591/5594 constraints:9053/9053
+#64     31.00s best:985057 next:[158851,985056] graph_arc_lns (d=4.08e-01 s=136 t=0.10 p=0.47 stall=2 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #64: objective=985057, elapsed=18.5s
+#65     31.06s best:958455 next:[158851,958454] graph_arc_lns (d=4.08e-01 s=135 t=0.10 p=0.47 stall=2 h=base) (fixed_bools=0/4255)
+  → Solution #65: objective=958455, elapsed=18.6s
+#66     31.20s best:946657 next:[158851,946656] graph_arc_lns (d=4.08e-01 s=135 t=0.10 p=0.47 stall=2 h=base) [combined with: graph_arc_lns (d=4.0...] (fixed_bools=0/4255)
+  → Solution #66: objective=946657, elapsed=18.7s
+#67     31.36s best:940486 next:[158851,940485] graph_var_lns (d=6.33e-01 s=137 t=0.10 p=0.53 stall=1 h=base) [combined with: graph_arc_lns (d=4.0...] (fixed_bools=0/4255)
+  → Solution #67: objective=940486, elapsed=18.9s
+#68     31.45s best:940220 next:[158851,940219] ls_restart_decay_perturb(batch:1 lin{mvs:167 evals:39'249} #w_updates:53 #perturb:0) (fixed_bools=0/4255)
+  → Solution #68: objective=940220, elapsed=19.0s
+#69     31.58s best:934781 next:[158851,934780] graph_var_lns (d=6.33e-01 s=138 t=0.10 p=0.53 stall=1 h=base) [combined with: ls_restart_decay_per...] (fixed_bools=0/4255)
+  → Solution #69: objective=934781, elapsed=19.1s
+#70     31.71s best:933981 next:[158851,933980] ls_restart_compound(batch:1 lin{mvs:0 evals:23'368} gen{mvs:132 evals:5'822} comp{mvs:20 btracks:56} #w_updates:1 #perturb:0) (fixed_bools=0/4255)
+  → Solution #70: objective=933981, elapsed=19.2s
+#71     32.06s best:933873 next:[158851,933872] rnd_cst_lns (d=9.06e-01 s=142 t=0.10 p=0.67 stall=4 h=base) (fixed_bools=0/4255)
+  → Solution #71: objective=933873, elapsed=19.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#72     32.19s best:922563 next:[158851,922562] rnd_cst_lns (d=9.06e-01 s=141 t=0.10 p=0.67 stall=4 h=base) (fixed_bools=0/4255)
+  → Solution #72: objective=922563, elapsed=19.7s
+#73     32.29s best:922363 next:[158851,922362] rnd_cst_lns (d=9.06e-01 s=141 t=0.10 p=0.67 stall=4 h=base) [combined with: ls_restart_compound(...] (fixed_bools=0/4255)
+  → Solution #73: objective=922363, elapsed=19.8s
+#74     32.39s best:922348 next:[158851,922347] ls_restart(batch:1 lin{mvs:3 evals:1'837} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #74: objective=922348, elapsed=19.9s
+#75     32.74s best:912598 next:[158851,912597] rnd_var_lns (d=8.73e-01 s=146 t=0.10 p=0.64 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #75: objective=912598, elapsed=20.3s
+#76     32.84s best:912198 next:[158851,912197] ls_restart_decay(batch:1 lin{mvs:5 evals:3'359} gen{mvs:1 evals:108} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #76: objective=912198, elapsed=20.3s
+#77     33.16s best:857601 next:[158851,857600] graph_cst_lns (d=8.81e-01 s=148 t=0.10 p=0.64 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #77: objective=857601, elapsed=20.7s
+#78     33.37s best:857575 next:[158851,857574] graph_arc_lns (d=4.10e-01 s=152 t=0.10 p=0.47 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #78: objective=857575, elapsed=20.9s
+#79     33.60s best:800649 next:[158851,800648] rins_pump_lns (d=7.31e-01 s=154 t=0.10 p=0.54 stall=2 h=base) (fixed_bools=0/4255)
+  → Solution #79: objective=800649, elapsed=21.1s
+#80     34.08s best:796227 next:[158851,796226] graph_dec_lns (d=8.70e-01 s=156 t=0.10 p=0.64 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #80: objective=796227, elapsed=21.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#81     34.18s best:796027 next:[158851,796026] ls_restart_decay(batch:1 lin{mvs:3 evals:1'694} #w_updates:0 #perturb:0) (fixed_bools=0/4255)
+  → Solution #81: objective=796027, elapsed=21.7s
+#82     34.26s best:795827 next:[158851,795826] graph_dec_lns (d=8.70e-01 s=157 t=0.10 p=0.64 stall=0 h=base) [combined with: ls_restart_decay(bat...] (fixed_bools=0/4255)
+  → Solution #82: objective=795827, elapsed=21.8s
+#83     34.71s best:783684 next:[158851,783683] graph_var_lns (d=7.56e-01 s=159 t=0.10 p=0.58 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #83: objective=783684, elapsed=22.2s
+#84     35.49s best:766485 next:[158851,766484] graph_arc_lns (d=4.12e-01 s=165 t=0.10 p=0.47 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #84: objective=766485, elapsed=23.0s
+#85     35.61s best:754486 next:[158851,754485] graph_arc_lns (d=4.12e-01 s=164 t=0.10 p=0.47 stall=1 h=base) [combined with: graph_arc_lns (d=4.1...] (fixed_bools=0/4255)
+  → Solution #85: objective=754486, elapsed=23.1s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#86     36.64s best:754465 next:[158851,754464] graph_cst_lns (d=9.27e-01 s=170 t=0.10 p=0.69 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #86: objective=754465, elapsed=24.2s
+#87     37.48s best:754214 next:[158851,754213] rnd_var_lns (d=9.22e-01 s=172 t=0.10 p=0.69 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #87: objective=754214, elapsed=25.0s
+#88     38.04s best:231058 next:[158851,231057] max_lp_sym (fixed_bools=2/4439)
+  → Solution #88: objective=231058, elapsed=25.6s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#89     38.29s best:230977 next:[158851,230976] rins_lp_lns (d=8.28e-01 s=178 t=0.10 p=0.59 stall=3 h=base) (fixed_bools=0/4255)
+  → Solution #89: objective=230977, elapsed=25.8s
+#90     38.52s best:230899 next:[158851,230898] graph_var_lns (d=6.39e-01 s=179 t=0.10 p=0.52 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #90: objective=230899, elapsed=26.0s
+#91     38.94s best:230848 next:[158851,230847] rnd_cst_lns (d=9.24e-01 s=181 t=0.10 p=0.67 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #91: objective=230848, elapsed=26.5s
+#92     39.14s best:230822 next:[158851,230821] graph_var_lns (d=7.01e-01 s=183 t=0.10 p=0.55 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #92: objective=230822, elapsed=26.7s
+#93     39.35s best:230821 next:[158851,230820] graph_dec_lns (d=7.90e-01 s=185 t=0.10 p=0.54 stall=0 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #93: objective=230821, elapsed=26.9s
+#94     39.43s best:230795 next:[158851,230794] graph_arc_lns (d=3.42e-01 s=186 t=0.10 p=0.45 stall=1 h=base) [hint] (fixed_bools=0/4255)
+  → Solution #94: objective=230795, elapsed=26.9s
+#95     39.51s best:230770 next:[158851,230769] rnd_cst_lns (d=9.24e-01 s=182 t=0.10 p=0.67 stall=1 h=base) (fixed_bools=0/4255)
+  → Solution #95: objective=230770, elapsed=27.0s
+#96     39.68s best:230743 next:[158851,230742] graph_dec_lns (d=8.33e-01 s=188 t=0.10 p=0.57 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #96: objective=230743, elapsed=27.2s
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  40.45s best:230743 next:[159493,230742] max_lp_sym
+#97     40.58s best:230716 next:[159493,230715] graph_dec_lns (d=8.66e-01 s=195 t=0.10 p=0.60 stall=0 h=base) (fixed_bools=0/4255)
+  → Solution #97: objective=230716, elapsed=28.1s
+#Bound  41.71s best:230716 next:[166520,230715] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  42.35s best:230716 next:[171364,230715] max_lp_sym
+#98     42.82s best:218314 next:[171364,218313] graph_arc_lns (d=4.17e-01 s=211 t=0.10 p=0.48 stall=4 h=base) (fixed_bools=0/4255)
+  → Solution #98: objective=218314, elapsed=30.3s
+#Bound  43.63s best:218314 next:[179399,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  44.19s best:218314 next:[185071,218313] max_lp_sym
+#Bound  44.75s best:218314 next:[194883,218313] max_lp_sym
+#Bound  45.39s best:218314 next:[204003,218313] max_lp_sym
+#Bound  45.90s best:218314 next:[205924,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  46.41s best:218314 next:[206869,218313] max_lp_sym
+#Bound  46.94s best:218314 next:[208872,218313] max_lp_sym
+#Bound  47.48s best:218314 next:[210161,218313] max_lp_sym
+#Bound  47.51s best:218314 next:[210211,218313] max_lp_sym
+#Model  48.09s var:5033/5594 constraints:8620/9053 compo:5028,1,1,1,1,1
+#Model  48.15s var:4895/5594 constraints:8512/9053 compo:4890,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  49.90s var:4890/5594 constraints:8508/9053 compo:4885,1,1,1,1,1
+#Model  50.01s var:4874/5594 constraints:8505/9053 compo:4869,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  51.08s var:4870/5594 constraints:8505/9053 compo:4865,1,1,1,1,1
+#Model  51.18s var:4866/5594 constraints:8503/9053 compo:4861,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  53.17s var:4857/5594 constraints:8492/9053 compo:4852,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  55.10s best:218314 next:[211524,218313] max_lp_sym
+#Model  56.35s var:4776/5594 constraints:8291/9053 compo:4771,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  56.86s var:4772/5594 constraints:8289/9053 compo:4767,1,1,1,1,1
+#Model  57.17s var:4771/5594 constraints:8286/9053 compo:4766,1,1,1,1,1
+#Bound  57.28s best:218314 next:[212388,218313] max_lp_sym
+#Model  57.39s var:4769/5594 constraints:8284/9053 compo:4764,1,1,1,1,1
+#Bound  57.40s best:218314 next:[212517,218313] max_lp_sym
+#Model  58.57s var:4628/5594 constraints:8024/9053 compo:4620,1,1,1,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  59.26s best:218314 next:[213262,218313] max_lp_sym
+#Model  59.55s var:4627/5594 constraints:8023/9053 compo:4619,1,1,1,1,1,1,1,1
+#Model  59.87s var:4562/5594 constraints:7932/9053 compo:4550,1,1,1,1,1,1,1,1,1,...
+#Model  60.04s var:4559/5594 constraints:7926/9053 compo:4547,1,1,1,1,1,1,1,1,1,...
+#Model  60.31s var:4558/5594 constraints:7924/9053 compo:4546,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  60.95s best:218314 next:[215216,218313] max_lp_sym
+#Model  61.45s var:4536/5594 constraints:7897/9053 compo:4524,1,1,1,1,1,1,1,1,1,...
+#Model  61.68s var:4411/5594 constraints:7712/9053 compo:4397,1,1,1,1,1,1,1,1,1,...
+#Model  61.88s var:4405/5594 constraints:7690/9053 compo:4390,1,1,1,1,1,1,1,1,1,...
+#Model  62.11s var:4394/5594 constraints:7670/9053 compo:4380,1,1,1,1,1,1,1,1,1,...
+#Model  62.31s var:4393/5594 constraints:7669/9053 compo:4379,1,1,1,1,1,1,1,1,1,...
+#Model  62.43s var:4381/5594 constraints:7644/9053 compo:4367,1,1,1,1,1,1,1,1,1,...
+#Bound  62.55s best:218314 next:[216121,218313] max_lp_sym
+#Bound  62.61s best:218314 next:[216178,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  62.79s var:4380/5594 constraints:7640/9053 compo:4366,1,1,1,1,1,1,1,1,1,...
+#Model  63.25s var:4120/5594 constraints:7260/9053 compo:4105,1,1,1,1,1,1,1,1,1,...
+#Model  63.38s var:4115/5594 constraints:7254/9053 compo:4100,1,1,1,1,1,1,1,1,1,...
+#Model  63.48s var:4113/5594 constraints:7248/9053 compo:4098,1,1,1,1,1,1,1,1,1,...
+#Bound  64.17s best:218314 next:[216778,218313] max_lp_sym
+#Model  64.66s var:4093/5594 constraints:7202/9053 compo:4079,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  65.26s var:4041/5594 constraints:7080/9053 compo:4026,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/notifications/count HTTP/1.1" 200 OK
+#Model  65.67s var:4033/5594 constraints:7063/9053 compo:4017,1,1,1,1,1,1,1,1,1,...
+#Model  65.77s var:4002/5594 constraints:7003/9053 compo:3986,1,1,1,1,1,1,1,1,1,...
+#Model  65.88s var:3985/5594 constraints:6997/9053 compo:3969,1,1,1,1,1,1,1,1,1,...
+#Model  66.27s var:3984/5594 constraints:6991/9053 compo:3968,1,1,1,1,1,1,1,1,1,...
+#Bound  66.68s best:218314 next:[217012,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  66.76s best:218314 next:[217067,218313] max_lp_sym
+#Model  67.04s var:3967/5594 constraints:6943/9053 compo:3951,1,1,1,1,1,1,1,1,1,...
+#Model  68.59s var:3919/5594 constraints:6806/9053 compo:3902,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  69.19s best:218314 next:[217374,218313] max_lp_sym
+#Model  69.68s var:3912/5594 constraints:6799/9053 compo:3895,1,1,1,1,1,1,1,1,1,...
+#Model  70.31s var:3891/5594 constraints:6755/9053 compo:3874,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  71.14s var:3886/5594 constraints:6751/9053 compo:3869,1,1,1,1,1,1,1,1,1,...
+#Bound  71.97s best:218314 next:[218067,218313] max_lp_sym
+#Bound  72.00s best:218314 next:[218068,218313] max_lp_sym
+#Model  72.35s var:3816/5594 constraints:6631/9053 compo:3795,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  73.07s var:3815/5594 constraints:6624/9053 compo:3793,1,1,1,1,1,1,1,1,1,...
+#Model  73.17s var:3813/5594 constraints:6619/9053 compo:3791,1,1,1,1,1,1,1,1,1,...
+#Model  73.23s var:3810/5594 constraints:6610/9053 compo:3789,1,1,1,1,1,1,1,1,1,...
+#Model  73.32s var:3809/5594 constraints:6609/9053 compo:3788,1,1,1,1,1,1,1,1,1,...
+#Model  73.50s var:3807/5594 constraints:6606/9053 compo:3786,1,1,1,1,1,1,1,1,1,...
+#Model  74.19s var:3806/5594 constraints:6605/9053 compo:3785,1,1,1,1,1,1,1,1,1,...
+#Model  74.64s var:3571/5594 constraints:6071/9053 compo:3545,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  75.08s best:218314 next:[218078,218313] max_lp_sym
+#Model  75.13s var:3570/5594 constraints:6068/9053 compo:3544,1,1,1,1,1,1,1,1,1,...
+#Model  75.40s var:3561/5594 constraints:6047/9053 compo:3535,1,1,1,1,1,1,1,1,1,...
+#Model  75.42s var:3548/5594 constraints:6015/9053 compo:3522,1,1,1,1,1,1,1,1,1,...
+#Model  75.52s var:3512/5594 constraints:5964/9053 compo:3485,1,1,1,1,1,1,1,1,1,...
+#Model  76.34s var:3486/5594 constraints:5900/9053 compo:3459,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  77.32s var:3483/5594 constraints:5894/9053 compo:3456,1,1,1,1,1,1,1,1,1,...
+#Bound  77.36s best:218314 next:[218080,218313] max_lp_sym
+#Model  77.61s var:3481/5594 constraints:5890/9053 compo:3454,1,1,1,1,1,1,1,1,1,...
+#Model  77.69s var:3478/5594 constraints:5887/9053 compo:3451,1,1,1,1,1,1,1,1,1,...
+#Model  78.21s var:3400/5594 constraints:5749/9053 compo:3372,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  78.93s var:3397/5594 constraints:5747/9053 compo:3369,1,1,1,1,1,1,1,1,1,...
+#Bound  78.96s best:218314 next:[218083,218313] reduced_costs
+#Model  79.40s var:3395/5594 constraints:5745/9053 compo:3367,1,1,1,1,1,1,1,1,1,...
+#Bound  79.91s best:218314 next:[218085,218313] reduced_costs
+#Model  80.22s var:3392/5594 constraints:5742/9053 compo:3364,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  82.74s var:3241/5594 constraints:5567/9053 compo:3202,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound  83.32s best:218314 next:[218086,218313] reduced_costs
+#Model  83.84s var:3240/5594 constraints:5566/9053 compo:3200,1,1,1,1,1,1,1,1,1,...
+#Model  84.12s var:3238/5594 constraints:5564/9053 compo:3198,1,1,1,1,1,1,1,1,1,...
+#Model  84.17s var:3235/5594 constraints:5559/9053 compo:3195,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  88.15s var:3229/5594 constraints:5549/9053 compo:3189,1,1,1,1,1,1,1,1,1,...
+#Model  88.88s var:3226/5594 constraints:5546/9053 compo:3186,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  89.32s var:3225/5594 constraints:5545/9053 compo:3184,1,1,1,1,1,1,1,1,1,...
+#Model  90.77s var:3224/5594 constraints:5545/9053 compo:3183,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  98.97s var:3125/5594 constraints:5410/9053 compo:3075,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model  99.29s var:3114/5594 constraints:5393/9053 compo:3065,1,1,1,1,1,1,1,1,1,...
+#Model 100.98s var:3112/5594 constraints:5391/9053 compo:3063,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 102.92s var:3106/5594 constraints:5384/9053 compo:3057,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 104.56s var:3103/5594 constraints:5380/9053 compo:3054,1,1,1,1,1,1,1,1,1,...
+#Bound 105.14s best:218314 next:[218087,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 105.16s var:3058/5594 constraints:5333/9053 compo:3007,1,1,1,1,1,1,1,1,1,...
+#Model 105.92s var:3057/5594 constraints:5332/9053 compo:3006,1,1,1,1,1,1,1,1,1,...
+#Model 106.03s var:3054/5594 constraints:5326/9053 compo:3003,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 107.33s var:3053/5594 constraints:5326/9053 compo:3002,1,1,1,1,1,1,1,1,1,...
+#Model 107.78s var:3046/5594 constraints:5317/9053 compo:2995,1,1,1,1,1,1,1,1,1,...
+#Model 108.39s var:3041/5594 constraints:5311/9053 compo:2990,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 109.80s best:218314 next:[218088,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 112.13s var:3007/5594 constraints:5263/9053 compo:2956,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 114.17s var:3001/5594 constraints:5256/9053 compo:2950,1,1,1,1,1,1,1,1,1,...
+#Bound 114.45s best:218314 next:[218089,218313] max_lp_sym
+#Model 114.70s var:3000/5594 constraints:5254/9053 compo:2949,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 116.34s var:2992/5594 constraints:5244/9053 compo:2939,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 117.44s var:2988/5594 constraints:5239/9053 compo:2935,1,1,1,1,1,1,1,1,1,...
+#Bound 117.78s best:218314 next:[218091,218313] max_lp_sym
+#Model 117.80s var:2982/5594 constraints:5234/9053 compo:2929,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 120.80s var:2975/5594 constraints:5222/9053 compo:2922,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 123.96s best:218314 next:[218092,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 125.52s var:2974/5594 constraints:5222/9053 compo:2921,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/notifications/count HTTP/1.1" 200 OK
+#Model 126.09s var:2969/5594 constraints:5216/9053 compo:2916,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 129.58s var:2968/5594 constraints:5215/9053 compo:2914,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 131.74s var:2966/5594 constraints:5212/9053 compo:2912,1,1,1,1,1,1,1,1,1,...
+#Model 132.67s var:2964/5594 constraints:5210/9053 compo:2910,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 134.09s var:2963/5594 constraints:5209/9053 compo:2909,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 135.76s var:2962/5594 constraints:5206/9053 compo:2907,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 141.82s var:2961/5594 constraints:5205/9053 compo:2906,1,1,1,1,1,1,1,1,1,...
+#Model 142.72s var:2960/5594 constraints:5204/9053 compo:2904,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 143.97s var:2959/5594 constraints:5202/9053 compo:2903,1,1,1,1,1,1,1,1,1,...
+#Model 144.95s var:2958/5594 constraints:5200/9053 compo:2902,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 145.91s var:2955/5594 constraints:5196/9053 compo:2899,1,1,1,1,1,1,1,1,1,...
+#Bound 146.09s best:218314 next:[218093,218313] max_lp_sym
+#Model 146.14s var:2954/5594 constraints:5194/9053 compo:2898,1,1,1,1,1,1,1,1,1,...
+#Model 146.72s var:2953/5594 constraints:5192/9053 compo:2897,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 147.50s var:2952/5594 constraints:5190/9053 compo:2896,1,1,1,1,1,1,1,1,1,...
+#Bound 148.64s best:218314 next:[218094,218313] max_lp_sym
+#Model 148.66s var:2951/5594 constraints:5190/9053 compo:2895,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 149.59s var:2950/5594 constraints:5189/9053 compo:2894,1,1,1,1,1,1,1,1,1,...
+#Model 149.69s var:2946/5594 constraints:5184/9053 compo:2887,1,1,1,1,1,1,1,1,1,...
+#Model 150.25s var:2945/5594 constraints:5182/9053 compo:2884,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 151.70s var:2941/5594 constraints:5177/9053 compo:2880,1,1,1,1,1,1,1,1,1,...
+#Model 152.50s var:2938/5594 constraints:5174/9053 compo:2877,1,1,1,1,1,1,1,1,1,...
+#Bound 152.57s best:218314 next:[218095,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 153.33s best:218314 next:[218096,218313] max_lp_sym
+#Model 154.64s var:2935/5594 constraints:5171/9053 compo:2874,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 155.67s best:218314 next:[218097,218313] max_lp_sym
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 162.35s var:2930/5594 constraints:5165/9053 compo:2869,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 163.68s var:2929/5594 constraints:5165/9053 compo:2868,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 166.36s best:218314 next:[218098,218313] max_lp_sym
+#Model 166.38s var:2928/5594 constraints:5165/9053 compo:2867,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 170.36s var:2924/5594 constraints:5162/9053 compo:2863,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 175.27s var:2910/5594 constraints:5147/9053 compo:2849,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 175.74s var:2909/5594 constraints:5147/9053 compo:2848,1,1,1,1,1,1,1,1,1,...
+#Model 176.20s var:2908/5594 constraints:5145/9053 compo:2847,1,1,1,1,1,1,1,1,1,...
+#Model 177.08s var:2907/5594 constraints:5144/9053 compo:2845,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 180.93s var:2906/5594 constraints:5143/9053 compo:2843,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 182.87s var:2903/5594 constraints:5138/9053 compo:2840,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/notifications/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 195.57s var:2901/5594 constraints:5137/9053 compo:2838,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 197.89s best:218314 next:[218099,218313] max_lp_sym
+#Bound 198.15s best:218314 next:[218104,218313] max_lp_sym
+#Model 198.24s var:2877/5594 constraints:5093/9053 compo:2814,1,1,1,1,1,1,1,1,1,...
+#Bound 198.90s best:218314 next:[218107,218313] max_lp_sym
+#Bound 199.25s best:218314 next:[218111,218313] max_lp_sym
+#Model 199.26s var:2872/5594 constraints:5089/9053 compo:2809,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 199.79s best:218314 next:[218112,218313] max_lp_sym
+#Model 199.80s var:2866/5594 constraints:5066/9053 compo:2803,1,1,1,1,1,1,1,1,1,...
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 212.50s var:2857/5594 constraints:5053/9053 compo:2794,1,1,1,1,1,1,1,1,1,...
+#Bound 213.49s best:218314 next:[218126,218313] reduced_costs
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 214.48s best:218314 next:[218133,218313] max_lp_sym
+#Model 215.42s var:2723/5594 constraints:4971/9053
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 215.86s var:2716/5594 constraints:4968/9053
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 222.91s var:2680/5594 constraints:4866/9053
+#Bound 223.51s best:218314 next:[218148,218313] reduced_costs
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 223.57s var:2679/5594 constraints:4865/9053 compo:2678,1
+#Bound 224.43s best:218314 next:[218150,218313] reduced_costs
+#Model 224.46s var:2678/5594 constraints:4865/9053
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 226.33s best:218314 next:[218194,218313] reduced_costs
+#Bound 226.63s best:218314 next:[218196,218313] reduced_costs
+#Model 227.20s var:2665/5594 constraints:4836/9053
+#Model 227.26s var:2661/5594 constraints:4831/9053
+#Model 227.41s var:2644/5594 constraints:4815/9053
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 227.87s var:2641/5594 constraints:4811/9053
+#Bound 227.92s best:218314 next:[218197,218313] reduced_costs
+#Model 227.94s var:2612/5594 constraints:4731/9053
+#Model 228.78s var:2595/5594 constraints:4704/9053
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 230.27s var:2580/5594 constraints:4673/9053
+#Model 231.11s var:2579/5594 constraints:4672/9053 compo:2578,1
+#Bound 231.33s best:218314 next:[218242,218313] reduced_costs
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 231.95s var:2415/5594 constraints:4267/9053 compo:2413,1,1
+#Bound 232.08s best:218314 next:[218251,218313] reduced_costs
+#Bound 232.32s best:218314 next:[218252,218313] reduced_costs
+#Bound 232.60s best:218314 next:[218257,218313] reduced_costs
+#Bound 232.90s best:218314 next:[218261,218313] reduced_costs
+#Bound 233.20s best:218314 next:[218262,218313] reduced_costs
+#Model 233.29s var:2389/5594 constraints:4204/9053 compo:2385,1,1,1,1
+#Bound 233.54s best:218314 next:[218263,218313] reduced_costs
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 233.79s best:218314 next:[218266,218313] reduced_costs
+#Bound 234.23s best:218314 next:[218267,218313] reduced_costs
+#Bound 234.41s best:218314 next:[218268,218313] reduced_costs
+#Bound 234.64s best:218314 next:[218270,218313] reduced_costs
+#Model 235.18s var:2167/5594 constraints:3741/9053 compo:2160,1,1,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 235.72s var:2122/5594 constraints:3617/9053 compo:2114,1,1,1,1,1,1,1,1
+#Bound 235.85s best:218314 next:[218272,218313] reduced_costs
+#Bound 236.08s best:218314 next:[218273,218313] reduced_costs
+#Model 236.11s var:2085/5594 constraints:3533/9053 compo:2077,1,1,1,1,1,1,1,1
+#Model 237.47s var:2077/5594 constraints:3510/9053 compo:2069,1,1,1,1,1,1,1,1
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Model 238.11s var:2076/5594 constraints:3508/9053 compo:2067,1,1,1,1,1,1,1,1,1
+#Bound 238.42s best:218314 next:[218274,218313] reduced_costs
+#Bound 238.75s best:218314 next:[218275,218313] reduced_costs
+#Model 238.80s var:2072/5594 constraints:3508/9053 compo:2067,1,1,1,1,1
+#Bound 238.86s best:218314 next:[218280,218313] reduced_costs
+#Model 239.35s var:2037/5594 constraints:3409/9053 compo:2034,1,1,1
+#Model 239.40s var:2034/5594 constraints:3401/9053 compo:2031,1,1,1
+#Bound 239.49s best:218314 next:[218295,218313] reduced_costs
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+#Bound 239.85s best:218314 next:[218297,218313] reduced_costs
+#Bound 240.05s best:218314 next:[218299,218313] reduced_costs
+#Bound 240.18s best:218314 next:[218300,218313] reduced_costs
+#Bound 240.38s best:218314 next:[218303,218313] reduced_costs
+#Bound 240.54s best:218314 next:[218304,218313] reduced_costs
+#Bound 240.77s best:218314 next:[218305,218313] reduced_costs
+#Bound 240.83s best:218314 next:[218307,218313] reduced_costs
+#Bound 240.95s best:218314 next:[218309,218313] reduced_costs
+#Model 240.96s var:806/5594 constraints:1338/9053
+#Bound 241.00s best:218314 next:[218312,218313] reduced_costs
+#Done  241.05s reduced_costs
+
+Task timing                   n [     min,      max]      avg      dev     time         n [     min,      max]      avg      dev    dtime
+              'core':         1 [   3.81m,    3.81m]    3.81m   0.00ns    3.81m         1 [   1.51m,    1.51m]    1.51m   0.00ns    1.51m
+        'default_lp':         1 [   3.81m,    3.81m]    3.81m   0.00ns    3.81m         1 [   1.17m,    1.17m]    1.17m   0.00ns    1.17m
+  'feasibility_pump':       105 [ 75.15ms, 934.79ms] 480.55ms 143.33ms   50.46s       104 [197.20ms, 717.81ms] 328.95ms  57.68ms   34.21s
+                'fj':         1 [140.06ms, 140.06ms] 140.06ms   0.00ns 140.06ms         1 [ 21.92ms,  21.92ms]  21.92ms   0.00ns  21.92ms
+   'fs_random_no_lp':         1 [217.42ms, 217.42ms] 217.42ms   0.00ns 217.42ms         0 [  0.00ns,   0.00ns]   0.00ns   0.00ns   0.00ns
+     'graph_arc_lns':       224 [  1.59ms,    1.30s] 223.55ms 235.53ms   50.08s       178 [  1.03us, 102.24ms]  57.99ms  44.46ms   10.32s
+     'graph_cst_lns':       167 [  1.90ms,    1.20s] 301.38ms 267.53ms   50.33s       139 [  5.19us, 102.15ms]  62.02ms  42.11ms    8.62s
+     'graph_dec_lns':       153 [  9.30ms,    1.25s] 327.36ms 289.14ms   50.09s       139 [806.00ns, 102.20ms]  54.13ms  44.82ms    7.52s
+     'graph_var_lns':       260 [  1.25ms,    1.02s] 192.50ms 204.81ms   50.05s       188 [ 24.60us, 102.24ms]  55.32ms  45.54ms   10.40s
+                'ls':       321 [ 52.87ms, 272.35ms] 156.19ms  48.26ms   50.14s       321 [434.11us, 100.77ms]  96.29ms  18.67ms   30.91s
+        'max_lp_sym':         1 [   3.81m,    3.81m]    3.81m   0.00ns    3.81m         1 [  59.16s,   59.16s]   59.16s   0.00ns   59.16s
+             'no_lp':         1 [   3.81m,    3.81m]    3.81m   0.00ns    3.81m         1 [   2.15m,    2.15m]    2.15m   0.00ns    2.15m
+     'quick_restart':         1 [   3.81m,    3.81m]    3.81m   0.00ns    3.81m         1 [  53.61s,   53.61s]   53.61s   0.00ns   53.61s
+     'reduced_costs':         1 [   3.81m,    3.81m]    3.81m   0.00ns    3.81m         1 [  49.82s,   49.82s]   49.82s   0.00ns   49.82s
+         'rins/rens':       232 [441.25us,    1.11s] 218.27ms 235.68ms   50.64s       166 [ 10.00ns, 100.21ms]  57.47ms  45.91ms    9.54s
+       'rnd_cst_lns':       155 [  1.43ms,    1.59s] 325.47ms 289.56ms   50.45s       133 [ 10.00ns, 100.24ms]  60.51ms  42.63ms    8.05s
+       'rnd_var_lns':       163 [  6.20ms,    1.65s] 307.05ms 264.73ms   50.05s       137 [  2.08us, 102.10ms]  60.34ms  41.98ms    8.27s
+
+Search stats          Bools  Conflicts   Branches  Restarts   BoolPropag  IntegerPropag
+             'core':  5'174  6'137'942  6'429'471     8'511  173'384'724    389'169'134
+       'default_lp':  4'256      5'873    965'412   251'222    8'082'826     20'264'279
+  'fs_random_no_lp':  4'255          0      7'632     7'632      145'023        207'667
+       'max_lp_sym':  4'441      5'188    492'577   149'938    5'450'783     15'222'650
+            'no_lp':  4'612  3'180'672  3'918'311    52'581   63'978'935    291'997'609
+    'quick_restart':  4'501      1'232  1'308'906   385'478    9'166'974     24'790'055
+    'reduced_costs':  4'376      7'015    459'467   112'292    6'234'469     17'101'098
+
+SAT stats             ClassicMinim  LitRemoved   LitLearned  LitForgotten  Subsumed  MClauses  MDecisions  MLitTrue  MSubsumed  MLitRemoved  MReused
+             'core':     6'129'617  76'896'214  303'617'569   302'484'108     5'395         0           0         0          0            0        0
+       'default_lp':         4'088     173'489      307'392             0       190   184'566     694'016         0      3'736       18'578   40'565
+  'fs_random_no_lp':             0           0            0             0         0         0           0         0          0            0        0
+       'max_lp_sym':         4'334      34'110       61'001             0       184    92'906     333'352         0      3'457       16'568   18'181
+            'no_lp':     3'177'906  51'943'931  144'168'265   142'495'219       560    38'308     169'554         0      2'453       18'749   10'566
+    'quick_restart':           447      10'462       33'150             0       112   242'038     875'410         0      3'610       17'641   46'262
+    'reduced_costs':         6'056      67'255      145'342             0       148    80'510     313'952         0      3'719       19'616   19'064
+
+Lp stats            Component  Iterations  AddedCuts  OPTIMAL  DUAL_F.  DUAL_U.
+     'default_lp':          1     213'585     11'888   27'315       15    1'438
+     'max_lp_sym':          1     194'070     12'942   10'965    4'186      163
+  'quick_restart':          1     163'301     11'914   23'308       12      362
+  'reduced_costs':          1     239'771     17'544   17'320    6'075       80
+
+Lp dimension            Final dimension of first component
+     'default_lp':   1591 rows, 3931 columns, 7634 entries
+     'max_lp_sym':  2080 rows, 5434 columns, 12811 entries
+  'quick_restart':   1193 rows, 3931 columns, 5149 entries
+  'reduced_costs':  1267 rows, 5594 columns, 11220 entries
+
+Lp debug            CutPropag  CutEqPropag  Adjust  Overflow        Bad  BadScaling
+     'default_lp':        182          186  28'644         0    688'139           0
+     'max_lp_sym':        402           22  15'294         0  1'719'287           0
+  'quick_restart':        312          113  23'598         0    957'542           0
+  'reduced_costs':        458           13  23'465         0  1'171'695           0
+
+Lp pool             Constraints  Updates    Simplif  Merged  Shortened  Split  Strenghtened         Cuts/Call
+     'default_lp':       13'816    4'648    358'176      12     51'816  2'298         1'357     11'888/28'126
+     'max_lp_sym':       24'192    8'338    803'776       4     70'392  2'607         1'129    12'942/762'478
+  'quick_restart':       13'835    6'374    499'754      19     88'588  4'163           739     11'914/28'318
+  'reduced_costs':       24'724    7'272  1'295'127      54    149'461  2'302           530  17'544/1'128'527
+
+Lp Cut            reduced_costs  default_lp  max_lp_sym  quick_restart
+          CG_FF:            213          91          97            126
+           CG_K:             70          66          57             87
+          CG_KL:              5           8           7              2
+           CG_R:            321         386         163            458
+          CG_RB:             96         194         145            189
+         CG_RBP:             76          84          36             71
+         Clique:            332           -         275              -
+             IB:          2'592       2'056         382          2'049
+       MIR_1_FF:            349          51          89             27
+        MIR_1_K:             71           5          34              8
+       MIR_1_KL:            167          35          12             17
+        MIR_1_R:              1          49           9             64
+       MIR_1_RB:             65          31          32             23
+      MIR_1_RBP:              6           8          25              9
+      MIR_1_RLT:            485           -         298              -
+       MIR_2_FF:            750          79         208             68
+        MIR_2_K:             99          24          92             11
+       MIR_2_KL:             99           5          45              6
+        MIR_2_R:             19         335          19            269
+       MIR_2_RB:            119         116         115             74
+      MIR_2_RBP:             20          56          13             21
+       MIR_3_FF:            625          46         181             39
+        MIR_3_K:            116          13          55              5
+       MIR_3_KL:             57           -           9              7
+        MIR_3_R:             38         333          13            211
+       MIR_3_RB:             72          63          62             40
+      MIR_3_RBP:             32          68           7             24
+       MIR_4_FF:            366          38         101             52
+        MIR_4_K:             76           5          31              9
+       MIR_4_KL:             33           -           5              1
+        MIR_4_R:             22         230          12            166
+       MIR_4_RB:             42          42          27             34
+      MIR_4_RBP:             43          42           5             13
+       MIR_5_FF:            174          60         108             71
+        MIR_5_K:             82           6          16              9
+       MIR_5_KL:             18           -           3              -
+        MIR_5_R:             11         165           8             95
+       MIR_5_RB:             34          23          38             22
+      MIR_5_RBP:             65          25           5              6
+       MIR_6_FF:             95          28          98             27
+        MIR_6_K:             61           5          21             10
+       MIR_6_KL:              3           2           1              -
+        MIR_6_R:              5          92          17            105
+       MIR_6_RB:             14          18          19             29
+      MIR_6_RBP:             76          20           9              6
+   ZERO_HALF_FF:          1'408         450       2'426            319
+    ZERO_HALF_K:             63          44          50             43
+   ZERO_HALF_KL:             56          11           4              2
+    ZERO_HALF_R:          7'721       6'210       7'429          6'888
+   ZERO_HALF_RB:            139         100           9             18
+  ZERO_HALF_RBP:             42          70          20             84
+
+LNS stats           Improv/Calls  Closed  Difficulty  TimeLimit
+  'graph_arc_lns':        57/210     60%    9.82e-01       0.10
+  'graph_cst_lns':        50/163     60%    9.90e-01       0.10
+  'graph_dec_lns':        45/153     60%    9.90e-01       0.10
+  'graph_var_lns':        54/213     58%    9.78e-01       0.10
+      'rins/rens':        49/194     57%    9.74e-01       0.10
+    'rnd_cst_lns':        42/154     59%    9.89e-01       0.10
+    'rnd_var_lns':        51/162     61%    9.95e-01       0.10
+
+LS stats                                Batches  Restarts/Perturbs  LinMoves  GenMoves  CompoundMoves  Bactracks  WeightUpdates  ScoreComputed
+                         'fj_restart':        1                  1    14'001        17              0          0            645         43'361
+                         'ls_restart':       17                 14    22'231     1'899              0          0         12'278      6'150'520
+                'ls_restart_compound':       40                 17         0    54'317          3'353     25'373            269     25'215'332
+        'ls_restart_compound_perturb':       59                 24         0    93'964          6'091     43'793            437     36'145'101
+                   'ls_restart_decay':       56                 29   107'195     4'959              0          0          2'660     13'437'630
+          'ls_restart_decay_compound':       22                 16         0    33'609          3'218     15'141            149     14'329'300
+  'ls_restart_decay_compound_perturb':       44                 18         0    65'251          4'993     30'062            263     27'288'454
+           'ls_restart_decay_perturb':       45                 28    83'682     3'505              0          0          2'263      9'668'157
+                 'ls_restart_perturb':       38                 15   146'234     1'882              0          0         40'676     12'689'507
+
+Solutions (98)                          Num     Rank
+                         'fj_restart':    1    [1,1]
+                      'graph_arc_lns':   17   [4,98]
+                      'graph_cst_lns':    9   [5,86]
+                      'graph_dec_lns':   15   [6,97]
+                      'graph_var_lns':   14   [3,92]
+                         'ls_restart':    1  [74,74]
+                'ls_restart_compound':    2  [27,70]
+                   'ls_restart_decay':    2  [76,81]
+  'ls_restart_decay_compound_perturb':    2  [22,51]
+           'ls_restart_decay_perturb':    4  [24,68]
+                 'ls_restart_perturb':    2  [17,20]
+                         'max_lp_sym':    1  [88,88]
+                              'no_lp':    1    [2,2]
+                        'rins_lp_lns':    3   [7,89]
+                      'rins_pump_lns':    4  [30,79]
+                        'rnd_cst_lns':   11  [16,95]
+                        'rnd_var_lns':    9  [11,87]
+
+Objective bounds     Num
+      'default_lp':    2
+  'initial_domain':    1
+      'max_lp_sym':   57
+   'quick_restart':    3
+   'reduced_costs':   36
+
+Solution repositories    Added  Queried  Synchro
+  'feasible solutions':    938    3'045      587
+   'fj solution hints':      0        0        0
+        'lp solutions':    484      105      443
+                'pump':    310      127
+
+Improving bounds shared      Num  Sym
+            'default_lp':  1'224    1
+            'max_lp_sym':  3'233   50
+                 'no_lp':     93    0
+         'quick_restart':    893    0
+         'reduced_costs':  4'211    4
+
+Clauses shared        Num
+           'core':      7
+     'default_lp':  1'830
+     'max_lp_sym':  2'045
+          'no_lp':    933
+  'quick_restart':    949
+  'reduced_costs':  1'106
+
+CpSolverResponse summary:
+status: OPTIMAL
+objective: 218314
+best_bound: 218314
+integers: 5085
+booleans: 4255
+conflicts: 0
+branches: 7632
+propagations: 145023
+integer_propagations: 207667
+restarts: 7632
+lp_iterations: 0
+walltime: 241.122
+usertime: 241.122
+deterministic_time: 580.459
+gap_integral: 878.525
+solution_fingerprint: 0x8cc48021ab028981
+
+
+============================================================
+SOLVER RESULTS
+============================================================
+✓ OPTIMAL solution found!
+
+Solver statistics:
+  - Wall time: 241.12 seconds
+  - Branches: 7632
+  - Conflicts: 0
+  - Objective value: 218314.0
+  - Intermediate solutions found: 98
+  - Best objective via callback: 218314
+============================================================
+
+================================================================================
+SCHICHTPLAN ZUSAMMENFASSUNG (PLANNING SUMMARY)
+================================================================================
+
+Planungszeitraum:
+  Von: 28.12.2025 (Sunday)
+  Bis: 31.01.2026 (Saturday)
+  Tage im Planungszeitraum: 35
+  Wochen im Planungszeitraum: 5
+  Monat: Dezember 2025
+
+Anzahl Schichten je Schichtart:
+  F (Frühschicht): 156 Schichten
+  N (Nachtschicht): 139 Schichten
+  S (Spätschicht): 155 Schichten
+
+Monatliche Arbeitsstunden je Mitarbeiter:
+  Mitarbeiter                    Soll (h)     Ist (h)      Differenz    Tage    
+  --------------------------------------------------------------------------
+  Andreas Wolf                        240.0h       240.0h        +0.0h      30
+  Anna Schmidt                        240.0h       240.0h        +0.0h      30
+  Daniel Koch                         240.0h       240.0h        +0.0h      30
+  Julia Becker                        240.0h       240.0h        +0.0h      30
+  Lisa Meyer                          240.0h       240.0h        +0.0h      30
+  Maria Lange                         240.0h       240.0h        +0.0h      30
+  Markus Richter                      240.0h       240.0h        +0.0h      30
+  Max Müller                          240.0h       240.0h        +0.0h      30
+  Michael Schulz                      240.0h       240.0h        +0.0h      30
+  Nicole Schröder                     240.0h       240.0h        +0.0h      30
+  Peter Weber                         240.0h       240.0h        +0.0h      30
+  Robert Franke                       240.0h       240.0h        +0.0h      30
+  Sarah Hoffmann                      240.0h       240.0h        +0.0h      30
+  Stefanie Klein                      240.0h       240.0h        +0.0h      30
+  Thomas Zimmermann                   240.0h       240.0h        +0.0h      30
+
+Gesamtstatistik:
+  Gesamtanzahl Schichtzuweisungen: 450
+  Anzahl arbeitender Mitarbeiter: 15/15
+  Durchschnittliche Stunden pro Mitarbeiter: 240.0h
+================================================================================
+2026-04-17T13:27:45 [INFO] api.shifts: Total assignments generated: 450
+2026-04-17T13:27:45 [INFO] api.shifts:   - Current month (2026-01-01 to 2026-01-31): 394
+2026-04-17T13:27:45 [INFO] api.shifts:   - Excluded from previous month (already planned): 56
+2026-04-17T13:27:45 [INFO] api.shifts: Inserted 394 new assignments, skipped 0 locked assignments
+INFO:     127.0.0.1:41860 - "GET /api/shifts/plan/status/5c31be9a-cde3-421d-a2f6-911fbe67e58f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41860 - "GET /api/shifts/schedule?startDate=2026-04-01&view=month HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36714 - "GET /api/planning/report/2026/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36720 - "GET /api/employees HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36714 - "GET /api/shifts/plan/approvals/2026/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36714 - "GET /api/notifications/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47538 - "GET /api/notifications/count HTTP/1.1" 200 OK

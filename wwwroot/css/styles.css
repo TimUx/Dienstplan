@@ -777,6 +777,14 @@ select {
     width: 100%;
 }
 
+.auth-only {
+    display: none;
+}
+
+body.authenticated .auth-only {
+    display: block;
+}
+
 .menu-user-info {
     padding: 8px 10px;
     border-radius: 8px;
@@ -790,7 +798,7 @@ select {
     display: flex;
     align-items: center;
     padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
     color: white;
 }

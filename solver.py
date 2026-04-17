@@ -5,6 +5,7 @@ Configures and runs the solver, returns solution.
 
 from ortools.sat.python import cp_model
 from datetime import date, datetime, timedelta
+import os
 import time
 from typing import List, Dict, Tuple, Optional
 from entities import Employee, ShiftAssignment, RelaxedConstraint, STANDARD_SHIFT_TYPES, get_shift_type_by_id
@@ -36,6 +37,20 @@ from constraints import (
     add_cross_shift_capacity_enforcement,
     add_total_weekend_staffing_limit
 )
+
+
+def _default_num_workers() -> int:
+    """Return a sensible default for the number of CP-SAT search workers.
+
+    Uses all logical CPU cores reported by the OS, capped at 16 (diminishing
+    returns above that for CP-SAT) and floored at 1.  Falls back to 4 if the
+    OS cannot determine the core count.
+    """
+    cpu_count = os.cpu_count()
+    if cpu_count is None or cpu_count < 1:
+        return 4  # safe fallback when os.cpu_count() is unavailable
+    return min(cpu_count, 16)
+
 
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
 # 1. Operational constraints (200-20000): Rest time, shift grouping, etc. - CRITICAL for safety/compliance
@@ -165,7 +180,7 @@ class ShiftPlanningSolver:
         self,
         planning_model: ShiftPlanningModel,
         time_limit_seconds: Optional[int] = None,
-        num_workers: int = 8,
+        num_workers: Optional[int] = None,
         global_settings: Dict = None,
         db_path: str = "dienstplan.db",
         search_strategy: str = "PORTFOLIO",
@@ -178,7 +193,8 @@ class ShiftPlanningSolver:
         Args:
             planning_model: The shift planning model
             time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
-            num_workers: Number of parallel workers for solver
+            num_workers: Number of parallel workers for solver. None (default) uses
+                _default_num_workers() which auto-detects available CPU cores (capped at 16).
             global_settings: Dict with global settings from database (optional)
                 - min_rest_hours: Min rest hours between shifts (default 11)
                 Note: Max consecutive shift settings are now per-shift-type (see ShiftType.max_consecutive_days)
@@ -205,7 +221,7 @@ class ShiftPlanningSolver:
         """
         self.planning_model = planning_model
         self.time_limit_seconds = time_limit_seconds
-        self.num_workers = num_workers
+        self.num_workers = num_workers if num_workers is not None else _default_num_workers()
         self.solution = None
         self.status = None
         self.db_path = db_path
@@ -2229,7 +2245,7 @@ def _build_planning_report(
 def solve_shift_planning(
     planning_model: ShiftPlanningModel,
     time_limit_seconds: Optional[int] = None,
-    num_workers: int = 8,
+    num_workers: Optional[int] = None,
     global_settings: Dict = None,
     search_strategy: str = "PORTFOLIO",
     warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None,
@@ -2241,7 +2257,8 @@ def solve_shift_planning(
     Args:
         planning_model: The shift planning model
         time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
-        num_workers: Number of parallel workers
+        num_workers: Number of parallel workers. None (default) auto-detects CPU cores via
+            _default_num_workers() (all cores, capped at 16).
         global_settings: Dict with global settings from database (optional)
         search_strategy: Search branching strategy. Options:
             - "PORTFOLIO" (default): Parallel workers with different heuristics.

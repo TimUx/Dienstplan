@@ -192,6 +192,17 @@ class TestValidateRestTimes:
         result = self._run(assignments, [emp])
         assert result.is_valid is True
 
+    def test_nacht_to_spaet_violation(self):
+        """N ends 05:45 next day, S next day starts 13:45 = only 8h rest < 11h."""
+        emp = _make_emp()
+        assignments = [
+            _make_assign(1, 1, N_ID, date(2025, 1, 6)),
+            _make_assign(2, 1, S_ID, date(2025, 1, 7)),
+        ]
+        result = self._run(assignments, [emp])
+        assert result.is_valid is False
+        assert any("Nacht" in v.message or "N" in v.message for v in result.violations)
+
     def test_spaet_to_spaet_is_valid(self):
         emp = _make_emp()
         assignments = [

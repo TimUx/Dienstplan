@@ -38,19 +38,36 @@ jobs:
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Building version $VERSION (Production - Empty Database)"
     
-    - name: Build Windows executable with PyInstaller
+    - name: Build Windows One-Dir distribution with PyInstaller
       run: |
         python -m PyInstaller Dienstplan.spec
-    
-    - name: Rename executable with version
+
+    - name: Create distribution ZIP
       run: |
-        Move-Item dist\Dienstplan.exe Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.exe
-    
-    - name: Upload Windows executable
+        $zip = "Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip"
+        Compress-Archive -Path "dist\Dienstplan\*" -DestinationPath $zip -Force
+        echo "ZIP_NAME=$zip" >> $env:GITHUB_OUTPUT
+      id: zipstep
+
+    - name: Build Inno Setup installer
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $installer = "dist\Dienstplan-Windows-Setup-v${version}.exe"
+        iscc /DMyAppVersion=$version installer\Dienstplan.iss
+        echo "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
+      id: installerstep
+
+    - name: Upload Windows ZIP artifact
       uses: actions/upload-artifact@v4
       with:
-        name: windows-executable-empty
-        path: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.exe
+        name: windows-zip
+        path: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+
+    - name: Upload Windows installer artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-installer
+        path: dist\Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe
 
   build-python-linux-empty:
     runs-on: ubuntu-latest
@@ -86,20 +103,30 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version $VERSION (Production - Empty Database)"
     
-    - name: Build Linux executable with PyInstaller
+    - name: Build Linux One-Dir distribution with PyInstaller
       run: |
         python -m PyInstaller Dienstplan.spec
-    
-    - name: Rename executable with version
+
+    - name: Create distribution tar.gz
       run: |
-        mv dist/Dienstplan Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
-        chmod +x Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
-    
-    - name: Upload Linux executable
+        TAR="Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz"
+        if [ ! -d "dist/Dienstplan" ]; then
+          echo "ERROR: dist/Dienstplan directory not found"
+          exit 1
+        fi
+        # Write a VERSION file so users can always check which build they have
+        echo "${{ steps.version.outputs.VERSION }}" > dist/Dienstplan/VERSION
+        # Package with a top-level Dienstplan/ folder so extracting to any
+        # directory is safe and the contents don't spill into the current dir
+        tar -czf "$TAR" -C dist Dienstplan
+        echo "TAR_NAME=$TAR" >> $GITHUB_OUTPUT
+      id: tarstep
+
+    - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
-        name: linux-executable-empty
-        path: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
+        name: linux-tarball
+        path: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
 
   create-release:
     needs: [build-python-windows-empty, build-python-linux-empty]
@@ -120,15 +147,20 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version $VERSION"
     
-    - name: Download Windows executable
+    - name: Download Windows ZIP
       uses: actions/download-artifact@v4
       with:
-        name: windows-executable-empty
-    
-    - name: Download Linux executable
+        name: windows-zip
+
+    - name: Download Windows installer
       uses: actions/download-artifact@v4
       with:
-        name: linux-executable-empty
+        name: windows-installer
+
+    - name: Download Linux tarball
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-tarball
     
     - name: Generate changelog
       id: changelog
@@ -152,64 +184,75 @@ jobs:
           
           ## 📦 Downloads
           
-          Download the executable for your platform:
-          - **Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.exe** - Windows Executable
-          - **Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}** - Linux Binary
-          
+          Download the package for your platform:
+
+          ### Windows
+          | Datei | Beschreibung |
+          |-------|--------------|
+          | **Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe** | Empfohlen – Inno-Setup-Installer (installiert in Programme, Startmenü-Eintrag) |
+          | **Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip** | Portabel – ZIP entpacken und `Dienstplan.exe` starten |
+
+          ### Linux
+          | Datei | Beschreibung |
+          |-------|--------------|
+          | **Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz** | tar.gz entpacken und `Dienstplan` starten |
+
           ## ✨ What's New
-          
-          - ✅ **Production-ready**: Uses Waitress WSGI server (no development warnings)
-          - ✅ **Clean installation**: Database created automatically on first run
-          - ✅ **No bundled data**: Empty database initialized dynamically
-          - ✅ **Standalone executables**: No Python or dependencies required
-          - ✅ **Single file release**: Just the executable, no additional files needed
+
+          - ✅ **One-Dir build**: DLLs liegen als lose Dateien neben `Dienstplan.exe` – kein Entpacken beim Start mehr
+          - ✅ **Schnellerer Start**: Kein temporäres Extrahieren nach `%TEMP%` wie beim alten Monolith
+          - ✅ **Inno-Setup-Installer**: Installiert das Programm sauber in Programme, legt Startmenü- und Desktop-Verknüpfung an
+          - ✅ **Portable ZIP**: Alternativ einfach entpacken und ausführen
+          - ✅ **Linux tar.gz mit Top-Level-Ordner**: Entpacken landet sauber in `Dienstplan/` – kein Verschmutzen des aktuellen Verzeichnisses
+          - ✅ **VERSION-Datei im Linux-Paket**: `cat Dienstplan/VERSION` zeigt die genaue Build-Version
+          - ✅ **Keine Python-Installation nötig**: Alles mitgeliefert
+          - ✅ **Datenbank wird automatisch angelegt**: Beim ersten Start leer, für den Produktiveinsatz bereit
           
           ## 🚀 Quick Start
-          
-          ### Windows
-          1. Download **Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.exe**
-          2. Double-click to run
-          3. Browser opens automatically at http://localhost:5000
-          4. Database is created in `data/dienstplan.db` (same directory as executable)
-          
+
+          ### Windows (Installer)
+          1. `Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe` herunterladen und ausführen
+          2. Installationsassistent folgen
+          3. Dienstplan über Startmenü oder Desktop-Verknüpfung starten
+          4. Browser öffnet sich automatisch auf http://localhost:5000
+
+          ### Windows (Portable ZIP)
+          1. `Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip` herunterladen und entpacken
+          2. `Dienstplan.exe` doppelklicken
+          3. Browser öffnet sich automatisch auf http://localhost:5000
+
           ### Linux
           ```bash
-          # Download the executable
-          wget https://github.com/TimUx/Dienstplan/releases/download/v${{ steps.version.outputs.VERSION }}/Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
-          
-          # Make it executable
-          chmod +x Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
-          
-          # Run it
-          ./Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
+          tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+          cd Dienstplan
+          chmod +x Dienstplan
+          ./Dienstplan
           ```
           
-          Database is created in `data/dienstplan.db` (same directory as executable)
+          ## 🔐 Standard-Zugangsdaten
           
-          ## 🔐 Default Login
+          - **E-Mail**: admin@fritzwinter.de
+          - **Passwort**: Admin123!
+          - ⚠️ **Bitte nach dem ersten Login das Passwort ändern!**
           
-          - **Email**: admin@fritzwinter.de
-          - **Password**: Admin123!
-          - ⚠️ **IMPORTANT**: Change password after first login!
+          ## 📝 Datenbankpfad
           
-          ## 📝 Database Location
+          - `data\dienstplan.db` im selben Verzeichnis wie `Dienstplan.exe`
+          - Wird automatisch beim ersten Start angelegt
+          - Für Backups: diese Datei regelmäßig kopieren
           
-          - The database is automatically created in: `data/dienstplan.db`
-          - Located in the same directory as the executable
-          - Fully persistent - all your data is saved
-          - Empty on first run - ready for production use
+          ## 🛠️ Technische Details
           
-          ## 🛠️ Technical Details
-          
-          - **Web Server**: Waitress (production WSGI server)
+          - **Web-Server**: Uvicorn (ASGI, produktionsreif)
           - **Solver**: Google OR-Tools CP-SAT
-          - **Database**: SQLite (automatically initialized)
-          - **No Python needed**: All dependencies bundled
+          - **Datenbank**: SQLite (automatisch initialisiert)
+          - **Build**: PyInstaller One-Dir + Inno Setup Installer
           
           ${{ steps.changelog.outputs.CHANGELOG }}
         files: |
-          Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.exe
-          Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}
+          Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+          Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe
+          Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
         draft: false
         prerelease: false
       env:

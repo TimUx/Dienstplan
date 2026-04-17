@@ -104,25 +104,37 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# One-Dir build: only scripts are bundled into the EXE itself.
+# All binaries, data files and Python modules are placed as loose files
+# in the output folder next to Dienstplan.exe.  This eliminates the
+# per-launch extraction to %TEMP% that makes the one-file build slow.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    [],                              # binaries/datas go into COLLECT, not into the EXE
     name='Dienstplan',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,  # Keep console window to show server logs
+    upx=False,                       # UPX on individual DLLs gives no real benefit
+    console=True,                    # Keep console window to show server logs
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Could add an icon file here if available
+    icon=None,                       # Add an .ico path here if an icon is available
+)
+
+# COLLECT assembles the full application folder (dist/Dienstplan/).
+# The user distributes this folder (as a ZIP or via the Inno Setup installer).
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='Dienstplan',               # -> dist/Dienstplan/
 )

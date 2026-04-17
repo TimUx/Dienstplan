@@ -141,6 +141,7 @@ def get_planning_report_summary(request: Request, year: int, month: int):
         relaxed_constraints=relaxed_constraints,
         objective_value=report_dict.get('objective_value', 0.0),
         solver_time_seconds=report_dict.get('solver_time_seconds', 0.0),
+        penalty_breakdown=report_dict.get('penalty_breakdown', {}),
     )
 
     summary = report.generate_text_summary()

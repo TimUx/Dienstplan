@@ -214,6 +214,9 @@ class ShiftPlanningSolver:
         self.relaxation_level = relaxation_level
         # Records which constraints were relaxed (populated by add_all_constraints)
         self.relaxed_constraints: List[str] = []
+        # Penalty groups: category name → list of (cp_var, weight) tuples.
+        # Populated during add_all_constraints; used by compute_penalty_breakdown().
+        self.penalty_groups: Dict[str, List[Tuple]] = {}
         
         # Store global settings
         if global_settings is None:
@@ -420,72 +423,108 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(block_objective_vars)} block scheduling bonus objectives...")
             for bonus_var in block_objective_vars:
                 objective_terms.append(-bonus_var)  # Negative because we minimize
+            self.penalty_groups.setdefault("Blockplanung Bonus (negativ = Belohnung)", []).extend(
+                (v, -1) for v in block_objective_vars
+            )
         
         # Add consecutive shifts violation penalties (discourage but allow for feasibility)
         if consecutive_violation_penalties:
             print(f"  Adding {len(consecutive_violation_penalties)} consecutive shifts violation penalties...")
             for penalty_var in consecutive_violation_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (300-400 per violation)
+            self.penalty_groups.setdefault("Aufeinanderfolgende Schichten", []).extend(
+                (v, 1) for v in consecutive_violation_penalties
+            )
         
         # Add rest time violation penalties (strongly discourage but allow for feasibility)
         if rest_violation_penalties:
             print(f"  Adding {len(rest_violation_penalties)} rest time violation penalties...")
             for penalty_var in rest_violation_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (50 or 500 per violation)
+            self.penalty_groups.setdefault("Ruhezeiten-Verletzung", []).extend(
+                (v, 1) for v in rest_violation_penalties
+            )
         
         # Add rotation order violation penalties (VERY STRONGLY discourage breaking F → N → S order)
         if rotation_order_penalties:
             print(f"  Adding {len(rotation_order_penalties)} rotation order violation penalties...")
             for penalty_var in rotation_order_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (10000 per violation)
+            self.penalty_groups.setdefault("Rotationsreihenfolge (F→N→S)", []).extend(
+                (v, 1) for v in rotation_order_penalties
+            )
         
         # Add shift hopping penalties (discourage rapid shift changes)
         if shift_hopping_penalties:
             print(f"  Adding {len(shift_hopping_penalties)} shift hopping penalties...")
             for penalty_var in shift_hopping_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (200 per hopping pattern)
+            self.penalty_groups.setdefault("Schicht-Hopping", []).extend(
+                (v, 1) for v in shift_hopping_penalties
+            )
         
         # Add shift grouping penalties (prevent isolated shift types)
         if shift_grouping_penalties:
             print(f"  Adding {len(shift_grouping_penalties)} shift grouping penalties...")
             for penalty_var in shift_grouping_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (100000-500000 per isolation)
+            self.penalty_groups.setdefault("Schichtgruppierung (isolierte Typen)", []).extend(
+                (v, 1) for v in shift_grouping_penalties
+            )
         
         # Add minimum consecutive weekday shifts penalties (strongly enforce min 2 consecutive days during weekdays)
         if min_consecutive_weekday_penalties:
             print(f"  Adding {len(min_consecutive_weekday_penalties)} minimum consecutive weekday shift penalties...")
             for penalty_var in min_consecutive_weekday_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (6000-8000 per violation)
+            self.penalty_groups.setdefault("Min. aufeinanderfolgende Werktags-Schichten", []).extend(
+                (v, 1) for v in min_consecutive_weekday_penalties
+            )
         
         # Add weekly shift type limit penalties (strongly discourage > 2 shift types per week)
         if weekly_shift_type_penalties:
             print(f"  Adding {len(weekly_shift_type_penalties)} weekly shift type diversity penalties...")
             for penalty_var in weekly_shift_type_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (500 per violation)
+            self.penalty_groups.setdefault("Wöchentliche Schichttyp-Vielfalt", []).extend(
+                (v, 1) for v in weekly_shift_type_penalties
+            )
         
         # Add weekend consistency penalties (discourage shift changes from Fri to Sat/Sun)
         if weekend_consistency_penalties:
             print(f"  Adding {len(weekend_consistency_penalties)} weekend consistency penalties...")
             for penalty_var in weekend_consistency_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (300 per mismatch)
+            self.penalty_groups.setdefault("Wochenend-Konsistenz", []).extend(
+                (v, 1) for v in weekend_consistency_penalties
+            )
         
         # Add team night shift consistency penalties (strongly discourage cross-team night shifts)
         if night_team_consistency_penalties:
             print(f"  Adding {len(night_team_consistency_penalties)} team night shift consistency penalties...")
             for penalty_var in night_team_consistency_penalties:
                 objective_terms.append(penalty_var)  # Already weighted (600 per violation)
+            self.penalty_groups.setdefault("Nachtschicht-Team-Konsistenz", []).extend(
+                (v, 1) for v in night_team_consistency_penalties
+            )
         
         # Add daily shift ratio penalties (enforce shift ordering based on max_staff capacity)
         if daily_ratio_violations:
             print(f"  Adding {len(daily_ratio_violations)} daily shift ratio penalties (enforce capacity-based ordering)...")
             for penalty_var in daily_ratio_violations:
                 objective_terms.append(penalty_var)  # Already weighted (200 per violation - higher than hours shortage)
+            self.penalty_groups.setdefault("Tagesschicht-Verhältnis (Kapazitätsreihenfolge)", []).extend(
+                (v, 1) for v in daily_ratio_violations
+            )
         
         # Add cross-shift capacity violation penalties (prevent overstaffing low-capacity shifts when high-capacity have space)
         if cross_shift_capacity_violations:
             print(f"  Adding {len(cross_shift_capacity_violations)} cross-shift capacity violation penalties (weight {CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT}x)...")
             for penalty_var in cross_shift_capacity_violations:
                 objective_terms.append(penalty_var * CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT)
+            self.penalty_groups.setdefault("Schicht-Kapazitätsüberschreitung (N-Overflow)", []).extend(
+                (v, CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT) for v in cross_shift_capacity_violations
+            )
         
         # Add minimum staffing violation penalties (only active when min staffing is relaxed)
         # Weight MIN_STAFFING_RELAXED_PENALTY_WEIGHT (200,000) is intentionally very high so
@@ -494,6 +533,9 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(min_staffing_violations)} minimum staffing violation penalties (weight {MIN_STAFFING_RELAXED_PENALTY_WEIGHT}x - FALLBACK MODE)...")
             for viol_var in min_staffing_violations:
                 objective_terms.append(viol_var * MIN_STAFFING_RELAXED_PENALTY_WEIGHT)
+            self.penalty_groups.setdefault("Mindestbesetzung (Fallback-Modus)", []).extend(
+                (v, MIN_STAFFING_RELAXED_PENALTY_WEIGHT) for v in min_staffing_violations
+            )
         
         # Add hours shortage objectives (minimize shortage from target hours)
         # HIGHEST PRIORITY: Employees must reach their 192h minimum target
@@ -502,6 +544,9 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(hours_shortage_objectives)} target hours shortage penalties (weight {HOURS_SHORTAGE_PENALTY_WEIGHT}x - HIGHEST PRIORITY)...")
             for shortage_var in hours_shortage_objectives:
                 objective_terms.append(shortage_var * HOURS_SHORTAGE_PENALTY_WEIGHT)
+            self.penalty_groups.setdefault("Stunden-Ziel-Unterschreitung", []).extend(
+                (v, HOURS_SHORTAGE_PENALTY_WEIGHT) for v in hours_shortage_objectives
+            )
         
         # Calculate total days once for temporal weighting calculations
         total_days = len(dates)
@@ -515,6 +560,9 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(weekday_overstaffing)} weekday overstaffing penalties (weight {WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT}x - acceptable if needed)...")
             for overstaff_var in weekday_overstaffing:
                 objective_terms.append(overstaff_var * WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT)
+            self.penalty_groups.setdefault("Werktag-Überbesetzung", []).extend(
+                (v, WEEKDAY_OVERSTAFFING_PENALTY_WEIGHT) for v in weekday_overstaffing
+            )
         
         if weekend_overstaffing:
             print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (base weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x with temporal bias - STRONGLY avoid late month)...")
@@ -533,6 +581,9 @@ class ShiftPlanningSolver:
                 final_weight = round(WEEKEND_OVERSTAFFING_PENALTY_WEIGHT * temporal_multiplier)
                 
                 objective_terms.append(overstaff_var * final_weight)
+                self.penalty_groups.setdefault("Wochenend-Überbesetzung (zeitgewichtet)", []).append(
+                    (overstaff_var, final_weight)
+                )
         
         # Add TOTAL weekend staffing limit penalties (NEW: max 12 employees across all shifts)
         # This has VERY HIGH priority (150) - higher than hours shortage (100)
@@ -542,6 +593,9 @@ class ShiftPlanningSolver:
             for overstaff_var, overstaff_date in total_weekend_overstaffing:
                 # Apply high priority weight to enforce max 12 total employees on weekends
                 objective_terms.append(overstaff_var * TOTAL_WEEKEND_LIMIT_PENALTY_WEIGHT)
+            self.penalty_groups.setdefault("Gesamtes Wochenend-Limit (max 12)", []).extend(
+                (v, TOTAL_WEEKEND_LIMIT_PENALTY_WEIGHT) for v, _ in total_weekend_overstaffing
+            )
         
         # Add weekday understaffing penalties with SHIFT-SPECIFIC PRIORITY weights
         # AND TEMPORAL BIAS (prefer earlier dates)
@@ -612,6 +666,9 @@ class ShiftPlanningSolver:
                     final_weight = round(base_weight * temporal_multiplier)
                     
                     objective_terms.append(understaff_var * final_weight)
+                    self.penalty_groups.setdefault(
+                        f"Werktag-Unterbesetzung {shift_name} ({shift_code})", []
+                    ).append((understaff_var, final_weight))
         
         # NEW: Add team priority violation penalties
         # Strongly penalize using cross-team workers when own team has unfilled capacity
@@ -622,6 +679,9 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(team_priority_violations)} team priority violation penalties (weight {TEAM_PRIORITY_VIOLATION_WEIGHT}x)...")
             for violation_var in team_priority_violations:
                 objective_terms.append(violation_var * TEAM_PRIORITY_VIOLATION_WEIGHT)
+            self.penalty_groups.setdefault("Team-Priorität (Cross-Team)", []).extend(
+                (v, TEAM_PRIORITY_VIOLATION_WEIGHT) for v in team_priority_violations
+            )
         
         # NEW: Add shift type preference objective based on max_staff ratios
         # Count total staff assigned to each shift and apply inverse priority weights
@@ -736,7 +796,11 @@ class ShiftPlanningSolver:
                     # Penalize this employee working this late weekend
                     # employee_weekend_shift is 1 if working, 0 if not
                     # Use round() to preserve precision
-                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * round(temporal_weight))
+                    final_w = round(temporal_weight)
+                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * final_w)
+                    self.penalty_groups.setdefault("Späte Wochenendarbeit (zeitgewichtet)", []).append(
+                        (employee_weekend_shift[(emp.id, d)], final_w)
+                    )
                     weekend_work_penalties += 1
         
         # ALSO penalize cross-team weekend assignments with same temporal penalty
@@ -756,7 +820,11 @@ class ShiftPlanningSolver:
                     
                     if temporal_weight > 0:
                         # Penalize cross-team weekend work with same temporal penalty
-                        objective_terms.append(employee_cross_team_weekend[(emp.id, d, shift)] * round(temporal_weight))
+                        final_w = round(temporal_weight)
+                        objective_terms.append(employee_cross_team_weekend[(emp.id, d, shift)] * final_w)
+                        self.penalty_groups.setdefault("Späte Wochenendarbeit (zeitgewichtet)", []).append(
+                            (employee_cross_team_weekend[(emp.id, d, shift)], final_w)
+                        )
                         weekend_work_penalties += 1
         
         print(f"  Added {weekend_work_penalties} temporal weekend work penalties")
@@ -868,6 +936,28 @@ class ShiftPlanningSolver:
                 hint_count += 1
 
         print(f"  Applied {hint_count} warmstart hints from {len(hint_data)} previous shift assignments")
+
+    def compute_penalty_breakdown(self) -> Dict[str, float]:
+        """
+        Evaluate each tracked penalty group against the current solution.
+
+        Must be called after a successful solve (self.solution is set).
+
+        Returns:
+            Dict mapping category name → total weighted penalty value.
+            Only categories with a non-zero total are included.
+        """
+        if self.solution is None or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            return {}
+
+        breakdown: Dict[str, float] = {}
+        for category, var_weight_pairs in self.penalty_groups.items():
+            total = 0.0
+            for var, weight in var_weight_pairs:
+                total += self.solution.Value(var) * weight
+            if total != 0.0:
+                breakdown[category] = total
+        return breakdown
 
     def diagnose_infeasibility(self) -> Dict[str, any]:
         """
@@ -1569,17 +1659,25 @@ class ShiftPlanningSolver:
         total_days = len(dates)
         total_weeks = len(weeks)
         
-        # Determine month name from start date
+        # Determine month name from the original (requested) planning start date,
+        # not from dates[0] which may be in the previous month because the planning
+        # window is extended to cover complete calendar weeks.
         month_names = ["Januar", "Februar", "März", "April", "Mai", "Juni", 
                       "Juli", "August", "September", "Oktober", "November", "Dezember"]
-        month_name = month_names[start_date.month - 1]
+        target_date = getattr(self.planning_model, 'original_start_date', None)
+        if target_date is None:
+            # Fallback: original_start_date is always set by ShiftPlanningModel.__init__,
+            # so this branch should never be reached in production.
+            print("WARNING: original_start_date not found on planning_model, falling back to dates[0]")
+            target_date = start_date
+        month_name = month_names[target_date.month - 1]
         
         print(f"\nPlanungszeitraum:")
         print(f"  Von: {start_date.strftime('%d.%m.%Y')} ({start_date.strftime('%A')})")
         print(f"  Bis: {end_date.strftime('%d.%m.%Y')} ({end_date.strftime('%A')})")
         print(f"  Tage im Planungszeitraum: {total_days}")
         print(f"  Wochen im Planungszeitraum: {total_weeks}")
-        print(f"  Monat: {month_name} {start_date.year}")
+        print(f"  Monat: {month_name} {target_date.year}")
         
         # Count shifts per shift type
         shift_counts = defaultdict(int)
@@ -2051,6 +2149,7 @@ def _build_planning_report(
     objective_value: float,
     solver_time_seconds: float,
     relaxed_constraints_strs: List[str],
+    penalty_breakdown: Optional[Dict[str, float]] = None,
 ) -> PlanningReport:
     """Build a PlanningReport from solver outputs and a fresh validation run."""
     start_date = planning_model.original_start_date
@@ -2123,6 +2222,7 @@ def _build_planning_report(
         ),
         objective_value=objective_value,
         solver_time_seconds=solver_time_seconds,
+        penalty_breakdown=penalty_breakdown or {},
     )
 
 
@@ -2251,6 +2351,7 @@ def solve_shift_planning(
             objective_value=s1.solution.ObjectiveValue() if s1.solution else 0.0,
             solver_time_seconds=s1.solution.WallTime() if s1.solution else 0.0,
             relaxed_constraints_strs=[],
+            penalty_breakdown=s1.compute_penalty_breakdown(),
         )
         return result[0], result[1], report
 
@@ -2278,6 +2379,7 @@ def solve_shift_planning(
             objective_value=s2.solution.ObjectiveValue() if s2.solution else 0.0,
             solver_time_seconds=s2.solution.WallTime() if s2.solution else 0.0,
             relaxed_constraints_strs=s2.relaxed_constraints,
+            penalty_breakdown=s2.compute_penalty_breakdown(),
         )
         return result[0], result[1], report
 
@@ -2305,6 +2407,7 @@ def solve_shift_planning(
             objective_value=s3.solution.ObjectiveValue() if s3.solution else 0.0,
             solver_time_seconds=s3.solution.WallTime() if s3.solution else 0.0,
             relaxed_constraints_strs=s3.relaxed_constraints,
+            penalty_breakdown=s3.compute_penalty_breakdown(),
         )
         return result[0], result[1], report
 

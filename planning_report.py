@@ -182,6 +182,9 @@ class PlanningReport:
     solver_time_seconds: float = 0.0
     """Laufzeit des Solvers in Sekunden."""
 
+    penalty_breakdown: Dict[str, float] = field(default_factory=dict)
+    """Aufschlüsselung der Zielfunktion nach Strafkategorien (Kategoriename → Gesamtstrafe)."""
+
     # -----------------------------------------------------------------------
     # Computed properties
     # -----------------------------------------------------------------------
@@ -246,6 +249,17 @@ class PlanningReport:
         lines.append(f"Status:           {status_label}")
         lines.append(f"Solver-Laufzeit:  {self.solver_time_seconds:.1f} Sekunden")
         lines.append(f"Zielfunktionswert: {self.objective_value:.0f}")
+
+        if self.penalty_breakdown:
+            _subheading("Aufschlüsselung der Zielfunktion (Soft-Constraints)")
+            total_shown = 0.0
+            for category, cost in sorted(self.penalty_breakdown.items(),
+                                         key=lambda x: -x[1]):
+                if cost > 0:
+                    lines.append(f"  {category:<45s}: {cost:>10.0f}")
+                    total_shown += cost
+            if total_shown > 0:
+                lines.append(f"  {'Gesamt (aktive Strafen)':<45s}: {total_shown:>10.0f}")
 
         # ---- Mitarbeiter -----------------------------------------------------
         _heading("2. MITARBEITERÜBERSICHT")

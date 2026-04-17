@@ -16,20 +16,38 @@
                     <h1>Dienstplan - Schichtverwaltung</h1>
                 </div>
                 <div class="header-right">
-                    <nav>
-                        <button data-action="showView" data-view="schedule" class="nav-btn active">📅 Dienstplan</button>
-                        <button data-action="showView" data-view="management" class="nav-btn admin-only" id="nav-management" style="display:none;">👥 Verwaltung</button>
-                        <button data-action="showView" data-view="absences" class="nav-btn" id="nav-absences" style="display:none;">🏖️ Abwesenheiten</button>
-                        <button data-action="showView" data-view="vacationyearplan" class="nav-btn" id="nav-vacationyearplan">📆 Urlaubsjahresplan</button>
-                        <button data-action="showView" data-view="shiftexchange" class="nav-btn" id="nav-shiftexchange" style="display:none;">🔄 Diensttausch</button>
-                        <button data-action="showView" data-view="statistics" class="nav-btn admin-only" id="nav-statistics" style="display:none;">📊 Statistiken</button>
-                        <button data-action="showView" data-view="planning-report" class="nav-btn admin-only" id="nav-planning-report" style="display:none;">📝 Planungsbericht</button>
-                        <button data-action="showView" data-view="manual" class="nav-btn">📖 Hilfe</button>
-                        <button data-action="showView" data-view="admin" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
-                    </nav>
-                    <div id="notification-bell" class="notification-bell admin-only" style="display:none;" data-action="showNotificationModal">
-                        <span class="bell-icon">🔔</span>
-                        <span id="notification-badge" class="notification-badge" style="display:none;">0</span>
+                    <div class="header-actions">
+                        <div id="notification-bell" class="notification-bell admin-only" style="display:none;" data-action="showNotificationModal">
+                            <span class="bell-icon">🔔</span>
+                            <span id="notification-badge" class="notification-badge" style="display:none;">0</span>
+                        </div>
+                        <div id="header-menu" class="header-menu">
+                            <button id="header-menu-toggle" class="menu-toggle" type="button" aria-label="Navigation öffnen" aria-haspopup="true" aria-expanded="false">
+                                ☰ Menü
+                            </button>
+                            <nav id="header-menu-dropdown" class="menu-dropdown" aria-label="Hauptnavigation">
+                                <div class="menu-category">
+                                    <div class="menu-category-title">Schichtfunktionen</div>
+                                    <button data-action="showView" data-view="schedule" class="nav-btn active">📅 Dienstplan</button>
+                                    <button data-action="showView" data-view="absences" class="nav-btn" id="nav-absences" style="display:none;">🏖️ Abwesenheiten</button>
+                                    <button data-action="showView" data-view="vacationyearplan" class="nav-btn" id="nav-vacationyearplan">📆 Urlaubsjahresplan</button>
+                                    <button data-action="showView" data-view="shiftexchange" class="nav-btn" id="nav-shiftexchange" style="display:none;">🔄 Diensttausch</button>
+                                </div>
+                                <div class="menu-divider"></div>
+                                <div class="menu-category">
+                                    <div class="menu-category-title">Administration</div>
+                                    <button data-action="showView" data-view="management" class="nav-btn admin-only" id="nav-management" style="display:none;">👥 Verwaltung</button>
+                                    <button data-action="showView" data-view="statistics" class="nav-btn admin-only" id="nav-statistics" style="display:none;">📊 Statistiken</button>
+                                    <button data-action="showView" data-view="planning-report" class="nav-btn admin-only" id="nav-planning-report" style="display:none;">📝 Planungsbericht</button>
+                                    <button data-action="showView" data-view="admin" class="nav-btn admin-only" id="nav-admin" style="display:none;">⚙️ Admin</button>
+                                </div>
+                                <div class="menu-divider"></div>
+                                <div class="menu-category">
+                                    <div class="menu-category-title">Benutzerfunktionen</div>
+                                    <button data-action="showView" data-view="manual" class="nav-btn">📖 Hilfe</button>
+                                </div>
+                            </nav>
+                        </div>
                     </div>
                     <div id="user-info" class="user-info" style="display: none;">
                         <span id="user-name"></span>

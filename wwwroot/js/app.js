@@ -30,6 +30,46 @@ const VIEW_PARTIALS = {
 
 const loadedPartials = new Set();
 const trackedShiftSettingsButtons = new WeakSet();
+let headerMenuInitialized = false;
+
+function closeHeaderMenu() {
+    const headerMenu = document.getElementById('header-menu');
+    const menuToggle = document.getElementById('header-menu-toggle');
+    if (!headerMenu || !menuToggle) return;
+
+    headerMenu.classList.remove('open');
+    menuToggle.setAttribute('aria-expanded', 'false');
+}
+
+function initHeaderMenu() {
+    if (headerMenuInitialized) return;
+
+    const headerMenu = document.getElementById('header-menu');
+    const menuToggle = document.getElementById('header-menu-toggle');
+    if (!headerMenu || !menuToggle) return;
+
+    menuToggle.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const shouldOpen = !headerMenu.classList.contains('open');
+        headerMenu.classList.toggle('open', shouldOpen);
+        menuToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!headerMenu.classList.contains('open')) return;
+        if (headerMenu.contains(event.target)) return;
+        closeHeaderMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeHeaderMenu();
+        }
+    });
+
+    headerMenuInitialized = true;
+}
 
 async function ensurePartialLoaded(partialUrl) {
     if (loadedPartials.has(partialUrl)) return;
@@ -72,6 +112,8 @@ function bindShiftSettingsJsonButtons() {
 }
 
 async function showView(viewName) {
+    closeHeaderMenu();
+
     const partialUrl = VIEW_PARTIALS[viewName];
     if (partialUrl) {
         try {
@@ -616,6 +658,7 @@ function registerGlobals() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     registerGlobals();
+    initHeaderMenu();
     initEventDelegation();
     initImportFormHandlers();
     auth.initPasswordResetCheck();

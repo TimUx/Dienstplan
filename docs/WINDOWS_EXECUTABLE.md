@@ -1,40 +1,54 @@
-# Dienstplan - Windows Standalone Executable
+# Dienstplan - Windows Standalone Distribution
 
 **Version 2.1 - Python Edition**
 
 ## 🎯 Übersicht
 
-Dienstplan ist nun als standalone Windows-Executable verfügbar! Das bedeutet:
+Dienstplan ist als Windows-Distribution verfügbar. Der Build nutzt den
+**One-Dir-Modus** von PyInstaller: Alle DLLs und Python-Bibliotheken liegen
+als lose Dateien neben `Dienstplan.exe` – das Programm startet dadurch deutlich
+schneller als beim früheren Einzel-EXE-Build, der bei jedem Start alles nach
+`%TEMP%` entpacken musste.
+
 - ✅ **Keine Python-Installation erforderlich**
-- ✅ **Keine manuellen Abhängigkeiten**
+- ✅ **Schnellerer Start** – kein Entpacken beim Starten
 - ✅ **Einfaches Doppelklick-Starten**
 - ✅ **Automatischer Browser-Start**
 
 ## 📥 Download
 
 Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx/Dienstplan/releases) herunter:
-- **Dienstplan-Windows-v2.1.x.zip**
+
+| Datei | Beschreibung |
+|-------|--------------|
+| `Dienstplan-Windows-Setup-v*.exe` | **Empfohlen** – Inno-Setup-Installer (installiert in Programme, legt Startmenü- und Desktop-Verknüpfung an) |
+| `Dienstplan-Windows-v*.zip` | **Portabel** – ZIP entpacken und `Dienstplan.exe` starten |
 
 ## 🚀 Installation & Start
 
-### Schritt 1: Herunterladen und Entpacken
-1. ZIP-Datei von GitHub Releases herunterladen
-2. ZIP-Datei in einen Ordner Ihrer Wahl entpacken (z.B. `C:\Dienstplan`)
-3. Im entpackten Ordner finden Sie:
-   - `Dienstplan.exe` - Die Hauptanwendung
-   - `README.md` - Dokumentation
-   - `LICENSE` - Lizenzinformationen
-   - `VERSION.txt` - Versionsinformationen
+### Option A: Installer (empfohlen)
 
-### Schritt 2: Starten
-1. Doppelklick auf `Dienstplan.exe`
-2. Ein Konsolenfenster öffnet sich mit Serverinformationen
-3. Ihr Standard-Webbrowser öffnet sich automatisch
-4. Die Anwendung ist unter `http://localhost:5000` erreichbar
+1. `Dienstplan-Windows-Setup-v*.exe` herunterladen und ausführen
+2. Installationsassistenten folgen
+3. Dienstplan über Startmenü oder Desktop-Verknüpfung starten
+4. Ein Konsolenfenster öffnet sich mit Serverinformationen
+5. Ihr Standard-Webbrowser öffnet sich automatisch auf `http://localhost:5000`
+
+### Option B: Portables ZIP
+
+1. ZIP-Datei von GitHub Releases herunterladen
+2. ZIP in einen Ordner Ihrer Wahl entpacken (z. B. `C:\Dienstplan`)
+3. Im entpackten Ordner finden Sie:
+   - `Dienstplan.exe` – Die Hauptanwendung
+   - `_internal\` – Python-Runtime und Bibliotheken (nicht verändern)
+   - `README.md` – Dokumentation
+   - `LICENSE` – Lizenzinformationen
+4. `Dienstplan.exe` doppelklicken
 
 **Wichtig:** Lassen Sie das Konsolenfenster geöffnet, solange Sie die Anwendung nutzen!
 
-### Schritt 3: Erste Schritte
+### Erste Schritte
+
 1. Beim ersten Start wird automatisch eine leere Datenbank erstellt
 2. Melden Sie sich mit den Standard-Zugangsdaten an:
    - **E-Mail:** admin@fritzwinter.de
@@ -51,9 +65,9 @@ Um die Anwendung zu beenden:
 
 Die Anwendung speichert alle Daten in einer SQLite-Datenbank:
 - **Dateiname:** `dienstplan.db`
-- **Speicherort:** Im gleichen Ordner wie `Dienstplan.exe`
+- **Speicherort:** Unterordner `data\` neben `Dienstplan.exe`
 
-**Backup-Empfehlung:** Sichern Sie regelmäßig die `dienstplan.db` Datei!
+**Backup-Empfehlung:** Sichern Sie regelmäßig die `data\dienstplan.db` Datei!
 
 ## 🔧 Fehlerbehebung
 
@@ -64,12 +78,11 @@ Die Anwendung speichert alle Daten in einer SQLite-Datenbank:
 ❌ Missing dependency: DLL load failed while importing cp_model_helper: Das angegebene Modul wurde nicht gefunden.
 ```
 
-**Ursache:** OR-Tools native Bibliotheken fehlen in der Executable
+**Ursache:** OR-Tools native Bibliotheken fehlen.
 
 **Lösung:**
-- Dies wurde in neueren Versionen behoben (ab v2.1.x)
 - Laden Sie die neueste Version von GitHub herunter
-- Falls das Problem weiterhin besteht, melden Sie es auf GitHub Issues
+- Stellen Sie sicher, dass der `_internal\` Ordner vollständig entpackt/installiert wurde und nicht vom Antivirus gelöscht wurde
 
 ### Problem: "Windows hat den PC geschützt"
 **Ursache:** Windows SmartScreen warnt vor unbekannten Anwendungen.
@@ -77,13 +90,13 @@ Die Anwendung speichert alle Daten in einer SQLite-Datenbank:
 **Lösung:**
 1. Klicken Sie auf "Weitere Informationen"
 2. Klicken Sie auf "Trotzdem ausführen"
-3. Dies ist normal für neue Anwendungen ohne Code-Signatur
+3. Dies ist normal für Anwendungen ohne Code-Signatur
 
 ### Problem: Antivirus-Software blockiert die Anwendung
 **Ursache:** Einige Antivirus-Programme blockieren PyInstaller-Executables.
 
 **Lösung:**
-1. Fügen Sie `Dienstplan.exe` zur Whitelist Ihrer Antivirus-Software hinzu
+1. Fügen Sie den Dienstplan-Ordner zur Whitelist Ihrer Antivirus-Software hinzu
 2. Alternativ: Deaktivieren Sie temporär die Antivirus-Software für die Installation
 
 ### Problem: Browser öffnet sich nicht automatisch
@@ -103,14 +116,14 @@ Die Anwendung speichert alle Daten in einer SQLite-Datenbank:
 
 ### Problem: Datenbank ist beschädigt
 **Lösung:**
-1. Benennen Sie `dienstplan.db` um (z.B. zu `dienstplan.db.backup`)
-2. Starten Sie die Anwendung neu - eine neue Datenbank wird erstellt
+1. Benennen Sie `data\dienstplan.db` um (z. B. zu `data\dienstplan.db.backup`)
+2. Starten Sie die Anwendung neu – eine neue Datenbank wird erstellt
 3. Importieren Sie Ihre Daten aus dem Backup
 
 ## 🔐 Sicherheitshinweise
 
 ### Für Desktop-Nutzung (Single-User)
-Die Executable ist sicher für Desktop-Nutzung:
+Die Distribution ist sicher für Desktop-Nutzung:
 - Server läuft nur lokal (`127.0.0.1`)
 - Nur vom eigenen PC erreichbar
 - Keine Netzwerkexposition
@@ -127,49 +140,57 @@ Die Executable ist sicher für Desktop-Nutzung:
 Um auf eine neue Version zu aktualisieren:
 1. Laden Sie die neue Version herunter
 2. Schließen Sie die laufende Anwendung
-3. Ersetzen Sie `Dienstplan.exe` durch die neue Version
-4. **WICHTIG:** Behalten Sie Ihre `dienstplan.db` Datei!
-5. Starten Sie die neue Version
+3. **Installer:** Setup erneut ausführen – er überschreibt die vorhandene Installation
+4. **Portables ZIP:** Entpacken Sie in den gleichen Ordner und überschreiben Sie alle Dateien
+5. **WICHTIG:** Behalten Sie Ihre `data\dienstplan.db` Datei!
+6. Starten Sie die neue Version
 
 ## 🛠️ Erweiterte Optionen
 
-### Eigene Executable erstellen
-Falls Sie die Executable selbst bauen möchten:
+### Eigene Distribution erstellen
+Falls Sie den Build selbst ausführen möchten:
 
 **Voraussetzungen:**
 - Python 3.11+ installiert (empfohlen) oder mindestens Python 3.9
 - Git installiert
+- Inno Setup 6 installiert (für den Installer-Build)
 
 **Schritte:**
-```bash
-# Repository klonen
+```cmd
+REM Repository klonen
 git clone https://github.com/TimUx/Dienstplan.git
 cd Dienstplan
 
-# Abhängigkeiten installieren
-pip install -r requirements.txt
-
-# Build-Skript ausführen
+REM Abhängigkeiten installieren & Build starten (erzeugt ZIP)
 build_windows.bat
+
+REM Installer bauen (optional, benötigt Inno Setup)
+iscc /DMyAppVersion=2.1.0 installer\Dienstplan.iss
 ```
 
-Die fertige `Dienstplan.exe` finden Sie im Hauptverzeichnis.
+Die fertige Distribution befindet sich in `dist\Dienstplan\` (Ordner) sowie
+als `Dienstplan-Windows.zip`.
 
-## 📦 Was ist in der Executable enthalten?
+## 📦 Was ist in der Distribution enthalten?
 
-Die `Dienstplan.exe` enthält:
-- ✅ Python 3.11 Runtime
-- ✅ Flask Web-Framework
-- ✅ Google OR-Tools Solver
-- ✅ Alle Python-Bibliotheken
-- ✅ Web UI (HTML/CSS/JavaScript)
-- ✅ SQLite Datenbank-Engine
+```
+Dienstplan\
+├── Dienstplan.exe          ← Startprogramm
+├── _internal\              ← Python-Runtime + alle Bibliotheken
+│   ├── python311.dll
+│   ├── ortools\            ← Google OR-Tools
+│   ├── wwwroot\            ← Web-UI (HTML/CSS/JS)
+│   ├── migrations\         ← Alembic DB-Migrationsskripte
+│   └── ...
+└── data\                   ← (wird beim ersten Start angelegt)
+    └── dienstplan.db       ← SQLite-Datenbank
+```
 
-**Dateigröße:** ~120-150 MB (je nach Version)
+**Ordnergröße:** ~150–200 MB (je nach Version und Python-Runtime)
 
 ## 💡 Tipps & Tricks
 
-### Desktop-Verknüpfung erstellen
+### Desktop-Verknüpfung erstellen (Portables ZIP)
 1. Rechtsklick auf `Dienstplan.exe`
 2. "Verknüpfung erstellen"
 3. Verschieben Sie die Verknüpfung auf den Desktop
@@ -180,11 +201,6 @@ Die `Dienstplan.exe` enthält:
 3. Verknüpfung zu `Dienstplan.exe` in diesen Ordner kopieren
 4. Die Anwendung startet nun automatisch mit Windows
 
-### Mehrere Instanzen
-Sie können mehrere Instanzen mit verschiedenen Datenbanken laufen lassen, aber:
-- Nur eine Instanz kann Port 5000 verwenden
-- Nutzen Sie verschiedene Ports für weitere Instanzen (Python-Version erforderlich)
-
 ## 🆘 Support
 
 Bei Problemen oder Fragen:
@@ -194,7 +210,7 @@ Bei Problemen oder Fragen:
 
 ## 📄 Lizenz
 
-Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe LICENSE-Datei für Details.
+Dieses Projekt ist unter der MIT-Lizenz lizenziert – siehe LICENSE-Datei für Details.
 
 ---
 

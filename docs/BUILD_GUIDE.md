@@ -130,22 +130,25 @@ PyInstaller analyzes the `launcher.py` script and all its dependencies:
 - Identifies all imported modules
 - Collects binary dependencies
 - Bundles the `wwwroot` directory (web UI files)
-- Bundles the `data` directory (database)
 
-### Step 4: Bundle Creation
-PyInstaller creates a single executable containing:
-- Python 3.11 runtime
-- All Python packages
-- Web UI assets
-- Pre-initialized database template
-- Application code
+### Step 4: One-Dir Folder Creation
+PyInstaller creates a folder `dist/Dienstplan/` containing:
+- Python 3.11 runtime and all extension modules
+- All Python packages (as loose `.pyc` / `.pyd` / `.dll` files)
+- Web UI assets (`wwwroot/`)
+- Application code and migration scripts
+- A single, small `Dienstplan.exe` launcher
 
-### Step 5: Executable Generation
-The final `Dienstplan.exe` is created with:
-- Size: ~120-150 MB (includes Python runtime and all libraries)
-- Format: Windows PE executable
-- Console: Visible (shows server logs)
-- Database: Persistent in `data/` directory next to executable
+Unlike the old one-file approach the runtime is **not** repacked on every
+start, which means the application boots significantly faster.
+
+### Step 5: Distribution Packaging
+The build script ZIPs the folder into `Dienstplan-Windows.zip`.
+For a proper Windows installer (Start-menu entry, Add/Remove Programs), run:
+
+```cmd
+iscc /DMyAppVersion=2.1.0 installer\Dienstplan.iss
+```
 
 ## Build Configuration
 
@@ -162,12 +165,12 @@ Key configuration options:
 binaries=ortools_binaries
 
 # Data files to include
-datas=wwwroot_files + data_files  # All files from wwwroot/ and data/
+datas=wwwroot_files + migrations_files  # wwwroot/ and migrations/
 
 # Hidden imports (modules not auto-detected)
 hiddenimports=[
-    'flask',
-    'flask_cors',
+    'fastapi',
+    'uvicorn',
     'ortools',
     'ortools.sat',
     'ortools.sat.python',
@@ -179,12 +182,12 @@ hiddenimports=[
     'dateutil',
     'google',
     'google.protobuf',
+    'openpyxl',
 ]
 
-# Executable options
-name='Dienstplan'       # Output name
-console=True            # Show console window
-upx=True               # Compress with UPX
+# One-Dir mode: EXE only holds the bootstrap; COLLECT assembles the folder
+exe = EXE(pyz, a.scripts, [], name='Dienstplan', console=True, upx=False)
+coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, name='Dienstplan')
 ```
 
 **Important Note on OR-Tools:** The spec file includes special code to collect OR-Tools native binary files. This is essential for Windows builds where the `cp_model_helper` DLL and other native dependencies must be explicitly included.
@@ -416,22 +419,13 @@ powershell Compress-Archive -Path release\* -DestinationPath Dienstplan-Windows-
 
 ## File Size Optimization
 
-To reduce executable size:
-
 ### Remove Unnecessary Dependencies
 
 Edit `requirements.txt` and remove packages you don't need, then rebuild.
 
-### Use --onefile without UPX
-
-Edit `Dienstplan.spec`, line ~62:
-```python
-upx=False,
-```
-
 ### Exclude Unused Modules
 
-Add to `Dienstplan.spec`, line ~33:
+Add to the `excludes` list in `Dienstplan.spec`:
 ```python
 excludes=['tkinter', 'matplotlib', 'test'],
 ```
@@ -441,8 +435,8 @@ excludes=['tkinter', 'matplotlib', 'test'],
 ### Basic Functionality Test
 
 ```cmd
-REM Test executable starts
-Dienstplan.exe
+REM Test that the application starts (One-Dir layout)
+dist\Dienstplan\Dienstplan.exe
 
 REM Verify in browser
 REM Open http://localhost:5000
@@ -457,8 +451,8 @@ import subprocess
 import time
 import requests
 
-# Start executable
-proc = subprocess.Popen(['Dienstplan.exe'])
+# Start executable (One-Dir: exe is inside dist\Dienstplan\)
+proc = subprocess.Popen([r'dist\Dienstplan\Dienstplan.exe'])
 
 # Wait for server to start
 time.sleep(5)
@@ -481,7 +475,7 @@ For professional distribution, sign the executable:
 2. Install SignTool (Windows SDK)
 3. Sign the executable:
    ```cmd
-   signtool sign /f certificate.pfx /p password Dienstplan.exe
+   signtool sign /f certificate.pfx /p password dist\Dienstplan\Dienstplan.exe
    ```
 
 ### Virus Scanning
@@ -496,6 +490,7 @@ Before distribution, scan with:
 For build issues:
 - **GitHub Issues**: https://github.com/TimUx/Dienstplan/issues
 - **PyInstaller Docs**: https://pyinstaller.org/
+- **Inno Setup Docs**: https://jrsoftware.org/ishelp/
 - **Build Logs**: Check console output for detailed error messages
 
 ---

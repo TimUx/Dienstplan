@@ -114,7 +114,11 @@ jobs:
           echo "ERROR: dist/Dienstplan directory not found"
           exit 1
         fi
-        tar -czf "$TAR" -C dist/Dienstplan/ .
+        # Write a VERSION file so users can always check which build they have
+        echo "${{ steps.version.outputs.VERSION }}" > dist/Dienstplan/VERSION
+        # Package with a top-level Dienstplan/ folder so extracting to any
+        # directory is safe and the contents don't spill into the current dir
+        tar -czf "$TAR" -C dist Dienstplan
         echo "TAR_NAME=$TAR" >> $GITHUB_OUTPUT
       id: tarstep
 
@@ -199,6 +203,8 @@ jobs:
           - ✅ **Schnellerer Start**: Kein temporäres Extrahieren nach `%TEMP%` wie beim alten Monolith
           - ✅ **Inno-Setup-Installer**: Installiert das Programm sauber in Programme, legt Startmenü- und Desktop-Verknüpfung an
           - ✅ **Portable ZIP**: Alternativ einfach entpacken und ausführen
+          - ✅ **Linux tar.gz mit Top-Level-Ordner**: Entpacken landet sauber in `Dienstplan/` – kein Verschmutzen des aktuellen Verzeichnisses
+          - ✅ **VERSION-Datei im Linux-Paket**: `cat Dienstplan/VERSION` zeigt die genaue Build-Version
           - ✅ **Keine Python-Installation nötig**: Alles mitgeliefert
           - ✅ **Datenbank wird automatisch angelegt**: Beim ersten Start leer, für den Produktiveinsatz bereit
           
@@ -218,6 +224,7 @@ jobs:
           ### Linux
           ```bash
           tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+          cd Dienstplan
           chmod +x Dienstplan
           ./Dienstplan
           ```

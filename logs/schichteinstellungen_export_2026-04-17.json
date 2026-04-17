@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "exportedAt": "2026-04-17T19:15:11.938651Z",
+  "shiftTypes": [
+    {
+      "id": 1,
+      "code": "F",
+      "name": "Frühschicht",
+      "startTime": "06:00",
+      "endTime": "14:00",
+      "durationHours": 8.0,
+      "colorCode": "#4caf50",
+      "weeklyWorkingHours": 48.0,
+      "minStaffWeekday": 4,
+      "maxStaffWeekday": 8,
+      "minStaffWeekend": 2,
+      "maxStaffWeekend": 3,
+      "worksMonday": true,
+      "worksTuesday": true,
+      "worksWednesday": true,
+      "worksThursday": true,
+      "worksFriday": true,
+      "worksSaturday": true,
+      "worksSunday": true,
+      "maxConsecutiveDays": 6
+    },
+    {
+      "id": 2,
+      "code": "S",
+      "name": "Spätschicht",
+      "startTime": "14:00",
+      "endTime": "22:00",
+      "durationHours": 8.0,
+      "colorCode": "#ff9800",
+      "weeklyWorkingHours": 48.0,
+      "minStaffWeekday": 3,
+      "maxStaffWeekday": 8,
+      "minStaffWeekend": 2,
+      "maxStaffWeekend": 3,
+      "worksMonday": true,
+      "worksTuesday": true,
+      "worksWednesday": true,
+      "worksThursday": true,
+      "worksFriday": true,
+      "worksSaturday": true,
+      "worksSunday": true,
+      "maxConsecutiveDays": 6
+    },
+    {
+      "id": 3,
+      "code": "N",
+      "name": "Nachtschicht",
+      "startTime": "22:00",
+      "endTime": "06:00",
+      "durationHours": 8.0,
+      "colorCode": "#2196f3",
+      "weeklyWorkingHours": 48.0,
+      "minStaffWeekday": 3,
+      "maxStaffWeekday": 8,
+      "minStaffWeekend": 2,
+      "maxStaffWeekend": 3,
+      "worksMonday": true,
+      "worksTuesday": true,
+      "worksWednesday": true,
+      "worksThursday": true,
+      "worksFriday": true,
+      "worksSaturday": true,
+      "worksSunday": true,
+      "maxConsecutiveDays": 3
+    }
+  ],
+  "rotationGroups": [
+    {
+      "name": "Standard F→N→S",
+      "description": "Standard 3-Schicht-Rotation: Frühdienst → Nachtdienst → Spätdienst",
+      "isActive": true,
+      "shifts": [
+        {
+          "shiftCode": "F",
+          "rotationOrder": 1
+        },
+        {
+          "shiftCode": "N",
+          "rotationOrder": 2
+        },
+        {
+          "shiftCode": "S",
+          "rotationOrder": 3
+        }
+      ]
+    }
+  ],
+  "globalSettings": {
+    "maxConsecutiveShifts": 6,
+    "maxConsecutiveNightShifts": 3,
+    "minRestHoursBetweenShifts": 11
+  }
+}

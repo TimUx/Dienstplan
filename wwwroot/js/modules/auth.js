@@ -51,6 +51,7 @@ export function updateUIForAuthenticatedUser(user) {
         document.getElementById('nav-admin').style.display = 'inline-block';
         document.getElementById('nav-management').style.display = 'inline-block';
         document.getElementById('nav-statistics').style.display = 'inline-block';
+        document.getElementById('nav-planning-report').style.display = 'inline-block';
         document.getElementById('nav-absences').style.display = 'inline-block';
         document.getElementById('nav-shiftexchange').style.display = 'inline-block';
         const vacationYearApprovalsTab = document.getElementById('tab-vacation-year-approvals');
@@ -78,6 +79,9 @@ export function updateUIForAnonymousUser() {
     userRoles = [];
     document.body.classList.remove('admin', 'disponent');
     document.getElementById('nav-admin').style.display = 'none';
+    document.getElementById('nav-management').style.display = 'none';
+    document.getElementById('nav-statistics').style.display = 'none';
+    document.getElementById('nav-planning-report').style.display = 'none';
     document.getElementById('nav-absences').style.display = 'none';
     document.getElementById('nav-shiftexchange').style.display = 'none';
 

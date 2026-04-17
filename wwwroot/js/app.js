@@ -78,6 +78,7 @@ async function showView(viewName) {
             await ensurePartialLoaded(partialUrl);
         } catch (error) {
             console.error('Could not load view:', viewName, error);
+            showToast('Diese Ansicht konnte nicht geladen werden. Bitte Seite neu laden.', 'error');
             return;
         }
     }

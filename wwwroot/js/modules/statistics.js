@@ -13,6 +13,11 @@ export async function loadStatistics() {
 
     try {
         const response = await fetch(`${API_BASE}/statistics/dashboard?startDate=${startDate}&endDate=${endDate}`);
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            content.innerHTML = `<p class="error">Fehler beim Laden: ${escapeHtml(err.error || response.statusText)}</p>`;
+            return;
+        }
         const stats = await response.json();
 
         displayStatistics(stats);

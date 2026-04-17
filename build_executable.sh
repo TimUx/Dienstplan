@@ -39,10 +39,20 @@ if [ $? -ne 0 ]; then
     echo "WARNING: CSS minification failed, continuing with unminified CSS"
 fi
 
+# Determine executable name based on OS
+case "$OSTYPE" in
+    msys*|win32*|cygwin*|mingw*)
+        EXECUTABLE="Dienstplan.exe"
+        ;;
+    *)
+        EXECUTABLE="Dienstplan"
+        ;;
+esac
+
 echo ""
 echo "[2/4] Cleaning previous build..."
 rm -rf build dist
-rm -f Dienstplan Dienstplan.exe
+rm -rf "$EXECUTABLE" "$EXECUTABLE.exe"
 
 echo ""
 echo "[3/4] Building executable with PyInstaller..."
@@ -56,36 +66,27 @@ fi
 echo ""
 echo "[4/4] Finalizing..."
 
-# Determine executable name based on OS
-case "$OSTYPE" in
-    msys*|win32*|cygwin*|mingw*)
-        EXECUTABLE="Dienstplan.exe"
-        ;;
-    *)
-        EXECUTABLE="Dienstplan"
-        ;;
-esac
-
-if [ -f "dist/$EXECUTABLE" ]; then
+if [ -d "dist/$EXECUTABLE" ] && [ -f "dist/$EXECUTABLE/$EXECUTABLE" ]; then
+    rm -rf "$EXECUTABLE"
     mv "dist/$EXECUTABLE" .
-    chmod +x "$EXECUTABLE"
+    chmod +x "$EXECUTABLE/$EXECUTABLE"
     echo ""
     echo "============================================================"
     echo "BUILD SUCCESSFUL!"
     echo "============================================================"
     echo ""
-    echo "Executable created: $EXECUTABLE"
-    ls -lh "$EXECUTABLE"
+    echo "Application folder created: ./$EXECUTABLE/"
+    ls -lh "$EXECUTABLE/$EXECUTABLE"
     echo ""
     echo "Database will be created automatically on first run."
-    echo "Location: data/dienstplan.db (next to executable)"
+    echo "Location: data/dienstplan.db (next to the $EXECUTABLE/ folder)"
     echo ""
-    echo "The executable is standalone and production-ready."
+    echo "Distribute the entire $EXECUTABLE/ folder."
     echo "No Python installation or dependencies required."
     echo ""
-    echo "To test: ./$EXECUTABLE"
+    echo "To test: ./$EXECUTABLE/$EXECUTABLE"
     echo "============================================================"
 else
-    echo "ERROR: Executable not found in dist folder"
+    echo "ERROR: Executable not found in dist/$EXECUTABLE/"
     exit 1
 fi

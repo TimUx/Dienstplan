@@ -369,10 +369,10 @@ class ShiftPlanningSolver:
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, teams, dates, weeks, shift_codes)
         
-        # Consecutive shifts constraint (re-enabled as SOFT constraint per @TimUx)
-        # Limits consecutive working days per shift type
-        # Violations are penalized but allowed for feasibility
-        print("  - Consecutive shifts constraints (soft - max consecutive days per shift type)")
+        # Consecutive shifts constraint (HARD within period, SOFT for cross-month boundaries)
+        # Limits consecutive working days per shift type (HARD: model.Add constraints)
+        # Cross-month boundary violations are high-weight soft (50,000 per violation)
+        print("  - Consecutive shifts constraints (HARD within period: max consecutive days per shift type)")
         consecutive_violation_penalties = add_consecutive_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend, 
@@ -427,12 +427,12 @@ class ShiftPlanningSolver:
                 (v, -1) for v in block_objective_vars
             )
         
-        # Add consecutive shifts violation penalties (discourage but allow for feasibility)
+        # Add consecutive shifts cross-month boundary penalties (high-weight soft, 50,000 per violation)
         if consecutive_violation_penalties:
-            print(f"  Adding {len(consecutive_violation_penalties)} consecutive shifts violation penalties...")
+            print(f"  Adding {len(consecutive_violation_penalties)} consecutive shifts cross-month boundary penalties (weight 50,000)...")
             for penalty_var in consecutive_violation_penalties:
-                objective_terms.append(penalty_var)  # Already weighted (300-400 per violation)
-            self.penalty_groups.setdefault("Aufeinanderfolgende Schichten", []).extend(
+                objective_terms.append(penalty_var)  # Already weighted (50,000 per cross-month violation)
+            self.penalty_groups.setdefault("Aufeinanderfolgende Schichten (Monatsgrenze)", []).extend(
                 (v, 1) for v in consecutive_violation_penalties
             )
         

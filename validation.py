@@ -191,7 +191,7 @@ def validate_shift_plan(
     validate_one_shift_per_day(result, assignments_by_emp_date)
     validate_no_work_when_absent(result, assignments, absences, emp_dict)
     validate_rest_times(result, assignments, emp_dict, absences, employees)
-    validate_consecutive_shifts(result, assignments, emp_dict, absences, employees)
+    validate_consecutive_shifts(result, assignments, emp_dict, absences, employees, shift_types)
     validate_minimum_consecutive_weekday_shifts(result, assignments, emp_dict)
     validate_working_hours(result, assignments, emp_dict, start_date, end_date, shift_types, absences, employees)
     validate_staffing_requirements(result, assignments_by_date, emp_dict, shift_types, absences, employees)
@@ -336,6 +336,23 @@ def validate_rest_times(
                         cause_type=cause_type,
                         cause=cause,
                     )
+                elif current_shift == "N" and next_shift == "S":
+                    emp_name = emp_dict[emp_id].full_name
+                    cause_type, cause = _analyze_absence_cause(
+                        next_assign.date, absences, employees, shift_code=next_shift
+                    )
+                    if cause_type != "ABSENCE":
+                        cause_type = "ROTATION_CONFLICT"
+                        cause = (
+                            f"Ursache: Verbotene Schichtfolge Nacht→Spät am "
+                            f"{current.date.strftime('%d.%m.')}→{next_assign.date.strftime('%d.%m.')} "
+                            f"durch Rotationszwänge (nur 8h Ruhezeit)"
+                        )
+                    result.add_violation(
+                        f"{emp_name} has forbidden transition Nacht->Spät on {current.date}->{next_assign.date} (only 8h rest)",
+                        cause_type=cause_type,
+                        cause=cause,
+                    )
 
 
 def validate_consecutive_shifts(
@@ -344,8 +361,28 @@ def validate_consecutive_shifts(
     emp_dict: Dict[int, Employee],
     absences: List[Absence],
     employees: List[Employee],
+    shift_types: List = None,
 ):
-    """Validate max consecutive shifts (6 days, 5 nights)"""
+    """Validate max consecutive shifts using shift type configuration from DB.
+    
+    Limits are read from shift_types (max_consecutive_days per shift type).
+    Falls back to defaults if shift_types is not provided:
+      - Any shift type: max 6 consecutive days
+      - Night shift (N): max 3 consecutive nights (per STANDARD_SHIFT_TYPES configuration)
+    """
+    # Derive limits from shift type config
+    max_consecutive_any = 6  # Default total consecutive days limit
+    max_consecutive_by_code: dict = {}  # shift_code -> max consecutive days
+    if shift_types:
+        max_consecutive_any = max(
+            (st.max_consecutive_days for st in shift_types), default=6
+        ) or 6  # Guard against all-zero config
+        for st in shift_types:
+            max_consecutive_by_code[st.code] = st.max_consecutive_days
+    
+    # Fallback for night shifts: use configured value or the known default of 3
+    n_max_consec = max_consecutive_by_code.get("N", 3)
+    
     # Group by employee
     assignments_by_emp = {}
     for assignment in assignments:
@@ -358,19 +395,19 @@ def validate_consecutive_shifts(
         emp_assignments.sort(key=lambda x: x.date)
         emp_name = emp_dict[emp_id].full_name
         
-        # Check max 6 consecutive working days
+        # Check max consecutive working days (any shift type)
         consecutive_days = 1
         last_date = None
         
         for assignment in emp_assignments:
             if last_date and (assignment.date - last_date).days == 1:
                 consecutive_days += 1
-                if consecutive_days > 6:
+                if consecutive_days > max_consecutive_any:
                     cause_type, cause = _analyze_absence_cause(
                         assignment.date, absences, employees
                     )
                     result.add_violation(
-                        f"{emp_name} works more than 6 consecutive days (ends {assignment.date})",
+                        f"{emp_name} works more than {max_consecutive_any} consecutive days (ends {assignment.date})",
                         cause_type=cause_type,
                         cause=cause,
                     )
@@ -378,7 +415,7 @@ def validate_consecutive_shifts(
                 consecutive_days = 1
             last_date = assignment.date
         
-        # Check max 5 consecutive night shifts
+        # Check max consecutive night shifts (per configured limit, default 3)
         # Track last_night_date to detect free days between night blocks (which reset the counter).
         consecutive_nights = 0
         last_night_date = None
@@ -390,12 +427,12 @@ def validate_consecutive_shifts(
                     consecutive_nights = 0
                 consecutive_nights += 1
                 last_night_date = assignment.date
-                if consecutive_nights > 5:
+                if consecutive_nights > n_max_consec:
                     cause_type, cause = _analyze_absence_cause(
                         assignment.date, absences, employees, shift_code="N"
                     )
                     result.add_violation(
-                        f"{emp_name} works more than 5 consecutive night shifts (ends {assignment.date})",
+                        f"{emp_name} works more than {n_max_consec} consecutive night shifts (ends {assignment.date})",
                         cause_type=cause_type,
                         cause=cause,
                     )

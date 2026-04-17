@@ -29,6 +29,7 @@ const VIEW_PARTIALS = {
 };
 
 const loadedPartials = new Set();
+const trackedShiftSettingsButtons = new WeakSet();
 
 async function ensurePartialLoaded(partialUrl) {
     if (loadedPartials.has(partialUrl)) return;
@@ -38,7 +39,36 @@ async function ensurePartialLoaded(partialUrl) {
     const html = await response.text();
     const container = document.getElementById('view-container');
     container.insertAdjacentHTML('beforeend', html);
+    if (partialUrl === '/partials/management.html') {
+        bindShiftSettingsJsonButtons();
+    }
     loadedPartials.add(partialUrl);
+}
+
+function bindShiftSettingsJsonButtons() {
+    const handlers = {
+        exportShiftSettings: () => employees.exportShiftSettings(),
+        showImportShiftSettingsModal: () => employees.showImportShiftSettingsModal(),
+    };
+    // Build selector from registered handler keys so action names stay in sync.
+    const shiftSettingsActionSelector = Object.keys(handlers)
+        .map((action) => `[data-action="${action}"]`)
+        .join(', ');
+
+    document.querySelectorAll(shiftSettingsActionSelector).forEach((button) => {
+        if (trackedShiftSettingsButtons.has(button)) return;
+
+        const action = button.dataset.action;
+        const handler = handlers[action];
+        if (!handler) return;
+
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handler();
+        });
+        trackedShiftSettingsButtons.add(button);
+    });
 }
 
 async function showView(viewName) {
@@ -48,6 +78,7 @@ async function showView(viewName) {
             await ensurePartialLoaded(partialUrl);
         } catch (error) {
             console.error('Could not load view:', viewName, error);
+            showToast('Diese Ansicht konnte nicht geladen werden. Bitte Seite neu laden.', 'error');
             return;
         }
     }

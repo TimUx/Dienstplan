@@ -33,7 +33,12 @@ export async function checkAuthenticationStatus() {
 export function updateUIForAuthenticatedUser(user) {
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-prompt').style.display = 'none';
+    document.body.classList.add('authenticated');
     document.getElementById('user-name').textContent = user.fullName || user.email;
+    const menuUserName = document.getElementById('menu-user-name');
+    if (menuUserName) {
+        menuUserName.textContent = user.fullName || user.email;
+    }
 
     const isAdmin = userRoles.includes('Admin');
     const isDisponent = userRoles.includes('Disponent');
@@ -75,6 +80,7 @@ export function updateUIForAuthenticatedUser(user) {
 export function updateUIForAnonymousUser() {
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('login-prompt').style.display = 'block';
+    document.body.classList.remove('authenticated');
     currentUser = null;
     userRoles = [];
     document.body.classList.remove('admin', 'disponent');

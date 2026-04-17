@@ -44,6 +44,11 @@
                                 <div class="menu-divider"></div>
                                 <div class="menu-category">
                                     <div class="menu-category-title">Benutzerfunktionen</div>
+                                    <div id="menu-user-info" class="menu-user-info auth-only">
+                                        <span id="menu-user-name"></span>
+                                    </div>
+                                    <button data-action="showChangePasswordModal" class="nav-btn auth-only" id="nav-change-password">🔒 Passwort ändern</button>
+                                    <button data-action="logout" class="nav-btn nav-btn-danger auth-only" id="nav-logout">🚪 Abmelden</button>
                                     <button data-action="showView" data-view="manual" class="nav-btn">📖 Hilfe</button>
                                 </div>
                             </nav>
@@ -51,8 +56,6 @@
                     </div>
                     <div id="user-info" class="user-info" style="display: none;">
                         <span id="user-name"></span>
-                        <button data-action="showChangePasswordModal" class="btn-secondary" style="margin-right: 10px;">🔒 Passwort ändern</button>
-                        <button data-action="logout" class="btn-logout">Abmelden</button>
                     </div>
                     <div id="login-prompt" class="login-prompt">
                         <button data-action="showLoginModal" class="btn-login">Anmelden</button>

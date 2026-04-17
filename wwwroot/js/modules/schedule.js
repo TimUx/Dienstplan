@@ -756,8 +756,8 @@ export async function executePlanShifts(event) {
                 if (job.status === 'running') {
                     // Exponential backoff: double the delay after each poll, cap at max
                     const nextDelay = Math.min(_pollDelay * 2, _pollDelayMax);
+                    setTimeout(poll, nextDelay);
                     _pollDelay = nextDelay;
-                    setTimeout(poll, _pollDelay);
                     return;
                 }
 

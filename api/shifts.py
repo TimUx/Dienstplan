@@ -1235,7 +1235,12 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
                 try:
                     emp_id_int = int(emp_id)
                 except (ValueError, TypeError):
-                    emp_id_int = emp_id
+                    # Employee IDs should always be integers; log if conversion fails
+                    # and skip the record to avoid key-type inconsistencies.
+                    logger.warning(
+                        f"Warmstart: could not convert employee ID {emp_id!r} to int, skipping"
+                    )
+                    continue
                 warm_start_shifts[(emp_id_int, date.fromisoformat(date_str))] = shift_code
             conn_ws.close()
             if warm_start_shifts:

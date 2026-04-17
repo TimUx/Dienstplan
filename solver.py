@@ -947,7 +947,7 @@ class ShiftPlanningSolver:
             Dict mapping category name → total weighted penalty value.
             Only categories with a non-zero total are included.
         """
-        if not self.solution or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+        if self.solution is None or self.status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             return {}
 
         breakdown: Dict[str, float] = {}
@@ -1664,7 +1664,12 @@ class ShiftPlanningSolver:
         # window is extended to cover complete calendar weeks.
         month_names = ["Januar", "Februar", "März", "April", "Mai", "Juni", 
                       "Juli", "August", "September", "Oktober", "November", "Dezember"]
-        target_date = getattr(self.planning_model, 'original_start_date', start_date)
+        target_date = getattr(self.planning_model, 'original_start_date', None)
+        if target_date is None:
+            # Fallback: original_start_date is always set by ShiftPlanningModel.__init__,
+            # so this branch should never be reached in production.
+            print("WARNING: original_start_date not found on planning_model, falling back to dates[0]")
+            target_date = start_date
         month_name = month_names[target_date.month - 1]
         
         print(f"\nPlanungszeitraum:")

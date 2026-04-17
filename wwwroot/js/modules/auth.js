@@ -48,23 +48,23 @@ export function updateUIForAuthenticatedUser(user) {
 
     if (isAdmin) {
         document.body.classList.add('admin');
-        document.getElementById('nav-admin').style.display = 'inline-block';
-        document.getElementById('nav-management').style.display = 'inline-block';
-        document.getElementById('nav-statistics').style.display = 'inline-block';
-        document.getElementById('nav-planning-report').style.display = 'inline-block';
-        document.getElementById('nav-absences').style.display = 'inline-block';
-        document.getElementById('nav-shiftexchange').style.display = 'inline-block';
+        document.getElementById('nav-admin').style.display = '';
+        document.getElementById('nav-management').style.display = '';
+        document.getElementById('nav-statistics').style.display = '';
+        document.getElementById('nav-planning-report').style.display = '';
+        document.getElementById('nav-absences').style.display = '';
+        document.getElementById('nav-shiftexchange').style.display = '';
         const vacationYearApprovalsTab = document.getElementById('tab-vacation-year-approvals');
         if (vacationYearApprovalsTab) {
             vacationYearApprovalsTab.style.display = '';
         }
     } else if (isDisponent) {
         document.body.classList.add('disponent');
-        document.getElementById('nav-absences').style.display = 'inline-block';
-        document.getElementById('nav-shiftexchange').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = '';
+        document.getElementById('nav-shiftexchange').style.display = '';
     } else {
-        document.getElementById('nav-absences').style.display = 'inline-block';
-        document.getElementById('nav-shiftexchange').style.display = 'inline-block';
+        document.getElementById('nav-absences').style.display = '';
+        document.getElementById('nav-shiftexchange').style.display = '';
     }
 
     if (isAdmin || isDisponent) {

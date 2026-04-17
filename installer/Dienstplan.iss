@@ -27,6 +27,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
+AppVerName={#MyAppName} {#MyAppVersion}
 
 ; Install to Program Files by default
 DefaultDirName={autopf}\{#MyAppName}
@@ -43,6 +44,10 @@ SolidCompression=yes
 
 ; Require admin rights so the app can be installed for all users
 PrivilegesRequired=admin
+
+; Close running instances automatically before upgrade to avoid file-lock errors
+CloseApplications=yes
+CloseApplicationsFilter={#MyAppExeName}
 
 ; Windows Vista SP1 or later
 MinVersion=6.1sp1
@@ -74,15 +79,31 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Remove the automatically created data directory on uninstall
-Type: filesandordirs; Name: "{app}\data"
+; data\ is intentionally NOT listed here.
+; The [Code] section below asks the user whether to delete it.
 
 [Code]
-// Show a warning if a previous installation is detected
+// Ask the user during uninstall whether to also remove the data directory.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: String;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    DataDir := ExpandConstant('{app}\data');
+    if DirExists(DataDir) then
+    begin
+      if MsgBox(
+        'Möchten Sie auch die gespeicherten Daten (Datenbank, Einstellungen) löschen?' + #13#10 +
+        'Wenn Sie Nein wählen, bleiben Ihre Daten erhalten und können bei einer Neuinstallation weiterverwendet werden.',
+        mbConfirmation, MB_YESNO) = IDYES
+      then
+        DelTree(DataDir, True, True, True);
+    end;
+  end;
+end;
+
+// Nothing extra needed during install; standard upgrade handling is sufficient.
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssInstall then
-  begin
-    // Nothing extra needed; standard upgrade handling is sufficient
-  end;
 end;

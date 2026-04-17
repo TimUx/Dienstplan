@@ -705,8 +705,9 @@ export async function executePlanShifts(event) {
         const { jobId } = await startResponse.json();
         _currentPlanJobId = jobId;
 
-        // Poll for status
-        const pollInterval = 2000; // 2 seconds
+        // Poll for status with exponential backoff (2s → 4s → 8s → 10s cap)
+        let _pollDelay = 2000;
+        const _pollDelayMax = 10000;
 
         const updatePlanningSteps = (currentStep, totalSteps) => {
             const stepItems = document.querySelectorAll('#planningStepsList .planning-step');
@@ -753,7 +754,10 @@ export async function executePlanShifts(event) {
                 }
 
                 if (job.status === 'running') {
-                    setTimeout(poll, pollInterval);
+                    // Exponential backoff: double the delay after each poll, cap at max
+                    const nextDelay = Math.min(_pollDelay * 2, _pollDelayMax);
+                    _pollDelay = nextDelay;
+                    setTimeout(poll, _pollDelay);
                     return;
                 }
 
@@ -779,7 +783,7 @@ export async function executePlanShifts(event) {
             }
         };
 
-        setTimeout(poll, pollInterval);
+        setTimeout(poll, _pollDelay);
 
     } catch (error) {
         // Hide loading overlay on error

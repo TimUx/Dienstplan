@@ -6,6 +6,7 @@ for the Dienstplan shift planning system.
 """
 
 import os
+import sys
 from pathlib import Path
 
 # Get the application directory
@@ -60,6 +61,10 @@ if migrations_dir.exists():
 
 block_cipher = None
 
+is_windows = sys.platform.startswith('win')
+exe_name = 'Dienstplan.exe' if is_windows else 'Dienstplan'
+collect_name = 'Dienstplan' if is_windows else 'Dienstplan_bundle'
+
 a = Analysis(
     ['launcher.py'],
     pathex=[],
@@ -112,7 +117,7 @@ exe = EXE(
     pyz,
     a.scripts,
     exclude_binaries=True,           # required by PyInstaller 6.x for onedir+COLLECT builds
-    name='Dienstplan',
+    name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -136,5 +141,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='Dienstplan',               # -> dist/Dienstplan/
+    name=collect_name,               # -> dist/Dienstplan/ on Windows, dist/Dienstplan_bundle/ on Linux
 )

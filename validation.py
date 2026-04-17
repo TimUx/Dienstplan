@@ -366,13 +366,17 @@ def validate_consecutive_shifts(
     """Validate max consecutive shifts using shift type configuration from DB.
     
     Limits are read from shift_types (max_consecutive_days per shift type).
-    Falls back to legacy hardcoded limits (6 days, 3 nights) if shift_types is not provided.
+    Falls back to defaults if shift_types is not provided:
+      - Any shift type: max 6 consecutive days
+      - Night shift (N): max 3 consecutive nights (per STANDARD_SHIFT_TYPES configuration)
     """
     # Derive limits from shift type config
     max_consecutive_any = 6  # Default total consecutive days limit
     max_consecutive_by_code: dict = {}  # shift_code -> max consecutive days
     if shift_types:
-        max_consecutive_any = max((st.max_consecutive_days for st in shift_types), default=6)
+        max_consecutive_any = max(
+            (st.max_consecutive_days for st in shift_types), default=6
+        ) or 6  # Guard against all-zero config
         for st in shift_types:
             max_consecutive_by_code[st.code] = st.max_consecutive_days
     

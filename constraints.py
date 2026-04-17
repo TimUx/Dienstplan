@@ -37,13 +37,19 @@ DEFAULT_WEEKLY_HOURS = 48.0  # Default maximum weekly hours for constraint calcu
 # They are ALWAYS read from the ShiftType configuration in the database.
 # See data_loader.py for default values used during DB initialization only.
 
-# NOTE: Forbidden transitions (S→F, N→F) are checked based on shift timing
+# NOTE: Forbidden transitions (S→F, N→F, N→S) are checked based on shift timing
 # in add_rest_time_constraints() and are NOT derived from rotation groups.
 # These are based on physical rest time requirements (11-hour minimum rest).
 # The transitions are:
 #   S→F (Spät 21:45 → Früh 05:45 = only 8 hours rest)
 #   N→F (Nacht 05:45 → Früh 05:45 = 0 hours rest in same-day context)
+#   N→S (Nacht 05:45 → Spät 13:45 = only 8 hours rest)
 # See add_rest_time_constraints() for implementation.
+
+# Penalty weight for cross-month boundary consecutive shift violations.
+# Cannot be made a hard constraint since previous month data is immutable.
+# High weight (50,000) ensures the solver strongly discourages extending violations.
+CROSS_MONTH_BOUNDARY_PENALTY = 50000
 
 # NOTE: Rotation patterns are database-driven from RotationGroups table.
 # The F→N→S pattern below is only used as a FALLBACK when no database
@@ -2882,7 +2888,7 @@ def add_consecutive_shifts_constraints(
             # These cannot be made hard (previous month data is immutable), but are
             # given a very high penalty to strongly discourage extending violations.
             # Weight: 50,000 per violation (much higher than any other soft constraint)
-            consecutive_penalty_weight = 50000
+            consecutive_penalty_weight = CROSS_MONTH_BOUNDARY_PENALTY
             
             # CROSS-MONTH BOUNDARY CHECK:
             # Check if employee has consecutive shifts from BEFORE the planning period
@@ -3226,9 +3232,9 @@ def add_consecutive_shifts_constraints(
                         model.Add(sum(period_any_shift_indicators) == num_days_in_period).OnlyEnforceIf(all_work_in_period)
                         model.Add(sum(period_any_shift_indicators) < num_days_in_period).OnlyEnforceIf(all_work_in_period.Not())
                         
-                        # High-weight soft penalty for cross-month boundary violations (50,000)
-                        prev_total_penalty = model.NewIntVar(0, 50000, f"prev_total_penalty_{emp.id}_{num_days_in_period}")
-                        model.AddMultiplicationEquality(prev_total_penalty, [all_work_in_period, 50000])
+                        # High-weight soft penalty for cross-month boundary violations
+                        prev_total_penalty = model.NewIntVar(0, CROSS_MONTH_BOUNDARY_PENALTY, f"prev_total_penalty_{emp.id}_{num_days_in_period}")
+                        model.AddMultiplicationEquality(prev_total_penalty, [all_work_in_period, CROSS_MONTH_BOUNDARY_PENALTY])
                         consecutive_violation_penalties.append(prev_total_penalty)
         
         # HARD CONSTRAINT: Check each possible window of (max_total_consecutive + 1) days

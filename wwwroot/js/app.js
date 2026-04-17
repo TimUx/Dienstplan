@@ -30,6 +30,7 @@ const VIEW_PARTIALS = {
 
 const loadedPartials = new Set();
 const trackedShiftSettingsButtons = new WeakSet();
+let headerMenuInitialized = false;
 
 function closeHeaderMenu() {
     const headerMenu = document.getElementById('header-menu');
@@ -41,6 +42,8 @@ function closeHeaderMenu() {
 }
 
 function initHeaderMenu() {
+    if (headerMenuInitialized) return;
+
     const headerMenu = document.getElementById('header-menu');
     const menuToggle = document.getElementById('header-menu-toggle');
     if (!headerMenu || !menuToggle) return;
@@ -64,6 +67,8 @@ function initHeaderMenu() {
             closeHeaderMenu();
         }
     });
+
+    headerMenuInitialized = true;
 }
 
 async function ensurePartialLoaded(partialUrl) {

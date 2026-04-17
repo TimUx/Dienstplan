@@ -208,7 +208,7 @@ def get_shift_type(request: Request, id):
 
 @router.put('/api/shifttypes/{id:int}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
 
-def update_shift_type(request: Request, id):
+def update_shift_type(request: Request, id, data: dict = Depends(parse_json_body)):
     """Update shift type (Admin only)"""
     try:
         
@@ -394,7 +394,7 @@ def get_shift_type_teams(request: Request, shift_id):
 
 @router.put('/api/shifttypes/{shift_id:int}/teams', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
 
-def update_shift_type_teams(request: Request, shift_id):
+def update_shift_type_teams(request: Request, shift_id, data: dict = Depends(parse_json_body)):
     """Update teams assigned to a shift type (Admin only)"""
     try:
         team_ids = data.get('teamIds', [])

@@ -1,0 +1,275 @@
+./build_executable.sh
+============================================================
+Dienstplan - Standalone Executable Builder
+============================================================
+
+[1/5] Installing dependencies...
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: pip in /home/timo/.local/lib/python3.10/site-packages (26.0.1)
+WARNING: Error parsing dependencies of flatbuffers: Invalid version: '1.12.1-git20200711.33e2d80-dfsg1-0.6'
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: ortools>=9.8.3296 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 5)) (9.14.6206)
+Requirement already satisfied: fastapi>=0.115.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 8)) (0.136.0)
+Requirement already satisfied: uvicorn>=0.32.0 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (0.44.0)
+Requirement already satisfied: bcrypt>=4.0.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 12)) (5.0.0)
+Requirement already satisfied: slowapi>=0.1.9 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 13)) (0.1.9)
+Requirement already satisfied: python-multipart>=0.0.22 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 14)) (0.0.26)
+Requirement already satisfied: itsdangerous>=2.2.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 15)) (2.2.0)
+Requirement already satisfied: python-dateutil>=2.8.2 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 18)) (2.9.0.post0)
+Requirement already satisfied: numpy>=1.26.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 23)) (1.26.4)
+Requirement already satisfied: numexpr>=2.8.4 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 27)) (2.14.1)
+Requirement already satisfied: bottleneck>=1.3.6 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 28)) (1.6.0)
+Requirement already satisfied: alembic>=1.13.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 34)) (1.18.4)
+Requirement already satisfied: reportlab>=4.0.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 37)) (4.4.6)
+Requirement already satisfied: pyinstaller>=6.0.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 40)) (6.17.0)
+Requirement already satisfied: openpyxl>=3.1.0 in /home/timo/.local/lib/python3.10/site-packages (from -r requirements.txt (line 43)) (3.1.5)
+Collecting csscompressor>=0.9.5 (from -r requirements.txt (line 46))
+  Downloading csscompressor-0.9.5.tar.gz (237 kB)
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... done
+Requirement already satisfied: absl-py>=2.0.0 in /home/timo/.local/lib/python3.10/site-packages (from ortools>=9.8.3296->-r requirements.txt (line 5)) (2.3.1)
+Requirement already satisfied: pandas>=2.0.0 in /home/timo/.local/lib/python3.10/site-packages (from ortools>=9.8.3296->-r requirements.txt (line 5)) (2.3.3)
+Requirement already satisfied: protobuf<6.32,>=6.31.1 in /home/timo/.local/lib/python3.10/site-packages (from ortools>=9.8.3296->-r requirements.txt (line 5)) (6.31.1)
+Requirement already satisfied: typing-extensions>=4.12 in /home/timo/.local/lib/python3.10/site-packages (from ortools>=9.8.3296->-r requirements.txt (line 5)) (4.15.0)
+Requirement already satisfied: immutabledict>=3.0.0 in /home/timo/.local/lib/python3.10/site-packages (from ortools>=9.8.3296->-r requirements.txt (line 5)) (4.2.2)
+Requirement already satisfied: starlette>=0.46.0 in /home/timo/.local/lib/python3.10/site-packages (from fastapi>=0.115.0->-r requirements.txt (line 8)) (1.0.0)
+Requirement already satisfied: pydantic>=2.9.0 in /home/timo/.local/lib/python3.10/site-packages (from fastapi>=0.115.0->-r requirements.txt (line 8)) (2.13.2)
+Requirement already satisfied: typing-inspection>=0.4.2 in /home/timo/.local/lib/python3.10/site-packages (from fastapi>=0.115.0->-r requirements.txt (line 8)) (0.4.2)
+Requirement already satisfied: annotated-doc>=0.0.2 in /home/timo/.local/lib/python3.10/site-packages (from fastapi>=0.115.0->-r requirements.txt (line 8)) (0.0.4)
+Requirement already satisfied: click>=7.0 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn>=0.32.0->uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (8.1.7)
+Requirement already satisfied: h11>=0.8 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn>=0.32.0->uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (0.16.0)
+Requirement already satisfied: limits>=2.3 in /home/timo/.local/lib/python3.10/site-packages (from slowapi>=0.1.9->-r requirements.txt (line 13)) (5.8.0)
+Requirement already satisfied: six>=1.5 in /usr/lib/python3/dist-packages (from python-dateutil>=2.8.2->-r requirements.txt (line 18)) (1.16.0)
+Requirement already satisfied: SQLAlchemy>=1.4.23 in /home/timo/.local/lib/python3.10/site-packages (from alembic>=1.13.0->-r requirements.txt (line 34)) (2.0.49)
+Requirement already satisfied: Mako in /usr/lib/python3/dist-packages (from alembic>=1.13.0->-r requirements.txt (line 34)) (1.1.3)
+Requirement already satisfied: tomli in /home/timo/.local/lib/python3.10/site-packages (from alembic>=1.13.0->-r requirements.txt (line 34)) (2.4.1)
+Requirement already satisfied: pillow>=9.0.0 in /home/timo/.local/lib/python3.10/site-packages (from reportlab>=4.0.0->-r requirements.txt (line 37)) (11.2.1)
+Requirement already satisfied: charset-normalizer in /home/timo/.local/lib/python3.10/site-packages (from reportlab>=4.0.0->-r requirements.txt (line 37)) (3.4.1)
+Requirement already satisfied: altgraph in /home/timo/.local/lib/python3.10/site-packages (from pyinstaller>=6.0.0->-r requirements.txt (line 40)) (0.17.5)
+Requirement already satisfied: packaging>=22.0 in /home/timo/.local/lib/python3.10/site-packages (from pyinstaller>=6.0.0->-r requirements.txt (line 40)) (25.0)
+Requirement already satisfied: pyinstaller-hooks-contrib>=2025.9 in /home/timo/.local/lib/python3.10/site-packages (from pyinstaller>=6.0.0->-r requirements.txt (line 40)) (2025.10)
+Requirement already satisfied: setuptools>=42.0.0 in /usr/lib/python3/dist-packages (from pyinstaller>=6.0.0->-r requirements.txt (line 40)) (59.6.0)
+Requirement already satisfied: et-xmlfile in /usr/lib/python3/dist-packages (from openpyxl>=3.1.0->-r requirements.txt (line 43)) (1.0.1)
+Requirement already satisfied: deprecated>=1.2 in /home/timo/.local/lib/python3.10/site-packages (from limits>=2.3->slowapi>=0.1.9->-r requirements.txt (line 13)) (1.3.1)
+Requirement already satisfied: wrapt<3,>=1.10 in /home/timo/.local/lib/python3.10/site-packages (from deprecated>=1.2->limits>=2.3->slowapi>=0.1.9->-r requirements.txt (line 13)) (2.1.2)
+Requirement already satisfied: pytz>=2020.1 in /usr/lib/python3/dist-packages (from pandas>=2.0.0->ortools>=9.8.3296->-r requirements.txt (line 5)) (2022.1)
+Requirement already satisfied: tzdata>=2022.7 in /home/timo/.local/lib/python3.10/site-packages (from pandas>=2.0.0->ortools>=9.8.3296->-r requirements.txt (line 5)) (2025.2)
+Requirement already satisfied: annotated-types>=0.6.0 in /home/timo/.local/lib/python3.10/site-packages (from pydantic>=2.9.0->fastapi>=0.115.0->-r requirements.txt (line 8)) (0.7.0)
+Requirement already satisfied: pydantic-core==2.46.2 in /home/timo/.local/lib/python3.10/site-packages (from pydantic>=2.9.0->fastapi>=0.115.0->-r requirements.txt (line 8)) (2.46.2)
+Requirement already satisfied: greenlet>=1 in /home/timo/.local/lib/python3.10/site-packages (from SQLAlchemy>=1.4.23->alembic>=1.13.0->-r requirements.txt (line 34)) (3.4.0)
+Requirement already satisfied: anyio<5,>=3.6.2 in /home/timo/.local/lib/python3.10/site-packages (from starlette>=0.46.0->fastapi>=0.115.0->-r requirements.txt (line 8)) (4.13.0)
+Requirement already satisfied: exceptiongroup>=1.0.2 in /home/timo/.local/lib/python3.10/site-packages (from anyio<5,>=3.6.2->starlette>=0.46.0->fastapi>=0.115.0->-r requirements.txt (line 8)) (1.3.1)
+Requirement already satisfied: idna>=2.8 in /usr/lib/python3/dist-packages (from anyio<5,>=3.6.2->starlette>=0.46.0->fastapi>=0.115.0->-r requirements.txt (line 8)) (3.3)
+Requirement already satisfied: httptools>=0.6.3 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (0.7.1)
+Requirement already satisfied: python-dotenv>=0.13 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (1.2.1)
+Requirement already satisfied: pyyaml>=5.1 in /usr/lib/python3/dist-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (5.4.1)
+Requirement already satisfied: uvloop>=0.15.1 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (0.22.1)
+Requirement already satisfied: watchfiles>=0.20 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (1.1.1)
+Requirement already satisfied: websockets>=10.4 in /home/timo/.local/lib/python3.10/site-packages (from uvicorn[standard]>=0.32.0->-r requirements.txt (line 9)) (16.0)
+Building wheels for collected packages: csscompressor
+  Building wheel for csscompressor (pyproject.toml) ... done
+  Created wheel for csscompressor: filename=csscompressor-0.9.5-py3-none-any.whl size=240406 sha256=40b0608504fe9458b0b7dd56414d02dd8ce541a2275cb76a848153c0e5909526
+  Stored in directory: /home/timo/.cache/pip/wheels/23/87/3c/3811e0b3e93b0778079202c3f3d68bd7b45d69ce2d80eaf775
+Successfully built csscompressor
+WARNING: Error parsing dependencies of flatbuffers: Invalid version: '1.12.1-git20200711.33e2d80-dfsg1-0.6'
+Installing collected packages: csscompressor
+Successfully installed csscompressor-0.9.5
+
+[1b/5] Minifying CSS assets...
+CSS minified: 51683 → 37269 bytes (72% of original)
+
+[2/4] Cleaning previous build...
+
+[3/4] Building executable with PyInstaller...
+Note: Database will be created dynamically at runtime (no bundled data)
+57 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.10
+57 INFO: Python: 3.10.12
+58 INFO: Platform: Linux-5.15.0-174-generic-x86_64-with-glibc2.35
+58 INFO: Python environment: /usr
+Found 16 OR-Tools binary files
+63 INFO: Module search paths (PYTHONPATH):
+['/home/timo/git/Dienstplan',
+ '/usr/lib/python310.zip',
+ '/usr/lib/python3.10',
+ '/usr/lib/python3.10/lib-dynload',
+ '/home/timo/.local/lib/python3.10/site-packages',
+ '/usr/local/lib/python3.10/dist-packages',
+ '/usr/lib/python3/dist-packages',
+ '/usr/lib/python3.10/dist-packages',
+ '/home/timo/git/Dienstplan']
+234 INFO: Appending 'binaries' from .spec
+235 INFO: Appending 'datas' from .spec
+236 INFO: checking Analysis
+236 INFO: Building Analysis because Analysis-00.toc is non existent
+236 INFO: Looking for Python shared library...
+250 WARNING: Unrecognised line of output 'Der Cache wurde generiert von: ldconfig (Ubuntu GLIBC 2.35-0ubuntu3.13) stable release version 2.35' from ldconfig
+250 INFO: Using Python shared library: /lib/x86_64-linux-gnu/libpython3.10.so.1.0
+250 INFO: Running Analysis Analysis-00.toc
+250 INFO: Target bytecode optimization level: 0
+250 INFO: Initializing module dependency graph...
+251 INFO: Initializing module graph hook caches...
+258 INFO: Analyzing modules for base_library.zip ...
+554 INFO: Processing standard module hook 'hook-heapq.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+754 INFO: Processing standard module hook 'hook-encodings.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+1486 INFO: Processing standard module hook 'hook-pickle.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+2206 INFO: Caching module dependency graph...
+2244 INFO: Analyzing /home/timo/git/Dienstplan/launcher.py
+2296 INFO: Processing standard module hook 'hook-sqlite3.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+2395 INFO: Processing standard module hook 'hook-bcrypt.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+2412 INFO: Processing standard module hook 'hook-sqlalchemy.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+2731 INFO: Processing standard module hook 'hook-platform.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+2743 INFO: Processing standard module hook 'hook-sysconfig.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+2771 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+2771 INFO: SetuptoolsInfo: initializing cached setuptools info...
+3165 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+3281 INFO: Processing standard module hook 'hook-xml.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+3410 INFO: Processing standard module hook 'hook-_ctypes.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+3627 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+3640 INFO: Processing standard module hook 'hook-importlib_metadata.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+3641 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+3644 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+5800 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6106 INFO: Processing standard module hook 'hook-pkg_resources.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+6663 INFO: Processing standard module hook 'hook-mako.codegen.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+6733 INFO: Processing standard module hook 'hook-pygments.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+8026 INFO: Processing standard module hook 'hook-zoneinfo.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+8691 INFO: Processing standard module hook 'hook-anyio.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+8955 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+9201 INFO: Processing standard module hook 'hook-httplib2.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+9582 INFO: Processing standard module hook 'hook-difflib.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+9614 INFO: Processing standard module hook 'hook-certifi.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+9654 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+9763 INFO: Processing standard module hook 'hook-cryptography.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+10064 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+10197 INFO: Processing pre-safe-import-module hook 'hook-six.moves.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+10243 INFO: Processing standard module hook 'hook-keyring.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+10960 INFO: Processing standard module hook 'hook-pydantic.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+11792 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+11793 INFO: Processing pre-find-module-path hook 'hook-distutils.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_find_module_path'
+11793 INFO: Processing standard module hook 'hook-distutils.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+11812 INFO: Processing standard module hook 'hook-_osx_support.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+11819 INFO: Processing standard module hook 'hook-distutils.util.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+11849 INFO: Processing standard module hook 'hook-numpy.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+12278 INFO: Processing standard module hook 'hook-psutil.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+15688 INFO: Processing standard module hook 'hook-lxml.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+15798 INFO: Processing standard module hook 'hook-lxml.etree.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+15835 INFO: Processing standard module hook 'hook-setuptools.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+15956 INFO: Processing standard module hook 'hook-IPython.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+17277 INFO: Processing standard module hook 'hook-wcwidth.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+17403 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+18039 INFO: Processing standard module hook 'hook-jedi.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+18267 INFO: Processing standard module hook 'hook-parso.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+18943 INFO: Processing standard module hook 'hook-PIL.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+18998 INFO: Processing standard module hook 'hook-PIL.Image.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+19302 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+20300 INFO: Processing standard module hook 'hook-limits.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+20358 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+20634 INFO: Processing standard module hook 'hook-pandas.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+116 INFO: NumExpr defaulting to 6 threads.
+21443 INFO: Processing standard module hook 'hook-pytz.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+21933 INFO: Processing standard module hook 'hook-pytest.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+22075 INFO: Processing standard module hook 'hook-py.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+23432 INFO: Processing standard module hook 'hook-numba.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+23440 INFO: Processing standard module hook 'hook-llvmlite.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+23903 INFO: Processing standard module hook 'hook-pycparser.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+25426 INFO: Processing standard module hook 'hook-jinja2.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+26750 INFO: Processing pre-safe-import-module hook 'hook-win32com.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/pre_safe_import_module'
+27847 INFO: Processing standard module hook 'hook-pandas.io.formats.style.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+29067 INFO: Processing standard module hook 'hook-pandas.plotting.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+29697 INFO: Processing standard module hook 'hook-openpyxl.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+30877 INFO: Processing standard module hook 'hook-tables.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+31302 INFO: Processing standard module hook 'hook-pandas.io.clipboard.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+31459 INFO: Processing standard module hook 'hook-dateutil.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+31613 INFO: Processing standard module hook 'hook-fsspec.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+32039 INFO: Processing standard module hook 'hook-lz4.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+33397 INFO: Processing standard module hook 'hook-reportlab.lib.utils.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+33504 INFO: Processing standard module hook 'hook-reportlab.pdfbase._fontdata.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+33732 INFO: Processing standard module hook 'hook-charset_normalizer.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+35026 INFO: Processing standard module hook 'hook-uvicorn.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+35532 INFO: Processing standard module hook 'hook-websockets.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+36354 INFO: Analyzing hidden import 'ortools.init'
+36354 INFO: Analyzing hidden import 'ortools.init.python'
+36355 INFO: Analyzing hidden import 'ortools.init.python.init'
+36356 INFO: Processing module hooks (post-graph stage)...
+36425 INFO: Processing standard module hook 'hook-lxml.isoschematron.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+36552 INFO: Processing standard module hook 'hook-uvloop.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+36924 INFO: Processing standard module hook 'hook-urllib3.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+37386 INFO: Processing standard module hook 'hook-lxml.objectify.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+37668 INFO: Processing standard module hook 'hook-zope.interface.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+38000 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+38042 INFO: Processing standard module hook 'hook-gi.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+38075 INFO: Processing pre-safe-import-module hook 'hook-gi.overrides.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+38137 INFO: Processing pre-safe-import-module hook 'hook-gi.repository.Gio.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+38137 INFO: Processing standard module hook 'hook-gi.repository.Gio.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+38397 INFO: Processing pre-safe-import-module hook 'hook-gi.repository.GLib.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+38397 INFO: Processing standard module hook 'hook-gi.repository.GLib.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+38844 INFO: Processing standard module hook 'hook-gi.repository.GLib.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+39340 INFO: Processing pre-safe-import-module hook 'hook-gi.repository.GObject.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/pre_safe_import_module'
+39350 INFO: Processing standard module hook 'hook-sqlalchemy.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+39606 WARNING: Hidden import "MySQLdb" not found!
+40138 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+40163 INFO: Processing standard module hook 'hook-gi.repository.GObject.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks'
+41452 INFO: Performing binary vs. data reclassification (1922 entries)
+41524 INFO: Looking for ctypes DLLs
+41645 WARNING: Library msvcrt required via ctypes not found
+41657 WARNING: Library user32 required via ctypes not found
+41737 INFO: Analyzing run-time hooks ...
+41753 INFO: Including run-time hook 'pyi_rth_inspect.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41754 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41755 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41756 INFO: Including run-time hook 'pyi_rth_pkgres.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41759 INFO: Including run-time hook 'pyi_rth_traitlets.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/rthooks'
+41759 INFO: Including run-time hook 'pyi_rth_glib.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41760 INFO: Including run-time hook 'pyi_rth_gio.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41760 INFO: Including run-time hook 'pyi_rth_gi.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41761 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from '/home/timo/.local/lib/python3.10/site-packages/_pyinstaller_hooks_contrib/rthooks'
+41761 INFO: Including run-time hook 'pyi_rth_setuptools.py' from '/home/timo/.local/lib/python3.10/site-packages/PyInstaller/hooks/rthooks'
+41826 INFO: Compiling collected GLib schema files in '/home/timo/git/Dienstplan/build/Dienstplan/_pyi_gschema_compilation'...
+41899 INFO: Creating base_library.zip...
+41917 INFO: Looking for dynamic libraries
+45356 INFO: Warnings written to /home/timo/git/Dienstplan/build/Dienstplan/warn-Dienstplan.txt
+45562 INFO: Graph cross-reference written to /home/timo/git/Dienstplan/build/Dienstplan/xref-Dienstplan.html
+45664 INFO: checking PYZ
+45664 INFO: Building PYZ because PYZ-00.toc is non existent
+45664 INFO: Building PYZ (ZlibArchive) /home/timo/git/Dienstplan/build/Dienstplan/PYZ-00.pyz
+47685 INFO: Building PYZ (ZlibArchive) /home/timo/git/Dienstplan/build/Dienstplan/PYZ-00.pyz completed successfully.
+47743 INFO: checking PKG
+47743 INFO: Building PKG because PKG-00.toc is non existent
+47743 INFO: Building PKG (CArchive) Dienstplan.pkg
+47764 INFO: Building PKG (CArchive) Dienstplan.pkg completed successfully.
+47765 INFO: Bootloader /home/timo/.local/lib/python3.10/site-packages/PyInstaller/bootloader/Linux-64bit-intel/run
+47765 INFO: checking EXE
+47765 INFO: Building EXE because EXE-00.toc is non existent
+47765 INFO: Building EXE from EXE-00.toc
+47765 INFO: Copying bootloader EXE to /home/timo/git/Dienstplan/dist/Dienstplan
+47765 INFO: Appending PKG archive to custom ELF section in EXE
+47848 INFO: Building EXE from EXE-00.toc completed successfully.
+47869 INFO: checking COLLECT
+47869 INFO: Building COLLECT because COLLECT-00.toc is non existent
+47872 INFO: Building COLLECT COLLECT-00.toc
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/__main__.py", line 321, in <module>
+    run()
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/__main__.py", line 215, in run
+    run_build(pyi_config, spec_file, **vars(args))
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/__main__.py", line 70, in run_build
+    PyInstaller.building.build_main.main(pyi_config, spec_file, **kwargs)
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/building/build_main.py", line 1272, in main
+    build(specfile, distpath, workpath, clean_build)
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/building/build_main.py", line 1210, in build
+    exec(code, spec_namespace)
+  File "Dienstplan.spec", line 131, in <module>
+    coll = COLLECT(
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/building/api.py", line 1147, in __init__
+    self.__postinit__()
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/building/datastruct.py", line 184, in __postinit__
+    self.assemble()
+  File "/home/timo/.local/lib/python3.10/site-packages/PyInstaller/building/api.py", line 1214, in assemble
+    raise ValueError(f"Resource {src_name!r} is not a valid file!")
+ValueError: Resource '/home/timo/git/Dienstplan/dist/Dienstplan' is not a valid file!
+ERROR: PyInstaller build failed

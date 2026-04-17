@@ -777,18 +777,35 @@ select {
     width: 100%;
 }
 
+.menu-user-info {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #1e293b;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
 .user-info {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
     color: white;
 }
 
 .user-info span {
     font-weight: 500;
+}
+
+.nav-btn-danger {
+    color: #b91c1c;
+}
+
+.nav-btn-danger:hover {
+    background: #fee2e2;
+    border-color: #fecaca;
 }
 
 .btn-login {

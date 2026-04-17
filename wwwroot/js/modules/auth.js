@@ -34,6 +34,13 @@ export function updateUIForAuthenticatedUser(user) {
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-prompt').style.display = 'none';
     document.getElementById('user-name').textContent = user.fullName || user.email;
+    const menuUserName = document.getElementById('menu-user-name');
+    if (menuUserName) {
+        menuUserName.textContent = user.fullName || user.email;
+    }
+    document.querySelectorAll('.auth-only').forEach(el => {
+        el.style.display = '';
+    });
 
     const isAdmin = userRoles.includes('Admin');
     const isDisponent = userRoles.includes('Disponent');
@@ -75,6 +82,13 @@ export function updateUIForAuthenticatedUser(user) {
 export function updateUIForAnonymousUser() {
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('login-prompt').style.display = 'block';
+    document.querySelectorAll('.auth-only').forEach(el => {
+        el.style.display = 'none';
+    });
+    const userName = document.getElementById('user-name');
+    if (userName) userName.textContent = '';
+    const menuUserName = document.getElementById('menu-user-name');
+    if (menuUserName) menuUserName.textContent = '';
     currentUser = null;
     userRoles = [];
     document.body.classList.remove('admin', 'disponent');

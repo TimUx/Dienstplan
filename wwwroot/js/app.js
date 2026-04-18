@@ -32,6 +32,40 @@ const loadedPartials = new Set();
 const trackedShiftSettingsButtons = new WeakSet();
 let headerMenuInitialized = false;
 
+export async function refreshBranding() {
+    try {
+        const response = await fetch(`${utils.API_BASE}/settings/branding`, {
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            return;
+        }
+        const branding = await response.json();
+        applyBranding(branding);
+    } catch (error) {
+        console.error('Error refreshing branding settings:', error);
+    }
+}
+
+function applyBranding(branding) {
+    if (!branding) return;
+
+    const logoElement = document.getElementById('header-company-logo');
+    if (logoElement && branding.headerLogoUrl) {
+        let logoSrc = branding.headerLogoUrl;
+        if (branding.logoModifiedAt) {
+            const cacheBuster = encodeURIComponent(branding.logoModifiedAt);
+            logoSrc = `${logoSrc}${logoSrc.includes('?') ? '&' : '?'}v=${cacheBuster}`;
+        }
+        logoElement.src = logoSrc;
+    }
+
+    const footerCompanyName = document.getElementById('footer-company-name');
+    if (footerCompanyName && branding.companyName) {
+        footerCompanyName.textContent = branding.companyName;
+    }
+}
+
 function closeHeaderMenu() {
     const headerMenu = document.getElementById('header-menu');
     const menuToggle = document.getElementById('header-menu-toggle');
@@ -411,6 +445,9 @@ function buildActionMap() {
         'closeEmailSettingsModal': () => employees.closeEmailSettingsModal(),
         'saveEmailSettings': () => employees.saveEmailSettings(),
         'testEmailSettings': () => employees.testEmailSettings(),
+        'loadBrandingSettings': () => employees.loadBrandingSettings(),
+        'saveBrandingSettings': () => employees.saveBrandingSettings(),
+        'uploadBrandingLogo': () => employees.uploadBrandingLogo(),
 
         // Admin
         'showAdminTab': (el) => employees.showAdminTab(el.dataset.tab, el),
@@ -598,6 +635,10 @@ function registerGlobals() {
     window.closeEmailSettingsModal = employees.closeEmailSettingsModal;
     window.saveEmailSettings = employees.saveEmailSettings;
     window.testEmailSettings = employees.testEmailSettings;
+    window.refreshBranding = refreshBranding;
+    window.loadBrandingSettings = employees.loadBrandingSettings;
+    window.saveBrandingSettings = employees.saveBrandingSettings;
+    window.uploadBrandingLogo = employees.uploadBrandingLogo;
     window.showAdminTab = employees.showAdminTab;
     window.loadAuditLogs = employees.loadAuditLogs;
     window.applyAuditFilters = employees.applyAuditFilters;
@@ -661,6 +702,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initHeaderMenu();
     initEventDelegation();
     initImportFormHandlers();
+    refreshBranding();
     auth.initPasswordResetCheck();
     auth.checkAuthenticationStatus();
 

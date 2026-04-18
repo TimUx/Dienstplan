@@ -18,6 +18,9 @@ Neu im System? Starten Sie hier:
 
 ## 📖 Dokumentationskategorien
 
+> Hinweis (Stand 2026-04): Die Screenshot-Sammlungen unter `docs/screenshots/` und `wwwroot/images/screenshots/`
+> wurden mit aktueller UI und befüllten Beispieldaten neu erzeugt.
+
 ### Für Endbenutzer
 
 | Dokument | Beschreibung | Zielgruppe |

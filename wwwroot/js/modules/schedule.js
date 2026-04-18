@@ -714,6 +714,9 @@ export async function executePlanShifts(event) {
 
         // Poll for status with fixed cadence to keep elapsed timer smooth
         const _pollDelay = 2000;
+        const FIRST_SOLUTION_THRESHOLD_SECONDS = 20;
+        const IMPROVEMENT_THRESHOLD_SECONDS = 60;
+        const SEARCH_PROGRESS_TOTAL_PHASES = 3;
         let localElapsed = 0;
 
         const formatElapsed = (elapsedSeconds) => {
@@ -725,13 +728,13 @@ export async function executePlanShifts(event) {
         };
 
         const getSearchProgressPhase = (elapsedSeconds) => {
-            if (elapsedSeconds < 20) {
-                return { index: 1, total: 3, label: 'Erste Lösung wird gesucht' };
+            if (elapsedSeconds < FIRST_SOLUTION_THRESHOLD_SECONDS) {
+                return { index: 1, total: SEARCH_PROGRESS_TOTAL_PHASES, label: 'Erste Lösung wird gesucht' };
             }
-            if (elapsedSeconds < 60) {
-                return { index: 2, total: 3, label: 'Zwischenergebnisse werden verbessert' };
+            if (elapsedSeconds < IMPROVEMENT_THRESHOLD_SECONDS) {
+                return { index: 2, total: SEARCH_PROGRESS_TOTAL_PHASES, label: 'Zwischenergebnisse werden verbessert' };
             }
-            return { index: 3, total: 3, label: 'Beste Lösung wird verfeinert' };
+            return { index: 3, total: SEARCH_PROGRESS_TOTAL_PHASES, label: 'Beste Lösung wird verfeinert' };
         };
 
         if (_planningElapsedTimer) clearInterval(_planningElapsedTimer);
@@ -777,7 +780,7 @@ export async function executePlanShifts(event) {
                 }
                 if (optimizationPhaseEl) {
                     if (job.optimizationSearchState === 'started') {
-                        const searchPhase = getSearchProgressPhase(elapsed);
+                        const searchPhase = getSearchProgressPhase(localElapsed);
                         optimizationPhaseEl.textContent = `Berechnungsphase ${searchPhase.index}/${searchPhase.total} – ${searchPhase.label}`;
                     } else if (job.optimizationSearchState === 'finished') {
                         optimizationPhaseEl.textContent = 'Berechnungsphase abgeschlossen';

@@ -2517,25 +2517,72 @@ def solve_shift_planning(
         )
 
     # ------------------------------------------------------------------ #
+    # Pre-check: skip Stage 1 when min-staffing is provably infeasible   #
+    # ------------------------------------------------------------------ #
+    # If absences leave fewer staff available than the minimum required   #
+    # for even a single day, Stage 1 (hard min-staffing constraints) can  #
+    # never find a feasible solution.  Running it would waste the full    #
+    # 15-minute time limit before moving on.  Detect this upfront and     #
+    # jump straight to Stage 2 where min-staffing is a soft constraint.   #
+    _stage1_skip_reason: Optional[str] = None
+    if planning_model.shift_types:
+        _absence_impact = analyze_absence_impact(
+            employees=planning_model.employees,
+            absences=planning_model.absences,
+            dates=planning_model.dates,
+            shift_requirements=[
+                st for st in planning_model.shift_types
+                if st.code in planning_model.shift_codes
+            ],
+        )
+        _infeasible_days = sorted(
+            d for d, impact in _absence_impact.items()
+            if not impact.min_staffing_reachable
+        )
+        if _infeasible_days:
+            _stage1_skip_reason = (
+                f"{len(_infeasible_days)} Tag(e) mit zu wenig verfügbarem Personal "
+                f"für die Mindestbesetzung (erster betroffener Tag: "
+                f"{_infeasible_days[0].strftime('%d.%m.%Y')})"
+            )
+
+    # ------------------------------------------------------------------ #
     # Stage 1 – Normal solve                                              #
     # ------------------------------------------------------------------ #
-    _emit_progress(
-        progress_callback,
-        "stage_started",
-        stageIndex=1,
-        totalStages=4,
-        stageName="Normaler Lösungsversuch",
-        stageDetails="Alle Hard-Constraints aktiv"
-    )
-    print("\n" + "=" * 60)
-    print("STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)")
-    if stage1_limit:
-        print(f"  Zeit-Limit: {stage1_limit} Sekunden "
-              f"(beste FEASIBLE-Lösung wird bei Ablauf zurückgegeben)")
-    print("=" * 60)
-    s1 = _make_solver(planning_model, level=0, limit=stage1_limit)
-    s1.add_all_constraints(progress_callback=progress_callback)
-    if s1.solve(progress_callback=progress_callback):
+    if _stage1_skip_reason:
+        print("\n" + "=" * 60)
+        print("STUFE 1 ÜBERSPRUNGEN: Mindestbesetzung nachweislich nicht erfüllbar")
+        print(f"  Grund: {_stage1_skip_reason}")
+        print("  → Direkt zu Stufe 2 (Mindestbesetzung als Soft-Constraint)")
+        print("=" * 60)
+        _emit_progress(
+            progress_callback,
+            "stage_skipped",
+            stageIndex=1,
+            totalStages=4,
+            stageName="Normaler Lösungsversuch",
+            stageDetails=_stage1_skip_reason,
+        )
+    else:
+        _emit_progress(
+            progress_callback,
+            "stage_started",
+            stageIndex=1,
+            totalStages=4,
+            stageName="Normaler Lösungsversuch",
+            stageDetails="Alle Hard-Constraints aktiv"
+        )
+        print("\n" + "=" * 60)
+        print("STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)")
+        if stage1_limit:
+            print(f"  Zeit-Limit: {stage1_limit} Sekunden "
+                  f"(beste FEASIBLE-Lösung wird bei Ablauf zurückgegeben)")
+        print("=" * 60)
+
+    if not _stage1_skip_reason:
+        s1 = _make_solver(planning_model, level=0, limit=stage1_limit)
+        s1.add_all_constraints(progress_callback=progress_callback)
+    if not _stage1_skip_reason and s1.solve(progress_callback=progress_callback):
         _emit_progress(
             progress_callback,
             "stage_completed",
@@ -2571,7 +2618,10 @@ def solve_shift_planning(
     )
     print("\n" + "=" * 60)
     print("STUFE 2 (FALLBACK 1): Mindestbesetzung wird als Soft-Constraint behandelt")
-    print("  Grund: Stufe 1 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
+    if _stage1_skip_reason:
+        print(f"  Grund: Stufe 1 übersprungen – {_stage1_skip_reason}")
+    else:
+        print("  Grund: Stufe 1 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
     if stage2_limit:
         print(f"  Zeit-Limit: {stage2_limit} Sekunden")
     print("=" * 60)

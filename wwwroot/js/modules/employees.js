@@ -1687,6 +1687,150 @@ export async function testEmailSettings() {
 }
 
 // ============================================================================
+// BRANDING SETTINGS
+// ============================================================================
+
+export async function loadBrandingSettings() {
+    const content = document.getElementById('branding-settings-content');
+    if (!content) return;
+    content.innerHTML = '<p class="loading">Lade Branding-Einstellungen...</p>';
+
+    try {
+        const response = await fetch(`${API_BASE}/settings/branding`, {
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            content.innerHTML = '<p class="error">Fehler beim Laden der Branding-Einstellungen.</p>';
+            return;
+        }
+        const settings = await response.json();
+        displayBrandingSettings(settings);
+    } catch (error) {
+        console.error('Error loading branding settings:', error);
+        content.innerHTML = '<p class="error">Fehler beim Laden der Branding-Einstellungen.</p>';
+    }
+}
+
+export function displayBrandingSettings(settings) {
+    const content = document.getElementById('branding-settings-content');
+    if (!content) return;
+
+    const logoUrl = settings?.headerLogoUrl || '/images/fw-logo-white.svg';
+    const companyName = settings?.companyName || '';
+    const logoPreviewUrl = settings?.logoModifiedAt
+        ? `${logoUrl}${logoUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(settings.logoModifiedAt)}`
+        : logoUrl;
+
+    content.innerHTML = `
+        <form id="branding-settings-form" onsubmit="saveBrandingSettings(event)">
+            <div class="form-group">
+                <label for="brandingCompanyName">Firmenname (Footer)*</label>
+                <input type="text" id="brandingCompanyName" maxlength="200" required value="${escapeHtml(companyName)}">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">💾 Firmenname speichern</button>
+            </div>
+        </form>
+
+        <hr style="margin: 16px 0;">
+
+        <form id="branding-logo-form" onsubmit="uploadBrandingLogo(event)">
+            <div class="form-group">
+                <label for="brandingLogoFile">Header-Logo ersetzen</label>
+                <input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" required>
+                <small>Erlaubte Formate: PNG, JPG, JPEG, SVG, WEBP (max. 5 MB)</small>
+            </div>
+            <div class="form-group">
+                <small>Aktuelles Logo:</small><br>
+                <img src="${logoPreviewUrl}" alt="Aktuelles Firmenlogo" style="max-height: 70px; width: auto; background: #2563eb; padding: 6px; border-radius: 6px;">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">🖼️ Logo hochladen</button>
+            </div>
+        </form>
+    `;
+}
+
+export async function saveBrandingSettings(event) {
+    event.preventDefault();
+
+    if (!hasRole('Admin')) {
+        showToast('Nur Administratoren können Branding-Einstellungen ändern.', 'error');
+        return;
+    }
+
+    const companyName = (document.getElementById('brandingCompanyName')?.value || '').trim();
+    if (!companyName) {
+        showToast('Bitte einen Firmennamen eingeben.', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/settings/branding`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() || '' },
+            credentials: 'include',
+            body: JSON.stringify({ companyName })
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Fehler beim Speichern');
+        }
+
+        if (window.refreshBranding) {
+            await window.refreshBranding();
+        }
+        await loadBrandingSettings();
+        showToast('Branding-Einstellungen gespeichert.', 'success');
+    } catch (error) {
+        console.error('Error saving branding settings:', error);
+        showToast(`Fehler beim Speichern: ${error.message}`, 'error');
+    }
+}
+
+export async function uploadBrandingLogo(event) {
+    event.preventDefault();
+
+    if (!hasRole('Admin')) {
+        showToast('Nur Administratoren können das Logo ändern.', 'error');
+        return;
+    }
+
+    const fileInput = document.getElementById('brandingLogoFile');
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        showToast('Bitte eine Datei auswählen.', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const response = await fetch(`${API_BASE}/settings/branding/logo`, {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': getCsrfToken() || '' },
+            credentials: 'include',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Fehler beim Logo-Upload');
+        }
+
+        if (window.refreshBranding) {
+            await window.refreshBranding();
+        }
+        await loadBrandingSettings();
+        showToast('Logo erfolgreich aktualisiert.', 'success');
+    } catch (error) {
+        console.error('Error uploading branding logo:', error);
+        showToast(`Fehler beim Upload: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================================
 // ADMIN TAB NAVIGATION
 // ============================================================================
 
@@ -1726,6 +1870,9 @@ export function showAdminTab(tabName, clickedElement) {
     } else if (tabName === 'email') {
         stopAuditLogAutoRefresh();
         loadEmailSettings();
+    } else if (tabName === 'branding') {
+        stopAuditLogAutoRefresh();
+        loadBrandingSettings();
     } else {
         stopAuditLogAutoRefresh();
     }
@@ -1988,4 +2135,3 @@ export function showImportShiftSettingsModal() {
 export function closeImportShiftSettingsModal() {
     document.getElementById('importShiftSettingsModal').style.display = 'none';
 }
-

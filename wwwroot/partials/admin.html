@@ -6,6 +6,7 @@
                 <div class="admin-tabs">
                     <button class="admin-tab active" data-action="showAdminTab" data-tab="audit-logs">📋 Änderungsprotokoll</button>
                     <button class="admin-tab" data-action="showAdminTab" data-tab="email">📧 E-Mail-Einstellungen</button>
+                    <button class="admin-tab" data-action="showAdminTab" data-tab="branding">🏷️ Branding</button>
                     <button class="admin-tab" data-action="showAdminTab" data-tab="system">📊 System-Information</button>
                     <button class="admin-tab" data-action="showAdminTab" data-tab="audit-log">🔍 API Audit-Log</button>
                 </div>
@@ -94,6 +95,17 @@
                                     <p><strong>Aktive Konfiguration:</strong> Noch keine E-Mail-Einstellungen konfiguriert.</p>
                                     <p>Klicken Sie auf "E-Mail-Einstellungen bearbeiten" um eine neue Konfiguration zu erstellen.</p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Branding Tab -->
+                    <div id="admin-tab-branding" class="admin-tab-content">
+                        <div class="admin-section">
+                            <h3>🏷️ Branding</h3>
+                            <p>Firmenname im Footer und Firmenlogo im Header verwalten.</p>
+                            <div id="branding-settings-content">
+                                <p class="loading">Lade Branding-Einstellungen...</p>
                             </div>
                         </div>
                     </div>

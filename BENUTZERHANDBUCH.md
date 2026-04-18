@@ -1284,6 +1284,15 @@ Der Administrationsbereich ist nur für Benutzer mit Admin-Rolle zugänglich.
 
 ![Admin-Panel](docs/screenshots/11-admin-panel.png)
 
+### Branding (Logo & Firmenname)
+
+**Navigation:** **Administration** → **Branding**
+
+Im Branding-Tab können Administratoren:
+
+1. Den **Firmennamen** pflegen, der im Footer angezeigt wird
+2. Das **Header-Logo** über Dateiupload austauschen (PNG/JPG/JPEG/SVG/WEBP)
+
 ### Benutzerverwaltung
 
 #### Neue Benutzer registrieren

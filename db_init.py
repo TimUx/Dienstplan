@@ -457,6 +457,26 @@ def create_database_schema(db_path: str = "dienstplan.db"):
         INSERT OR IGNORE INTO GlobalSettings (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts)
         VALUES (1, 6, 3, 11)
     """)
+
+    # AppSettings table (generic key/value settings)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AppSettings (
+            Key TEXT PRIMARY KEY,
+            Value TEXT,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+
+    # Initialize default branding settings
+    cursor.execute("""
+        INSERT OR IGNORE INTO AppSettings (Key, Value, ModifiedBy)
+        VALUES ('CompanyNameFooter', 'Fritz Winter Eisengießerei GmbH & Co. KG', 'system')
+    """)
+    cursor.execute("""
+        INSERT OR IGNORE INTO AppSettings (Key, Value, ModifiedBy)
+        VALUES ('HeaderLogoUrl', '/images/fw-logo-white.svg', 'system')
+    """)
     
     # EmailSettings table (for SMTP configuration)
     cursor.execute("""
@@ -903,9 +923,9 @@ def initialize_absence_types(db_path: str = "dienstplan.db"):
     # Standard absence types
     # Format: (Name, Code, ColorCode, IsSystemType)
     standard_types = [
-        ('Urlaub', 'U', '#90EE90', 1),  # Light green for vacation
+        ('Urlaub', 'U', '#9E9E9E', 1),  # Neutral gray for vacation
         ('Krank / AU', 'AU', '#FFB6C1', 1),  # Light pink for sick leave
-        ('Lehrgang', 'L', '#87CEEB', 1)  # Sky blue for training
+        ('Lehrgang', 'L', '#BDBDBD', 1)  # Light gray for training
     ]
     
     cursor.executemany("""

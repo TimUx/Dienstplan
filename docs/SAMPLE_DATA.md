@@ -27,6 +27,16 @@ Das System kann automatisch Beispieldaten generieren mit:
 
 ## 🔧 Beispieldaten generieren
 
+### Empfohlener Ablauf für aktuelle Doku-Screenshots
+
+```bash
+python main.py init-db --db /tmp/dienstplan_docs.db --with-sample-data
+python main.py plan --start-date 2026-03-01 --end-date 2026-03-31 --db /tmp/dienstplan_docs.db --time-limit 90
+python main.py serve --db /tmp/dienstplan_docs.db --host 127.0.0.1 --port 5000
+```
+
+Damit stehen Teams, Mitarbeiter, Abwesenheiten und geplante Schichten bereit, um alle UI-Screenshots mit realistischen Daten zu befüllen.
+
 ### Option 1: Automatische Generierung mit CLI
 
 Der einfachste Weg ist die Verwendung des integrierten Sample-Data-Generators:

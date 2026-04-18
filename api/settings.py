@@ -7,12 +7,45 @@ from fastapi.responses import JSONResponse, Response
 from datetime import datetime
 import json
 import logging
+import os
 
 from .shared import get_db, require_auth, require_role, log_audit, require_csrf, check_csrf, parse_json_body
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+DEFAULT_COMPANY_NAME = 'Fritz Winter Eisengießerei GmbH & Co. KG'
+DEFAULT_HEADER_LOGO_URL = '/images/fw-logo-white.svg'
+
+
+def _ensure_app_settings_table(cursor) -> None:
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AppSettings (
+            Key TEXT PRIMARY KEY,
+            Value TEXT,
+            ModifiedAt TEXT,
+            ModifiedBy TEXT
+        )
+    """)
+
+
+def _get_app_setting(cursor, key: str, fallback: str) -> str:
+    cursor.execute("SELECT Value FROM AppSettings WHERE Key = ?", (key,))
+    row = cursor.fetchone()
+    if row and row[0] is not None:
+        return row[0]
+    return fallback
+
+
+def _upsert_app_setting(cursor, key: str, value: str, modified_by: str) -> None:
+    cursor.execute("""
+        INSERT INTO AppSettings (Key, Value, ModifiedAt, ModifiedBy)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(Key) DO UPDATE SET
+            Value = excluded.Value,
+            ModifiedAt = excluded.ModifiedAt,
+            ModifiedBy = excluded.ModifiedBy
+    """, (key, value, datetime.utcnow().isoformat(), modified_by))
 
 
 @router.get('/api/settings/global')
@@ -45,7 +78,7 @@ def get_global_settings(request: Request):
         
     except Exception as e:
         logger.error(f"Get global settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Laden der globalen Einstellungen'}, status_code=500)
 
 
 @router.put('/api/settings/global', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -105,7 +138,122 @@ def update_global_settings(request: Request, data: dict = Depends(parse_json_bod
         
     except Exception as e:
         logger.error(f"Update global settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Aktualisieren der globalen Einstellungen'}, status_code=500)
+
+
+@router.get('/api/settings/branding')
+def get_branding_settings(request: Request):
+    """Get public branding settings (logo + footer company name)."""
+    try:
+        db = get_db()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        _ensure_app_settings_table(cursor)
+
+        company_name = _get_app_setting(cursor, 'CompanyNameFooter', DEFAULT_COMPANY_NAME)
+        logo_url = _get_app_setting(cursor, 'HeaderLogoUrl', DEFAULT_HEADER_LOGO_URL)
+
+        cursor.execute("SELECT ModifiedAt FROM AppSettings WHERE Key = 'HeaderLogoUrl'")
+        logo_row = cursor.fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return {
+            'companyName': company_name,
+            'headerLogoUrl': logo_url,
+            'logoModifiedAt': logo_row[0] if logo_row and logo_row[0] else None,
+        }
+    except Exception as e:
+        logger.error(f"Get branding settings error: {str(e)}")
+        return JSONResponse(content={'error': 'Fehler beim Laden der Branding-Einstellungen'}, status_code=500)
+
+
+@router.put('/api/settings/branding', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+def update_branding_settings(request: Request, data: dict = Depends(parse_json_body)):
+    """Update branding text settings (Admin only)."""
+    try:
+        company_name = (data.get('companyName') or '').strip()
+        if not company_name:
+            return JSONResponse(content={'error': 'Firmenname darf nicht leer sein'}, status_code=400)
+        if len(company_name) > 200:
+            return JSONResponse(content={'error': 'Firmenname darf maximal 200 Zeichen haben'}, status_code=400)
+
+        db = get_db()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        _ensure_app_settings_table(cursor)
+
+        modified_by = request.session.get('user_email', 'system')
+        _upsert_app_setting(cursor, 'CompanyNameFooter', company_name, modified_by)
+
+        changes = json.dumps({'companyName': company_name}, ensure_ascii=False)
+        log_audit(conn, 'BrandingSettings', 'CompanyNameFooter', 'Updated', changes,
+                  user_id=request.session.get('user_id'), user_name=modified_by)
+
+        conn.commit()
+        conn.close()
+        return {'success': True, 'companyName': company_name}
+    except Exception as e:
+        logger.error(f"Update branding settings error: {str(e)}")
+        return JSONResponse(content={'error': 'Fehler beim Speichern der Branding-Einstellungen'}, status_code=500)
+
+
+@router.post('/api/settings/branding/logo', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
+async def upload_branding_logo(request: Request, file: UploadFile = File(...)):
+    """Upload and activate custom header logo (Admin only).
+
+    Args:
+        request: FastAPI request object with authenticated admin session.
+        file: Uploaded image file (PNG/JPG/JPEG/SVG/WEBP, max. 5 MB).
+    """
+    try:
+        if not file or not file.filename:
+            return JSONResponse(content={'error': 'Keine Logo-Datei übergeben'}, status_code=400)
+
+        _, ext = os.path.splitext(file.filename.lower())
+        if ext not in {'.png', '.jpg', '.jpeg', '.svg', '.webp'}:
+            return JSONResponse(content={'error': 'Nur PNG, JPG, JPEG, SVG oder WEBP sind erlaubt'}, status_code=400)
+
+        content = await file.read()
+        if not content:
+            return JSONResponse(content={'error': 'Die Datei ist leer'}, status_code=400)
+        if len(content) > 5 * 1024 * 1024:
+            return JSONResponse(content={'error': 'Datei zu groß (max. 5 MB)'}, status_code=400)
+
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        images_dir = os.path.join(project_root, 'wwwroot', 'images')
+        os.makedirs(images_dir, exist_ok=True)
+
+        for old_ext in ('.png', '.jpg', '.jpeg', '.svg', '.webp'):
+            old_path = os.path.join(images_dir, f'company-logo-custom{old_ext}')
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+        target_name = f'company-logo-custom{ext}'
+        target_path = os.path.join(images_dir, target_name)
+        with open(target_path, 'wb') as f:
+            f.write(content)
+
+        logo_url = f'/images/{target_name}'
+
+        db = get_db()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        _ensure_app_settings_table(cursor)
+        modified_by = request.session.get('user_email', 'system')
+        _upsert_app_setting(cursor, 'HeaderLogoUrl', logo_url, modified_by)
+
+        changes = json.dumps({'headerLogoUrl': logo_url}, ensure_ascii=False)
+        log_audit(conn, 'BrandingSettings', 'HeaderLogoUrl', 'Updated', changes,
+                  user_id=request.session.get('user_id'), user_name=modified_by)
+
+        conn.commit()
+        conn.close()
+        return {'success': True, 'headerLogoUrl': logo_url}
+    except Exception as e:
+        logger.error(f"Upload branding logo error: {str(e)}")
+        return JSONResponse(content={'error': 'Fehler beim Upload des Logos'}, status_code=500)
 
 
 @router.get('/api/email-settings', dependencies=[Depends(require_role('Admin'))])
@@ -155,7 +303,7 @@ def get_email_settings(request: Request):
             
     except Exception as e:
         logger.error(f"Get email settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Laden der E-Mail-Einstellungen'}, status_code=500)
 
 
 @router.post('/api/email-settings', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -244,7 +392,7 @@ def save_email_settings(request: Request, data: dict = Depends(parse_json_body))
         
     except Exception as e:
         logger.error(f"Save email settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Speichern der E-Mail-Einstellungen'}, status_code=500)
 
 
 @router.post('/api/email-settings/test', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -270,7 +418,7 @@ def test_email_settings(request: Request, data: dict = Depends(parse_json_body))
             
     except Exception as e:
         logger.error(f"Test email error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Senden der Test-E-Mail'}, status_code=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

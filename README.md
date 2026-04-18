@@ -70,6 +70,7 @@ Schichttypen werden flexibel durch die **Schichtverwaltung im Admin-Bereich** ko
 - **Brandschutzbeauftragter (BSB)**: 07:00-16:30 Uhr (Mo-Fr, 9,5 Stunden)
 - **Tagdienst (TD)**: Speziell für qualifizierte Mitarbeiter
 - **Abwesenheiten**: AU (Arbeitsunfähigkeit/Krank), U (Urlaub), L (Lehrgang)
+  - **Standardfarben Abwesenheiten**: U und L sind standardmäßig in neutralen Grautönen hinterlegt
 
 **Navigation zur Schichtverwaltung:** Nach Login als Admin → **Administration** → **Schichtverwaltung**
 
@@ -195,7 +196,7 @@ Das System verwendet **Google OR-Tools CP-SAT Solver** für optimale Schichtplan
 
 ### Administration
 ![Admin-Panel](docs/screenshots/11-admin-panel.png)
-*Administrator-Panel mit Änderungsprotokoll (Audit Log), E-Mail-Einstellungen und Systeminformationen*
+*Administrator-Panel mit Änderungsprotokoll (Audit Log), E-Mail-Einstellungen, Branding (Logo/Firmenname) und Systeminformationen*
 
 ### Passwort ändern
 ![Passwort ändern Dialog](docs/screenshots/22-password-change-dialog.png)
@@ -393,7 +394,7 @@ graph TD
     Header --> Admin[⚙️ Admin<br/><i>nur Admin</i>]
     Admin --> AD_Protokoll[Tab: Änderungsprotokoll]
     Admin --> AD_Email[Tab: E-Mail-Einstellungen]
-    Admin --> AD_Settings[Tab: Globale Einstellungen]
+    Admin --> AD_Branding[Tab: Branding]
     Admin --> AD_System[Tab: System-Information]
     
     style Header fill:#1976D2,stroke:#333,stroke-width:3px,color:#fff

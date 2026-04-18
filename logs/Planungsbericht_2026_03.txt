@@ -1,0 +1,265 @@
+PLANUNGSBERICHT
+Zeitraum: 01.03.2026 – 04.04.2026 (35 Tage)
+
+============================================================
+1. PLANUNGSSTATUS
+============================================================
+Status:           Fallback-Stufe 1 (Mindestbesetzung relaxiert)
+Solver-Laufzeit:  13.3 Sekunden
+Zielfunktionswert: 65668209
+
+--- Aufschlüsselung der Zielfunktion (Soft-Constraints) ---
+  Stunden-Ziel-Unterschreitung                 :   64110000
+  Mindestbesetzung (Fallback-Modus)            :    1200000
+  Ruhezeiten-Verletzung                        :     250000
+  Rotationsreihenfolge (F→N→S)                 :      60000
+  Späte Wochenendarbeit (zeitgewichtet)        :      35727
+  Team-Priorität (Cross-Team)                  :       7950
+  Werktag-Unterbesetzung Nacht (N)             :       2893
+  Werktag-Unterbesetzung Spät (S)              :       2733
+  Nachtschicht-Team-Konsistenz                 :       2400
+  Werktag-Unterbesetzung Früh (F)              :       2232
+  Tagesschicht-Verhältnis (Kapazitätsreihenfolge):       1200
+  Gesamt (aktive Strafen)                      :   65675135
+
+============================================================
+2. MITARBEITERÜBERSICHT
+============================================================
+Mitarbeiter gesamt:     15
+Verfügbare Mitarbeiter: 15
+Abwesenheiten:          6
+
+--- Abwesenheiten im Detail ---
+  • Daniel Koch: AU, 23.02.2026 – 01.03.2026
+  • Robert Franke: AU, 09.03.2026 – 22.03.2026
+  • Lisa Meyer: AU, 09.03.2026 – 22.03.2026
+  • Michael Schulz: L, 09.03.2026 – 15.03.2026
+  • Robert Franke: U, 09.02.2026 – 16.02.2026 (Genehmigter Urlaub)
+  • Nicole Schröder: U, 02.03.2026 – 22.03.2026 (Genehmigter Urlaub)
+
+============================================================
+3. SCHICHTZUWEISUNGEN
+============================================================
+Schichten gesamt: 321
+
+--- Zuweisungen pro Schichttyp ---
+  F     : 124 Schichten
+  N     : 96 Schichten
+  S     : 101 Schichten
+
+✓ Alle Schichten wurden besetzt.
+
+============================================================
+4. REGELVERSTÖSSE
+============================================================
+Harte Verstöße:   5
+Weiche Verstöße:  58
+
+--- Harte Regelverstöße (5) ---
+  [HART] VALIDATION_HARD: Sarah Hoffmann has forbidden transition Spät->Früh on 2026-03-21->2026-03-22 (only 8h rest)
+    Ursache:    Ursache: Frühschicht am 22.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: Sarah Hoffmann has forbidden transition Spät->Früh on 2026-03-21->2026-03-22 (only 8h rest)
+  [HART] VALIDATION_HARD: Maria Lange has forbidden transition Nacht->Früh on 2026-03-21->2026-03-22 (0h rest)
+    Ursache:    Ursache: Frühschicht am 22.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: Maria Lange has forbidden transition Nacht->Früh on 2026-03-21->2026-03-22 (0h rest)
+  [HART] VALIDATION_HARD: Insufficient staffing for N shift on 2026-03-10: 2 (min 3)
+    Ursache:    Ursache: Nachtschicht am 10.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: Insufficient staffing for N shift on 2026-03-10: 2 (min 3)
+  [HART] VALIDATION_HARD: Insufficient staffing for N shift on 2026-03-11: 0 (min 3)
+    Ursache:    Ursache: Nachtschicht am 11.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: Insufficient staffing for N shift on 2026-03-11: 0 (min 3)
+  [HART] VALIDATION_HARD: Insufficient staffing for N shift on 2026-03-12: 1 (min 3)
+    Ursache:    Ursache: Nachtschicht am 12.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: Insufficient staffing for N shift on 2026-03-12: 1 (min 3)
+
+--- Weiche Regelverstöße (58) ---
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-06 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 06.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-06 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-06 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 06.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-06 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-09 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 09.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BMT count on 2026-03-09 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-09 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 09.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BSB count on 2026-03-09 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-10 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 10.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BMT count on 2026-03-10 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-10 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 10.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BSB count on 2026-03-10 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-13 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 13.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BMT count on 2026-03-13 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-13 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 13.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BSB count on 2026-03-13 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-16 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 16.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-16 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-16 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 16.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-16 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-17 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 17.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-17 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-17 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 17.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-17 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-18 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 18.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-18 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-18 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 18.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-18 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-19 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 19.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-19 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-19 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 19.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-19 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-20 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 20.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-20 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-20 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 20.03. – 3 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-20 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-24 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 24.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-24 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-24 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 24.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-24 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-25 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 25.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-25 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-25 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 25.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-25 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-02 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 02.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-02 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-02 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 02.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-02 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-05 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 05.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-05 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-05 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 05.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-05 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-03 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 03.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-03 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-03 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 03.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-03 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-23 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 23.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-23 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-23 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 23.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-23 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-26 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 26.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-26 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-26 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 26.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-26 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-27 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 27.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-27 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-27 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 27.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-27 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-30 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 30.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-30 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-30 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 30.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-30 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-04-03 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 03.04. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-04-03 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-04-03 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 03.04. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-04-03 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-04 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 04.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BMT count on 2026-03-04 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-04 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 04.03. – 1 von 15 Mitarbeitern abwesend (N. Schröder (U))
+    Auswirkung: BSB count on 2026-03-04 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-11 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 11.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BMT count on 2026-03-11 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-11 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 11.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BSB count on 2026-03-11 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-12 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 12.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BMT count on 2026-03-12 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-12 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 12.03. – 4 von 15 Mitarbeitern abwesend (L. Meyer (AU), R. Franke (AU), M. Schulz (L) (+1 weitere))
+    Auswirkung: BSB count on 2026-03-12 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-04-02 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 02.04. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-04-02 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-04-02 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 02.04. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-04-02 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-03-31 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 31.03. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-03-31 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-03-31 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 31.03. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-03-31 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-04-01 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 01.04. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-04-01 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-04-01 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 01.04. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-04-01 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Peter Weber works weekend in week 3 but no weekdays
+    Ursache:    Ursache: Peter Weber arbeitet am Wochenende in Woche 3, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Peter Weber works weekend in week 3 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Lisa Meyer works weekend in week 1 but no weekdays
+    Ursache:    Ursache: Lisa Meyer arbeitet am Wochenende in Woche 1, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Lisa Meyer works weekend in week 1 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Michael Schulz works weekend in week 1 but no weekdays
+    Ursache:    Ursache: Michael Schulz arbeitet am Wochenende in Woche 1, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Michael Schulz works weekend in week 1 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Sarah Hoffmann works weekend in week 2 but no weekdays
+    Ursache:    Ursache: Sarah Hoffmann arbeitet am Wochenende in Woche 2, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Sarah Hoffmann works weekend in week 2 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Sarah Hoffmann works weekend in week 3 but no weekdays
+    Ursache:    Ursache: Sarah Hoffmann arbeitet am Wochenende in Woche 3, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Sarah Hoffmann works weekend in week 3 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Daniel Koch works weekend in week 4 but no weekdays
+    Ursache:    Ursache: Daniel Koch arbeitet am Wochenende in Woche 4, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Daniel Koch works weekend in week 4 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Stefanie Klein works weekend in week 3 but no weekdays
+    Ursache:    Ursache: Stefanie Klein arbeitet am Wochenende in Woche 3, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Stefanie Klein works weekend in week 3 but no weekdays
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Maria Lange works weekend in week 3 but no weekdays
+    Ursache:    Ursache: Maria Lange arbeitet am Wochenende in Woche 3, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Maria Lange works weekend in week 3 but no weekdays
+
+============================================================
+5. RELAXIERTE CONSTRAINTS
+============================================================
+⚠ 1 Regel(n) mussten für die Planung abgeschwächt werden:
+  • Mindestbesetzung (H3)
+    Grund: Als Soft-Constraint mit Strafgewicht 200.000 behandelt – Unterschreitungen sind möglich
+
+============================================================
+6. ABWESENHEITSRISIKOTAGE
+============================================================
+✓ Keine Risikotage – ausreichend Puffer an allen Planungstagen.
+
+============================================================
+ENDE DES PLANUNGSBERICHTS
+============================================================

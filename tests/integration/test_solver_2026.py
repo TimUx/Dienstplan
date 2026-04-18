@@ -608,3 +608,120 @@ def test_march_2026_sick_leave_wave():
     _assert_solver_invariants(assignments, schedule, report, absences)
 
 
+@pytest.mark.slow
+def test_march_2026_no_work_gaps_during_high_absence():
+    """March 2026 (real scenario): 5 staggered absences; present employees must not
+    have idle weeks.
+
+    Reproduces the exact absence pattern from the production März-2026 run documented
+    in logs/Planungsbericht_2026_03.txt:
+      • Daniel Koch    – AU  23.02 – 01.03 (overlaps start of March)
+      • Lisa Meyer     – AU  09.03 – 22.03
+      • Robert Franke  – AU  09.03 – 22.03
+      • Michael Schulz – L   09.03 – 15.03
+      • Nicole Schröder – U  02.03 – 22.03
+
+    This leaves employees such as Sarah Hoffmann (emp id=8 in generate_sample_data)
+    present for the full month.  The regression ensures they are assigned work in every
+    calendar week they are present – previously the solver stopped at the first feasible
+    solution in Fallback-Stage 1 and left present employees idle for entire weeks.
+
+    Key assertions:
+    1. Solver invariants (no duplicates, no work on absence days).
+    2. No present employee has a week with zero work days inside the planning month.
+    3. Every present employee's total assignments are at least MIN_EXPECTED_SHIFTS.
+    """
+    employees, teams, _ = generate_sample_data()
+
+    # Build employee-id lookup (matches generate_sample_data())
+    emp_by_id = {e.id: e for e in employees}
+
+    # employee IDs from generate_sample_data:
+    #   Daniel Koch     → id 9   (Team Beta)
+    #   Lisa Meyer      → id 4   (Team Alpha)
+    #   Robert Franke   → id 16  (Team Gamma)
+    #   Michael Schulz  → id 7   (Team Beta)
+    #   Nicole Schröder → id 14  (Team Gamma)
+    absences = [
+        Absence(id=1, employee_id=9,  absence_type=AbsenceType.AU,
+                start_date=date(2026, 2, 23), end_date=date(2026, 3,  1)),
+        Absence(id=2, employee_id=4,  absence_type=AbsenceType.AU,
+                start_date=date(2026, 3,  9), end_date=date(2026, 3, 22)),
+        Absence(id=3, employee_id=16, absence_type=AbsenceType.AU,
+                start_date=date(2026, 3,  9), end_date=date(2026, 3, 22)),
+        Absence(id=4, employee_id=7,  absence_type=AbsenceType.L,
+                start_date=date(2026, 3,  9), end_date=date(2026, 3, 15)),
+        Absence(id=5, employee_id=14, absence_type=AbsenceType.U,
+                start_date=date(2026, 3,  2), end_date=date(2026, 3, 22)),
+    ]
+
+    model = _build_model(employees, teams, date(2026, 3, 1), date(2026, 3, 31), absences)
+    assignments, schedule, report = solve_shift_planning(model)
+
+    _assert_solver_invariants(assignments, schedule, report, absences)
+
+    # --- Build helper structures ---
+    plan_start = date(2026, 3,  1)
+    plan_end   = date(2026, 3, 31)
+
+    # Determine all calendar weeks that fall (at least partially) inside March 2026
+    weeks_in_month = []
+    d = plan_start
+    while d <= plan_end:
+        week_monday = d - timedelta(days=d.weekday())
+        week_saturday = week_monday + timedelta(days=6)
+        if (week_monday, week_saturday) not in weeks_in_month:
+            weeks_in_month.append((week_monday, week_saturday))
+        d += timedelta(days=7)
+
+    # Build absence-day set for March
+    absence_days_march = set()
+    for ab in absences:
+        cur = ab.start_date
+        while cur <= ab.end_date:
+            if plan_start <= cur <= plan_end:
+                absence_days_march.add((ab.employee_id, cur))
+            cur += timedelta(days=1)
+
+    # Build assignment lookup
+    assignments_by_emp_date = {}
+    for a in assignments:
+        assignments_by_emp_date.setdefault(a.employee_id, set()).add(a.date)
+
+    # --- Assertion: no present employee has an idle week ---
+    MIN_EXPECTED_SHIFTS = 10  # A present employee should work at least 10 days in March
+
+    for emp in employees:
+        if not emp.team_id:
+            continue
+
+        emp_absence_days = {d for (eid, d) in absence_days_march if eid == emp.id}
+        emp_work_days    = assignments_by_emp_date.get(emp.id, set())
+
+        for week_monday, week_saturday in weeks_in_month:
+            # Collect non-absent days in this week that fall inside March
+            workable_days_in_week = [
+                plan_start + timedelta(days=i)
+                for i in range((plan_end - plan_start).days + 1)
+                if week_monday <= plan_start + timedelta(days=i) <= week_saturday
+                and (emp.id, plan_start + timedelta(days=i)) not in absence_days_march
+            ]
+            if not workable_days_in_week:
+                continue  # Employee is absent the whole week → no gap expected
+
+            # Employee must work at least 1 day in any week where they are present
+            worked_days_in_week = [d for d in workable_days_in_week if d in emp_work_days]
+            assert worked_days_in_week, (
+                f"Employee {emp.id} ({emp.vorname} {emp.name}) has zero work days in week "
+                f"{week_monday}–{week_saturday} but is present (not absent) on "
+                f"{workable_days_in_week[:3]}{'...' if len(workable_days_in_week) > 3 else ''}"
+            )
+
+        # Employees fully present in March should have a reasonable number of shifts
+        if not emp_absence_days:
+            assert len(emp_work_days) >= MIN_EXPECTED_SHIFTS, (
+                f"Employee {emp.id} ({emp.vorname} {emp.name}) has only "
+                f"{len(emp_work_days)} shifts in March – expected at least "
+                f"{MIN_EXPECTED_SHIFTS} (full month, no absences)"
+            )
+

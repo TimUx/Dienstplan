@@ -3319,7 +3319,9 @@ def add_working_hours_constraints(
     shift_codes: List[str],
     shift_types: List[ShiftType],
     absences: List[Absence] = None,
-    violation_tracker=None
+    violation_tracker=None,
+    target_start_date: date = None,
+    target_end_date: date = None,
 ) -> List[cp_model.IntVar]:
     """
     HARD + SOFT CONSTRAINT: Working hours target based on proportional calculation INCLUDING cross-team.
@@ -3341,8 +3343,20 @@ def add_working_hours_constraints(
     when calculating hours. This caused hours worked on non-absent days to not be counted.
     Now only individual absent DAYS are skipped, allowing proper hour calculation for partial-week absences.
     
+    FIX (2026-04-18): Added target_start_date / target_end_date parameters.
+    The planning model extends dates to complete calendar weeks (e.g. March extends to April 4th).
+    Without filtering, the hours target is computed for 35 days instead of the actual 31 days of
+    March, making the target artificially high and causing the solver to understate how well
+    employees are meeting their monthly obligation.  Both the target and the actual hours now
+    only count days within [target_start_date, target_end_date].
+    
     Example: Employee has AU on March 1 (Sunday) but worked Feb 23-28. Previously week 4 (Feb 23-Mar 1)
     was completely skipped. Now only March 1 is skipped, and Feb 23-28 hours are properly counted.
+    
+    Args:
+        target_start_date: First day of the planning MONTH (not the extended week boundary).
+                           When None, all dates in the extended period are used (backward-compat).
+        target_end_date:   Last day of the planning MONTH.  Same behaviour as target_start_date.
     
     Returns:
         List of IntVar representing shortage from target hours for soft optimization
@@ -3366,8 +3380,15 @@ def add_working_hours_constraints(
         shift_hours[st.code] = st.hours
         shift_weekly_hours[st.code] = st.weekly_working_hours
     
-    # NOTE: No weekly maximum hours constraints
-    # Employees can work varying hours per week (e.g., 40h one week, 56h another)
+    # Restrict hours accounting to the original planning month.
+    # The planning model may extend dates to complete calendar weeks (e.g. a March
+    # planning run covers 2026-03-01 to 2026-04-04 = 35 days).  Computing the target
+    # over all 35 days inflates the monthly obligation by ~13 %.  Instead we only
+    # count days inside [target_start_date, target_end_date] (e.g. March 1–31).
+    if target_start_date is not None and target_end_date is not None:
+        target_date_set = frozenset(d for d in dates if target_start_date <= d <= target_end_date)
+    else:
+        target_date_set = frozenset(dates)
     # The system only enforces:
     # - SOFT target: proportional hours over the entire planning period
     # - NO hard weekly limits
@@ -3480,8 +3501,9 @@ def add_working_hours_constraints(
                 absent_dates.add(d)
         
         # Calculate total days without absences for this employee
-        # FIX: Count days instead of weeks to handle partial-week absences correctly
-        days_without_absence = len(dates) - len(absent_dates)
+        # Use only target-period days so that extended-week days (e.g. April 1-4 when
+        # planning March) do not inflate the monthly hours obligation.
+        days_without_absence = sum(1 for d in target_date_set if d not in absent_dates)
         
         # Track weekly target hours (use shift settings from last week with shifts)
         weekly_target_hours = DEFAULT_WEEKLY_HOURS  # Default if no shifts found
@@ -3501,12 +3523,14 @@ def add_working_hours_constraints(
                     weekly_target_hours = shift_weekly_hours[shift_code]
                 
                 # Count all active days (weekday + weekend) for this employee when team has this shift
-                # FIX: Only count days WITHOUT absences (using pre-computed absent_dates set)
+                # Only count days inside the target period and WITHOUT absences.
                 active_days = []
                 
                 # WEEKDAY days
                 for d in week_dates:
-                    # Skip days with absences (O(1) lookup in set)
+                    # Skip days outside the target month or with absences
+                    if d not in target_date_set:
+                        continue
                     if d in absent_dates:
                         continue
                     
@@ -3515,7 +3539,9 @@ def add_working_hours_constraints(
                 
                 # WEEKEND days (same shift type as team)
                 for d in week_dates:
-                    # Skip days with absences (O(1) lookup in set)
+                    # Skip days outside the target month or with absences
+                    if d not in target_date_set:
+                        continue
                     if d in absent_dates:
                         continue
                     
@@ -3544,14 +3570,16 @@ def add_working_hours_constraints(
                 total_hours_terms.append(conditional_days * scaled_hours)
             
             # ADD: Count cross-team hours this week for minimum hours calculation
-            # FIX: Only count days WITHOUT absences (using pre-computed absent_dates set)
+            # Only count days inside the target period and WITHOUT absences.
             for shift_code in shift_codes:
                 if shift_code not in shift_hours:
                     continue
                 
                 cross_team_days = []
                 for d in week_dates:
-                    # Skip days with absences (O(1) lookup in set)
+                    # Skip days outside the target month or with absences
+                    if d not in target_date_set:
+                        continue
                     if d in absent_dates:
                         continue
                     
@@ -3602,6 +3630,123 @@ def add_working_hours_constraints(
             soft_objectives.append(shortage_from_target * 100)
     
     return soft_objectives
+
+
+def add_no_gap_constraints(
+    model: cp_model.CpModel,
+    employee_active: Dict[Tuple[int, date], cp_model.IntVar],
+    employee_weekend_shift: Dict[Tuple[int, date], cp_model.IntVar],
+    team_shift: Dict[Tuple[int, int, str], cp_model.IntVar],
+    employee_cross_team_shift: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employee_cross_team_weekend: Dict[Tuple[int, date, str], cp_model.IntVar],
+    employees: List[Employee],
+    teams: List[Team],
+    dates: List[date],
+    weeks: List[List[date]],
+    shift_codes: List[str],
+    absences: List[Absence],
+    target_start_date: date = None,
+    target_end_date: date = None,
+) -> List[cp_model.IntVar]:
+    """
+    SOFT CONSTRAINT: Penalise employees for having zero work days in any week where they
+    are present (not fully absent).
+
+    Business requirement: In high-absence situations, present employees must fill their
+    monthly target hours.  Leaving present employees idle for entire weeks is therefore
+    more costly than minor comfort-constraint violations such as shift-type grouping.
+
+    Weight: 150,000 per idle week.  This is:
+    - Higher than typical shift-grouping isolation penalties (100,000–200,000) so that
+      the solver prefers to fill the gap even when working triggers a grouping penalty.
+    - Lower than the minimum-staffing fallback penalty (200,000 × count) and the
+      monthly hours-shortage penalty (~480,000 per week of missing work), meaning those
+      harder obligations still dominate.
+
+    Only days inside [target_start_date, target_end_date] are considered so that extended
+    week-boundary days (e.g. Apr 1–4 in a March run) do not generate spurious penalties.
+
+    Returns:
+        List of IntVar penalty values to be minimised in the objective.
+    """
+    NO_WORK_WEEK_PENALTY = 150_000
+    gap_penalties = []
+
+    # Restrict to the original planning month (not extended week-boundary days).
+    if target_start_date is not None and target_end_date is not None:
+        target_date_set = frozenset(d for d in dates if target_start_date <= d <= target_end_date)
+    else:
+        target_date_set = frozenset(dates)
+
+    # Build employee→team lookup once
+    emp_to_team: Dict[int, Team] = {}
+    for emp in employees:
+        if emp.team_id:
+            for t in teams:
+                if t.id == emp.team_id:
+                    emp_to_team[emp.id] = t
+                    break
+
+    for emp in employees:
+        if not emp.team_id:
+            continue
+        team = emp_to_team.get(emp.id)
+        if not team:
+            continue
+
+        # Pre-compute absent dates once for this employee
+        absent_dates = frozenset(
+            d for d in dates
+            if any(a.employee_id == emp.id and a.overlaps_date(d) for a in absences)
+        )
+
+        for week_idx, week_dates in enumerate(weeks):
+            # Collect work-indicator variables for non-absent target-period days this week
+            work_vars = []
+            has_workable_day = False
+
+            for d in week_dates:
+                if d not in target_date_set:
+                    continue
+                if d in absent_dates:
+                    continue
+                has_workable_day = True
+                weekday = d.weekday()
+
+                # Team-shift weekday: employee_active is 1 iff the employee works
+                # their team's shift on this day (already enforced by team-linkage constraints)
+                if weekday < 5 and (emp.id, d) in employee_active:
+                    work_vars.append(employee_active[(emp.id, d)])
+
+                # Team-shift weekend
+                if weekday >= 5 and (emp.id, d) in employee_weekend_shift:
+                    work_vars.append(employee_weekend_shift[(emp.id, d)])
+
+                # Cross-team assignments (weekday and weekend)
+                for sc in shift_codes:
+                    if weekday < 5 and (emp.id, d, sc) in employee_cross_team_shift:
+                        work_vars.append(employee_cross_team_shift[(emp.id, d, sc)])
+                    if weekday >= 5 and (emp.id, d, sc) in employee_cross_team_weekend:
+                        work_vars.append(employee_cross_team_weekend[(emp.id, d, sc)])
+
+            if not has_workable_day or not work_vars:
+                # Entire week is absent or has no work variables → skip
+                continue
+
+            # works_this_week = 1  ↔  at least one work variable is 1
+            works_this_week = model.NewBoolVar(f"nogap_works_{emp.id}_w{week_idx}")
+            model.Add(sum(work_vars) >= 1).OnlyEnforceIf(works_this_week)
+            model.Add(sum(work_vars) == 0).OnlyEnforceIf(works_this_week.Not())
+
+            # Add penalty when employee works zero days this week
+            # penalty = 0 if works_this_week else NO_WORK_WEEK_PENALTY
+            penalty = model.NewIntVar(0, NO_WORK_WEEK_PENALTY,
+                                      f"nogap_pen_{emp.id}_w{week_idx}")
+            model.Add(penalty >= NO_WORK_WEEK_PENALTY).OnlyEnforceIf(works_this_week.Not())
+            model.Add(penalty >= 0)
+            gap_penalties.append(penalty)
+
+    return gap_penalties
 
 
 def add_weekly_available_employee_constraint(

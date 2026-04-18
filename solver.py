@@ -27,6 +27,7 @@ from constraints import (
     add_rest_time_constraints,
     add_consecutive_shifts_constraints,
     add_working_hours_constraints,
+    add_no_gap_constraints,
     add_weekly_available_employee_constraint,
     add_fairness_objectives,
     add_weekly_shift_type_limit_constraints,
@@ -117,8 +118,8 @@ MIN_STAFFING_RELAXED_PENALTY_WEIGHT = 200_000
 #   hits the time limit with status FEASIBLE, the best solution found is already
 #   retained by the solver and accessible via solver.Value(). The callback provides
 #   visibility into how quickly and how much the objective improved over time.
-#   For fallback stages (relaxation_level > 0) the callback calls StopSearch()
-#   immediately after the first feasible solution – no optimization needed there.
+#   All solver stages (including fallback) always keep optimising within their time
+#   budget so that present employees fill their monthly hours target.
 # - PORTFOLIO strategy (default): Runs multiple parallel workers with different
 #   heuristics; typically 10-30% faster than FIXED_SEARCH on large diverse instances.
 # - FIXED_SEARCH strategy: Deterministic ordering; useful for debugging or comparing
@@ -239,6 +240,8 @@ class ShiftPlanningSolver:
                      high penalty weight (MIN_STAFFING_RELAXED_PENALTY_WEIGHT).
                 - 2: Minimum staffing soft + team rotation pattern constraints are skipped,
                      allowing teams to use any shift assignment each week.
+                Note: All stages always optimise within their time budget (never
+                stop at first feasible) so that present employees reach their hours target.
             random_seed: Optional integer seed for the CP-SAT pseudo-random number generator.
                 When set, results are reproducible across identical runs. Useful for
                 regression testing and performance comparisons. None (default) lets
@@ -425,7 +428,17 @@ class ShiftPlanningSolver:
         hours_shortage_objectives = add_working_hours_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, 
-            employees, teams, dates, weeks, shift_codes, shift_types, absences)
+            employees, teams, dates, weeks, shift_codes, shift_types, absences,
+            target_start_date=self.planning_model.original_start_date,
+            target_end_date=self.planning_model.original_end_date)
+        
+        print("  - No-gap constraints (prevent idle weeks for present employees)")
+        no_gap_penalties = add_no_gap_constraints(
+            model, employee_active, employee_weekend_shift, team_shift,
+            employee_cross_team_shift, employee_cross_team_weekend,
+            employees, teams, dates, weeks, shift_codes, absences,
+            target_start_date=self.planning_model.original_start_date,
+            target_end_date=self.planning_model.original_end_date)
         
         # BLOCK SCHEDULING FOR CROSS-TEAM
         print("  - Weekly block constraints (Mon-Fri blocks for cross-team assignments)")
@@ -588,6 +601,19 @@ class ShiftPlanningSolver:
                 objective_terms.append(shortage_var * HOURS_SHORTAGE_PENALTY_WEIGHT)
             self.penalty_groups.setdefault("Stunden-Ziel-Unterschreitung", []).extend(
                 (v, HOURS_SHORTAGE_PENALTY_WEIGHT) for v in hours_shortage_objectives
+            )
+        
+        # Add no-gap penalties (prevent present employees from being idle for whole weeks)
+        # Weight is already baked into the penalty variable (150,000 per idle week).
+        # This is complementary to the hours shortage objective: hours shortage captures
+        # the cumulative monthly shortfall whereas no-gap explicitly penalises idle *weeks*,
+        # ensuring gaps are distributed across the month rather than concentrated.
+        if no_gap_penalties:
+            print(f"  Adding {len(no_gap_penalties)} no-gap penalties (idle weeks for present employees)...")
+            for gap_pen in no_gap_penalties:
+                objective_terms.append(gap_pen)
+            self.penalty_groups.setdefault("Arbeitslücken (keine Schicht ganze Woche)", []).extend(
+                (v, 1) for v in no_gap_penalties
             )
         
         # Calculate total days once for temporal weighting calculations
@@ -1409,10 +1435,10 @@ class ShiftPlanningSolver:
         print()
         
         # Create solution callback for logging intermediate solutions.
-        # For fallback stages (relaxation_level > 0) the callback will call StopSearch()
-        # as soon as the first feasible solution is found – optimisation is not needed there.
-        stop_early = (self.relaxation_level > 0)
-        callback = ShiftPlanSolutionCallback(stop_after_first_feasible=stop_early)
+        # NOTE: We never stop at the first feasible solution, even in fallback stages.
+        # Fallback stages must also optimise so that present employees reach their monthly
+        # hours target and no work gaps arise in high-absence situations.
+        callback = ShiftPlanSolutionCallback(stop_after_first_feasible=False)
 
         # Solve with callback so each new improving solution is logged immediately.
         # The solver retains the best solution found; if it times out with status

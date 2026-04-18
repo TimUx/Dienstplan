@@ -45,6 +45,6 @@ def test_upload_branding_logo_as_admin(admin_client):
     payload = resp.json()
     assert payload['headerLogoUrl'].startswith('/images/company-logo-custom')
 
-    logo_path = Path('/home/runner/work/Dienstplan/Dienstplan/wwwroot/images/company-logo-custom.svg')
+    logo_path = Path(__file__).resolve().parents[2] / 'wwwroot' / 'images' / 'company-logo-custom.svg'
     if logo_path.exists():
         logo_path.unlink()

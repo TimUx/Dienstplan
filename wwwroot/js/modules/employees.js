@@ -1737,7 +1737,7 @@ export function displayBrandingSettings(settings) {
         <form id="branding-logo-form" onsubmit="uploadBrandingLogo(event)">
             <div class="form-group">
                 <label for="brandingLogoFile">Header-Logo ersetzen</label>
-                <input type="file" id="brandingLogoFile" accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp" required>
+                <input type="file" id="brandingLogoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" required>
                 <small>Erlaubte Formate: PNG, JPG, JPEG, SVG, WEBP (max. 5 MB)</small>
             </div>
             <div class="form-group">

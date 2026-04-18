@@ -78,7 +78,7 @@ def get_global_settings(request: Request):
         
     except Exception as e:
         logger.error(f"Get global settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Laden der globalen Einstellungen'}, status_code=500)
 
 
 @router.put('/api/settings/global', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -138,7 +138,7 @@ def update_global_settings(request: Request, data: dict = Depends(parse_json_bod
         
     except Exception as e:
         logger.error(f"Update global settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Aktualisieren der globalen Einstellungen'}, status_code=500)
 
 
 @router.get('/api/settings/branding')
@@ -166,7 +166,7 @@ def get_branding_settings(request: Request):
         }
     except Exception as e:
         logger.error(f"Get branding settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Laden: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Laden der Branding-Einstellungen'}, status_code=500)
 
 
 @router.put('/api/settings/branding', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -196,12 +196,17 @@ def update_branding_settings(request: Request, data: dict = Depends(parse_json_b
         return {'success': True, 'companyName': company_name}
     except Exception as e:
         logger.error(f"Update branding settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Speichern: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Speichern der Branding-Einstellungen'}, status_code=500)
 
 
 @router.post('/api/settings/branding/logo', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
 async def upload_branding_logo(request: Request, file: UploadFile = File(...)):
-    """Upload and activate custom header logo (Admin only)."""
+    """Upload and activate custom header logo (Admin only).
+
+    Args:
+        request: FastAPI request object with authenticated admin session.
+        file: Uploaded image file (PNG/JPG/JPEG/SVG/WEBP, max. 5 MB).
+    """
     try:
         if not file or not file.filename:
             return JSONResponse(content={'error': 'Keine Logo-Datei übergeben'}, status_code=400)
@@ -248,7 +253,7 @@ async def upload_branding_logo(request: Request, file: UploadFile = File(...)):
         return {'success': True, 'headerLogoUrl': logo_url}
     except Exception as e:
         logger.error(f"Upload branding logo error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Upload: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Upload des Logos'}, status_code=500)
 
 
 @router.get('/api/email-settings', dependencies=[Depends(require_role('Admin'))])
@@ -298,7 +303,7 @@ def get_email_settings(request: Request):
             
     except Exception as e:
         logger.error(f"Get email settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Laden der E-Mail-Einstellungen'}, status_code=500)
 
 
 @router.post('/api/email-settings', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -387,7 +392,7 @@ def save_email_settings(request: Request, data: dict = Depends(parse_json_body))
         
     except Exception as e:
         logger.error(f"Save email settings error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Speichern der E-Mail-Einstellungen'}, status_code=500)
 
 
 @router.post('/api/email-settings/test', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -413,7 +418,7 @@ def test_email_settings(request: Request, data: dict = Depends(parse_json_body))
             
     except Exception as e:
         logger.error(f"Test email error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return JSONResponse(content={'error': 'Fehler beim Senden der Test-E-Mail'}, status_code=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

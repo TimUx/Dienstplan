@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 DEFAULT_WEEKLY_HOURS_FALLBACK = 48.0
+MAX_ABSENCE_DAYS_PER_WEEK = 6
 
 
 @router.get('/api/statistics/dashboard')
@@ -195,9 +196,12 @@ async def get_dashboard_stats(request: Request):
             week_start = d - timedelta(days=d.weekday())  # Monday-based calendar week
             weekly_day_count[week_start] = weekly_day_count.get(week_start, 0) + 1
 
-        credited_days = sum(min(days_in_week, 6) for days_in_week in weekly_day_count.values())
+        credited_days = sum(min(days_in_week, MAX_ABSENCE_DAYS_PER_WEEK) for days_in_week in weekly_day_count.values())
         weekly_hours = employee_hours_map[emp_id]['weeklyHours']
-        daily_hours = weekly_hours / 6.0 if weekly_hours > 0 else 0.0
+        daily_hours = (
+            weekly_hours / float(MAX_ABSENCE_DAYS_PER_WEEK)
+            if weekly_hours > 0 else 0.0
+        )
         employee_hours_map[emp_id]['absenceHours'] = credited_days * daily_hours
 
     # Build final work-hours result list

@@ -66,6 +66,32 @@ function applyBranding(branding) {
     }
 }
 
+async function refreshFooterMetadata() {
+    const footerLastUpdated = document.getElementById('footer-last-updated');
+    if (!footerLastUpdated) return;
+
+    try {
+        const response = await fetch(`${utils.API_BASE}/health`, {
+            credentials: 'include'
+        });
+        if (!response.ok) return;
+
+        const health = await response.json();
+        const isoDate = health?.last_updated;
+        if (!isoDate || isoDate === 'unknown') return;
+
+        const parsedDate = new Date(isoDate);
+        if (Number.isNaN(parsedDate.getTime())) return;
+
+        footerLastUpdated.textContent = new Intl.DateTimeFormat('de-DE', {
+            month: 'long',
+            year: 'numeric'
+        }).format(parsedDate);
+    } catch (error) {
+        console.error('Error refreshing footer metadata:', error);
+    }
+}
+
 function closeHeaderMenu() {
     const headerMenu = document.getElementById('header-menu');
     const menuToggle = document.getElementById('header-menu-toggle');
@@ -703,6 +729,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initEventDelegation();
     initImportFormHandlers();
     refreshBranding();
+    refreshFooterMetadata();
     auth.initPasswordResetCheck();
     auth.checkAuthenticationStatus();
 

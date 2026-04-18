@@ -66,9 +66,14 @@ fi
 echo ""
 echo "[4/4] Finalizing..."
 
-if [ -d "dist/$EXECUTABLE" ] && [ -f "dist/$EXECUTABLE/$EXECUTABLE" ]; then
+DIST_FOLDER="dist/$EXECUTABLE"
+if [ ! -d "$DIST_FOLDER" ] && [ -d "dist/${EXECUTABLE}_bundle" ]; then
+    DIST_FOLDER="dist/${EXECUTABLE}_bundle"
+fi
+
+if [ -d "$DIST_FOLDER" ] && [ -f "$DIST_FOLDER/$EXECUTABLE" ]; then
     rm -rf "$EXECUTABLE"
-    mv "dist/$EXECUTABLE" .
+    mv "$DIST_FOLDER" "$EXECUTABLE"
     chmod +x "$EXECUTABLE/$EXECUTABLE"
     echo ""
     echo "============================================================"
@@ -87,6 +92,6 @@ if [ -d "dist/$EXECUTABLE" ] && [ -f "dist/$EXECUTABLE/$EXECUTABLE" ]; then
     echo "To test: ./$EXECUTABLE/$EXECUTABLE"
     echo "============================================================"
 else
-    echo "ERROR: Executable not found in dist/$EXECUTABLE/"
+    echo "ERROR: Executable not found in $DIST_FOLDER/"
     exit 1
 fi

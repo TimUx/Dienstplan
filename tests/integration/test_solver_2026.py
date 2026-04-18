@@ -613,8 +613,8 @@ def test_march_2026_no_work_gaps_during_high_absence():
     """March 2026 (real scenario): 5 staggered absences; present employees must not
     have idle weeks.
 
-    Reproduces the exact absence pattern from the production März-2026 run documented
-    in logs/Planungsbericht_2026_03.txt:
+    Reproduces the absence pattern that caused work gaps in the März-2026 production
+    planning run (5 employees absent for overlapping periods in week KW10-KW13):
       • Daniel Koch    – AU  23.02 – 01.03 (overlaps start of March)
       • Lisa Meyer     – AU  09.03 – 22.03
       • Robert Franke  – AU  09.03 – 22.03
@@ -629,7 +629,7 @@ def test_march_2026_no_work_gaps_during_high_absence():
     Key assertions:
     1. Solver invariants (no duplicates, no work on absence days).
     2. No present employee has a week with zero work days inside the planning month.
-    3. Every present employee's total assignments are at least MIN_EXPECTED_SHIFTS.
+    3. Every fully-present employee has at least MIN_EXPECTED_SHIFTS total assignments.
     """
     employees, teams, _ = generate_sample_data()
 
@@ -689,7 +689,11 @@ def test_march_2026_no_work_gaps_during_high_absence():
         assignments_by_emp_date.setdefault(a.employee_id, set()).add(a.date)
 
     # --- Assertion: no present employee has an idle week ---
-    MIN_EXPECTED_SHIFTS = 10  # A present employee should work at least 10 days in March
+    # March has 31 days.  A fully-present employee on a 6-day/48h week should work
+    # roughly 31 × (6/7) ≈ 26 days.  We use 10 as a conservative lower-bound to catch
+    # severely under-scheduled employees while remaining robust to small planning
+    # variations (e.g. rotation effects, team composition differences in sample data).
+    MIN_EXPECTED_SHIFTS = 10
 
     for emp in employees:
         if not emp.team_id:

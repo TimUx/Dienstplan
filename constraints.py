@@ -3656,12 +3656,15 @@ def add_no_gap_constraints(
     monthly target hours.  Leaving present employees idle for entire weeks is therefore
     more costly than minor comfort-constraint violations such as shift-type grouping.
 
-    Weight: 150,000 per idle week.  This is:
-    - Higher than typical shift-grouping isolation penalties (100,000–200,000) so that
-      the solver prefers to fill the gap even when working triggers a grouping penalty.
-    - Lower than the minimum-staffing fallback penalty (200,000 × count) and the
-      monthly hours-shortage penalty (~480,000 per week of missing work), meaning those
-      harder obligations still dominate.
+    Weight: 250,000 per idle week.  Calibration:
+    - The shift-grouping "isolation" penalty ranges from 100,000 (far-range A-B-A pattern
+      over 10+ days) up to 500,000 (ultra-close A-B-A within 7 days).  The most common
+      violation in practice is the far-range case at ~100,000–200,000.  By using 250,000
+      the no-gap penalty reliably exceeds the common grouping range, ensuring the solver
+      prefers to fill a gap even when working triggers a grouping penalty.
+    - The minimum-staffing fallback penalty (200,000 × violation count) and the monthly
+      hours-shortage penalty (~4,800,000 per week of missing work after scaling) are both
+      larger, so those harder obligations still dominate.
 
     Only days inside [target_start_date, target_end_date] are considered so that extended
     week-boundary days (e.g. Apr 1–4 in a March run) do not generate spurious penalties.
@@ -3669,7 +3672,7 @@ def add_no_gap_constraints(
     Returns:
         List of IntVar penalty values to be minimised in the objective.
     """
-    NO_WORK_WEEK_PENALTY = 150_000
+    NO_WORK_WEEK_PENALTY = 250_000
     gap_penalties = []
 
     # Restrict to the original planning month (not extended week-boundary days).
@@ -3743,7 +3746,6 @@ def add_no_gap_constraints(
             penalty = model.NewIntVar(0, NO_WORK_WEEK_PENALTY,
                                       f"nogap_pen_{emp.id}_w{week_idx}")
             model.Add(penalty >= NO_WORK_WEEK_PENALTY).OnlyEnforceIf(works_this_week.Not())
-            model.Add(penalty >= 0)
             gap_penalties.append(penalty)
 
     return gap_penalties

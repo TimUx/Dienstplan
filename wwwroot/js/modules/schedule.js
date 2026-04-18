@@ -15,6 +15,7 @@ export let multiSelectMode = false;
 export let selectedShifts = new Set();
 
 let _currentPlanJobId = null;
+let _planningElapsedTimer = null;
 
 // ============================================================================
 // DATE PICKERS & INIT
@@ -628,6 +629,10 @@ export function closePlanShiftsModal() {
     document.getElementById('planShiftsModal').style.display = 'none';
     document.getElementById('planShiftsForm').reset();
     document.getElementById('planningOverlay').classList.remove('active');
+    if (_planningElapsedTimer) {
+        clearInterval(_planningElapsedTimer);
+        _planningElapsedTimer = null;
+    }
 }
 
 export async function executePlanShifts(event) {
@@ -665,9 +670,11 @@ export async function executePlanShifts(event) {
     const planningOverlay = document.getElementById('planningOverlay');
     const statusEl = document.getElementById('planningStatusMessage');
     const elapsedEl = document.getElementById('planningElapsedTime');
+    const optimizationPhaseEl = document.getElementById('planningOptimizationPhase');
     planningOverlay.classList.add('active');
     statusEl.textContent = 'Planung wird gestartet…';
     elapsedEl.textContent = '';
+    if (optimizationPhaseEl) optimizationPhaseEl.textContent = '';
     // Reset step indicators
     document.querySelectorAll('#planningStepsList .planning-step').forEach(el => {
         el.classList.remove('done', 'active');
@@ -705,9 +712,23 @@ export async function executePlanShifts(event) {
         const { jobId } = await startResponse.json();
         _currentPlanJobId = jobId;
 
-        // Poll for status with exponential backoff (2s → 4s → 8s → 10s cap)
-        let _pollDelay = 2000;
-        const _pollDelayMax = 10000;
+        // Poll for status with fixed cadence to keep elapsed timer smooth
+        const _pollDelay = 2000;
+        let localElapsed = 0;
+
+        const formatElapsed = (elapsedSeconds) => {
+            const mins = Math.floor(elapsedSeconds / 60);
+            const secs = elapsedSeconds % 60;
+            return mins > 0
+                ? `${mins} Min. ${secs} Sek. vergangen`
+                : `${secs} Sek. vergangen`;
+        };
+
+        if (_planningElapsedTimer) clearInterval(_planningElapsedTimer);
+        _planningElapsedTimer = setInterval(() => {
+            localElapsed += 1;
+            if (elapsedEl) elapsedEl.textContent = formatElapsed(localElapsed);
+        }, 1000);
 
         const updatePlanningSteps = (currentStep, totalSteps) => {
             const stepItems = document.querySelectorAll('#planningStepsList .planning-step');
@@ -741,11 +762,19 @@ export async function executePlanShifts(event) {
                 // Update status message
                 if (statusEl) statusEl.textContent = job.message || 'Schichten werden geplant…';
                 if (elapsedEl) {
-                    const mins = Math.floor(elapsed / 60);
-                    const secs = elapsed % 60;
-                    elapsedEl.textContent = mins > 0
-                        ? `${mins} Min. ${secs} Sek. vergangen`
-                        : `${secs} Sek. vergangen`;
+                    if (elapsed > localElapsed) localElapsed = elapsed;
+                    elapsedEl.textContent = formatElapsed(localElapsed);
+                }
+                if (optimizationPhaseEl) {
+                    if (job.optimizationPhaseIndex && job.optimizationTotalPhases) {
+                        const phaseName = job.optimizationPhaseLabel ? ` – ${job.optimizationPhaseLabel}` : '';
+                        optimizationPhaseEl.textContent = `Phase ${job.optimizationPhaseIndex}/${job.optimizationTotalPhases}${phaseName}`;
+                    } else if (job.optimizationConstraintIndex && job.optimizationConstraintTotal) {
+                        const constraintLabel = job.optimizationConstraintLabel ? ` – ${job.optimizationConstraintLabel}` : '';
+                        optimizationPhaseEl.textContent = `Unterphase ${job.optimizationConstraintIndex}/${job.optimizationConstraintTotal}${constraintLabel}`;
+                    } else {
+                        optimizationPhaseEl.textContent = '';
+                    }
                 }
 
                 // Update step progress indicators
@@ -754,16 +783,17 @@ export async function executePlanShifts(event) {
                 }
 
                 if (job.status === 'running') {
-                    // Exponential backoff: double the delay after each poll, cap at max
-                    const nextDelay = Math.min(_pollDelay * 2, _pollDelayMax);
-                    setTimeout(poll, nextDelay);
-                    _pollDelay = nextDelay;
+                    setTimeout(poll, _pollDelay);
                     return;
                 }
 
                 // Job finished
                 planningOverlay.classList.remove('active');
                 _currentPlanJobId = null;
+                if (_planningElapsedTimer) {
+                    clearInterval(_planningElapsedTimer);
+                    _planningElapsedTimer = null;
+                }
 
                 if (job.status === 'success') {
                     closePlanShiftsModal();
@@ -779,6 +809,10 @@ export async function executePlanShifts(event) {
                 }
             } catch (err) {
                 planningOverlay.classList.remove('active');
+                if (_planningElapsedTimer) {
+                    clearInterval(_planningElapsedTimer);
+                    _planningElapsedTimer = null;
+                }
                 showToast(`Fehler: ${err.message}`, 'error');
             }
         };
@@ -788,6 +822,10 @@ export async function executePlanShifts(event) {
     } catch (error) {
         // Hide loading overlay on error
         planningOverlay.classList.remove('active');
+        if (_planningElapsedTimer) {
+            clearInterval(_planningElapsedTimer);
+            _planningElapsedTimer = null;
+        }
         showToast(`Fehler: ${error.message}`, 'error');
     }
 }
@@ -812,6 +850,10 @@ export async function cancelPlanning() {
     const planningOverlay = document.getElementById('planningOverlay');
     if (planningOverlay) planningOverlay.classList.remove('active');
     _currentPlanJobId = null;
+    if (_planningElapsedTimer) {
+        clearInterval(_planningElapsedTimer);
+        _planningElapsedTimer = null;
+    }
 }
 
 // ============================================================================

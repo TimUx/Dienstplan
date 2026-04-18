@@ -1256,6 +1256,58 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         # SOLVER_TIME_LIMIT_SECONDS can be set in Flask config for test environments.
         # Production leaves it unset (None = unlimited).
         _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
+
+        def _solver_progress(event: str, payload: dict):
+            payload = payload or {}
+            if event == 'stage_started':
+                stage_index = payload.get('stageIndex')
+                stage_total = payload.get('totalStages')
+                stage_name = payload.get('stageName')
+                stage_details = payload.get('stageDetails')
+                detail_suffix = f" – {stage_details}" if stage_details else ""
+                _update(
+                    'running',
+                    f"Optimierung läuft… Phase {stage_index}/{stage_total}: {stage_name}{detail_suffix}",
+                    step=3,
+                    optimizationPhaseIndex=stage_index,
+                    optimizationTotalPhases=stage_total,
+                    optimizationPhaseLabel=stage_name,
+                    optimizationPhaseDetails=stage_details,
+                )
+                return
+
+            if event == 'constraint':
+                constraint_label = payload.get('label')
+                constraint_index = payload.get('index')
+                constraint_total = payload.get('total')
+                _update(
+                    'running',
+                    f"Optimierung läuft… Modellierung {constraint_index}/{constraint_total}: {constraint_label}",
+                    step=3,
+                    optimizationConstraintIndex=constraint_index,
+                    optimizationConstraintTotal=constraint_total,
+                    optimizationConstraintLabel=constraint_label,
+                )
+                return
+
+            if event == 'solver_search_started':
+                _update(
+                    'running',
+                    'Optimierung läuft… Solver-Suche gestartet',
+                    step=3,
+                    optimizationSearchState='started',
+                )
+                return
+
+            if event == 'solver_search_finished':
+                _update(
+                    'running',
+                    'Optimierung läuft… Solver-Suche abgeschlossen, Ergebnis wird aufbereitet',
+                    step=3,
+                    optimizationSearchState='finished',
+                )
+                return
+
         solver_time_limit = None  # use default
         result = solve_shift_planning(
             planning_model,
@@ -1263,6 +1315,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
             db_path=db.db_path,
             time_limit_seconds=solver_time_limit,
             warm_start_shifts=warm_start_shifts if warm_start_shifts else None,
+            progress_callback=_solver_progress,
         )
         
         if not result:

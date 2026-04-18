@@ -1257,7 +1257,10 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         # Production leaves it unset (None = unlimited).
         _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
 
+        _constraint_phase_shown = False
+
         def _solver_progress(event: str, payload: dict):
+            nonlocal _constraint_phase_shown
             if event == 'stage_started':
                 stage_index = payload.get('stageIndex')
                 stage_total = payload.get('totalStages')
@@ -1276,32 +1279,51 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
                 return
 
             if event == 'constraint':
-                constraint_label = payload.get('label')
-                constraint_index = payload.get('index')
-                constraint_total = payload.get('total')
+                if _constraint_phase_shown:
+                    return
+                _constraint_phase_shown = True
                 _update(
                     'running',
-                    f"Optimierung läuft… Modellierung {constraint_index}/{constraint_total}: {constraint_label}",
+                    'Optimierung läuft… Planungsregeln werden vorbereitet',
                     step=3,
-                    optimizationConstraintIndex=constraint_index,
-                    optimizationConstraintTotal=constraint_total,
-                    optimizationConstraintLabel=constraint_label,
                 )
                 return
 
             if event == 'solver_search_started':
                 _update(
                     'running',
-                    'Optimierung läuft… Solver-Suche gestartet',
+                    'Optimierung läuft… Berechnung wurde gestartet',
                     step=3,
                     optimizationSearchState='started',
+                    optimizationSearchPhaseIndex=1,
+                    optimizationSearchPhaseTotal=3,
+                    optimizationSearchPhaseLabel='Berechnung gestartet',
+                )
+                return
+
+            if event == 'solver_solution_progress':
+                solution_count = payload.get('solutionCount') or 0
+                if solution_count == 1:
+                    phase_index = 2
+                    phase_label = 'Erste Lösung gefunden'
+                else:
+                    phase_index = 3
+                    phase_label = 'Lösung wird weiter verbessert'
+                _update(
+                    'running',
+                    f'Optimierung läuft… {phase_label}',
+                    step=3,
+                    optimizationSearchState='started',
+                    optimizationSearchPhaseIndex=phase_index,
+                    optimizationSearchPhaseTotal=3,
+                    optimizationSearchPhaseLabel=phase_label,
                 )
                 return
 
             if event == 'solver_search_finished':
                 _update(
                     'running',
-                    'Optimierung läuft… Solver-Suche abgeschlossen, Ergebnis wird aufbereitet',
+                    'Optimierung läuft… Berechnung abgeschlossen, Ergebnis wird aufbereitet',
                     step=3,
                     optimizationSearchState='finished',
                 )

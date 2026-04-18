@@ -174,12 +174,17 @@ class ShiftPlanSolutionCallback(cp_model.CpSolverSolutionCallback):
     and further optimisation would only waste time.
     """
 
-    def __init__(self, stop_after_first_feasible: bool = False):
+    def __init__(
+        self,
+        stop_after_first_feasible: bool = False,
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
+    ):
         super().__init__()
         self._solution_count = 0
         self._best_objective = None  # None until first solution found (works for both min and max)
         self._start_time = None
         self._stop_after_first_feasible = stop_after_first_feasible
+        self._progress_callback = progress_callback
 
     def OnSolutionCallback(self):
         """Called by the solver each time a new improving solution is found."""
@@ -196,6 +201,13 @@ class ShiftPlanSolutionCallback(cp_model.CpSolverSolutionCallback):
             self._best_objective = current_obj
             self._solution_count += 1
             print(f"  → Solution #{self._solution_count}: objective={current_obj:.0f}, elapsed={elapsed:.1f}s")
+            _emit_progress(
+                self._progress_callback,
+                "solver_solution_progress",
+                solutionCount=self._solution_count,
+                objectiveValue=float(current_obj),
+                elapsedSeconds=float(elapsed),
+            )
 
         # For fallback stages feasibility is sufficient; stop as soon as we have one.
         if self._stop_after_first_feasible and self._solution_count >= 1:
@@ -1524,7 +1536,10 @@ class ShiftPlanningSolver:
         # NOTE: We never stop at the first feasible solution, even in fallback stages.
         # Fallback stages must also optimise so that present employees reach their monthly
         # hours target and no work gaps arise in high-absence situations.
-        callback = ShiftPlanSolutionCallback(stop_after_first_feasible=False)
+        callback = ShiftPlanSolutionCallback(
+            stop_after_first_feasible=False,
+            progress_callback=progress_callback
+        )
 
         # Solve with callback so each new improving solution is logged immediately.
         # The solver retains the best solution found; if it times out with status

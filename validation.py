@@ -224,7 +224,7 @@ def validate_one_shift_per_day(
         if len(shifts) > 1:
             shift_codes = [get_shift_type_by_id(s.shift_type_id).code for s in shifts]
             result.add_violation(
-                f"Employee {emp_id} has multiple shifts on {d}: {', '.join(shift_codes)}",
+                f"Mehrfachzuweisung: Mitarbeiter-ID {emp_id} hat am {d.strftime('%d.%m.%Y')} mehrere Schichten: {', '.join(shift_codes)}",
                 cause_type="ROTATION_CONFLICT",
                 cause=(
                     f"Ursache: Mehrfachzuweisung am {d.strftime('%d.%m.')} – "
@@ -259,7 +259,7 @@ def validate_no_work_when_absent(
             if absence.employee_id == emp_id and absence.overlaps_date(d):
                 shift_code = get_shift_type_by_id(assignment.shift_type_id).code
                 result.add_violation(
-                    f"{emp.full_name} (ID {emp_id}) assigned to {shift_code} shift on {d} but is absent ({absence.absence_type.value})",
+                    f"{emp.full_name} ist am {d.strftime('%d.%m.%Y')} zur {shift_code}-Schicht eingeplant, ist aber abwesend ({absence.get_code()})",
                     cause_type="ABSENCE",
                     cause=(
                         f"Ursache: {emp.full_name} ist am {d.strftime('%d.%m.')} "
@@ -314,7 +314,7 @@ def validate_rest_times(
                             f"durch Rotationszwänge (nur 8h Ruhezeit)"
                         )
                     result.add_violation(
-                        f"{emp_name} has forbidden transition Spät->Früh on {current.date}->{next_assign.date} (only 8h rest)",
+                        f"{emp_name}: Unzulässiger Schichtwechsel Spät→Früh am {current.date.strftime('%d.%m.%Y')}→{next_assign.date.strftime('%d.%m.%Y')} (nur 8h Ruhezeit)",
                         cause_type=cause_type,
                         cause=cause,
                     )
@@ -332,7 +332,7 @@ def validate_rest_times(
                             f"durch Rotationszwänge (0h Ruhezeit)"
                         )
                     result.add_violation(
-                        f"{emp_name} has forbidden transition Nacht->Früh on {current.date}->{next_assign.date} (0h rest)",
+                        f"{emp_name}: Unzulässiger Schichtwechsel Nacht→Früh am {current.date.strftime('%d.%m.%Y')}→{next_assign.date.strftime('%d.%m.%Y')} (0h Ruhezeit)",
                         cause_type=cause_type,
                         cause=cause,
                     )
@@ -349,7 +349,7 @@ def validate_rest_times(
                             f"durch Rotationszwänge (nur 8h Ruhezeit)"
                         )
                     result.add_violation(
-                        f"{emp_name} has forbidden transition Nacht->Spät on {current.date}->{next_assign.date} (only 8h rest)",
+                        f"{emp_name}: Unzulässiger Schichtwechsel Nacht→Spät am {current.date.strftime('%d.%m.%Y')}→{next_assign.date.strftime('%d.%m.%Y')} (nur 8h Ruhezeit)",
                         cause_type=cause_type,
                         cause=cause,
                     )
@@ -407,7 +407,7 @@ def validate_consecutive_shifts(
                         assignment.date, absences, employees
                     )
                     result.add_violation(
-                        f"{emp_name} works more than {max_consecutive_any} consecutive days (ends {assignment.date})",
+                        f"{emp_name}: Mehr als {max_consecutive_any} aufeinanderfolgende Arbeitstage (zuletzt am {assignment.date.strftime('%d.%m.%Y')})",
                         cause_type=cause_type,
                         cause=cause,
                     )
@@ -432,7 +432,7 @@ def validate_consecutive_shifts(
                         assignment.date, absences, employees, shift_code="N"
                     )
                     result.add_violation(
-                        f"{emp_name} works more than {n_max_consec} consecutive night shifts (ends {assignment.date})",
+                        f"{emp_name}: Mehr als {n_max_consec} aufeinanderfolgende Nachtschichten (zuletzt am {assignment.date.strftime('%d.%m.%Y')})",
                         cause_type=cause_type,
                         cause=cause,
                     )
@@ -484,8 +484,7 @@ def validate_minimum_consecutive_weekday_shifts(
                 # Check for A-B-A pattern (single B isolated)
                 if shift1 == shift3 and shift1 != shift2:
                     result.add_warning(
-                        f"{emp_name}: Single isolated {shift2} shift on {assign2.date.strftime('%a %d.%m')} "
-                        f"between {shift1} shifts (violates minimum 2 consecutive days rule)",
+                        f"{emp_name}: Einzelne {shift2}-Schicht am {assign2.date.strftime('%a %d.%m')} zwischen {shift1}-Schichten (weniger als 2 aufeinanderfolgende Tage)",
                         cause_type="ROTATION_CONFLICT",
                         cause=(
                             f"Ursache: Einzelne {shift2}-Schicht am {assign2.date.strftime('%d.%m.')} "
@@ -496,8 +495,7 @@ def validate_minimum_consecutive_weekday_shifts(
                 # Check for B-A-C pattern (single A isolated in middle)
                 if shift1 != shift2 and shift2 != shift3 and shift1 != shift3:
                     result.add_warning(
-                        f"{emp_name}: Single isolated {shift2} shift on {assign2.date.strftime('%a %d.%m')} "
-                        f"between different shifts {shift1} and {shift3} (violates minimum 2 consecutive days rule)",
+                        f"{emp_name}: Einzelne {shift2}-Schicht am {assign2.date.strftime('%a %d.%m')} zwischen {shift1} und {shift3} (weniger als 2 aufeinanderfolgende Tage)",
                         cause_type="ROTATION_CONFLICT",
                         cause=(
                             f"Ursache: Einzelne {shift2}-Schicht am {assign2.date.strftime('%d.%m.')} "
@@ -548,9 +546,8 @@ def validate_minimum_consecutive_weekday_shifts(
                     # Only warn if either day appears to be isolated (single day of that shift)
                     if is_isolated_day1 or is_isolated_day2:
                         result.add_warning(
-                            f"{emp_name}: Shift change from {shift1} to {shift2} on consecutive weekdays "
-                            f"({assign1.date.strftime('%a %d.%m')} → {assign2.date.strftime('%a %d.%m')}), "
-                            f"violates minimum 2 consecutive days rule",
+                            f"{emp_name}: Schichtwechsel {shift1}→{shift2} an aufeinanderfolgenden Werktagen"
+                            f" ({assign1.date.strftime('%a %d.%m')} → {assign2.date.strftime('%a %d.%m')}) – weniger als 2 aufeinanderfolgende Tage",
                             cause_type="ROTATION_CONFLICT",
                             cause=(
                                 f"Ursache: Schichtwechsel {shift1}→{shift2} an aufeinanderfolgenden Werktagen "
@@ -639,7 +636,7 @@ def validate_working_hours(
                     week_start, absences, employees
                 )
                 result.add_violation(
-                    f"{emp_name} works {hours:.1f} hours in week starting {week_start} (max {expected_weekly_hours}h based on shift config)",
+                    f"{emp_name}: {hours:.1f} Stunden in der Woche ab {week_start.strftime('%d.%m.%Y')} (max. {expected_weekly_hours}h laut Schichtkonfiguration)",
                     cause_type=cause_type,
                     cause=cause,
                 )
@@ -665,7 +662,7 @@ def validate_working_hours(
                     current, absences, employees
                 )
                 result.add_violation(
-                    f"{emp_name} works {hours_in_window:.1f} hours in 30-day period {current} to {window_end} (max {expected_monthly_hours}h based on shift config)",
+                    f"{emp_name}: {hours_in_window:.1f} Stunden im 30-Tage-Zeitraum {current.strftime('%d.%m.%Y')} bis {window_end.strftime('%d.%m.%Y')} (max. {expected_monthly_hours}h laut Schichtkonfiguration)",
                     cause_type=cause_type,
                     cause=cause,
                 )
@@ -734,13 +731,13 @@ def validate_staffing_requirements(
             if count < min_req:
                 cause_type, cause = _analyze_absence_cause(d, absences, employees, shift_code=shift_code)
                 result.add_violation(
-                    f"Insufficient staffing for {shift_code} shift on {d}: {count} (min {min_req})",
+                    f"Unterbesetzung: {shift_code}-Schicht am {d.strftime('%d.%m.%Y')}: {count} Mitarbeiter (Minimum: {min_req})",
                     cause_type=cause_type,
                     cause=cause,
                 )
             elif count > max_req:
                 result.add_violation(
-                    f"Overstaffing for {shift_code} shift on {d}: {count} (max {max_req})",
+                    f"Überbesetzung: {shift_code}-Schicht am {d.strftime('%d.%m.%Y')}: {count} Mitarbeiter (Maximum: {max_req})",
                     cause_type="UNKNOWN",
                     cause=(
                         f"Ursache: Überbesetzung in {shift_code}schicht am {d.strftime('%d.%m.')} "
@@ -782,7 +779,7 @@ def validate_special_functions(
                 bmt_count += 1
                 if not emp.is_brandmeldetechniker:
                     result.add_violation(
-                        f"Employee {emp.full_name} assigned to BMT but not qualified on {d}",
+                        f"{emp.full_name} ist am {d.strftime('%d.%m.%Y')} als BMT eingeplant, hat aber keine BMT-Qualifikation",
                         cause_type="UNKNOWN",
                         cause=(
                             f"Ursache: {emp.full_name} ist am {d.strftime('%d.%m.')} "
@@ -794,7 +791,7 @@ def validate_special_functions(
                 bsb_count += 1
                 if not emp.is_brandschutzbeauftragter:
                     result.add_violation(
-                        f"Employee {emp.full_name} assigned to BSB but not qualified on {d}",
+                        f"{emp.full_name} ist am {d.strftime('%d.%m.%Y')} als BSB eingeplant, hat aber keine BSB-Qualifikation",
                         cause_type="UNKNOWN",
                         cause=(
                             f"Ursache: {emp.full_name} ist am {d.strftime('%d.%m.')} "
@@ -806,7 +803,7 @@ def validate_special_functions(
         if bmt_count != 1:
             cause_type, cause = _analyze_absence_cause(d, absences, employees, shift_code="BMT")
             result.add_warning(
-                f"BMT count on {d} is {bmt_count} (expected 1)",
+                f"BMT-Besetzung am {d.strftime('%d.%m.%Y')}: {bmt_count} Mitarbeiter (erwartet: 1)",
                 cause_type=cause_type,
                 cause=cause,
             )
@@ -814,7 +811,7 @@ def validate_special_functions(
         if bsb_count != 1:
             cause_type, cause = _analyze_absence_cause(d, absences, employees, shift_code="BSB")
             result.add_warning(
-                f"BSB count on {d} is {bsb_count} (expected 1)",
+                f"BSB-Besetzung am {d.strftime('%d.%m.%Y')}: {bsb_count} Mitarbeiter (erwartet: 1)",
                 cause_type=cause_type,
                 cause=cause,
             )
@@ -920,7 +917,7 @@ def validate_weekend_team_consistency(
             if not weekday_shifts:
                 # Weekend work but no weekday work - this shouldn't happen
                 result.add_warning(
-                    f"{emp.full_name} works weekend in week {week_idx} but no weekdays",
+                    f"{emp.full_name}: Wochenendarbeit in Woche {week_idx}, aber keine Wochentage eingeplant",
                     cause_type="ROTATION_CONFLICT",
                     cause=(
                         f"Ursache: {emp.full_name} arbeitet am Wochenende in Woche {week_idx}, "
@@ -933,10 +930,10 @@ def validate_weekend_team_consistency(
             # (should be exactly same shift type, but subset handles partial week work)
             if not weekend_shifts.issubset(weekday_shifts):
                 result.add_violation(
-                    f"WEEKEND VIOLATION: {emp.full_name} week {week_idx}: "
-                    f"weekday shifts={sorted(weekday_shifts)}, "
-                    f"weekend shifts={sorted(weekend_shifts)}. "
-                    f"Weekend must match team's weekly shift!",
+                    f"Wochenend-Verstoß: {emp.full_name}, Woche {week_idx}: "
+                    f"Wochentag-Schichten={sorted(weekday_shifts)}, "
+                    f"Wochenend-Schichten={sorted(weekend_shifts)} – "
+                    f"Wochenendschichten müssen mit der Teamschicht übereinstimmen",
                     cause_type="ROTATION_CONFLICT",
                     cause=(
                         f"Ursache: {emp.full_name} in Woche {week_idx} – Wochenendschichten "
@@ -978,7 +975,7 @@ def validate_all_employees_present(
         for d in dates:
             if (emp.id, d) not in complete_schedule:
                 result.add_violation(
-                    f"MISSING EMPLOYEE: {emp.full_name} (ID {emp.id}) is missing from schedule on {d}",
+                    f"Fehlender Eintrag: {emp.full_name} (ID {emp.id}) fehlt im Dienstplan am {d.strftime('%d.%m.%Y')}",
                     cause_type="UNKNOWN",
                     cause=(
                         f"Ursache: {emp.full_name} fehlt im Dienstplan am {d.strftime('%d.%m.')} "
@@ -1048,7 +1045,7 @@ def validate_locked_assignments(
             
             if actual_shifts and expected_shift not in actual_shifts:
                 result.add_violation(
-                    f"LOCKED TEAM SHIFT VIOLATED: {team.name} week {week_idx} should be '{expected_shift}' but has {actual_shifts}",
+                    f"Gesperrte Teamschicht verletzt: Team {team.name}, Woche {week_idx} – sollte '{expected_shift}' sein, hat aber {sorted(actual_shifts)}",
                     cause_type="ROTATION_CONFLICT",
                     cause=(
                         f"Ursache: Team {team.name} in Woche {week_idx} – gesperrte Schicht "
@@ -1068,7 +1065,7 @@ def validate_locked_assignments(
             
             if expected_working and not is_working:
                 result.add_violation(
-                    f"LOCKED WEEKEND VIOLATED: {emp.full_name} should work on {d} but doesn't",
+                    f"Gesperrtes Wochenende verletzt: {emp.full_name} sollte am {d.strftime('%d.%m.%Y')} arbeiten, ist aber nicht eingeplant",
                     cause_type="ROTATION_CONFLICT",
                     cause=(
                         f"Ursache: {emp.full_name} ist für {d.strftime('%d.%m.')} als arbeitend gesperrt, "
@@ -1077,7 +1074,7 @@ def validate_locked_assignments(
                 )
             elif not expected_working and is_working:
                 result.add_violation(
-                    f"LOCKED WEEKEND VIOLATED: {emp.full_name} should NOT work on {d} but does",
+                    f"Gesperrtes Wochenende verletzt: {emp.full_name} sollte am {d.strftime('%d.%m.%Y')} frei haben, wurde aber eingeplant",
                     cause_type="ROTATION_CONFLICT",
                     cause=(
                         f"Ursache: {emp.full_name} ist für {d.strftime('%d.%m.')} als frei gesperrt, "

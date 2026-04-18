@@ -766,12 +766,16 @@ export async function executePlanShifts(event) {
                     elapsedEl.textContent = formatElapsed(localElapsed);
                 }
                 if (optimizationPhaseEl) {
-                    if (job.optimizationPhaseIndex != null && job.optimizationTotalPhases != null) {
+                    if (job.optimizationSearchState === 'started') {
+                        const phaseIndex = job.optimizationSearchPhaseIndex || 1;
+                        const phaseTotal = job.optimizationSearchPhaseTotal || 3;
+                        const phaseLabel = job.optimizationSearchPhaseLabel ? ` – ${job.optimizationSearchPhaseLabel}` : '';
+                        optimizationPhaseEl.textContent = `Berechnungsphase ${phaseIndex}/${phaseTotal}${phaseLabel}`;
+                    } else if (job.optimizationSearchState === 'finished') {
+                        optimizationPhaseEl.textContent = 'Berechnungsphase abgeschlossen';
+                    } else if (job.optimizationPhaseIndex != null && job.optimizationTotalPhases != null) {
                         const phaseName = job.optimizationPhaseLabel ? ` – ${job.optimizationPhaseLabel}` : '';
-                        optimizationPhaseEl.textContent = `Phase ${job.optimizationPhaseIndex}/${job.optimizationTotalPhases}${phaseName}`;
-                    } else if (job.optimizationConstraintIndex != null && job.optimizationConstraintTotal != null) {
-                        const constraintLabel = job.optimizationConstraintLabel ? ` – ${job.optimizationConstraintLabel}` : '';
-                        optimizationPhaseEl.textContent = `Unterphase ${job.optimizationConstraintIndex}/${job.optimizationConstraintTotal}${constraintLabel}`;
+                        optimizationPhaseEl.textContent = `Optimierungsphase ${job.optimizationPhaseIndex}/${job.optimizationTotalPhases}${phaseName}`;
                     } else {
                         optimizationPhaseEl.textContent = '';
                     }

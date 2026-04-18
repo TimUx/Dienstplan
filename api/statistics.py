@@ -12,8 +12,8 @@ from .shared import get_db, require_role, require_csrf, check_csrf
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-DEFAULT_WEEKLY_HOURS_FALLBACK = 48.0
-MAX_ABSENCE_DAYS_PER_WEEK = 6
+DEFAULT_WEEKLY_HOURS_FALLBACK = 48.0  # Business default for weekly shift hours
+MAX_ABSENCE_DAYS_PER_WEEK = 6  # Business rule: absence credit capped to 6 days/week
 
 
 @router.get('/api/statistics/dashboard')
@@ -198,6 +198,7 @@ async def get_dashboard_stats(request: Request):
 
         credited_days = sum(min(days_in_week, MAX_ABSENCE_DAYS_PER_WEEK) for days_in_week in weekly_day_count.values())
         weekly_hours = employee_hours_map[emp_id]['weeklyHours']
+        # Convert weekly configured hours to per-day absence credit using 6-day cap.
         daily_hours = (weekly_hours / MAX_ABSENCE_DAYS_PER_WEEK) if weekly_hours > 0 else 0.0
         employee_hours_map[emp_id]['absenceHours'] = credited_days * daily_hours
 

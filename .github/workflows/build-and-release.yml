@@ -34,7 +34,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        $VERSION = "2.1.${{ github.run_number }}"
+        $VERSION = "2.2.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Building version $VERSION (Production - Empty Database)"
     
@@ -99,7 +99,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="2.1.${{ github.run_number }}"
+        VERSION="2.2.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version $VERSION (Production - Empty Database)"
     
@@ -152,7 +152,7 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION="2.1.${{ github.run_number }}"
+        VERSION="2.2.${{ github.run_number }}"
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version $VERSION"
     
@@ -189,7 +189,7 @@ jobs:
         body: |
           # Dienstplan Release v${{ steps.version.outputs.VERSION }}
           
-          **Version 2.1 - Python Edition - Production Release**
+          **Version 2.2 - Python Edition - Production Release**
           
           ## 📦 Downloads
           

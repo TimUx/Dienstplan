@@ -52,7 +52,7 @@ def health_check():
         import importlib.metadata
         app_version = importlib.metadata.version('dienstplan') 
     except Exception:
-        app_version = '2.1'
+        app_version = '2.2'
     
     python_version = sys.version.split()[0]
     

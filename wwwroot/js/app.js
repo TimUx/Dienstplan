@@ -68,7 +68,8 @@ function applyBranding(branding) {
 
 async function refreshFooterMetadata() {
     const footerLastUpdated = document.getElementById('footer-last-updated');
-    if (!footerLastUpdated) return;
+    const footerAppVersion = document.getElementById('footer-app-version');
+    if (!footerLastUpdated && !footerAppVersion) return;
 
     try {
         const response = await fetch(`${utils.API_BASE}/health`, {
@@ -77,8 +78,13 @@ async function refreshFooterMetadata() {
         if (!response.ok) return;
 
         const health = await response.json();
+        const appVersion = health?.version;
+        if (footerAppVersion && appVersion) {
+            footerAppVersion.textContent = appVersion;
+        }
+
         const isoDate = health?.last_updated;
-        if (!isoDate || isoDate === 'unknown') return;
+        if (!footerLastUpdated || !isoDate || isoDate === 'unknown') return;
 
         const parsedDate = new Date(isoDate);
         if (Number.isNaN(parsedDate.getTime())) return;

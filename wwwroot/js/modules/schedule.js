@@ -766,10 +766,10 @@ export async function executePlanShifts(event) {
                     elapsedEl.textContent = formatElapsed(localElapsed);
                 }
                 if (optimizationPhaseEl) {
-                    if (job.optimizationPhaseIndex && job.optimizationTotalPhases) {
+                    if (job.optimizationPhaseIndex != null && job.optimizationTotalPhases != null) {
                         const phaseName = job.optimizationPhaseLabel ? ` – ${job.optimizationPhaseLabel}` : '';
                         optimizationPhaseEl.textContent = `Phase ${job.optimizationPhaseIndex}/${job.optimizationTotalPhases}${phaseName}`;
-                    } else if (job.optimizationConstraintIndex && job.optimizationConstraintTotal) {
+                    } else if (job.optimizationConstraintIndex != null && job.optimizationConstraintTotal != null) {
                         const constraintLabel = job.optimizationConstraintLabel ? ` – ${job.optimizationConstraintLabel}` : '';
                         optimizationPhaseEl.textContent = `Unterphase ${job.optimizationConstraintIndex}/${job.optimizationConstraintTotal}${constraintLabel}`;
                     } else {

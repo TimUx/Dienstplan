@@ -1258,7 +1258,6 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         _update('running', 'Optimierung läuft… (dies kann mehrere Minuten dauern)', step=3)
 
         def _solver_progress(event: str, payload: dict):
-            payload = payload or {}
             if event == 'stage_started':
                 stage_index = payload.get('stageIndex')
                 stage_total = payload.get('totalStages')

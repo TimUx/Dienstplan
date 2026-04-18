@@ -198,10 +198,7 @@ async def get_dashboard_stats(request: Request):
 
         credited_days = sum(min(days_in_week, MAX_ABSENCE_DAYS_PER_WEEK) for days_in_week in weekly_day_count.values())
         weekly_hours = employee_hours_map[emp_id]['weeklyHours']
-        daily_hours = (
-            weekly_hours / float(MAX_ABSENCE_DAYS_PER_WEEK)
-            if weekly_hours > 0 else 0.0
-        )
+        daily_hours = (weekly_hours / MAX_ABSENCE_DAYS_PER_WEEK) if weekly_hours > 0 else 0.0
         employee_hours_map[emp_id]['absenceHours'] = credited_days * daily_hours
 
     # Build final work-hours result list

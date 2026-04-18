@@ -12,6 +12,7 @@ from .shared import get_db, require_role, require_csrf, check_csrf
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+DEFAULT_WEEKLY_HOURS_FALLBACK = 48.0
 
 
 @router.get('/api/statistics/dashboard')
@@ -90,11 +91,11 @@ async def get_dashboard_stats(request: Request):
     team_weekly_hours = {row['Id']: float(row['WeeklyHours'] or 0) for row in cursor.fetchall()}
 
     cursor.execute("""
-        SELECT COALESCE(MAX(WeeklyWorkingHours), 48.0) as DefaultWeeklyHours
+        SELECT COALESCE(MAX(WeeklyWorkingHours), ?) as DefaultWeeklyHours
         FROM ShiftTypes
         WHERE IsActive = 1
-    """)
-    weekly_hours_default = float(cursor.fetchone()['DefaultWeeklyHours'] or 48.0)
+    """, (DEFAULT_WEEKLY_HOURS_FALLBACK,))
+    weekly_hours_default = float(cursor.fetchone()['DefaultWeeklyHours'] or DEFAULT_WEEKLY_HOURS_FALLBACK)
 
     for emp_id, emp_data in employee_hours_map.items():
         weekly_hours = assigned_weekly_hours.get(emp_id, 0.0)
@@ -175,8 +176,19 @@ async def get_dashboard_stats(request: Request):
 
     # Add absence hour credit to employee work hours, max. 6 absence days per week.
     for emp_id, absence_days in employee_absence_credit_sets.items():
-        if not absence_days or emp_id not in employee_hours_map:
+        if not absence_days:
             continue
+        if emp_id not in employee_hours_map:
+            employee_name = employee_absence_sets.get(emp_id, {}).get('employeeName', f"Mitarbeiter {emp_id}")
+            employee_hours_map[emp_id] = {
+                'id': emp_id,
+                'name': employee_name,
+                'teamId': None,
+                'shiftCount': 0,
+                'shiftHours': 0.0,
+                'absenceHours': 0.0,
+                'weeklyHours': weekly_hours_default
+            }
 
         weekly_day_count = {}
         for d in absence_days:

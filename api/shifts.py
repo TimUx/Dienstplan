@@ -1295,6 +1295,28 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
                     'Optimierung läuft… Berechnung wurde gestartet',
                     step=3,
                     optimizationSearchState='started',
+                    optimizationSearchPhaseIndex=1,
+                    optimizationSearchPhaseTotal=3,
+                    optimizationSearchPhaseLabel='Berechnung gestartet',
+                )
+                return
+
+            if event == 'solver_solution_progress':
+                solution_count = payload.get('solutionCount') or 0
+                if solution_count == 1:
+                    phase_index = 2
+                    phase_label = 'Erste Lösung gefunden'
+                else:
+                    phase_index = 3
+                    phase_label = 'Lösung wird weiter verbessert'
+                _update(
+                    'running',
+                    f'Optimierung läuft… {phase_label}',
+                    step=3,
+                    optimizationSearchState='started',
+                    optimizationSearchPhaseIndex=phase_index,
+                    optimizationSearchPhaseTotal=3,
+                    optimizationSearchPhaseLabel=phase_label,
                 )
                 return
 

@@ -714,9 +714,6 @@ export async function executePlanShifts(event) {
 
         // Poll for status with fixed cadence to keep elapsed timer smooth
         const _pollDelay = 2000;
-        const FIRST_SOLUTION_THRESHOLD_SECONDS = 20;
-        const IMPROVEMENT_THRESHOLD_SECONDS = 60;
-        const SEARCH_PROGRESS_TOTAL_PHASES = 3;
         let localElapsed = 0;
 
         const formatElapsed = (elapsedSeconds) => {
@@ -725,16 +722,6 @@ export async function executePlanShifts(event) {
             return mins > 0
                 ? `${mins} Min. ${secs} Sek. vergangen`
                 : `${secs} Sek. vergangen`;
-        };
-
-        const getSearchProgressPhase = (elapsedSeconds) => {
-            if (elapsedSeconds < FIRST_SOLUTION_THRESHOLD_SECONDS) {
-                return { index: 1, total: SEARCH_PROGRESS_TOTAL_PHASES, label: 'Erste Lösung wird gesucht' };
-            }
-            if (elapsedSeconds < IMPROVEMENT_THRESHOLD_SECONDS) {
-                return { index: 2, total: SEARCH_PROGRESS_TOTAL_PHASES, label: 'Zwischenergebnisse werden verbessert' };
-            }
-            return { index: 3, total: SEARCH_PROGRESS_TOTAL_PHASES, label: 'Beste Lösung wird verfeinert' };
         };
 
         if (_planningElapsedTimer) clearInterval(_planningElapsedTimer);
@@ -780,8 +767,10 @@ export async function executePlanShifts(event) {
                 }
                 if (optimizationPhaseEl) {
                     if (job.optimizationSearchState === 'started') {
-                        const searchPhase = getSearchProgressPhase(localElapsed);
-                        optimizationPhaseEl.textContent = `Berechnungsphase ${searchPhase.index}/${searchPhase.total} – ${searchPhase.label}`;
+                        const phaseIndex = job.optimizationSearchPhaseIndex || 1;
+                        const phaseTotal = job.optimizationSearchPhaseTotal || 3;
+                        const phaseLabel = job.optimizationSearchPhaseLabel ? ` – ${job.optimizationSearchPhaseLabel}` : '';
+                        optimizationPhaseEl.textContent = `Berechnungsphase ${phaseIndex}/${phaseTotal}${phaseLabel}`;
                     } else if (job.optimizationSearchState === 'finished') {
                         optimizationPhaseEl.textContent = 'Berechnungsphase abgeschlossen';
                     } else if (job.optimizationPhaseIndex != null && job.optimizationTotalPhases != null) {

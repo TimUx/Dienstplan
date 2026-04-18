@@ -110,9 +110,18 @@ jobs:
     - name: Create distribution tar.gz
       run: |
         TAR="Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz"
-        if [ ! -d "dist/Dienstplan" ]; then
-          echo "ERROR: dist/Dienstplan directory not found"
+        SOURCE_DIR=""
+        if [ -d "dist/Dienstplan" ]; then
+          SOURCE_DIR="dist/Dienstplan"
+        elif [ -d "dist/Dienstplan_bundle" ]; then
+          SOURCE_DIR="dist/Dienstplan_bundle"
+        else
+          echo "ERROR: Neither dist/Dienstplan nor dist/Dienstplan_bundle directory found"
           exit 1
+        fi
+        if [ "$SOURCE_DIR" != "dist/Dienstplan" ]; then
+          rm -rf dist/Dienstplan
+          cp -a "$SOURCE_DIR" dist/Dienstplan
         fi
         # Write a VERSION file so users can always check which build they have
         echo "${{ steps.version.outputs.VERSION }}" > dist/Dienstplan/VERSION

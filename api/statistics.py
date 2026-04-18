@@ -38,10 +38,11 @@ async def get_dashboard_stats(request: Request):
     
     # Employee work hours
     # IMPORTANT: For statistics calculation:
-    # - AU (sick leave) and U (vacation): Count actual shift hours only (shifts are removed when absence is created)
-    # - L (Lehrgang/training): Count 8h per training day even though shifts are removed
-    
-    # First, calculate shift hours
+    # - AU (sick leave), U (vacation) and L (training) count as worked time
+    # - Absence credit is based on configured weekly shift hours
+    # - Max credit is 6 days per calendar week (never 7 days)
+
+    # First, calculate assigned shift hours
     cursor.execute("""
         SELECT e.Id, e.Vorname, e.Name, e.TeamId,
                COUNT(sa.Id) as ShiftCount,
@@ -61,69 +62,137 @@ async def get_dashboard_stats(request: Request):
             'teamId': row['TeamId'],
             'shiftCount': row['ShiftCount'],
             'shiftHours': float(row['ShiftHours'] or 0),
-            'lehrgangHours': 0.0
+            'absenceHours': 0.0,
+            'weeklyHours': 0.0
         }
-    
-    # Then, calculate Lehrgang hours separately
-    # Note: Type is stored as INTEGER in database: 1=AU, 2=U, 3=L
+
+    # Determine weekly working hours per employee:
+    # 1) shift assignments in range, 2) team shift configuration, 3) global fallback
     cursor.execute("""
-        SELECT a.EmployeeId,
-               SUM(
-                   CASE
-                       WHEN a.StartDate >= ? AND a.EndDate <= ? THEN
-                           julianday(a.EndDate) - julianday(a.StartDate) + 1
-                       WHEN a.StartDate < ? AND a.EndDate <= ? THEN
-                           julianday(a.EndDate) - julianday(?) + 1
-                       WHEN a.StartDate >= ? AND a.EndDate > ? THEN
-                           julianday(?) - julianday(a.StartDate) + 1
-                       WHEN a.StartDate < ? AND a.EndDate > ? THEN
-                           julianday(?) - julianday(?) + 1
-                       ELSE 0
-                   END
-               ) * 8.0 as LehrgangHours
+        SELECT e.Id,
+               MAX(st.WeeklyWorkingHours) as WeeklyHours
+        FROM Employees e
+        LEFT JOIN ShiftAssignments sa ON e.Id = sa.EmployeeId
+            AND sa.Date >= ? AND sa.Date <= ?
+        LEFT JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
+        GROUP BY e.Id
+    """, (start_date.isoformat(), end_date.isoformat()))
+    assigned_weekly_hours = {row['Id']: float(row['WeeklyHours'] or 0) for row in cursor.fetchall()}
+
+    cursor.execute("""
+        SELECT e.Id,
+               MAX(st.WeeklyWorkingHours) as WeeklyHours
+        FROM Employees e
+        LEFT JOIN TeamShiftAssignments tsa ON e.TeamId = tsa.TeamId
+        LEFT JOIN ShiftTypes st ON tsa.ShiftTypeId = st.Id
+        GROUP BY e.Id
+    """)
+    team_weekly_hours = {row['Id']: float(row['WeeklyHours'] or 0) for row in cursor.fetchall()}
+
+    cursor.execute("""
+        SELECT COALESCE(MAX(WeeklyWorkingHours), 48.0) as DefaultWeeklyHours
+        FROM ShiftTypes
+        WHERE IsActive = 1
+    """)
+    weekly_hours_default = float(cursor.fetchone()['DefaultWeeklyHours'] or 48.0)
+
+    for emp_id, emp_data in employee_hours_map.items():
+        weekly_hours = assigned_weekly_hours.get(emp_id, 0.0)
+        if weekly_hours <= 0:
+            weekly_hours = team_weekly_hours.get(emp_id, 0.0)
+        if weekly_hours <= 0:
+            weekly_hours = weekly_hours_default
+        emp_data['weeklyHours'] = weekly_hours
+
+    # Load absences with type code and clip them to the selected period in Python.
+    # This ensures period overlap is counted correctly (instead of full absence range).
+    cursor.execute("""
+        SELECT e.Id, e.Vorname, e.Name, a.Type, a.StartDate, a.EndDate,
+               at.Code as TypeCode
         FROM Absences a
-        WHERE a.Type = 3
-          AND ((a.StartDate <= ? AND a.EndDate >= ?)
-            OR (a.StartDate >= ? AND a.StartDate <= ?))
-        GROUP BY a.EmployeeId
+        JOIN Employees e ON e.Id = a.EmployeeId
+        LEFT JOIN AbsenceTypes at ON a.AbsenceTypeId = at.Id
+        WHERE (a.StartDate <= ? AND a.EndDate >= ?)
+           OR (a.StartDate >= ? AND a.StartDate <= ?)
+        ORDER BY e.Vorname, e.Name, a.StartDate
     """, (
-        start_date.isoformat(), end_date.isoformat(),  # Case 1: absence fully within period
-        start_date.isoformat(), end_date.isoformat(), start_date.isoformat(),  # Case 2: absence starts before period
-        start_date.isoformat(), end_date.isoformat(), end_date.isoformat(),  # Case 3: absence ends after period
-        start_date.isoformat(), end_date.isoformat(), end_date.isoformat(), start_date.isoformat(),  # Case 4: absence spans entire period
-        end_date.isoformat(), start_date.isoformat(),  # Overlap condition
-        start_date.isoformat(), end_date.isoformat()  # Overlap condition
+        end_date.isoformat(), start_date.isoformat(),
+        start_date.isoformat(), end_date.isoformat()
     ))
-    
+
+    type_id_to_code = {1: 'AU', 2: 'U', 3: 'L'}
+    employee_absence_sets = {}
+    employee_absence_credit_sets = {}
+
     for row in cursor.fetchall():
-        emp_id = row['EmployeeId']
-        lehrgang_hours = float(row['LehrgangHours'] or 0)
-        
-        if emp_id not in employee_hours_map:
-            # Employee has Lehrgang but no shifts in this period
-            cursor.execute("""
-                SELECT Id, Vorname, Name, TeamId
-                FROM Employees
-                WHERE Id = ?
-            """, (emp_id,))
-            emp_row = cursor.fetchone()
-            if emp_row:
-                employee_hours_map[emp_id] = {
-                    'id': emp_id,
-                    'name': f"{emp_row['Vorname']} {emp_row['Name']}",
-                    'teamId': emp_row['TeamId'],
-                    'shiftCount': 0,
-                    'shiftHours': 0.0,
-                    'lehrgangHours': lehrgang_hours
-                }
-        else:
-            employee_hours_map[emp_id]['lehrgangHours'] = lehrgang_hours
-    
-    # Build final result list
+        emp_id = row['Id']
+        if emp_id not in employee_absence_sets:
+            employee_absence_sets[emp_id] = {
+                'employeeId': emp_id,
+                'employeeName': f"{row['Vorname']} {row['Name']}",
+                'allDays': set(),
+                'byType': {}
+            }
+            employee_absence_credit_sets[emp_id] = set()
+
+        absence_start = date.fromisoformat(row['StartDate'])
+        absence_end = date.fromisoformat(row['EndDate'])
+        overlap_start = max(absence_start, start_date)
+        overlap_end = min(absence_end, end_date)
+        if overlap_start > overlap_end:
+            continue
+
+        absence_type_code = row['TypeCode'] or type_id_to_code.get(row['Type'], str(row['Type']))
+        if absence_type_code not in employee_absence_sets[emp_id]['byType']:
+            employee_absence_sets[emp_id]['byType'][absence_type_code] = set()
+
+        current_day = overlap_start
+        while current_day <= overlap_end:
+            employee_absence_sets[emp_id]['allDays'].add(current_day)
+            employee_absence_sets[emp_id]['byType'][absence_type_code].add(current_day)
+            if absence_type_code in {'AU', 'U', 'L'}:
+                employee_absence_credit_sets[emp_id].add(current_day)
+            current_day += timedelta(days=1)
+
+    # Convert absence sets for frontend
+    employee_absence_days = []
+    for emp_absence in employee_absence_sets.values():
+        by_type_counts = {
+            code: len(day_set)
+            for code, day_set in emp_absence['byType'].items()
+            if day_set
+        }
+        total_days = len(emp_absence['allDays'])
+        if total_days > 0:
+            employee_absence_days.append({
+                'employeeId': emp_absence['employeeId'],
+                'employeeName': emp_absence['employeeName'],
+                'totalDays': total_days,
+                'byType': by_type_counts
+            })
+
+    employee_absence_days.sort(key=lambda x: x['employeeName'])
+
+    # Add absence hour credit to employee work hours, max. 6 absence days per week.
+    for emp_id, absence_days in employee_absence_credit_sets.items():
+        if not absence_days or emp_id not in employee_hours_map:
+            continue
+
+        weekly_day_count = {}
+        for d in absence_days:
+            week_start = d - timedelta(days=d.weekday())  # Monday-based calendar week
+            weekly_day_count[week_start] = weekly_day_count.get(week_start, 0) + 1
+
+        credited_days = sum(min(days_in_week, 6) for days_in_week in weekly_day_count.values())
+        weekly_hours = employee_hours_map[emp_id]['weeklyHours']
+        daily_hours = weekly_hours / 6.0 if weekly_hours > 0 else 0.0
+        employee_hours_map[emp_id]['absenceHours'] = credited_days * daily_hours
+
+    # Build final work-hours result list
     employee_work_hours = []
     for emp_data in employee_hours_map.values():
-        total_hours = emp_data['shiftHours'] + emp_data['lehrgangHours']
-        if total_hours > 0:  # Only include employees with hours
+        total_hours = emp_data['shiftHours'] + emp_data['absenceHours']
+        if total_hours > 0:
             employee_work_hours.append({
                 'employeeId': emp_data['id'],
                 'employeeName': emp_data['name'],
@@ -131,8 +200,7 @@ async def get_dashboard_stats(request: Request):
                 'shiftCount': emp_data['shiftCount'],
                 'totalHours': total_hours
             })
-    
-    # Sort alphabetically by employee name
+
     employee_work_hours.sort(key=lambda x: x['employeeName'])
     
     # Team shift distribution
@@ -162,47 +230,6 @@ async def get_dashboard_stats(request: Request):
         team_shift_data[team_id]['shiftCounts'][row['Code']] = row['ShiftCount']
     
     team_shift_distribution = list(team_shift_data.values())
-    
-    # Employee absence days - categorized by type
-    cursor.execute("""
-        SELECT e.Id, e.Vorname, e.Name, a.Type,
-               SUM(julianday(a.EndDate) - julianday(a.StartDate) + 1) as TotalDays
-        FROM Employees e
-        JOIN Absences a ON e.Id = a.EmployeeId
-        WHERE (a.StartDate <= ? AND a.EndDate >= ?)
-           OR (a.StartDate >= ? AND a.StartDate <= ?)
-        GROUP BY e.Id, e.Vorname, e.Name, a.Type
-        HAVING TotalDays > 0
-        ORDER BY e.Vorname, e.Name, a.Type
-    """, (end_date.isoformat(), start_date.isoformat(),
-          start_date.isoformat(), end_date.isoformat()))
-    
-    # Build employee absence data with categorization
-    # Map integer type IDs to string codes for frontend display
-    type_id_to_code = {1: 'AU', 2: 'U', 3: 'L'}
-    
-    employee_absence_map = {}
-    for row in cursor.fetchall():
-        emp_id = row['Id']
-        if emp_id not in employee_absence_map:
-            employee_absence_map[emp_id] = {
-                'employeeId': emp_id,
-                'employeeName': f"{row['Vorname']} {row['Name']}",
-                'totalDays': 0,
-                'byType': {}
-            }
-        
-        absence_type_id = row['Type']
-        absence_type_code = type_id_to_code.get(absence_type_id, str(absence_type_id))
-        days = int(row['TotalDays'])
-        employee_absence_map[emp_id]['byType'][absence_type_code] = days
-        employee_absence_map[emp_id]['totalDays'] += days
-    
-    # Sort alphabetically by employee name
-    employee_absence_days = sorted(
-        employee_absence_map.values(),
-        key=lambda x: x['employeeName']
-    )
     
     # Team workload
     cursor.execute("""

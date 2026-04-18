@@ -40,16 +40,17 @@ from constraints import (
 
 
 def _default_num_workers() -> int:
-    """Return a sensible default for the number of CP-SAT search workers.
+    """Return the number of CP-SAT search workers.
 
-    Uses all logical CPU cores reported by the OS, capped at 16 (diminishing
-    returns above that for CP-SAT) and floored at 1.  Falls back to 4 if the
-    OS cannot determine the core count.
+    Uses ALL logical CPU cores reported by the OS so the solver can exploit
+    every available core.  Falls back to 8 if the OS cannot determine the
+    core count.  CP-SAT handles any number of workers gracefully – more cores
+    always means at least as fast a result, often significantly faster.
     """
     cpu_count = os.cpu_count()
     if cpu_count is None or cpu_count < 1:
-        return 4  # safe fallback when os.cpu_count() is unavailable
-    return min(cpu_count, 16)
+        return 8  # safe fallback when os.cpu_count() is unavailable
+    return cpu_count
 
 
 def _emit_progress(
@@ -126,6 +127,10 @@ CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT = 150  # NEW: Penalty for overstaffing low
 MIN_STAFFING_RELAXED_PENALTY_WEIGHT = 200_000
 
 # Expected performance improvements from solver optimizations:
+# - All CPU cores used (num_workers = os.cpu_count()): Every available core is put
+#   to work; CP-SAT scales well across cores and more workers always helps.
+# - PORTFOLIO strategy (default): Runs multiple parallel workers with different
+#   heuristics; typically 10-30% faster than FIXED_SEARCH on large diverse instances.
 # - Warmstart hints (AddHint): 20-40% faster first feasible solution on re-planning.
 #   The solver starts near a known-good solution instead of from scratch.
 # - Solution callbacks: Real-time logging of each improving solution; when the solver
@@ -134,14 +139,12 @@ MIN_STAFFING_RELAXED_PENALTY_WEIGHT = 200_000
 #   visibility into how quickly and how much the objective improved over time.
 #   For fallback stages (relaxation_level > 0) the callback calls StopSearch()
 #   immediately after the first feasible solution – no optimization needed there.
-# - PORTFOLIO strategy (default): Runs multiple parallel workers with different
-#   heuristics; typically 10-30% faster than FIXED_SEARCH on large diverse instances.
 # - FIXED_SEARCH strategy: Deterministic ordering; useful for debugging or comparing
 #   solutions across runs. May be slower on heterogeneous instances.
 # - linearization_level=2: Stronger LP relaxation provides tighter lower bounds,
 #   enabling faster pruning; typically speeds up scheduling problems by 15-40%.
-# - interleave_search=True (PORTFOLIO + ≥4 workers): Distributes wall-clock time
-#   more evenly across sub-solvers so no single worker monopolises the budget.
+# - interleave_search: DISABLED – while it distributes time more evenly, it slows
+#   time-to-first-solution by preventing fast workers from making rapid progress.
 # - symmetry_level=2: Automatic symmetry-breaking reduces equivalent subtrees;
 #   particularly effective for the repeated team/week structure of this model.
 # - random_seed: Fixes the pseudo-random choices inside CP-SAT for reproducible
@@ -230,7 +233,8 @@ class ShiftPlanningSolver:
             planning_model: The shift planning model
             time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
             num_workers: Number of parallel workers for solver. None (default) uses
-                _default_num_workers() which auto-detects available CPU cores (capped at 16).
+                _default_num_workers() which returns all available CPU cores so the
+                solver can exploit every core on the machine.
             global_settings: Dict with global settings from database (optional)
                 - min_rest_hours: Min rest hours between shifts (default 11)
                 Note: Max consecutive shift settings are now per-shift-type (see ShiftType.max_consecutive_days)
@@ -1401,10 +1405,12 @@ class ShiftPlanningSolver:
         AUTOMATIC) is set on the solver before solving starts.
 
         Additional solver tuning applied here:
+          - All CPU cores as workers: num_search_workers = os.cpu_count() so every
+            core is exploited; no artificial cap is applied.
           - linearization_level=2: stronger LP relaxation for tighter bounds and
             faster pruning (typically 15-40% speedup on scheduling problems).
-          - interleave_search=True (PORTFOLIO + ≥4 workers): distributes time
-            evenly across parallel sub-solvers.
+          - interleave_search: disabled – prevents fast workers from making rapid
+            progress; time-to-first-solution is better without it.
           - symmetry_level=2: automatic symmetry-breaking for the repeated
             team/week structure in this model.
           - random_seed: when set, makes the search fully reproducible.
@@ -1450,13 +1456,12 @@ class ShiftPlanningSolver:
                                      solver.parameters.PORTFOLIO_SEARCH)
         solver.parameters.search_branching = branching
 
-        # Interleaved search distributes wall-clock time more evenly across the
-        # parallel sub-solvers in PORTFOLIO mode, preventing one worker from
-        # monopolising the time budget.  Only effective with multiple workers.
-        is_portfolio = (solver.parameters.search_branching
-                        == solver.parameters.PORTFOLIO_SEARCH)
-        if is_portfolio and self.num_workers >= 4:
-            solver.parameters.interleave_search = True
+        # Interleaved search distributes wall-clock time evenly across parallel
+        # sub-solvers in PORTFOLIO mode.  While this improves fairness between
+        # workers, it tends to hurt time-to-first-feasible-solution in production
+        # because it prevents any single fast worker from quickly finding a solution.
+        # It is therefore intentionally disabled so all workers can progress at
+        # their own pace and the fastest one wins.
 
         # Optional reproducibility: fix the pseudo-random seed so that identical
         # inputs always yield identical solver behaviour.
@@ -1471,8 +1476,7 @@ class ShiftPlanningSolver:
         print(f"Search strategy: {self.search_strategy}")
         print(f"Linearization level: 2  (stronger LP relaxation)")
         print(f"Symmetry level: 2  (automatic symmetry-breaking)")
-        if is_portfolio and self.num_workers >= 4:
-            print("Interleaved search: enabled")
+        print("Interleaved search: disabled  (lets fastest worker find solution first)")
         if self.random_seed is not None:
             print(f"Random seed: {self.random_seed}")
         if self.relaxation_level > 0:
@@ -2417,8 +2421,9 @@ def solve_shift_planning(
     Args:
         planning_model: The shift planning model
         time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
-        num_workers: Number of parallel workers. None (default) auto-detects CPU cores via
-            _default_num_workers() (all cores, capped at 16).
+        num_workers: Number of parallel workers. None (default) uses all available
+            CPU cores via _default_num_workers() so every core on the machine
+            contributes to the search.
         global_settings: Dict with global settings from database (optional)
         search_strategy: Search branching strategy. Options:
             - "PORTFOLIO" (default): Parallel workers with different heuristics.

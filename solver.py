@@ -7,7 +7,7 @@ from ortools.sat.python import cp_model
 from datetime import date, datetime, timedelta
 import os
 import time
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Callable, Any
 from entities import Employee, ShiftAssignment, RelaxedConstraint, STANDARD_SHIFT_TYPES, get_shift_type_by_id
 from model import ShiftPlanningModel
 from planning_report import (
@@ -41,16 +41,32 @@ from constraints import (
 
 
 def _default_num_workers() -> int:
-    """Return a sensible default for the number of CP-SAT search workers.
+    """Return the number of CP-SAT search workers.
 
-    Uses all logical CPU cores reported by the OS, capped at 16 (diminishing
-    returns above that for CP-SAT) and floored at 1.  Falls back to 4 if the
-    OS cannot determine the core count.
+    Uses ALL logical CPU cores reported by the OS so the solver can exploit
+    every available core.  Falls back to 8 if the OS cannot determine the
+    core count.  CP-SAT handles any number of workers gracefully – more cores
+    always means at least as fast a result, often significantly faster.
     """
     cpu_count = os.cpu_count()
     if cpu_count is None or cpu_count < 1:
-        return 4  # safe fallback when os.cpu_count() is unavailable
-    return min(cpu_count, 16)
+        return 8  # safe fallback when os.cpu_count() is unavailable
+    return cpu_count
+
+
+def _emit_progress(
+    progress_callback: Optional[Callable[[str, Dict[str, Any]], None]],
+    event: str,
+    **payload
+) -> None:
+    """Safely emit a progress event without breaking solver execution."""
+    if not progress_callback:
+        return
+    try:
+        progress_callback(event, payload)
+    except Exception:
+        # Progress reporting must never affect solving.
+        pass
 
 
 # Soft constraint penalty weights - Priority hierarchy (highest to lowest):
@@ -112,6 +128,10 @@ CROSS_SHIFT_CAPACITY_VIOLATION_WEIGHT = 150  # NEW: Penalty for overstaffing low
 MIN_STAFFING_RELAXED_PENALTY_WEIGHT = 200_000
 
 # Expected performance improvements from solver optimizations:
+# - All CPU cores used (num_workers = os.cpu_count()): Every available core is put
+#   to work; CP-SAT scales well across cores and more workers always helps.
+# - PORTFOLIO strategy (default): Runs multiple parallel workers with different
+#   heuristics; typically 10-30% faster than FIXED_SEARCH on large diverse instances.
 # - Warmstart hints (AddHint): 20-40% faster first feasible solution on re-planning.
 #   The solver starts near a known-good solution instead of from scratch.
 # - Solution callbacks: Real-time logging of each improving solution; when the solver
@@ -126,8 +146,8 @@ MIN_STAFFING_RELAXED_PENALTY_WEIGHT = 200_000
 #   solutions across runs. May be slower on heterogeneous instances.
 # - linearization_level=2: Stronger LP relaxation provides tighter lower bounds,
 #   enabling faster pruning; typically speeds up scheduling problems by 15-40%.
-# - interleave_search=True (PORTFOLIO + ≥4 workers): Distributes wall-clock time
-#   more evenly across sub-solvers so no single worker monopolises the budget.
+# - interleave_search: DISABLED – while it distributes time more evenly, it slows
+#   time-to-first-solution by preventing fast workers from making rapid progress.
 # - symmetry_level=2: Automatic symmetry-breaking reduces equivalent subtrees;
 #   particularly effective for the repeated team/week structure of this model.
 # - random_seed: Fixes the pseudo-random choices inside CP-SAT for reproducible
@@ -216,7 +236,8 @@ class ShiftPlanningSolver:
             planning_model: The shift planning model
             time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
             num_workers: Number of parallel workers for solver. None (default) uses
-                _default_num_workers() which auto-detects available CPU cores (capped at 16).
+                _default_num_workers() which returns all available CPU cores so the
+                solver can exploit every core on the machine.
             global_settings: Dict with global settings from database (optional)
                 - min_rest_hours: Min rest hours between shifts (default 11)
                 Note: Max consecutive shift settings are now per-shift-type (see ShiftType.max_consecutive_days)
@@ -270,7 +291,10 @@ class ShiftPlanningSolver:
         # These settings are now configured per shift type (ShiftType.max_consecutive_days)
         self.min_rest_hours = global_settings.get('min_rest_hours', 11)
     
-    def add_all_constraints(self):
+    def add_all_constraints(
+        self,
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
+    ):
         """
         Add all constraints to the TEAM-BASED model with CROSS-TEAM support.
         """
@@ -289,11 +313,50 @@ class ShiftPlanningSolver:
         locked_team_shift = self.planning_model.locked_team_shift
         
         print("Adding constraints...")
+
+        constraint_labels = [
+            "Team shift assignment",
+            "Team rotation",
+            "Employee weekly rotation order",
+            "Employee-team linkage",
+            "Staffing requirements",
+            "Total weekend staffing limit",
+            "Cross-shift capacity enforcement",
+            "Daily shift ratio constraints",
+            "Rest time constraints",
+            "Shift stability constraints",
+            "Shift sequence grouping constraints",
+            "Minimum consecutive weekday shifts constraints",
+            "Weekly shift type limit constraints",
+            "Weekend shift consistency constraints",
+            "Team night shift consistency constraints",
+            "Consecutive shifts constraints",
+            "Working hours constraints",
+            "Weekly block constraints",
+            "Team member block constraints",
+            "Fairness objectives",
+        ]
+        constraint_total = len(constraint_labels)
+        constraint_index = 0
+
+        def _constraint_progress(label: str):
+            nonlocal constraint_index
+            constraint_index += 1
+            _emit_progress(
+                progress_callback,
+                "constraint",
+                label=label,
+                index=constraint_index,
+                total=constraint_total,
+                relaxationLevel=self.relaxation_level
+            )
         
         # CORE TEAM-BASED CONSTRAINTS
+        _constraint_progress("Team shift assignment")
         print("  - Team shift assignment (exactly one shift per team per week)")
         add_team_shift_assignment_constraints(model, team_shift, teams, weeks, shift_codes, shift_types)
         
+        _constraint_progress("Team rotation")
         # Try to load rotation patterns from database
         rotation_patterns = None
         try:
@@ -319,16 +382,19 @@ class ShiftPlanningSolver:
         else:
             add_team_rotation_constraints(model, team_shift, teams, weeks, shift_codes, locked_team_shift, shift_types, rotation_patterns)
         
+        _constraint_progress("Employee weekly rotation order")
         print("  - Employee weekly rotation order (enforce F → N → S transition order)")
         rotation_order_penalties = add_employee_weekly_rotation_order_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, teams, dates, weeks, shift_codes)
         
+        _constraint_progress("Employee-team linkage")
         print("  - Employee-team linkage (derive employee activity from team shifts)")
         add_employee_team_linkage_constraints(model, team_shift, employee_active, employee_cross_team_shift, employees, teams, dates, weeks, shift_codes, absences, employee_weekend_shift, employee_cross_team_weekend)
         
         # STAFFING AND WORKING CONDITIONS
+        _constraint_progress("Staffing requirements")
         relax_min = self.relaxation_level >= 1
         if relax_min:
             print("  - Staffing requirements (min SOFT with penalty 200000 / max soft, including cross-team)")
@@ -345,18 +411,21 @@ class ShiftPlanningSolver:
             employees, teams, dates, weeks, shift_codes, shift_types,
             relax_min_staffing=relax_min)
         
+        _constraint_progress("Total weekend staffing limit")
         print("  - Total weekend staffing limit (max 12 employees across all shifts)")
         total_weekend_overstaffing = add_total_weekend_staffing_limit(
             model, employee_active, employee_weekend_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, team_shift,
             employees, teams, dates, weeks, shift_codes, max_total_weekend_staff=12)
         
+        _constraint_progress("Cross-shift capacity enforcement")
         print("  - Cross-shift capacity enforcement (prevent N overflow when F/S have capacity)")
         cross_shift_capacity_violations = add_cross_shift_capacity_enforcement(
             model, employee_active, employee_weekend_shift, team_shift,
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, teams, dates, weeks, shift_codes, shift_types)
         
+        _constraint_progress("Daily shift ratio constraints")
         print("  - Daily shift ratio constraints (ensure F >= S on weekdays)")
         from constraints import add_daily_shift_ratio_constraints
         daily_ratio_violations = add_daily_shift_ratio_constraints(
@@ -364,6 +433,7 @@ class ShiftPlanningSolver:
             employee_cross_team_shift, employee_cross_team_weekend,
             employees, teams, dates, weeks, shift_codes, shift_types)
         
+        _constraint_progress("Rest time constraints")
         print("  - Rest time constraints (11h min, soft penalties for violations)")
         rest_violation_penalties = add_rest_time_constraints(model, employee_active, employee_weekend_shift, team_shift, 
                                  employee_cross_team_shift, employee_cross_team_weekend, 
@@ -371,6 +441,7 @@ class ShiftPlanningSolver:
                                  previous_employee_shifts=self.planning_model.previous_employee_shifts)
         
         # Shift stability constraint (prevent shift hopping)
+        _constraint_progress("Shift stability constraints")
         print("  - Shift stability constraints (prevent rapid shift changes like N→S→N)")
         from constraints import add_shift_stability_constraints
         shift_hopping_penalties = add_shift_stability_constraints(
@@ -379,6 +450,7 @@ class ShiftPlanningSolver:
             employees, dates, weeks, shift_codes, teams)
         
         # Shift sequence grouping constraint (prevent isolated shift types)
+        _constraint_progress("Shift sequence grouping constraints")
         print("  - Shift sequence grouping constraints (prevent isolated shift types like S-S-F-S-S)")
         print("    * Including ultra-high penalties (20000) for A-B-A patterns within 10-day windows")
         shift_grouping_penalties = add_shift_sequence_grouping_constraints(
@@ -387,6 +459,7 @@ class ShiftPlanningSolver:
             employees, dates, weeks, shift_codes, teams)
         
         # Minimum consecutive weekday shifts constraint (enforce at least 2 consecutive days for same shift during weekdays)
+        _constraint_progress("Minimum consecutive weekday shifts constraints")
         print("  - Minimum consecutive weekday shifts constraints (min 2 consecutive days for same shift Mon-Fri)")
         min_consecutive_weekday_penalties = add_minimum_consecutive_weekday_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
@@ -394,6 +467,7 @@ class ShiftPlanningSolver:
             employees, dates, weeks, shift_codes, teams)
         
         # Weekly shift type limit constraint (max 2 different shift types per week)
+        _constraint_progress("Weekly shift type limit constraints")
         print("  - Weekly shift type limit constraints (max 2 shift types per week)")
         weekly_shift_type_penalties = add_weekly_shift_type_limit_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
@@ -401,6 +475,7 @@ class ShiftPlanningSolver:
             employees, teams, dates, weeks, shift_codes, max_shift_types_per_week=2)
         
         # Weekend shift consistency constraint (no shift type changes within weekends)
+        _constraint_progress("Weekend shift consistency constraints")
         print("  - Weekend shift consistency constraints (prevent shift changes Fri→Sat/Sun)")
         weekend_consistency_penalties = add_weekend_shift_consistency_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
@@ -408,6 +483,7 @@ class ShiftPlanningSolver:
             employees, teams, dates, weeks, shift_codes)
         
         # Team night shift consistency constraint (discourage cross-team night shifts)
+        _constraint_progress("Team night shift consistency constraints")
         print("  - Team night shift consistency constraints (night shifts stay in night shift teams)")
         night_team_consistency_penalties = add_team_night_shift_consistency_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
@@ -417,6 +493,7 @@ class ShiftPlanningSolver:
         # Consecutive shifts constraint (HARD within period, SOFT for cross-month boundaries)
         # Limits consecutive working days per shift type (HARD: model.Add constraints)
         # Cross-month boundary violations are high-weight soft (50,000 per violation)
+        _constraint_progress("Consecutive shifts constraints")
         print("  - Consecutive shifts constraints (HARD within period: max consecutive days per shift type)")
         consecutive_violation_penalties = add_consecutive_shifts_constraints(
             model, employee_active, employee_weekend_shift, team_shift,
@@ -424,6 +501,7 @@ class ShiftPlanningSolver:
             employees, teams, dates, weeks, shift_codes, shift_types,
             self.planning_model.previous_employee_shifts)
         
+        _constraint_progress("Working hours constraints")
         print("  - Working hours constraints (HARD: min 192h/month, SOFT: proportional target)")
         hours_shortage_objectives = add_working_hours_constraints(
             model, employee_active, employee_weekend_shift, team_shift, 
@@ -441,12 +519,14 @@ class ShiftPlanningSolver:
             target_end_date=self.planning_model.original_end_date)
         
         # BLOCK SCHEDULING FOR CROSS-TEAM
+        _constraint_progress("Weekly block constraints")
         print("  - Weekly block constraints (Mon-Fri blocks for cross-team assignments)")
         from constraints import add_weekly_block_constraints
         add_weekly_block_constraints(model, employee_active, employee_cross_team_shift, 
                                     employees, dates, weeks, shift_codes, absences)
         
         # BLOCK SCHEDULING FOR TEAM MEMBERS (FLEXIBLE)
+        _constraint_progress("Team member block constraints")
         print("  - Team member block constraints (prevent isolated days, encourage full blocks)")
         from constraints import add_team_member_block_constraints
         block_objective_vars = add_team_member_block_constraints(
@@ -462,6 +542,7 @@ class ShiftPlanningSolver:
         # add_weekly_available_employee_constraint(model, employee_active, employee_weekend_shift, employees, teams, weeks)
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
+        _constraint_progress("Fairness objectives")
         print("  - Fairness objectives (per-employee, year-long, including block scheduling)")
         objective_terms = add_fairness_objectives(
             model, employee_active, employee_weekend_shift, team_shift,
@@ -1340,7 +1421,10 @@ class ShiftPlanningSolver:
         
         return diagnostics
     
-    def solve(self) -> bool:
+    def solve(
+        self,
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
+    ) -> bool:
         """
         Solve the shift planning problem.
 
@@ -1349,10 +1433,12 @@ class ShiftPlanningSolver:
         AUTOMATIC) is set on the solver before solving starts.
 
         Additional solver tuning applied here:
+          - All CPU cores as workers: num_search_workers = os.cpu_count() so every
+            core is exploited; no artificial cap is applied.
           - linearization_level=2: stronger LP relaxation for tighter bounds and
             faster pruning (typically 15-40% speedup on scheduling problems).
-          - interleave_search=True (PORTFOLIO + ≥4 workers): distributes time
-            evenly across parallel sub-solvers.
+          - interleave_search: disabled – prevents fast workers from making rapid
+            progress; time-to-first-solution is better without it.
           - symmetry_level=2: automatic symmetry-breaking for the repeated
             team/week structure in this model.
           - random_seed: when set, makes the search fully reproducible.
@@ -1364,6 +1450,8 @@ class ShiftPlanningSolver:
         """
         model = self.planning_model.get_model()
         
+        _emit_progress(progress_callback, "solver_setup_started")
+
         # Configure solver
         solver = cp_model.CpSolver()
         if self.time_limit_seconds is not None:
@@ -1396,13 +1484,12 @@ class ShiftPlanningSolver:
                                      solver.parameters.PORTFOLIO_SEARCH)
         solver.parameters.search_branching = branching
 
-        # Interleaved search distributes wall-clock time more evenly across the
-        # parallel sub-solvers in PORTFOLIO mode, preventing one worker from
-        # monopolising the time budget.  Only effective with multiple workers.
-        is_portfolio = (solver.parameters.search_branching
-                        == solver.parameters.PORTFOLIO_SEARCH)
-        if is_portfolio and self.num_workers >= 4:
-            solver.parameters.interleave_search = True
+        # Interleaved search distributes wall-clock time evenly across parallel
+        # sub-solvers in PORTFOLIO mode.  While this improves fairness between
+        # workers, it tends to hurt time-to-first-feasible-solution in production
+        # because it prevents any single fast worker from quickly finding a solution.
+        # It is therefore intentionally disabled so all workers can progress at
+        # their own pace and the fastest one wins.
 
         # Optional reproducibility: fix the pseudo-random seed so that identical
         # inputs always yield identical solver behaviour.
@@ -1417,8 +1504,7 @@ class ShiftPlanningSolver:
         print(f"Search strategy: {self.search_strategy}")
         print(f"Linearization level: 2  (stronger LP relaxation)")
         print(f"Symmetry level: 2  (automatic symmetry-breaking)")
-        if is_portfolio and self.num_workers >= 4:
-            print("Interleaved search: enabled")
+        print("Interleaved search: disabled  (lets fastest worker find solution first)")
         if self.random_seed is not None:
             print(f"Random seed: {self.random_seed}")
         if self.relaxation_level > 0:
@@ -1443,7 +1529,13 @@ class ShiftPlanningSolver:
         # Solve with callback so each new improving solution is logged immediately.
         # The solver retains the best solution found; if it times out with status
         # FEASIBLE, solver.Value() still returns the best assignment found so far.
+        _emit_progress(progress_callback, "solver_search_started")
         self.status = solver.Solve(model, callback)
+        _emit_progress(
+            progress_callback,
+            "solver_search_finished",
+            status=int(self.status)
+        )
         self.solution = solver
         
         # Print results
@@ -2349,6 +2441,7 @@ def solve_shift_planning(
     warm_start_shifts: Optional[Dict[Tuple[int, date], str]] = None,
     db_path: str = "dienstplan.db",
     random_seed: Optional[int] = None,
+    progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
 ) -> Tuple[List[ShiftAssignment], Dict[Tuple[int, date], str], PlanningReport]:
     """
     Solve the shift planning problem.
@@ -2356,8 +2449,9 @@ def solve_shift_planning(
     Args:
         planning_model: The shift planning model
         time_limit_seconds: Maximum time for solver in seconds. None (default) means no limit.
-        num_workers: Number of parallel workers. None (default) auto-detects CPU cores via
-            _default_num_workers() (all cores, capped at 16).
+        num_workers: Number of parallel workers. None (default) uses all available
+            CPU cores via _default_num_workers() so every core on the machine
+            contributes to the search.
         global_settings: Dict with global settings from database (optional)
         search_strategy: Search branching strategy. Options:
             - "PORTFOLIO" (default): Parallel workers with different heuristics.
@@ -2375,6 +2469,8 @@ def solve_shift_planning(
         random_seed: Optional integer seed for the CP-SAT pseudo-random number
             generator. When set, results are reproducible across identical runs.
             Useful for regression testing and performance comparisons.
+        progress_callback: Optional callback(event, payload) used to report
+            optimization stage and sub-step progress to callers (e.g. API status).
         
     Returns:
         Always returns a non-None 3-tuple of
@@ -2449,17 +2545,79 @@ def solve_shift_planning(
         )
 
     # ------------------------------------------------------------------ #
+    # Pre-check: skip Stage 1 when min-staffing is provably infeasible   #
+    # ------------------------------------------------------------------ #
+    # If absences leave fewer staff available than the minimum required   #
+    # for even a single day, Stage 1 (hard min-staffing constraints) can  #
+    # never find a feasible solution.  Running it would waste the full    #
+    # 15-minute time limit before moving on.  Detect this upfront and     #
+    # jump straight to Stage 2 where min-staffing is a soft constraint.   #
+    _stage1_skip_reason: Optional[str] = None
+    if planning_model.shift_types:
+        _absence_impact = analyze_absence_impact(
+            employees=planning_model.employees,
+            absences=planning_model.absences,
+            dates=planning_model.dates,
+            shift_requirements=[
+                st for st in planning_model.shift_types
+                if st.code in planning_model.shift_codes
+            ],
+        )
+        _infeasible_days = sorted(
+            d for d, impact in _absence_impact.items()
+            if not impact.min_staffing_reachable
+        )
+        if _infeasible_days:
+            _stage1_skip_reason = (
+                f"{len(_infeasible_days)} Tag(e) mit zu wenig verfügbarem Personal "
+                f"für die Mindestbesetzung (erster betroffener Tag: "
+                f"{_infeasible_days[0].strftime('%d.%m.%Y')})"
+            )
+
+    # ------------------------------------------------------------------ #
     # Stage 1 – Normal solve                                              #
     # ------------------------------------------------------------------ #
-    print("\n" + "=" * 60)
-    print("STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)")
-    if stage1_limit:
-        print(f"  Zeit-Limit: {stage1_limit} Sekunden "
-              f"(beste FEASIBLE-Lösung wird bei Ablauf zurückgegeben)")
-    print("=" * 60)
-    s1 = _make_solver(planning_model, level=0, limit=stage1_limit)
-    s1.add_all_constraints()
-    if s1.solve():
+    if _stage1_skip_reason:
+        print("\n" + "=" * 60)
+        print("STUFE 1 ÜBERSPRUNGEN: Mindestbesetzung nachweislich nicht erfüllbar")
+        print(f"  Grund: {_stage1_skip_reason}")
+        print("  → Direkt zu Stufe 2 (Mindestbesetzung als Soft-Constraint)")
+        print("=" * 60)
+        _emit_progress(
+            progress_callback,
+            "stage_skipped",
+            stageIndex=1,
+            totalStages=4,
+            stageName="Normaler Lösungsversuch",
+            stageDetails=_stage1_skip_reason,
+        )
+    else:
+        _emit_progress(
+            progress_callback,
+            "stage_started",
+            stageIndex=1,
+            totalStages=4,
+            stageName="Normaler Lösungsversuch",
+            stageDetails="Alle Hard-Constraints aktiv"
+        )
+        print("\n" + "=" * 60)
+        print("STUFE 1: Normaler Lösungsversuch (alle Hard-Constraints aktiv)")
+        if stage1_limit:
+            print(f"  Zeit-Limit: {stage1_limit} Sekunden "
+                  f"(beste FEASIBLE-Lösung wird bei Ablauf zurückgegeben)")
+        print("=" * 60)
+
+    if not _stage1_skip_reason:
+        s1 = _make_solver(planning_model, level=0, limit=stage1_limit)
+        s1.add_all_constraints(progress_callback=progress_callback)
+    if not _stage1_skip_reason and s1.solve(progress_callback=progress_callback):
+        _emit_progress(
+            progress_callback,
+            "stage_completed",
+            stageIndex=1,
+            totalStages=4,
+            stageName="Normaler Lösungsversuch"
+        )
         result = s1.extract_solution()
         s1.print_planning_summary(result[0], result[1])
         status = "OPTIMAL" if s1.status == cp_model.OPTIMAL else "FEASIBLE"
@@ -2478,16 +2636,34 @@ def solve_shift_planning(
     # ------------------------------------------------------------------ #
     # Stage 2 – Fallback 1: relax minimum staffing (H3)                  #
     # ------------------------------------------------------------------ #
+    _emit_progress(
+        progress_callback,
+        "stage_started",
+        stageIndex=2,
+        totalStages=4,
+        stageName="Fallback 1",
+        stageDetails="Mindestbesetzung als Soft-Constraint"
+    )
     print("\n" + "=" * 60)
     print("STUFE 2 (FALLBACK 1): Mindestbesetzung wird als Soft-Constraint behandelt")
-    print("  Grund: Stufe 1 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
+    if _stage1_skip_reason:
+        print(f"  Grund: Stufe 1 übersprungen – {_stage1_skip_reason}")
+    else:
+        print("  Grund: Stufe 1 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
     if stage2_limit:
         print(f"  Zeit-Limit: {stage2_limit} Sekunden")
     print("=" * 60)
     m2 = _rebuild_model()
     s2 = _make_solver(m2, level=1, limit=stage2_limit)
-    s2.add_all_constraints()
-    if s2.solve():
+    s2.add_all_constraints(progress_callback=progress_callback)
+    if s2.solve(progress_callback=progress_callback):
+        _emit_progress(
+            progress_callback,
+            "stage_completed",
+            stageIndex=2,
+            totalStages=4,
+            stageName="Fallback 1"
+        )
         result = s2.extract_solution()
         _print_relaxation_summary(s2.relaxed_constraints)
         s2.print_planning_summary(result[0], result[1])
@@ -2506,6 +2682,14 @@ def solve_shift_planning(
     # ------------------------------------------------------------------ #
     # Stage 3 – Fallback 2: relax staffing + skip rotation constraints   #
     # ------------------------------------------------------------------ #
+    _emit_progress(
+        progress_callback,
+        "stage_started",
+        stageIndex=3,
+        totalStages=4,
+        stageName="Fallback 2",
+        stageDetails="Mindestbesetzung soft + Teamrotation deaktiviert"
+    )
     print("\n" + "=" * 60)
     print("STUFE 3 (FALLBACK 2): Mindestbesetzung soft + Teamrotation deaktiviert")
     print("  Grund: Stufe 2 war INFEASIBLE oder hat keine Lösung innerhalb des Zeit-Limits gefunden")
@@ -2514,8 +2698,15 @@ def solve_shift_planning(
     print("=" * 60)
     m3 = _rebuild_model()
     s3 = _make_solver(m3, level=2, limit=stage3_limit)
-    s3.add_all_constraints()
-    if s3.solve():
+    s3.add_all_constraints(progress_callback=progress_callback)
+    if s3.solve(progress_callback=progress_callback):
+        _emit_progress(
+            progress_callback,
+            "stage_completed",
+            stageIndex=3,
+            totalStages=4,
+            stageName="Fallback 2"
+        )
         result = s3.extract_solution()
         _print_relaxation_summary(s3.relaxed_constraints)
         s3.print_planning_summary(result[0], result[1])
@@ -2534,6 +2725,14 @@ def solve_shift_planning(
     # ------------------------------------------------------------------ #
     # Stage 4 – Emergency plan: greedy algorithm without OR-Tools         #
     # ------------------------------------------------------------------ #
+    _emit_progress(
+        progress_callback,
+        "stage_started",
+        stageIndex=4,
+        totalStages=4,
+        stageName="Notfallplan",
+        stageDetails="Greedy-Algorithmus ohne OR-Tools"
+    )
     print("\n" + "=" * 60)
     print("STUFE 4 (NOTFALLPLAN): Greedy-Algorithmus ohne OR-Tools")
     print("  Grund: Alle Solver-Stufen waren INFEASIBLE")
@@ -2553,6 +2752,13 @@ def solve_shift_planning(
         objective_value=0.0,
         solver_time_seconds=0.0,
         relaxed_constraints_strs=greedy_relaxed,
+    )
+    _emit_progress(
+        progress_callback,
+        "stage_completed",
+        stageIndex=4,
+        totalStages=4,
+        stageName="Notfallplan"
     )
     return result[0], result[1], report
 

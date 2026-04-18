@@ -344,11 +344,11 @@ class TestValidateShiftPlan:
         )
         # No duplicate / absence / rest-time violations for a single day
         dup_violations = [v for v in result.violations
-                          if "multiple shifts" in v.message.lower()]
+                          if "mehrfachzuweisung" in v.message.lower() or "mehrere schichten" in v.message.lower()]
         absence_violations = [v for v in result.violations
-                               if "absent" in v.message.lower()]
+                               if "abwesend" in v.message.lower()]
         rest_violations = [v for v in result.violations
-                           if "forbidden" in v.message.lower()]
+                           if "unzulässiger schichtwechsel" in v.message.lower()]
         assert len(dup_violations) == 0
         assert len(absence_violations) == 0
         assert len(rest_violations) == 0

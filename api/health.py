@@ -1,9 +1,33 @@
 """Health check router."""
 import sys
+import subprocess
+from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
+
+
+def _get_last_merge_or_commit_iso() -> str:
+    repo_root = Path(__file__).resolve().parent.parent
+    commands = [
+        ['git', '-C', str(repo_root), 'log', '--merges', '-1', '--format=%cI'],
+        ['git', '-C', str(repo_root), 'log', '-1', '--format=%cI'],
+    ]
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            value = result.stdout.strip()
+            if result.returncode == 0 and value:
+                return value
+        except Exception:
+            continue
+    return 'unknown'
 
 @router.get('/api/health')
 def health_check():
@@ -39,4 +63,5 @@ def health_check():
         'version': app_version,
         'python': python_version,
         'ortools': ortools_version,
+        'last_updated': _get_last_merge_or_commit_iso(),
     }, status_code=http_status)

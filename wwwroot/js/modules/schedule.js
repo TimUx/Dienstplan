@@ -724,6 +724,16 @@ export async function executePlanShifts(event) {
                 : `${secs} Sek. vergangen`;
         };
 
+        const getSearchProgressPhase = (elapsedSeconds) => {
+            if (elapsedSeconds < 20) {
+                return { index: 1, total: 3, label: 'Erste Lösung wird gesucht' };
+            }
+            if (elapsedSeconds < 60) {
+                return { index: 2, total: 3, label: 'Zwischenergebnisse werden verbessert' };
+            }
+            return { index: 3, total: 3, label: 'Beste Lösung wird verfeinert' };
+        };
+
         if (_planningElapsedTimer) clearInterval(_planningElapsedTimer);
         _planningElapsedTimer = setInterval(() => {
             localElapsed += 1;
@@ -766,12 +776,14 @@ export async function executePlanShifts(event) {
                     elapsedEl.textContent = formatElapsed(localElapsed);
                 }
                 if (optimizationPhaseEl) {
-                    if (job.optimizationPhaseIndex != null && job.optimizationTotalPhases != null) {
+                    if (job.optimizationSearchState === 'started') {
+                        const searchPhase = getSearchProgressPhase(elapsed);
+                        optimizationPhaseEl.textContent = `Berechnungsphase ${searchPhase.index}/${searchPhase.total} – ${searchPhase.label}`;
+                    } else if (job.optimizationSearchState === 'finished') {
+                        optimizationPhaseEl.textContent = 'Berechnungsphase abgeschlossen';
+                    } else if (job.optimizationPhaseIndex != null && job.optimizationTotalPhases != null) {
                         const phaseName = job.optimizationPhaseLabel ? ` – ${job.optimizationPhaseLabel}` : '';
-                        optimizationPhaseEl.textContent = `Phase ${job.optimizationPhaseIndex}/${job.optimizationTotalPhases}${phaseName}`;
-                    } else if (job.optimizationConstraintIndex != null && job.optimizationConstraintTotal != null) {
-                        const constraintLabel = job.optimizationConstraintLabel ? ` – ${job.optimizationConstraintLabel}` : '';
-                        optimizationPhaseEl.textContent = `Unterphase ${job.optimizationConstraintIndex}/${job.optimizationConstraintTotal}${constraintLabel}`;
+                        optimizationPhaseEl.textContent = `Optimierungsphase ${job.optimizationPhaseIndex}/${job.optimizationTotalPhases}${phaseName}`;
                     } else {
                         optimizationPhaseEl.textContent = '';
                     }

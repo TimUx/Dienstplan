@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "exportedAt": "2026-04-17T19:15:11.938651Z",
+  "exportedAt": "2026-04-18T09:37:59.691396Z",
   "shiftTypes": [
     {
       "id": 1,
@@ -9,7 +9,7 @@
       "startTime": "06:00",
       "endTime": "14:00",
       "durationHours": 8.0,
-      "colorCode": "#4caf50",
+      "colorCode": "#429e45",
       "weeklyWorkingHours": 48.0,
       "minStaffWeekday": 4,
       "maxStaffWeekday": 8,
@@ -31,7 +31,7 @@
       "startTime": "14:00",
       "endTime": "22:00",
       "durationHours": 8.0,
-      "colorCode": "#ff9800",
+      "colorCode": "#d8db00",
       "weeklyWorkingHours": 48.0,
       "minStaffWeekday": 3,
       "maxStaffWeekday": 8,
@@ -53,7 +53,7 @@
       "startTime": "22:00",
       "endTime": "06:00",
       "durationHours": 8.0,
-      "colorCode": "#2196f3",
+      "colorCode": "#9e9e9e",
       "weeklyWorkingHours": 48.0,
       "minStaffWeekday": 3,
       "maxStaffWeekday": 8,

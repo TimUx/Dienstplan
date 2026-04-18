@@ -1,0 +1,195 @@
+PLANUNGSBERICHT
+Zeitraum: 01.02.2026 – 28.02.2026 (28 Tage)
+
+============================================================
+1. PLANUNGSSTATUS
+============================================================
+Status:           Machbar (nicht bewiesen optimal)
+Solver-Laufzeit:  900.1 Sekunden
+Zielfunktionswert: 14934967
+
+--- Aufschlüsselung der Zielfunktion (Soft-Constraints) ---
+  Stunden-Ziel-Unterschreitung                 :   14390000
+  Aufeinanderfolgende Schichten (Monatsgrenze) :     350000
+  Ruhezeiten-Verletzung                        :     150000
+  Späte Wochenendarbeit (zeitgewichtet)        :      30026
+  Rotationsreihenfolge (F→N→S)                 :      10000
+  Tagesschicht-Verhältnis (Kapazitätsreihenfolge):       4000
+  Werktag-Unterbesetzung Nacht (N)             :       1807
+  Werktag-Unterbesetzung Früh (F)              :       1572
+  Werktag-Unterbesetzung Spät (S)              :       1388
+  Team-Priorität (Cross-Team)                  :         50
+  Gesamt (aktive Strafen)                      :   14938843
+
+============================================================
+2. MITARBEITERÜBERSICHT
+============================================================
+Mitarbeiter gesamt:     15
+Verfügbare Mitarbeiter: 15
+Abwesenheiten:          2
+
+--- Abwesenheiten im Detail ---
+  • Daniel Koch: AU, 23.02.2026 – 01.03.2026
+  • Robert Franke: U, 09.02.2026 – 16.02.2026 (Genehmigter Urlaub)
+
+============================================================
+3. SCHICHTZUWEISUNGEN
+============================================================
+Schichten gesamt: 330
+
+--- Zuweisungen pro Schichttyp ---
+  F     : 108 Schichten
+  N     : 101 Schichten
+  S     : 121 Schichten
+
+✓ Alle Schichten wurden besetzt.
+
+============================================================
+4. REGELVERSTÖSSE
+============================================================
+Harte Verstöße:   1
+Weiche Verstöße:  41
+
+--- Harte Regelverstöße (1) ---
+  [HART] VALIDATION_HARD: Robert Franke has forbidden transition Nacht->Spät on 2026-02-21->2026-02-22 (only 8h rest)
+    Ursache:    Ursache: Verbotene Schichtfolge Nacht→Spät am 21.02.→22.02. durch Rotationszwänge (nur 8h Ruhezeit)
+    Auswirkung: Robert Franke has forbidden transition Nacht->Spät on 2026-02-21->2026-02-22 (only 8h rest)
+
+--- Weiche Regelverstöße (41) ---
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-02 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 02.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-02 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-02 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 02.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-02 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-03 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 03.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-03 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-03 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 03.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-03 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-04 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 04.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-04 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-04 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 04.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-04 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-05 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 05.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-05 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-05 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 05.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-05 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-06 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 06.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-06 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-06 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 06.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-06 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-09 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 09.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BMT count on 2026-02-09 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-09 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 09.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BSB count on 2026-02-09 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-10 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 10.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BMT count on 2026-02-10 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-10 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 10.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BSB count on 2026-02-10 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-11 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 11.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BMT count on 2026-02-11 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-11 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 11.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BSB count on 2026-02-11 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-12 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 12.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BMT count on 2026-02-12 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-12 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 12.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BSB count on 2026-02-12 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-13 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 13.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BMT count on 2026-02-13 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-13 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 13.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BSB count on 2026-02-13 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-16 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 16.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BMT count on 2026-02-16 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-16 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 16.02. – 1 von 15 Mitarbeitern abwesend (R. Franke (U))
+    Auswirkung: BSB count on 2026-02-16 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-17 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 17.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-17 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-17 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 17.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-17 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-18 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 18.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-18 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-18 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 18.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-18 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-20 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 20.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-20 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-20 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 20.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-20 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-23 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 23.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BMT count on 2026-02-23 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-23 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 23.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BSB count on 2026-02-23 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-24 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 24.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BMT count on 2026-02-24 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-24 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 24.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BSB count on 2026-02-24 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-25 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 25.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BMT count on 2026-02-25 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-25 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 25.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BSB count on 2026-02-25 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-26 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 26.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BMT count on 2026-02-26 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-26 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 26.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BSB count on 2026-02-26 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-27 is 0 (expected 1)
+    Ursache:    Ursache: BMT-Dienst am 27.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BMT count on 2026-02-27 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-27 is 0 (expected 1)
+    Ursache:    Ursache: BSB-Dienst am 27.02. – 1 von 15 Mitarbeitern abwesend (D. Koch (AU))
+    Auswirkung: BSB count on 2026-02-27 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BMT count on 2026-02-19 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BMT-Dienst am 19.02. – keine Abwesenheiten erfasst
+    Auswirkung: BMT count on 2026-02-19 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: BSB count on 2026-02-19 is 0 (expected 1)
+    Ursache:    Ursache: Personalunterbesetzung BSB-Dienst am 19.02. – keine Abwesenheiten erfasst
+    Auswirkung: BSB count on 2026-02-19 is 0 (expected 1)
+  [SOFT (NIEDRIG)] VALIDATION_SOFT: Robert Franke works weekend in week 1 but no weekdays
+    Ursache:    Ursache: Robert Franke arbeitet am Wochenende in Woche 1, hat aber keine Wochentags-Schichten – Rotationsfehler
+    Auswirkung: Robert Franke works weekend in week 1 but no weekdays
+
+============================================================
+5. RELAXIERTE CONSTRAINTS
+============================================================
+✓ Alle Planungsregeln wurden vollständig eingehalten.
+
+============================================================
+6. ABWESENHEITSRISIKOTAGE
+============================================================
+✓ Keine Risikotage – ausreichend Puffer an allen Planungstagen.
+
+============================================================
+ENDE DES PLANUNGSBERICHTS
+============================================================

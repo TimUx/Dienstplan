@@ -59,7 +59,7 @@ export function displayStatistics(stats) {
     stats.employeeAbsenceDays.forEach(e => {
         const typeNames = {
             'AU': 'Krank/AU',
-            'U': 'Urlaub',
+            'U': 'Urlaubstage',
             'L': 'Lehrgang'
         };
 

@@ -25,7 +25,7 @@ def _get_last_merge_or_commit_iso() -> str:
             value = result.stdout.strip()
             if result.returncode == 0 and value:
                 return value
-        except Exception:
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
             continue
     return 'unknown'
 

@@ -83,7 +83,7 @@ class TestHealthMetadataHelper:
         from api import health
 
         def fake_run(*args, **kwargs):
-            raise RuntimeError('git unavailable')
+            raise FileNotFoundError('git unavailable')
 
         monkeypatch.setattr(health.subprocess, 'run', fake_run)
 

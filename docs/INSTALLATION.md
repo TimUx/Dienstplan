@@ -14,11 +14,11 @@ Diese Anleitung beschreibt alle verfügbaren Installationsarten für das Dienstp
 | [1-Klick-Installation (Executable)](#2-1-klick-installation-standalone-executable) | Keine | Endbenutzer, Einzelplatz |
 | [Docker Compose](#3-docker-compose-container) | Docker | Server, Mehrbenutzer-Betrieb |
 
-**Standard-Zugangsdaten nach der Installation:**
-- **E-Mail:** `admin@fritzwinter.de`
-- **Passwort:** `Admin123!`
+**Administrator-Zugang nach der Installation:**
+- **E-Mail:** `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Standard: `admin@fritzwinter.de`)
+- **Passwort:** `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` setzen oder das bei `python main.py init-db` ausgegebene **einmalige Initialpasswort** verwenden
 
-> ⚠️ **WICHTIG:** Ändern Sie das Standard-Passwort nach der ersten Anmeldung!
+> ⚠️ **WICHTIG:** Ändern Sie das Initialpasswort nach der ersten Anmeldung!
 
 ---
 
@@ -528,9 +528,9 @@ Unabhängig von der gewählten Installationsmethode:
 
 1. Öffnen Sie **http://localhost:5000** im Browser
 2. Klicken Sie auf **Anmelden**
-3. Melden Sie sich mit den Standard-Zugangsdaten an:
-   - **E-Mail:** `admin@fritzwinter.de`
-   - **Passwort:** `Admin123!`
+3. Melden Sie sich mit dem Admin-Konto an (wie bei `init-db`/Umgebungsvariablen festgelegt bzw. in der Konsole ausgegeben):
+   - **E-Mail:** `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (oder Standard)
+   - **Passwort:** `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder generiertes Initialpasswort
 
 ### 4.2 Pflichtaufgaben nach der Installation
 

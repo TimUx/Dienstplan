@@ -10,6 +10,7 @@ import logging
 import os
 
 from .shared import get_db, require_auth, require_role, log_audit, require_csrf, check_csrf, parse_json_body
+from .error_utils import api_error
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +78,13 @@ def get_global_settings(request: Request):
         }
         
     except Exception as e:
-        logger.error(f"Get global settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Laden der globalen Einstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Laden der globalen Einstellungen',
+            status_code=500,
+            exc=e,
+            context='get_global_settings',
+        )
 
 
 @router.put('/api/settings/global', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -137,8 +143,13 @@ def update_global_settings(request: Request, data: dict = Depends(parse_json_bod
         return {'success': True}
         
     except Exception as e:
-        logger.error(f"Update global settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Aktualisieren der globalen Einstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Aktualisieren der globalen Einstellungen',
+            status_code=500,
+            exc=e,
+            context='update_global_settings',
+        )
 
 
 @router.get('/api/settings/branding')
@@ -165,8 +176,13 @@ def get_branding_settings(request: Request):
             'logoModifiedAt': logo_row[0] if logo_row and logo_row[0] else None,
         }
     except Exception as e:
-        logger.error(f"Get branding settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Laden der Branding-Einstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Laden der Branding-Einstellungen',
+            status_code=500,
+            exc=e,
+            context='get_branding_settings',
+        )
 
 
 @router.put('/api/settings/branding', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -195,8 +211,13 @@ def update_branding_settings(request: Request, data: dict = Depends(parse_json_b
         conn.close()
         return {'success': True, 'companyName': company_name}
     except Exception as e:
-        logger.error(f"Update branding settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Speichern der Branding-Einstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Speichern der Branding-Einstellungen',
+            status_code=500,
+            exc=e,
+            context='update_branding_settings',
+        )
 
 
 @router.post('/api/settings/branding/logo', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -252,8 +273,13 @@ async def upload_branding_logo(request: Request, file: UploadFile = File(...)):
         conn.close()
         return {'success': True, 'headerLogoUrl': logo_url}
     except Exception as e:
-        logger.error(f"Upload branding logo error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Upload des Logos'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Upload des Logos',
+            status_code=500,
+            exc=e,
+            context='upload_branding_logo',
+        )
 
 
 @router.get('/api/email-settings', dependencies=[Depends(require_role('Admin'))])
@@ -302,8 +328,13 @@ def get_email_settings(request: Request):
             }
             
     except Exception as e:
-        logger.error(f"Get email settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Laden der E-Mail-Einstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Laden der E-Mail-Einstellungen',
+            status_code=500,
+            exc=e,
+            context='get_email_settings',
+        )
 
 
 @router.post('/api/email-settings', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -391,8 +422,13 @@ def save_email_settings(request: Request, data: dict = Depends(parse_json_body))
         return {'success': True}
         
     except Exception as e:
-        logger.error(f"Save email settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Speichern der E-Mail-Einstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Speichern der E-Mail-Einstellungen',
+            status_code=500,
+            exc=e,
+            context='save_email_settings',
+        )
 
 
 @router.post('/api/email-settings/test', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -417,8 +453,13 @@ def test_email_settings(request: Request, data: dict = Depends(parse_json_body))
             return JSONResponse(content={'error': error}, status_code=500)
             
     except Exception as e:
-        logger.error(f"Test email error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Senden der Test-E-Mail'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Senden der Test-E-Mail',
+            status_code=500,
+            exc=e,
+            context='test_email_settings',
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -529,8 +570,13 @@ def export_shift_settings(request: Request):
         )
 
     except Exception as e:
-        logger.error(f"Export shift settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Exportieren der Schichteinstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Exportieren der Schichteinstellungen',
+            status_code=500,
+            exc=e,
+            context='export_shift_settings',
+        )
 
 
 @router.post('/api/settings/shifts/import', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -765,5 +811,10 @@ async def import_shift_settings(request: Request, file: UploadFile = File(...)):
         return {'success': True, **result}
 
     except Exception as e:
-        logger.error(f"Import shift settings error: {str(e)}")
-        return JSONResponse(content={'error': 'Fehler beim Importieren der Schichteinstellungen'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Importieren der Schichteinstellungen',
+            status_code=500,
+            exc=e,
+            context='import_shift_settings',
+        )

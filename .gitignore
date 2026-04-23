@@ -58,3 +58,7 @@ Desktop.ini
 cookies.txt
 data/dienstplan.db
 data/dienstplan.db*
+
+# Local tooling / generated assets (not part of source review)
+system_info.txt
+wwwroot/css/styles.min.css

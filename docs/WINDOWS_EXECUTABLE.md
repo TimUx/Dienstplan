@@ -50,9 +50,9 @@ Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx
 ### Erste Schritte
 
 1. Beim ersten Start wird automatisch eine leere Datenbank erstellt
-2. Melden Sie sich mit den Standard-Zugangsdaten an:
-   - **E-Mail:** admin@fritzwinter.de
-   - **Passwort:** Admin123!
+2. Melden Sie sich mit dem Administrator-Konto an:
+   - **E-Mail:** Wert von `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Standard: `admin@fritzwinter.de`), sofern beim Packen/Start nicht gesetzt
+   - **Passwort:** Wert von `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder das bei der **ersten** Datenbank-Erstellung in der Konsole ausgegebene Initialpasswort
 3. **WICHTIG:** Ändern Sie das Passwort nach der ersten Anmeldung!
 
 ## 🛑 Beenden der Anwendung

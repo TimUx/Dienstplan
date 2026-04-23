@@ -11,6 +11,9 @@ from entities import (
 )
 from data_loader import generate_sample_data
 
+TEST_ADMIN_EMAIL = "admin@fritzwinter.de"
+TEST_ADMIN_PASSWORD = "Admin123!"
+
 
 @pytest.fixture
 def sample_employees_teams_absences():
@@ -27,6 +30,8 @@ def test_db(tmp_path):
     """Isolated SQLite database for each test."""
     db_path = str(tmp_path / "test.db")
     from db_init import initialize_database
+    os.environ["DIENSTPLAN_INITIAL_ADMIN_EMAIL"] = TEST_ADMIN_EMAIL
+    os.environ["DIENSTPLAN_INITIAL_ADMIN_PASSWORD"] = TEST_ADMIN_PASSWORD
     initialize_database(db_path, with_sample_data=True)
     yield db_path
     if os.path.exists(db_path):
@@ -54,7 +59,7 @@ def admin_client(client):
     csrf = resp.json()['token']
     client.post(
         '/api/auth/login',
-        json={'email': 'admin@fritzwinter.de', 'password': 'Admin123!'},
+        json={'email': TEST_ADMIN_EMAIL, 'password': TEST_ADMIN_PASSWORD},
         headers={'X-CSRF-Token': csrf},
     )
     client.csrf_token = csrf

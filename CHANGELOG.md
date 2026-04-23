@@ -8,7 +8,7 @@
 - **Neuer Endpunkt**: `GET /api/csrf-token` liefert ein sitzungsgebundenes CSRF-Token
 - **`require_csrf`-Decorator**: Alle schreibenden API-Endpunkte (POST/PUT/DELETE) prüfen den `X-CSRF-Token`-Header
 - **Frontend**: `fetchCsrfToken()` und `getCsrfToken()` in `utils.js`; das Token wird bei jedem mutierenden Request automatisch als `X-CSRF-Token`-Header übermittelt
-- Das Token wird serverseitig in der Flask-Session gespeichert und geprüft (Constant-Time-Vergleich)
+- Das Token wird serverseitig in der HTTP-Sitzung (SessionMiddleware) gespeichert und geprüft (Constant-Time-Vergleich)
 
 #### XSS-Behebung
 - `escapeHtml()` wird nun konsequent auf alle benutzerkontrollierten Inhalte angewendet, bevor sie in den DOM geschrieben werden (`employees.js`, `schedule.js`, `statistics.js`, `app.js`)
@@ -98,6 +98,8 @@
 - **CSS-Minifizierung**: `minify_css.py` mit `csscompressor` für optimierte Stylesheets im Build
 - Neue Abhängigkeiten: `flask-limiter`, `flask-compress`, `csscompressor`
 
+> **Hinweis (Stand April 2026):** Die Live-Web-API nutzt inzwischen **FastAPI** (ASGI, Uvicorn). Rate-Limiting und Gzip laufen mit **slowapi** bzw. **GZipMiddleware** in `web_api.py` — die oben genannten Flask-Pakete beschreiben den Zustand zum Zeitpunkt von PR #220 und wurden im weiteren Verlauf zugunsten des FastAPI-Stacks abgelöst.
+
 #### Planung & Analyse (PR #219)
 - **Abwesenheits-Impact-Analyse**: Neue `AbsenceImpact`-Klasse in `planning_report.py` mit tagesweiser Risikoanalyse
 - `PlanningReport.absence_impact` liefert ein Dict mit tagesweiser Abwesenheitsauswirkungsanalyse
@@ -136,7 +138,7 @@
 #### Migration from .NET to Python ✅
 - **Complete rewrite** of backend from C# to Python
 - **New solver**: Google OR-Tools CP-SAT for optimal shift planning
-- **Framework change**: ASP.NET Core → Flask
+- **Framework change**: ASP.NET Core → Python (Web-API: FastAPI/ASGI; frühere 2.x-Zwischenstände nutzten Flask)
 - **Same UI**: Web interface (HTML/CSS/JS) unchanged
 
 #### Removed
@@ -170,7 +172,7 @@
 ### Technical Details
 - **Language**: Python 3.9+
 - **Solver**: Google OR-Tools 9.8+
-- **Web Framework**: Flask 3.0+
+- **Web Framework**: FastAPI (ASGI, Uvicorn)
 - **Database**: SQLite (unchanged)
 - **Frontend**: Vanilla JavaScript (unchanged)
 

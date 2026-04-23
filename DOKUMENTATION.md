@@ -103,7 +103,7 @@ Neu im System? Starten Sie hier:
 |---------|--------|
 | Datenbank-Fehler beim Start | `python main.py init-db --with-sample-data` |
 | Port bereits belegt | `python main.py serve --port 8080` |
-| Login funktioniert nicht | E-Mail: `admin@fritzwinter.de` / PW: `Admin123!` |
+| Login funktioniert nicht | Admin-E-Mail/Passwort: siehe `DIENSTPLAN_INITIAL_ADMIN_EMAIL` / `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` bzw. Konsolen-Ausgabe von `python main.py init-db` (kein festes Standardpasswort mehr). |
 | Keine optimale Lösung | `python main.py plan --time-limit 600` |
 
 Weitere Hilfe: [BENUTZERHANDBUCH – Fehlerbehebung](BENUTZERHANDBUCH.md#fehlerbehebung)

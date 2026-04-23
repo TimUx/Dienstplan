@@ -1,94 +1,36 @@
-"""Factory functions for building test data objects."""
+"""Small factories for HTTP tests (payloads, query strings)."""
 
-from datetime import date, timedelta
-from entities import (
-    Employee, Team, Absence, AbsenceType, ShiftAssignment, ShiftType,
-    STANDARD_SHIFT_TYPES, get_shift_type_by_code,
-)
+from __future__ import annotations
+
+from datetime import date
 
 
-def make_employee(
-    id: int = 1,
-    vorname: str = "Max",
-    name: str = "Mustermann",
-    personalnummer: str = None,
-    team_id: int = 1,
-    is_td_qualified: bool = False,
-    is_brandmeldetechniker: bool = False,
-    is_brandschutzbeauftragter: bool = False,
-    is_team_leader: bool = False,
-) -> Employee:
-    pnr = personalnummer or f"P{id:04d}"
-    return Employee(
-        id=id,
-        vorname=vorname,
-        name=name,
-        personalnummer=pnr,
-        team_id=team_id,
-        is_td_qualified=is_td_qualified,
-        is_brandmeldetechniker=is_brandmeldetechniker,
-        is_brandschutzbeauftragter=is_brandschutzbeauftragter,
-        is_team_leader=is_team_leader,
-    )
+def csrf_token(client) -> str:
+    return client.get("/api/csrf-token").json()["token"]
 
 
-def make_team(
-    id: int = 1,
-    name: str = "Team Alpha",
-    employees: list = None,
-    allowed_shift_type_ids: list = None,
-) -> Team:
-    return Team(
-        id=id,
-        name=name,
-        employees=employees or [],
-        allowed_shift_type_ids=allowed_shift_type_ids or [],
-    )
+def csrf_headers(client: "TestClient", token: str | None = None) -> dict[str, str]:
+    tok = token if token is not None else csrf_token(client)
+    return {"X-CSRF-Token": tok}
 
 
-def make_absence(
-    id: int = 1,
-    employee_id: int = 1,
-    absence_type: AbsenceType = AbsenceType.U,
-    start_date: date = None,
-    end_date: date = None,
-) -> Absence:
-    start = start_date or date(2025, 1, 6)
-    end = end_date or (start + timedelta(days=6))
-    return Absence(
-        id=id,
-        employee_id=employee_id,
-        absence_type=absence_type,
-        start_date=start,
-        end_date=end,
-    )
+def schedule_url(start: date, view: str | None = None) -> str:
+    base = f"/api/shifts/schedule?startDate={start.isoformat()}"
+    if view:
+        return f"{base}&view={view}"
+    return base
 
 
-def make_assignment(
-    id: int = 1,
-    employee_id: int = 1,
-    shift_type_id: int = 1,
-    d: date = None,
-) -> ShiftAssignment:
-    return ShiftAssignment(
-        id=id,
-        employee_id=employee_id,
-        shift_type_id=shift_type_id,
-        date=d or date(2025, 1, 6),
-    )
+def dashboard_url(start: date, end: date) -> str:
+    return f"/api/statistics/dashboard?startDate={start.isoformat()}&endDate={end.isoformat()}"
 
 
-def make_small_scenario(num_teams: int = 2, emp_per_team: int = 3):
-    """Build a minimal scenario: ``num_teams`` teams with ``emp_per_team`` each."""
-    teams = []
-    employees = []
-    emp_id = 1
-    for t in range(1, num_teams + 1):
-        team = make_team(id=t, name=f"Team {t}")
-        for _ in range(emp_per_team):
-            emp = make_employee(id=emp_id, team_id=t, personalnummer=f"P{emp_id:04d}")
-            employees.append(emp)
-            team.employees.append(emp)
-            emp_id += 1
-        teams.append(team)
-    return employees, teams
+def minimal_employee_payload(suffix: str) -> dict:
+    """Payload compatible with POST /api/employees (Admin)."""
+    return {
+        "vorname": "Factory",
+        "name": f"User{suffix}",
+        "personalnummer": f"FN{suffix}",
+        "email": f"factory.user{suffix}@example.test",
+        "password": "TestPass-9a!",
+    }

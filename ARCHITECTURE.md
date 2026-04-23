@@ -6,27 +6,27 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 
 ## Architekturprinzipien
 
-### 1. Modulare Struktur
+### 1. Modulare Struktur 
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Web Layer                            │
-│                    (web_api.py)                          │
-│  - Flask REST API                                        │
-│  - Static File Serving (wwwroot/)                        │
-│  - HTML Partials (wwwroot/partials/)                     │
-│  - CORS Configuration                                    │
-│  - Rate Limiting (flask-limiter)                         │
-│  - Gzip Compression (flask-compress)                     │
+│                     Web Layer                           │
+│                    (web_api.py)                         │
+│  - FastAPI REST API                                     │
+│  - Static File Serving (wwwroot/)                       │
+│  - HTML Partials (wwwroot/partials/)                    │
+│  - CORS Configuration                                   │
+│  - Rate Limiting (slowapi)                              │
+│  - Gzip Compression (FastAPI Middleware)                │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                  Application Layer                       │
-│                    (main.py)                             │
-│  - CLI Interface                                         │
-│  - Server Orchestration                                  │
-│  - Command Routing                                       │
+│                  Application Layer                      │
+│                    (main.py)                            │
+│  - CLI Interface                                        │
+│  - Server Orchestration                                 │
+│  - Command Routing                                      │
 └──────────────────────┬──────────────────────────────────┘
                        │
          ┌─────────────┼─────────────┐
@@ -39,11 +39,11 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 │ - Config    │ │ - Objective │ │ - Reporting    │
 │ - Execute   │ │ - Problem   │ │ - Verify       │
 └──────┬──────┘ └──────┬──────┘ └────────┬───────┘
-       │               │                  │
-       │               ▼                  │
+       │               │                 │
+       │               ▼                 │
        │      ┌──────────────────┐       │
        │      │   Constraints    │       │
-       └──────┤ (constraints.py) │───────┘
+       └──────┤ (constraints/)   │───────┘
               │                  │
               │ - Hard Rules     │
               │ - Soft Rules     │
@@ -52,12 +52,12 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                    Data Layer                            │
+│                    Data Layer                           │
 │     (data_loader.py, entities.py, api/repositories/)    │
-│  - Database Access (SQLite)                              │
-│  - Data Models                                           │
-│  - Repository Layer (Absence, Employee, Shift)           │
-│  - Sample Data Generation                                │
+│  - Database Access (SQLite)                             │
+│  - Data Models                                          │
+│  - Repository Layer (Absence, Employee, Shift)          │
+│  - Sample Data Generation                               │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -67,7 +67,7 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 **Datei:** `web_api.py`
 
 - **Zweck**: REST API und Web-Schnittstelle
-- **Technologie**: Flask + Flask-CORS + Flask-Limiter + Flask-Compress
+- **Technologie**: FastAPI + CORSMiddleware + SlowAPI + GZipMiddleware
 - **Verantwortlichkeiten**:
   - HTTP Endpoints (REST API)
   - Static File Serving (HTML/CSS/JS)
@@ -78,11 +78,11 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
   - Gzip-Komprimierung aller Responses
 
 **Hauptendpoints:**
-- `/api/employees` - Mitarbeiterverwaltung
+- `/api/employees` - Mitarbeiterverwaltung (Router in ``api/employees.py``; Module ``api/employees_crud_routes.py``, ``api/employees_teams_routes.py``, ``api/employees_vacation_periods_routes.py``, ``api/employees_rotation_groups_routes.py``, ``api/employees_import_export_routes.py``)
 - `/api/teams` - Teamverwaltung
-- `/api/shifts/*` - Schichtplanung und Abfrage
+- `/api/shifts/*` - Schichtplanung und Abfrage (Router in ``api/shifts.py`` gebündelt; Implementierung aufgeteilt in ``api/shift_types_routes.py``, ``api/shifts_schedule_routes.py``, ``api/shifts_planning_*``, ``api/shifts_assignments_routes.py``, ``api/shifts_export_routes.py``, ``api/shifts_exchange_routes.py``)
 - `/api/statistics/*` - Statistiken und Reports
-- `/api/absences` - Abwesenheitsverwaltung
+- `/api/absences` - Abwesenheitsverwaltung (Router in ``api/absences.py``; Module ``api/absences_records_routes.py``, ``api/absences_types_routes.py``, ``api/absences_vacation_requests_routes.py``, ``api/absences_year_approvals_routes.py``, ``api/absences_year_plan_routes.py``)
 - `/*` - Static Files (Web UI)
 
 #### Application Layer
@@ -102,7 +102,7 @@ python main.py plan --start-date DATE --end-date DATE [--sample-data] [--db PATH
 ```
 
 #### Solver Layer
-**Dateien:** `solver.py`, `model.py`, `constraints.py`
+**Dateien:** `solver.py`, `model.py`, `constraints/` (Paket)
 
 **solver.py:**
 - OR-Tools CP-SAT Solver Konfiguration
@@ -114,7 +114,7 @@ python main.py plan --start-date DATE --end-date DATE [--sample-data] [--db PATH
 - Problem-Formulierung
 - Variable-Definition
 
-**constraints.py:**
+**constraints/ (Paket):**
 - Alle Geschäftsregeln als Constraints
 - Harte Constraints (MUST)
 - Weiche Constraints (SHOULD)
@@ -229,7 +229,7 @@ data_loader.py (Load Data)
     ↓
 model.py (Build Model)
     ↓
-constraints.py (Add Rules)
+constraints/ (Add Rules)
     ↓
 solver.py (Solve)
     ↓
@@ -242,7 +242,7 @@ data_loader.py (Save Results)
 ```
 Client (Browser)
     ↓ HTTP Request
-web_api.py (Flask Endpoint)
+web_api.py (FastAPI Endpoint)
     ↓
 api/repositories/ (Repository Layer)
     ↓
@@ -257,11 +257,11 @@ Client (Browser)
 ```
 Client (Browser)
     ↓ POST /api/shifts/plan
-web_api.py (Flask Endpoint)
+web_api.py (FastAPI Endpoint)
     ↓
 data_loader.py (Load Data)
     ↓
-solver.py → model.py → constraints.py
+solver.py → model.py → constraints/
     ↓
 validation.py (Verify)
     ↓
@@ -277,8 +277,8 @@ Client (Browser)
 ### Backend
 - **Python**: 3.9+
 - **OR-Tools**: Google Constraint Programming Solver
-- **Flask**: Web Framework
-- **Flask-CORS**: Cross-Origin Resource Sharing
+- **FastAPI**: Web Framework
+- **CORSMiddleware**: Cross-Origin Resource Sharing
 
 ### Frontend
 - **HTML5**: Struktur; Views als lazy-geladene HTML-Partials (`wwwroot/partials/`)
@@ -296,10 +296,9 @@ Client (Browser)
 ### Dependencies
 ```
 ortools>=9.8.0        # Constraint Solver
-Flask>=3.0.0          # Web Framework
-flask-cors>=4.0.0     # CORS Support
-flask-limiter>=3.0.0  # Rate Limiting (200/min, 2000/h pro IP)
-flask-compress>=1.0.0 # Gzip-Komprimierung
+fastapi>=0.110.0      # Web Framework
+uvicorn>=0.29.0       # ASGI Server
+slowapi>=0.1.9        # Rate Limiting (200/min, 2000/h pro IP)
 csscompressor>=0.9.5  # CSS-Minifizierung (Build-Zeit)
 ```
 
@@ -388,7 +387,7 @@ Employees ──→ Teams
 ## 8. Skalierbarkeit
 
 ### Horizontale Skalierung
-- Mehrere Flask-Instanzen hinter Load Balancer
+- Mehrere FastAPI/Uvicorn-Instanzen hinter Load Balancer
 - Shared SQLite-Datenbank oder Migration zu PostgreSQL/MySQL
 - Stateless API-Design
 
@@ -410,8 +409,8 @@ Employees ──→ Teams
 - ✅ Rollenbasierte Autorisierung
 - ✅ SQL-Injection-Schutz (Parametrisierte Queries)
 - ✅ CORS-Konfiguration
-- ✅ Rate Limiting (flask-limiter: 200/min, 2000/h pro IP)
-- ✅ Gzip-Komprimierung (flask-compress)
+- ✅ Rate Limiting (slowapi: 200/min, 2000/h pro IP)
+- ✅ Gzip-Komprimierung (GZipMiddleware)
 
 ### Empfohlene Erweiterungen
 - [ ] HTTPS (via Reverse Proxy)
@@ -467,7 +466,7 @@ python validation.py
 ## 12. Monitoring & Logging
 
 ### Logging
-Flask Standard-Logging:
+Standard-Logging (Python/Uvicorn):
 ```python
 app.logger.info("Message")
 app.logger.warning("Warning")
@@ -483,12 +482,12 @@ Empfohlene Tools:
 ## 13. Erweiterbarkeit
 
 ### Neue Constraints hinzufügen
-1. Funktion in `constraints.py` erstellen
+1. Funktion in einem Modul unter `constraints/` erstellen
 2. In `solver.py` aufrufen
 3. In `validation.py` prüfen
 
 ### Neue API-Endpoints
-1. Route in `web_api.py` definieren
+1. Route in `api/*.py` definieren und in `web_api.py` registrieren
 2. Business-Logik implementieren
 3. JSON-Response zurückgeben
 

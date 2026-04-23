@@ -210,11 +210,11 @@ Dienstplan/
 ├── entities.py          # Datenmodelle (Employee, Team, Shift, etc.)
 ├── data_loader.py       # Datenbankzugriff und Sample-Daten
 ├── model.py             # OR-Tools CP-SAT Modell
-├── constraints.py       # Alle Constraint-Implementierungen
+├── constraints/         # CP-SAT-Regeln (mehrere Module, siehe `constraints/__init__.py`)
 ├── solver.py            # OR-Tools Solver-Konfiguration
 ├── validation.py        # Ergebnis-Validierung
 ├── planning_report.py   # Planungsberichte inkl. Abwesenheits-Impact-Analyse
-├── web_api.py          # Flask REST API (Gzip via flask-compress)
+├── web_api.py          # FastAPI-App (ASGI), CORS, Rate-Limit, GZip
 ├── main.py             # Haupteinstiegspunkt (CLI & Server)
 ├── minify_css.py       # CSS-Minifizierung (csscompressor, Build-Zeit)
 ├── requirements.txt    # Python-Abhängigkeiten
@@ -236,7 +236,7 @@ Dienstplan/
 - **Backend**: Python 3.9+
 - **Solver**: Google OR-Tools CP-SAT
 - **Database**: SQLite (einfach austauschbar)
-- **Web Framework**: Flask mit Flask-CORS, Flask-Limiter (Rate Limiting), Flask-Compress (Gzip)
+- **Web Framework**: FastAPI mit Uvicorn (ASGI), SlowAPI (Rate Limiting), CORSMiddleware, GZipMiddleware
 - **Frontend**: Vanilla JavaScript (Event Delegation, State Store), CSS3, HTML5 mit Lazy-Loading-Partials
 - **API**: REST mit JSON
 
@@ -274,10 +274,10 @@ python main.py serve
 
 Anwendung läuft unter: **http://localhost:5000**
 
-**Standard-Anmeldedaten:**
-- E-Mail: `admin@fritzwinter.de`
-- Passwort: `Admin123!`
-- ⚠️ **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
+**Initiale Admin-Anmeldung:**
+- E-Mail wird über `DIENSTPLAN_INITIAL_ADMIN_EMAIL` gesetzt (Standard: `admin@fritzwinter.de`)
+- Passwort wird über `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` gesetzt oder bei Init zufällig generiert
+- ⚠️ **WICHTIG**: Passwort direkt nach der ersten Anmeldung ändern
 
 ### Schnellstart: Docker Compose
 
@@ -421,7 +421,7 @@ python main.py init-db
 **Was wird automatisch erstellt:**
 - ✅ Alle Datenbanktabellen
 - ✅ **Rollen**: Admin, Mitarbeiter
-- ✅ **Admin-Benutzer**: admin@fritzwinter.de (Passwort: Admin123!)
+- ✅ **Admin-Benutzer**: E-Mail via ENV, Passwort via ENV oder Zufallspasswort bei Init
 - ✅ **Standard-Schichttypen**: F, S, N, Z, BMT, BSB, TD
 
 **Ergebnis**: System ist einsatzbereit mit minimaler Konfiguration.
@@ -594,7 +594,7 @@ python main.py init-db
 python main.py serve
 
 # 3. Im Browser: http://localhost:5000
-# 4. Anmelden als Admin (admin@fritzwinter.de / Admin123!)
+# 4. Anmelden als Admin (Zugangsdaten aus Init/ENV verwenden)
 # 5. Teams erstellen (mindestens 1)
 # 6. Mitarbeiter anlegen (mindestens 10-15)
 # 7. Abwesenheiten eintragen (bekannte Urlaube)
@@ -677,8 +677,8 @@ POST /api/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@fritzwinter.de",
-  "password": "Admin123!",
+  "email": "<admin-e-mail aus DIENSTPLAN_INITIAL_ADMIN_EMAIL oder Konsolen-Ausgabe von init-db>",
+  "password": "<initialpasswort aus DIENSTPLAN_INITIAL_ADMIN_PASSWORD oder Konsolen-Ausgabe>",
   "rememberMe": true
 }
 ```
@@ -688,7 +688,7 @@ Antwort:
 {
   "success": true,
   "user": {
-    "email": "admin@fritzwinter.de",
+    "email": "admin@example.org",
     "fullName": "Administrator",
     "roles": ["Admin"]
   }
@@ -999,17 +999,17 @@ python main.py serve
 
 ### Standard-Anmeldedaten
 Bei der ersten Ausführung wird automatisch ein Administrator-Account erstellt:
-- **E-Mail**: admin@fritzwinter.de
-- **Passwort**: Admin123!
+- **E-Mail**: `DIENSTPLAN_INITIAL_ADMIN_EMAIL` oder Standard `admin@fritzwinter.de`
+- **Passwort**: `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder automatisch generiertes Initialpasswort
 
-**WICHTIG**: Ändern Sie das Standard-Passwort nach der ersten Anmeldung!
+**WICHTIG**: Ändern Sie das Initialpasswort nach der ersten Anmeldung!
 
 ### Passwort-Änderungspflicht
 Administratoren können für Benutzer das `MustChangePassword`-Flag setzen (z. B. nach einem Passwort-Reset). Beim nächsten Login wird diesen Benutzern automatisch der Dialog zur Passwort-Änderung angezeigt; erst danach können sie das System nutzen.
 
 ### Sicherheitshinweise für Produktion
-1. **Passwörter ändern**: Ändern Sie alle Standard-Passwörter
-2. **HTTPS verwenden**: Setzen Sie einen Reverse Proxy (nginx, Apache) vor Flask
+1. **Passwörter setzen**: Nutzen Sie sichere Initialpasswörter über Umgebungsvariablen
+2. **HTTPS verwenden**: Setzen Sie einen Reverse Proxy (nginx, Apache) vor die FastAPI-/Uvicorn-Instanz
 3. **CORS konfigurieren**: Beschränken Sie erlaubte Origins in `web_api.py`
 4. **Datenbank schützen**: SQLite-Datei vor unbefugtem Zugriff schützen
 5. **Regular Updates**: Halten Sie alle Python-Pakete aktuell
@@ -1056,7 +1056,7 @@ WantedBy=multi-user.target
 ## 🛠️ Entwicklung
 
 ### Neue Constraint hinzufügen
-In `constraints.py`:
+Im Paket `constraints/`:
 ```python
 def add_my_new_constraint(model, x, employees, dates, shift_codes):
     for emp in employees:
@@ -1206,7 +1206,7 @@ Diese Version 2.1 ist eine vollständige Neuimplementierung des Schichtplanungss
 ### Hauptunterschiede
 - **Solver**: Custom-Algorithmus → Google OR-Tools CP-SAT
 - **Sprache**: C# → Python
-- **Framework**: ASP.NET Core → Flask
+- **Framework**: ASP.NET Core → FastAPI (Python)
 - **Lösungsqualität**: Heuristisch → Optimal/Near-Optimal
 
 ### Vorteile der Python-Version

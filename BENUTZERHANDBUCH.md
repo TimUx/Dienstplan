@@ -70,9 +70,9 @@ Dienstplan ist ein intelligentes System zur **automatischen Planung und Verwaltu
 3. Doppelklicken Sie auf `Dienstplan.exe`
 4. Der Browser öffnet sich automatisch
 
-**Standard-Login:**
-- E-Mail: `admin@fritzwinter.de`
-- Passwort: `Admin123!`
+**Erstanmeldung (Administrator):**
+- **E-Mail:** per Umgebungsvariable `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Standard: `admin@fritzwinter.de`), sofern nicht überschrieben.
+- **Passwort:** vor `init-db` mit `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` setzen – oder beim ersten `python main.py init-db` **ohne** diese Variable das in der **Konsole ausgegebene** einmalige Initialpasswort verwenden.
 
 #### Option B: Python-Installation
 
@@ -97,9 +97,9 @@ python main.py serve
 
 1. Öffnen Sie die Dienstplan-Anwendung im Browser
 2. Klicken Sie auf den **Anmelden**-Button (rechts oben)
-3. Geben Sie die Standard-Anmeldedaten ein:
-   - E-Mail: `admin@fritzwinter.de`
-   - Passwort: `Admin123!`
+3. Geben Sie die Admin-Anmeldedaten ein (wie bei der Datenbank-Initialisierung gesetzt bzw. in der Konsole ausgegeben):
+   - E-Mail: Wert von `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (oder Standard)
+   - Passwort: Wert von `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder das generierte Initialpasswort aus der `init-db`-Ausgabe
 4. Klicken Sie auf **Anmelden**
 
 ![Anmeldedialog](docs/screenshots/00-login-modal.png)
@@ -125,7 +125,7 @@ Das Dienstplan-System basiert auf einer hierarchischen Datenstruktur. **Die Reih
                     ↓
 ┌─────────────────────────────────────────────────┐
 │ 2. ADMIN-BENUTZER                               │
-│    - admin@fritzwinter.de                       │
+│    - Admin-Konto (E-Mail per ENV / Standard)    │
 │    (automatisch bei DB-Initialisierung)         │
 └─────────────────────────────────────────────────┘
                     ↓
@@ -188,8 +188,8 @@ Bei der ersten Initialisierung (`python main.py init-db`) werden automatisch ers
    - Admin (volle Berechtigung)
    - Mitarbeiter (Lesezugriff)
 3. **Administrator-Konto:**
-   - E-Mail: `admin@fritzwinter.de`
-   - Passwort: `Admin123!`
+   - E-Mail: `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Standard: `admin@fritzwinter.de`)
+   - Passwort: `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder bei fehlender Variable ein **generiertes Initialpasswort** (siehe Konsolen-Ausgabe von `init-db`)
    - Rolle: Admin
 4. **Standard-Schichttypen:**
    - F (Früh: 05:45-13:45, 8h)
@@ -497,7 +497,7 @@ Sie können einzelne Schichten manuell anpassen:
 **Für produktiven Betrieb:**
 
 - [ ] **Schritt 1:** Datenbank initialisieren (`python main.py init-db`) ✅ AUTOMATISCH
-- [ ] **Schritt 2:** Als Admin anmelden (admin@fritzwinter.de / Admin123!)
+- [ ] **Schritt 2:** Als Admin anmelden (Zugangsdaten aus `init-db`/Umgebungsvariablen wie oben beschrieben)
 - [ ] **Schritt 3:** Admin-Passwort ändern (sicher!)
 - [ ] **Schritt 4:** Teams erstellen (mind. 3 Teams) ✅ ERFORDERLICH
 - [ ] **Schritt 5:** Mitarbeiter anlegen (mind. 10-15) ✅ ERFORDERLICH
@@ -1619,10 +1619,9 @@ python main.py plan --start-date 2025-01-01 --end-date 2025-01-31 --time-limit 6
 
 **Lösungen:**
 
-1. **Standard-Anmeldedaten prüfen:**
-   - E-Mail: `admin@fritzwinter.de`
-   - Passwort: `Admin123!`
-   - Beachten Sie Groß-/Kleinschreibung!
+1. **Anmeldedaten prüfen:**
+   - E-Mail und Passwort müssen mit `DIENSTPLAN_INITIAL_ADMIN_*` bzw. der **Konsolen-Ausgabe** von `python main.py init-db` übereinstimmen (es gibt kein festes Standardpasswort mehr).
+   - Beachten Sie Groß-/Kleinschreibung bei E-Mail und Passwort.
 
 2. **Datenbank initialisiert?**
    ```bash
@@ -2022,7 +2021,7 @@ Diese Reihenfolge ist zwingend und kann nicht umgangen werden!
 | Fehlermeldung | Ursache | Lösung |
 |---------------|---------|--------|
 | "Keine Lösung gefunden" | Zu wenige Mitarbeiter, zu viele Abwesenheiten | Mehr Mitarbeiter, weniger Abwesenheiten, längeres Zeitlimit |
-| "Ungültige Anmeldedaten" | Falsches Passwort oder E-Mail | Admin-Passwort: Admin123!, Groß-/Kleinschreibung beachten |
+| "Ungültige Anmeldedaten" | Falsches Passwort oder E-Mail | Zugangsdaten mit `init-db`-Ausgabe oder `DIENSTPLAN_INITIAL_ADMIN_*` abgleichen; nach mehrfachen Fehlversuchen ggf. Kontosperre (Lockout) abwarten. |
 | "Team erforderlich" | Mitarbeiter ohne Team | Team zuerst erstellen, dann zuordnen |
 | "Qualifikation fehlt" | BMT/BSB-Dienst ohne qualifizierten Mitarbeiter | Mehr Mitarbeiter qualifizieren |
 | "Konflikt mit Abwesenheit" | Schicht während Abwesenheit | Abwesenheit löschen oder Schicht verschieben |

@@ -114,8 +114,8 @@ chmod +x build_executable_both.sh
 ### Step 1: Install Dependencies
 The script installs all Python packages from `requirements.txt`:
 - **ortools** - Constraint programming solver
-- **Flask** - Web framework
-- **flask-cors** - CORS support
+- **FastAPI** / **uvicorn** - Web API (ASGI) and server
+- **slowapi** - Rate limiting
 - **PyInstaller** - Executable builder
 
 ### Step 2: Create Production Database
@@ -291,7 +291,7 @@ The production database is stored in the `data/` directory:
 **Contents:**
 - ✅ All database tables and indexes
 - ✅ Default roles (Admin, Mitarbeiter)
-- ✅ Admin user (`admin@fritzwinter.de` / `Admin123!`)
+- ✅ Admin user (E-Mail: `DIENSTPLAN_INITIAL_ADMIN_EMAIL` / Passwort: `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder generiertes Initialpasswort bei `init-db`)
 - ✅ Standard shift types (F, S, N)
 - ❌ No teams (empty)
 - ❌ No employees (empty)

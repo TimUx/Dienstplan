@@ -54,8 +54,8 @@ python main.py serve --db /pfad/zur/datenbank.db
 
 Beim ersten Start wird automatisch ein Administrator-Konto erstellt:
 
-- **E-Mail**: admin@fritzwinter.de
-- **Passwort**: Admin123!
+- **E-Mail**: `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Standard: `admin@fritzwinter.de`)
+- **Passwort**: `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` setzen oder das bei `python main.py init-db` **generierte** Initialpasswort aus der Konsole verwenden
 
 **WICHTIG**: Ändern Sie das Passwort nach der ersten Anmeldung!
 
@@ -215,8 +215,8 @@ POST /api/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@fritzwinter.de",
-  "password": "Admin123!",
+  "email": "<DIENSTPLAN_INITIAL_ADMIN_EMAIL>",
+  "password": "<Initialpasswort aus ENV oder init-db-Konsole>",
   "rememberMe": true
 }
 ```
@@ -296,8 +296,8 @@ Authorization: Required (Admin only)
 
 ### Sicherheit
 
-1. **Passwörter ändern**: Ändern Sie Standard-Passwörter sofort
-2. **HTTPS verwenden**: Setzen Sie einen Reverse Proxy (nginx/Apache) vor Flask
+1. **Passwörter**: Initialpasswort nach `init-db` bzw. `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` sofort nach der ersten Anmeldung ändern
+2. **HTTPS verwenden**: Setzen Sie einen Reverse Proxy (nginx/Apache) vor die FastAPI-/Uvicorn-Instanz
 3. **Backups**: Sichern Sie die Datenbank regelmäßig
 4. **Updates**: Halten Sie Python und alle Packages aktuell
 

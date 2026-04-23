@@ -99,7 +99,7 @@ python_ortools/
 │   ├── validate_staffing_requirements()
 │   └── validate_springer_availability()
 │
-├── web_api.py          # ✅ Flask REST API
+├── web_api.py          # ✅ FastAPI (ASGI) Web-API
 │   ├── /api/employees
 │   ├── /api/teams
 │   ├── /api/shifttypes
@@ -205,13 +205,13 @@ model.Minimize(sum(objective_terms))
 
 ---
 
-## 6. Web-API (Flask)
+## 6. Web-API (FastAPI)
 
 ### REST API Kompatibilität
 
-Die Python-Flask-API ist **vollständig kompatibel** mit der .NET-ASP.NET-Core-API:
+Die Python-**FastAPI**-Implementierung in `web_api.py` ist **funktional kompatibel** mit der früheren .NET-ASP.NET-Core-API (gleiche REST-Pfade für die Web-UI):
 
-| Endpoint | .NET Controller | Python Flask | Status |
+| Endpoint | .NET Controller | Python (`web_api.py`) | Status |
 |----------|----------------|--------------|--------|
 | `GET /api/employees` | EmployeesController | web_api.py | ✅ |
 | `GET /api/teams` | TeamsController | web_api.py | ✅ |
@@ -231,12 +231,7 @@ src/Dienstplan.Web/wwwroot/
 └── js/app.js          # ✅ Keine Änderung nötig
 ```
 
-Flask serviert die statischen Dateien:
-```python
-app = Flask(__name__, 
-            static_folder='../src/Dienstplan.Web/wwwroot', 
-            static_url_path='')
-```
+Statische Dateien und die SPA-Hülle werden über **FastAPI** (`StaticFiles`, `FileResponse`) aus dem Ordner `wwwroot/` ausgeliefert (früher vergleichbar mit `static_folder` in Flask).
 
 ---
 
@@ -269,7 +264,7 @@ validation_result = validate_shift_plan(
 | Komponente | .NET | Python OR-Tools |
 |-----------|------|-----------------|
 | Programmiersprache | C# | Python |
-| Web-Framework | ASP.NET Core | Flask |
+| Web-Framework | ASP.NET Core | FastAPI (ASGI, Uvicorn) |
 | ORM | Entity Framework Core | Native SQLite3 |
 | Solver | Custom-Algorithmus | OR-Tools CP-SAT |
 | Deployment | .exe / Self-Contained | Python-Script / Docker |
@@ -372,7 +367,7 @@ CMD ["python", "python_ortools/main.py", "serve"]
 
 - 🔄 Solver-Algorithmus (Custom → OR-Tools)
 - 🔄 Backend-Sprache (C# → Python)
-- 🔄 Web-Framework (ASP.NET → Flask)
+- 🔄 Web-Framework (ASP.NET → Python; aktuell FastAPI/ASGI)
 - 🔄 Validierungs-Engine
 
 ### Kann entfallen

@@ -13,10 +13,10 @@ This guide will help you get the Dienstplan system up and running in minutes.
 pip install -r requirements.txt
 ```
 
-This will install:
+This will install (among others):
 - `ortools` - Google OR-Tools Constraint Solver
-- `Flask` - Web framework
-- `flask-cors` - CORS support
+- `fastapi` / `uvicorn` - Web API (ASGI) and server
+- `slowapi` - Rate limiting
 
 ## Step 2: Initialize Database
 
@@ -34,11 +34,11 @@ This command will:
 - ✅ Add sample teams (Team Alpha, Beta, Gamma)
 - ✅ Add 19 sample employees (15 regular + 4 springers with qualifications)
 
-**Default Admin Credentials:**
-- **Email**: `admin@fritzwinter.de`
-- **Password**: `Admin123!`
+**Default admin bootstrap:**
+- **Email:** set `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (default: `admin@fritzwinter.de`)
+- **Password:** set `DIENSTPLAN_INITIAL_ADMIN_PASSWORD`, or run `python main.py init-db` **without** it and use the **one-time password printed to the console**
 
-⚠️ **IMPORTANT**: Change the default admin password after first login!
+⚠️ **IMPORTANT:** Change the admin password after first login!
 
 ### Alternative: Initialize Without Sample Data
 
@@ -82,10 +82,7 @@ You should see the Dienstplan web interface.
 
 ## Step 5: Login
 
-Click the login button and use the default credentials:
-
-- **Email**: `admin@fritzwinter.de`
-- **Password**: `Admin123!`
+Click the login button and sign in with the admin email/password from your `init-db` run / environment variables (see above).
 
 After logging in as admin, you have full access to:
 - ✅ Employee management
@@ -216,9 +213,7 @@ Make sure you initialized the database first:
 python main.py init-db
 ```
 
-Then use the default credentials:
-- Email: `admin@fritzwinter.de`
-- Password: `Admin123!`
+Then sign in with the admin credentials from `DIENSTPLAN_INITIAL_ADMIN_*` or the `init-db` console output (there is no fixed default password anymore).
 
 ## Database Location
 
@@ -235,13 +230,12 @@ python main.py serve --db /var/lib/dienstplan/production.db
 
 For production deployment, consider:
 
-1. **Use a production WSGI server** (not Flask development server)
-   - gunicorn
-   - uWSGI
-   
+1. **Use a production ASGI server** (e.g. Uvicorn behind a reverse proxy; not ad-hoc debug serving for production)
+   - Example: `uvicorn web_api:create_app --factory` with appropriate `--host` / workers (see deployment docs)
+
 2. **Set up HTTPS** (use reverse proxy like nginx)
 
-3. **Change default admin password**
+3. **Change the admin initial password** after first login (and prefer setting `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` for automated installs)
 
 4. **Regular database backups**
 

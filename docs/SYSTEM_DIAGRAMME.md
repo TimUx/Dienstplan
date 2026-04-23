@@ -36,7 +36,7 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │                       BACKEND (Python)                            │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                    Flask Web API                          │   │
+│  │                    FastAPI Web API                       │   │
 │  │  - Endpunkte (GET/POST/PUT/DELETE)                       │   │
 │  │  - Authentifizierung & Autorisierung                     │   │
 │  │  - Input Validierung                                      │   │

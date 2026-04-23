@@ -98,49 +98,50 @@ def update_global_settings(request: Request, data: dict = Depends(parse_json_bod
         
         db = get_db()
         conn = db.get_connection()
-        cursor = conn.cursor()
-        
-        # Load existing values for deprecated fields
-        cursor.execute("SELECT MaxConsecutiveShifts, MaxConsecutiveNightShifts FROM GlobalSettings WHERE Id = 1")
-        existing = cursor.fetchone()
-        
-        # Use existing values for deprecated fields, or defaults if not found
-        max_consecutive_shifts = existing['MaxConsecutiveShifts'] if existing else 6
-        max_consecutive_night_shifts = existing['MaxConsecutiveNightShifts'] if existing else 3
-        
-        # Only update minRestHoursBetweenShifts from the request
-        min_rest_hours = data.get('minRestHoursBetweenShifts', 11)
-        
-        # Validation
-        if min_rest_hours < 8 or min_rest_hours > 24:
-            return JSONResponse(content={'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}, status_code=400)
-        
-        # Update or insert settings (keeping deprecated fields as-is)
-        cursor.execute("""
-            INSERT INTO GlobalSettings 
-            (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts, ModifiedAt, ModifiedBy)
-            VALUES (1, ?, ?, ?, ?, ?)
-            ON CONFLICT(Id) DO UPDATE SET
-                MinRestHoursBetweenShifts = excluded.MinRestHoursBetweenShifts,
-                ModifiedAt = excluded.ModifiedAt,
-                ModifiedBy = excluded.ModifiedBy
-        """, (
-            max_consecutive_shifts,
-            max_consecutive_night_shifts,
-            min_rest_hours,
-            datetime.utcnow().isoformat(),
-            request.session.get('user_email', 'system')
-        ))
-        
-        # Log audit entry
-        changes = json.dumps({'minRestHoursBetweenShifts': min_rest_hours}, ensure_ascii=False)
-        log_audit(conn, 'GlobalSettings', 1, 'Updated', changes,
-                  user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
-        
-        conn.commit()
-        conn.close()
-        
-        return {'success': True}
+        try:
+            cursor = conn.cursor()
+
+            # Load existing values for deprecated fields
+            cursor.execute("SELECT MaxConsecutiveShifts, MaxConsecutiveNightShifts FROM GlobalSettings WHERE Id = 1")
+            existing = cursor.fetchone()
+
+            # Use existing values for deprecated fields, or defaults if not found
+            max_consecutive_shifts = existing['MaxConsecutiveShifts'] if existing else 6
+            max_consecutive_night_shifts = existing['MaxConsecutiveNightShifts'] if existing else 3
+
+            # Only update minRestHoursBetweenShifts from the request
+            min_rest_hours = data.get('minRestHoursBetweenShifts', 11)
+
+            # Validation
+            if min_rest_hours < 8 or min_rest_hours > 24:
+                return JSONResponse(content={'error': 'Mindest-Ruhezeit muss zwischen 8 und 24 Stunden liegen'}, status_code=400)
+
+            # Update or insert settings (keeping deprecated fields as-is)
+            cursor.execute("""
+                INSERT INTO GlobalSettings
+                (Id, MaxConsecutiveShifts, MaxConsecutiveNightShifts, MinRestHoursBetweenShifts, ModifiedAt, ModifiedBy)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(Id) DO UPDATE SET
+                    MinRestHoursBetweenShifts = excluded.MinRestHoursBetweenShifts,
+                    ModifiedAt = excluded.ModifiedAt,
+                    ModifiedBy = excluded.ModifiedBy
+            """, (
+                max_consecutive_shifts,
+                max_consecutive_night_shifts,
+                min_rest_hours,
+                datetime.utcnow().isoformat(),
+                request.session.get('user_email', 'system')
+            ))
+
+            # Log audit entry
+            changes = json.dumps({'minRestHoursBetweenShifts': min_rest_hours}, ensure_ascii=False)
+            log_audit(conn, 'GlobalSettings', 1, 'Updated', changes,
+                      user_id=request.session.get('user_id'), user_name=request.session.get('user_email'))
+
+            conn.commit()
+            return {'success': True}
+        finally:
+            conn.close()
         
     except Exception as e:
         return api_error(

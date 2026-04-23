@@ -8,16 +8,20 @@ from datetime import datetime, timedelta
 import json
 import logging
 import secrets
+import os
 
 from .shared import (
     get_db, require_auth, require_role, log_audit, limiter,
     hash_password, verify_password, get_employee_by_email, require_csrf,
     check_csrf, parse_json_body
 )
+from .error_utils import api_error
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+MAX_FAILED_LOGIN_ATTEMPTS = int(os.environ.get("DIENSTPLAN_MAX_FAILED_LOGIN_ATTEMPTS", "5"))
+LOCKOUT_MINUTES = int(os.environ.get("DIENSTPLAN_LOCKOUT_MINUTES", "15"))
 
 
 @router.get('/api/csrf-token')
@@ -48,31 +52,49 @@ def login(request: Request, data: dict = Depends(parse_json_body)):
         if not employee.get('passwordHash'):
             return JSONResponse(content={'error': 'Kein Passwort gesetzt. Bitte Administrator kontaktieren.'}, status_code=401)
         
-        # Check if account is locked
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        # Check if account is locked; unlock automatically once timeout elapsed.
         if employee['lockoutEnd']:
             lockout_end = datetime.fromisoformat(employee['lockoutEnd'])
             if lockout_end > datetime.utcnow():
+                conn.close()
                 return JSONResponse(content={'error': 'Konto ist gesperrt'}, status_code=403)
+            cursor.execute(
+                "UPDATE Employees SET AccessFailedCount = 0, LockoutEnd = NULL WHERE Id = ?",
+                (employee['id'],),
+            )
+            conn.commit()
         
         # Verify password
         if not verify_password(password, employee['passwordHash']):
-            # Increment failed attempts
-            conn = db.get_connection()
-            cursor = conn.cursor()
+            # Increment failed attempts and activate lockout once threshold is reached.
             cursor.execute("""
                 UPDATE Employees 
                 SET AccessFailedCount = AccessFailedCount + 1
                 WHERE Id = ?
             """, (employee['id'],))
+            cursor.execute("SELECT AccessFailedCount FROM Employees WHERE Id = ?", (employee['id'],))
+            failed_count_row = cursor.fetchone()
+            failed_count = int(failed_count_row[0]) if failed_count_row else 0
+            if failed_count >= MAX_FAILED_LOGIN_ATTEMPTS:
+                lockout_end = datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
+                cursor.execute(
+                    "UPDATE Employees SET LockoutEnd = ? WHERE Id = ?",
+                    (lockout_end.isoformat(), employee['id']),
+                )
             conn.commit()
             conn.close()
-            
+            if failed_count >= MAX_FAILED_LOGIN_ATTEMPTS:
+                return JSONResponse(
+                    content={'error': f'Konto ist für {LOCKOUT_MINUTES} Minuten gesperrt'},
+                    status_code=403,
+                )
             return JSONResponse(content={'error': 'Ung\u00fcltige Anmeldedaten'}, status_code=401)
         
         # Reset failed attempts on successful login and migrate legacy SHA256
         # hash to bcrypt transparently so the next login uses the stronger hash.
-        conn = db.get_connection()
-        cursor = conn.cursor()
         is_legacy = not (
             employee['passwordHash'].startswith('$2b$') or
             employee['passwordHash'].startswith('$2a$')
@@ -80,12 +102,12 @@ def login(request: Request, data: dict = Depends(parse_json_body)):
         if is_legacy:
             new_hash = hash_password(password)
             cursor.execute(
-                "UPDATE Employees SET AccessFailedCount = 0, PasswordHash = ? WHERE Id = ?",
+                "UPDATE Employees SET AccessFailedCount = 0, LockoutEnd = NULL, PasswordHash = ? WHERE Id = ?",
                 (new_hash, employee['id']),
             )
         else:
             cursor.execute(
-                "UPDATE Employees SET AccessFailedCount = 0 WHERE Id = ?",
+                "UPDATE Employees SET AccessFailedCount = 0, LockoutEnd = NULL WHERE Id = ?",
                 (employee['id'],),
             )
         conn.commit()
@@ -118,8 +140,13 @@ def login(request: Request, data: dict = Depends(parse_json_body)):
         }
         
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        return JSONResponse(content={'error': 'Anmeldefehler aufgetreten'}, status_code=500)
+        return api_error(
+            logger,
+            'Anmeldefehler aufgetreten',
+            status_code=500,
+            exc=e,
+            context='Login error',
+        )
 
 
 @router.post('/api/auth/logout', dependencies=[Depends(check_csrf)])

@@ -674,13 +674,29 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
+def _resolve_initial_admin_credentials() -> tuple[str, str, bool]:
+    """
+    Resolve initial admin credentials from environment.
+
+    Returns:
+        (email, password, generated_password)
+    """
+    admin_email = os.environ.get("DIENSTPLAN_INITIAL_ADMIN_EMAIL", "admin@fritzwinter.de")
+    configured_password = os.environ.get("DIENSTPLAN_INITIAL_ADMIN_PASSWORD")
+    if configured_password:
+        return admin_email, configured_password, False
+
+    # Fallback: generate a one-time password so no static default credential exists.
+    generated_password = secrets.token_urlsafe(18)
+    return admin_email, generated_password, True
+
+
 def create_default_admin(db_path: str = "dienstplan.db"):
     """Create default admin employee with login credentials"""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    admin_email = "admin@fritzwinter.de"
-    admin_password = "Admin123!"
+    admin_email, admin_password, generated_password = _resolve_initial_admin_credentials()
     
     # Check if admin already exists (check Employees table now)
     cursor.execute("SELECT Id FROM Employees WHERE Email = ?", (admin_email,))
@@ -724,8 +740,12 @@ def create_default_admin(db_path: str = "dienstplan.db"):
     conn.close()
     
     print(f"   Email: {admin_email}")
-    print(f"   [!] Password change required on first login!")
-    print(f"   [!] CHANGE THIS PASSWORD AFTER FIRST LOGIN!")
+    if generated_password:
+        print(f"   Initial password (generated): {admin_password}")
+    else:
+        print("   Initial password was loaded from DIENSTPLAN_INITIAL_ADMIN_PASSWORD")
+    print("   [!] Password change required on first login!")
+    print("   [!] CHANGE THIS PASSWORD AFTER FIRST LOGIN!")
 
 
 def initialize_shift_types(db_path: str = "dienstplan.db"):
@@ -1093,7 +1113,10 @@ def initialize_database(db_path: str = "dienstplan.db", with_sample_data: bool =
 
     logger.info("Database initialization complete!")
     logger.info(f"Start the server with: python main.py serve --db {db_path}")
-    logger.info("Default login credentials: Email: admin@fritzwinter.de")
+    logger.info(
+        "Initial admin ready. Configure DIENSTPLAN_INITIAL_ADMIN_EMAIL and "
+        "DIENSTPLAN_INITIAL_ADMIN_PASSWORD for deterministic bootstrap credentials."
+    )
 
 
 if __name__ == "__main__":

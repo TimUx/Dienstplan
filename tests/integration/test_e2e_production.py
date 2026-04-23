@@ -49,7 +49,7 @@ EP-E2E-02  [TestSolverProductionPipeline – test_extended_dates_are_full_weeks]
 
 EP-E2E-03  [TestSolverProductionPipeline – test_no_work_during_absences]
            SYMPTOM: Employee assigned on an absence day.
-           FIX PROMPT: "In constraints.py sicherstellen, dass jede Absence korrekt
+           FIX PROMPT: "Im constraints-Paket sicherstellen, dass jede Absence korrekt
            als hard constraint gesperrt wird. ShiftPlanningModel.__init__() muss
            absence_days zur locked_absence-Map hinzufügen, bevor der Solver
            die Variablen anlegt."
@@ -97,6 +97,8 @@ from solver import solve_shift_planning
 from api.shared import extend_planning_dates_to_complete_weeks
 from planning_report import PlanningReport
 
+pytestmark = [pytest.mark.slow, pytest.mark.e2e]
+
 # ---------------------------------------------------------------------------
 # Tuning
 # ---------------------------------------------------------------------------
@@ -127,6 +129,8 @@ def prod_db(tmp_path_factory):
     employees + teams.
     """
     db_path = str(tmp_path_factory.mktemp("prod_e2e") / "prod.db")
+    os.environ["DIENSTPLAN_INITIAL_ADMIN_EMAIL"] = "admin@fritzwinter.de"
+    os.environ["DIENSTPLAN_INITIAL_ADMIN_PASSWORD"] = "Admin123!"
     initialize_database(db_path, with_sample_data=True)
     yield db_path
     if os.path.exists(db_path):
@@ -326,7 +330,7 @@ class TestSolverProductionPipeline:
         """
         Employees must not receive a shift on any day covered by an absence.
 
-        EP-E2E-03: if this fails, check absence constraint registration in constraints.py.
+        EP-E2E-03: if this fails, check absence constraint registration in the constraints package.
         """
         absence_days = {
             (a.employee_id, a.start_date + timedelta(days=i))

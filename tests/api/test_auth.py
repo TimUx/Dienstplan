@@ -83,6 +83,22 @@ class TestLogin:
         )
         assert resp.status_code == 401
 
+    def test_account_is_locked_after_repeated_failed_logins(self, client):
+        csrf = self._csrf(client)
+        for _ in range(5):
+            client.post(
+                '/api/auth/login',
+                json={'email': ADMIN_EMAIL, 'password': 'wrongpassword'},
+                headers={'X-CSRF-Token': csrf},
+            )
+
+        locked = client.post(
+            '/api/auth/login',
+            json={'email': ADMIN_EMAIL, 'password': ADMIN_PASSWORD},
+            headers={'X-CSRF-Token': csrf},
+        )
+        assert locked.status_code == 403
+
     def test_login_without_csrf_token_returns_403(self, client):
         resp = client.post(
             '/api/auth/login',
@@ -134,8 +150,8 @@ class TestCurrentUser:
             json={'email': ADMIN_EMAIL, 'password': ADMIN_PASSWORD},
             headers={'X-CSRF-Token': csrf},
         )
-        with client.session_transaction() as sess:
-            assert 'user_id' in sess
+        # Starlette TestClient has no session_transaction(); session is in signed cookie.
+        assert client.get('/api/auth/current-user').status_code == 200
 
 
 # ---------------------------------------------------------------------------
@@ -155,8 +171,7 @@ class TestLogout:
             '/api/auth/logout',
             headers={'X-CSRF-Token': admin_client.csrf_token},
         )
-        with admin_client.session_transaction() as sess:
-            assert 'user_id' not in sess
+        assert admin_client.get('/api/auth/current-user').status_code == 401
 
     def test_subsequent_current_user_returns_401_after_logout(self, admin_client):
         admin_client.post(

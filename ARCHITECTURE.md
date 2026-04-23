@@ -6,27 +6,27 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 
 ## Architekturprinzipien
 
-### 1. Modulare Struktur
+### 1. Modulare Struktur 
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Web Layer                            │
-│                    (web_api.py)                          │
-│  - FastAPI REST API                                      │
-│  - Static File Serving (wwwroot/)                        │
-│  - HTML Partials (wwwroot/partials/)                     │
-│  - CORS Configuration                                    │
-│  - Rate Limiting (slowapi)                               │
-│  - Gzip Compression (FastAPI Middleware)                 │
+│                     Web Layer                           │
+│                    (web_api.py)                         │
+│  - FastAPI REST API                                     │
+│  - Static File Serving (wwwroot/)                       │
+│  - HTML Partials (wwwroot/partials/)                    │
+│  - CORS Configuration                                   │
+│  - Rate Limiting (slowapi)                              │
+│  - Gzip Compression (FastAPI Middleware)                │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                  Application Layer                       │
-│                    (main.py)                             │
-│  - CLI Interface                                         │
-│  - Server Orchestration                                  │
-│  - Command Routing                                       │
+│                  Application Layer                      │
+│                    (main.py)                            │
+│  - CLI Interface                                        │
+│  - Server Orchestration                                 │
+│  - Command Routing                                      │
 └──────────────────────┬──────────────────────────────────┘
                        │
          ┌─────────────┼─────────────┐
@@ -39,11 +39,11 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
 │ - Config    │ │ - Objective │ │ - Reporting    │
 │ - Execute   │ │ - Problem   │ │ - Verify       │
 └──────┬──────┘ └──────┬──────┘ └────────┬───────┘
-       │               │                  │
-       │               ▼                  │
+       │               │                 │
+       │               ▼                 │
        │      ┌──────────────────┐       │
        │      │   Constraints    │       │
-       └──────┤ (constraints/) │───────┘
+       └──────┤ (constraints/)   │───────┘
               │                  │
               │ - Hard Rules     │
               │ - Soft Rules     │
@@ -52,12 +52,12 @@ Das Dienstplan-System ist eine Python-basierte Anwendung zur automatischen Schic
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                    Data Layer                            │
+│                    Data Layer                           │
 │     (data_loader.py, entities.py, api/repositories/)    │
-│  - Database Access (SQLite)                              │
-│  - Data Models                                           │
-│  - Repository Layer (Absence, Employee, Shift)           │
-│  - Sample Data Generation                                │
+│  - Database Access (SQLite)                             │
+│  - Data Models                                          │
+│  - Repository Layer (Absence, Employee, Shift)          │
+│  - Sample Data Generation                               │
 └─────────────────────────────────────────────────────────┘
 ```
 

@@ -24,12 +24,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -r requirements-dev.txt
     
     - name: Test Python modules
       run: |
         python -c "import importlib.metadata; print('OR-Tools:', importlib.metadata.version('ortools'))"
         python -c "import importlib.metadata; print('FastAPI:', importlib.metadata.version('fastapi'))"
         python -c "import importlib.metadata; print('Uvicorn:', importlib.metadata.version('uvicorn'))"
+    
+    - name: Run automated test suite (no slow solver)
+      run: |
+        python -m pytest -m "not slow" tests/ --tb=short -q
     
     - name: Get version
       id: version
@@ -89,12 +94,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -r requirements-dev.txt
     
     - name: Test Python modules
       run: |
         python -c "import importlib.metadata; print('OR-Tools:', importlib.metadata.version('ortools'))"
         python -c "import importlib.metadata; print('FastAPI:', importlib.metadata.version('fastapi'))"
         python -c "import importlib.metadata; print('Uvicorn:', importlib.metadata.version('uvicorn'))"
+    
+    - name: Run automated test suite (no slow solver)
+      run: |
+        python -m pytest -m "not slow" tests/ --tb=short -q
     
     - name: Get version
       id: version
@@ -238,11 +248,11 @@ jobs:
           ./Dienstplan
           ```
           
-          ## 🔐 Standard-Zugangsdaten
+          ## 🔐 Initiale Zugangsdaten
           
-          - **E-Mail**: admin@fritzwinter.de
-          - **Passwort**: Admin123!
-          - ⚠️ **Bitte nach dem ersten Login das Passwort ändern!**
+          - **E-Mail**: über `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Fallback: `admin@fritzwinter.de`)
+          - **Passwort**: über `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder beim ersten Start automatisch generiert
+          - ⚠️ **Bitte das Initialpasswort nach dem ersten Login ändern!**
           
           ## 📝 Datenbankpfad
           

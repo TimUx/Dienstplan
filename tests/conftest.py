@@ -1,7 +1,11 @@
 """Shared fixtures for the Dienstplan test suite."""
 
-import pytest
+import gc
 import os
+import sys
+import time
+
+import pytest
 
 
 from datetime import date
@@ -34,8 +38,22 @@ def test_db(tmp_path):
     os.environ["DIENSTPLAN_INITIAL_ADMIN_PASSWORD"] = TEST_ADMIN_PASSWORD
     initialize_database(db_path, with_sample_data=True)
     yield db_path
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    if not os.path.exists(db_path):
+        return
+    # Windows keeps SQLite files locked until connections are GC'd; release then retry remove.
+    gc.collect()
+    attempts = 12 if sys.platform == 'win32' else 1
+    last_err = None
+    for i in range(attempts):
+        try:
+            os.remove(db_path)
+            return
+        except PermissionError as e:
+            last_err = e
+            gc.collect()
+            if i + 1 < attempts:
+                time.sleep(0.05)
+    raise last_err
 
 
 @pytest.fixture

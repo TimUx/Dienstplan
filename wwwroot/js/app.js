@@ -31,6 +31,27 @@ const VIEW_PARTIALS = {
 const loadedPartials = new Set();
 const trackedShiftSettingsButtons = new WeakSet();
 let headerMenuInitialized = false;
+const coreFormSubmitHandlers = {
+    loginForm: (event) => auth.login(event),
+    forgotPasswordForm: (event) => auth.submitForgotPassword(event),
+    resetPasswordForm: (event) => auth.submitResetPassword(event),
+    changePasswordForm: (event) => auth.submitChangePassword(event),
+    planShiftsForm: (event) => schedule.executePlanShifts(event),
+    editShiftForm: (event) => schedule.saveShiftAssignment(event),
+    bulkEditForm: (event) => schedule.saveBulkEdit(event),
+    vacationRequestForm: (event) => absences.saveVacationRequest(event),
+    absenceForm: (event) => absences.saveAbsence(event),
+    vacationPeriodForm: (event) => absences.saveVacationPeriod(event),
+    absenceTypeForm: (event) => absences.saveAbsenceType(event),
+    shiftExchangeForm: (event) => absences.saveShiftExchange(event),
+    emailSettingsForm: (event) => employees.saveEmailSettings(event),
+    employeeForm: (event) => employees.saveEmployee(event),
+    teamForm: (event) => employees.saveTeam(event),
+    shiftTypeForm: (event) => employees.saveShiftType(event),
+    shiftTypeTeamsForm: (event) => employees.saveShiftTypeTeams(event),
+    rotationGroupForm: (event) => employees.saveRotationGroup(event),
+    userForm: (event) => employees.saveUser(event),
+};
 
 export async function refreshBranding() {
     try {
@@ -174,6 +195,26 @@ function bindShiftSettingsJsonButtons() {
             handler();
         });
         trackedShiftSettingsButtons.add(button);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const el = event.target.closest('[data-action][role="button"]');
+        if (!el) return;
+        const action = el.dataset.action;
+        const handler = actionMap[action];
+        if (!handler) return;
+        event.preventDefault();
+        handler(el, event);
+    });
+
+    document.addEventListener('change', (event) => {
+        const el = event.target.closest('[data-action]');
+        if (!el) return;
+        const action = el.dataset.action;
+        const handler = actionMap[action];
+        if (!handler) return;
+        handler(el, event);
     });
 }
 
@@ -412,6 +453,7 @@ function buildActionMap() {
         'switchScheduleView': (el) => schedule.switchScheduleView(el.dataset.view, el),
 
         // Schedule controls
+        'loadScheduleDebounced': () => schedule.loadScheduleDebounced(),
         'changeDate': (el) => schedule.changeDate(parseInt(el.dataset.delta, 10)),
         'changeMonth': (el) => schedule.changeMonth(parseInt(el.dataset.delta, 10)),
         'changeYear': (el) => schedule.changeYear(parseInt(el.dataset.delta, 10)),
@@ -437,6 +479,9 @@ function buildActionMap() {
         'closeQuickEntryModal': () => schedule.closeQuickEntryModal(),
         'saveQuickEntry': () => schedule.saveQuickEntry(),
         'updateQuickEntryOptions': () => schedule.updateQuickEntryOptions(),
+        'showQuickEntryModalForCell': (el) => schedule.showQuickEntryModalForCell(el.dataset.employeeId, el.dataset.date),
+        'editShiftAssignmentById': (el) => schedule.editShiftAssignmentById(el.dataset.shiftId),
+        'toggleShiftSelectionById': (el) => schedule.toggleShiftSelectionById(el.dataset.shiftId),
 
         // Management tabs
         'switchManagementTab': (el) => employees.switchManagementTab(el.dataset.tab),
@@ -444,17 +489,28 @@ function buildActionMap() {
 
         // Employee actions
         'showAddEmployeeModal': () => employees.showAddEmployeeModal(),
+        'editEmployeeById': (el) => employees.editEmployee(parseInt(el.dataset.id, 10)),
+        'deleteEmployeeById': (el) => employees.deleteEmployee(parseInt(el.dataset.id, 10), el.dataset.name),
         'exportEmployeesCsv': () => employees.exportEmployeesCsv(),
         'showImportEmployeesModal': () => employees.showImportEmployeesModal(),
         'closeImportEmployeesModal': () => employees.closeImportEmployeesModal(),
         'showAddTeamModal': () => employees.showAddTeamModal(),
+        'editTeamById': (el) => employees.editTeam(parseInt(el.dataset.id, 10)),
+        'deleteTeamById': (el) => employees.deleteTeam(parseInt(el.dataset.id, 10), el.dataset.name),
         'exportTeamsCsv': () => employees.exportTeamsCsv(),
         'showImportTeamsModal': () => employees.showImportTeamsModal(),
         'closeImportTeamsModal': () => employees.closeImportTeamsModal(),
         'showShiftTypeModal': () => employees.showShiftTypeModal(),
+        'editShiftTypeById': (el) => employees.editShiftType(parseInt(el.dataset.id, 10)),
+        'showShiftTypeTeamsModalById': (el) => employees.showShiftTypeTeamsModal(parseInt(el.dataset.id, 10), el.dataset.code),
+        'deleteShiftTypeById': (el) => employees.deleteShiftType(parseInt(el.dataset.id, 10), el.dataset.code),
         'loadShiftTypesManagement': () => employees.loadShiftTypesManagement(),
         'showRotationGroupModal': () => employees.showRotationGroupModal(),
+        'editRotationGroupById': (el) => employees.editRotationGroup(parseInt(el.dataset.id, 10)),
+        'deleteRotationGroupById': (el) => employees.deleteRotationGroup(parseInt(el.dataset.id, 10), el.dataset.name),
         'loadRotationGroups': () => employees.loadRotationGroups(),
+        'addShiftToRotationFromCheckbox': (el) => employees.addShiftToRotation(parseInt(el.dataset.shiftId, 10), el.dataset.shiftCode, el.dataset.shiftName, el.dataset.colorCode),
+        'removeShiftFromRotation': (el) => employees.removeShiftFromRotation(el),
         'loadGlobalSettings': () => employees.loadGlobalSettings(),
         'saveGlobalSettings': () => employees.saveGlobalSettings(),
         'exportShiftSettings': () => employees.exportShiftSettings(),
@@ -471,6 +527,8 @@ function buildActionMap() {
         'closeRotationGroupModal': () => employees.closeRotationGroupModal(),
         'saveRotationGroup': () => employees.saveRotationGroup(),
         'showAddUserModal': () => employees.showAddUserModal(),
+        'editUserById': (el) => employees.editUser(el.dataset.id),
+        'deleteUserById': (el) => employees.deleteUser(el.dataset.id, el.dataset.email),
         'closeUserModal': () => employees.closeUserModal(),
         'saveUser': () => employees.saveUser(),
         'showEmailSettingsModal': () => employees.showEmailSettingsModal(),
@@ -492,6 +550,7 @@ function buildActionMap() {
 
         // Statistics
         'loadStatistics': () => stats.loadStatistics(),
+        'loadAuditLog': () => audit.loadAuditLog(),
         'loadPlanningReport': () => planningReport.loadPlanningReport(),
         'exportPlanningReportSummary': () => planningReport.exportPlanningReportSummary(),
 
@@ -512,12 +571,23 @@ function buildActionMap() {
         'saveVacationRequest': () => absences.saveVacationRequest(),
         'closeAbsenceModal': () => absences.closeAbsenceModal(),
         'saveAbsence': () => absences.saveAbsence(),
+        'deleteAbsence': (el) => absences.deleteAbsence(parseInt(el.dataset.id, 10), el.dataset.type),
         'closeVacationPeriodModal': () => absences.closeVacationPeriodModal(),
         'saveVacationPeriod': () => absences.saveVacationPeriod(),
+        'editVacationPeriod': (el) => absences.editVacationPeriod(parseInt(el.dataset.id, 10)),
+        'deleteVacationPeriod': (el) => absences.deleteVacationPeriod(parseInt(el.dataset.id, 10), el.dataset.name),
         'closeAbsenceTypeModal': () => absences.closeAbsenceTypeModal(),
         'saveAbsenceType': () => absences.saveAbsenceType(),
+        'editAbsenceType': (el) => absences.editAbsenceType(parseInt(el.dataset.id, 10)),
+        'deleteAbsenceType': (el) => absences.deleteAbsenceType(parseInt(el.dataset.id, 10), el.dataset.name),
         'closeShiftExchangeModal': () => absences.closeShiftExchangeModal(),
         'saveShiftExchange': () => absences.saveShiftExchange(),
+        'requestShiftExchange': (el) => absences.requestShiftExchange(parseInt(el.dataset.id, 10)),
+        'processShiftExchange': (el) => absences.processShiftExchange(parseInt(el.dataset.id, 10), el.dataset.status),
+        'processVacationRequest': (el) => absences.processVacationRequest(parseInt(el.dataset.id, 10), el.dataset.status),
+        'deleteVacationRequest': (el) => absences.deleteVacationRequest(parseInt(el.dataset.id, 10), el.dataset.employeeName),
+        'toggleYearApproval': (el) => absences.toggleYearApproval(parseInt(el.dataset.year, 10), el.dataset.approve === 'true'),
+        'toggleYearApprovalAbsence': (el) => absences.toggleYearApprovalAbsence(parseInt(el.dataset.year, 10), el.dataset.approve === 'true'),
 
         // Auth modals
         'closeLoginModal': () => auth.closeLoginModal(),
@@ -531,6 +601,7 @@ function buildActionMap() {
         'submitResetPassword': () => auth.submitResetPassword(),
         'filterNotifications': (el) => auth.filterNotifications(el.dataset.filter),
         'markAllNotificationsRead': () => auth.markAllNotificationsRead(),
+        'markNotificationRead': (el) => auth.markNotificationRead(parseInt(el.dataset.id, 10)),
         'closeNotificationModal': () => auth.closeNotificationModal(),
     };
 }
@@ -548,9 +619,72 @@ function initEventDelegation() {
         if (handler) {
             event.preventDefault();
             handler(el, event);
+            setTimeout(focusVisibleModal, 0);
         } else {
             console.warn(`No handler for action: ${action}`);
         }
+    });
+}
+
+function getVisibleModal() {
+    return [...document.querySelectorAll('.modal')].find((modal) => {
+        if (modal.classList.contains('active')) return true;
+        const style = window.getComputedStyle(modal);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+}
+
+function focusVisibleModal() {
+    const modal = getVisibleModal();
+    if (!modal) return;
+    const focusable = modal.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length > 0) {
+        focusable[0].focus();
+    }
+}
+
+function initModalAccessibility() {
+    document.addEventListener('keydown', (event) => {
+        const modal = getVisibleModal();
+        if (!modal) return;
+
+        if (event.key === 'Escape') {
+            const closeButton = modal.querySelector('[data-action^="close"]');
+            if (closeButton) {
+                event.preventDefault();
+                closeButton.click();
+            }
+            return;
+        }
+
+        if (event.key !== 'Tab') return;
+        const focusable = [...modal.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )];
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+}
+
+function initCoreFormSubmitHandlers() {
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!form || !form.id) return;
+        const handler = coreFormSubmitHandlers[form.id];
+        if (!handler) return;
+        event.preventDefault();
+        handler(event);
     });
 }
 
@@ -733,6 +867,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     registerGlobals();
     initHeaderMenu();
     initEventDelegation();
+    initModalAccessibility();
+    initCoreFormSubmitHandlers();
     initImportFormHandlers();
     refreshBranding();
     refreshFooterMetadata();

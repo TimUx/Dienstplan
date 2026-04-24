@@ -4,12 +4,16 @@
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --danger-color: #ef4444;
+    --secondary-hover: #475569;
+    --danger-hover: #d32f2f;
     --bg-color: #f8fafc;
     --card-bg: #ffffff;
     --text-color: #1e293b;
     --border-color: #e2e8f0;
     --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --hover-bg: #f1f5f9;
+    --primary-hover: #1d4ed8;
     
     /* Shift colors */
     --frueh-color: #FFD700;
@@ -71,38 +75,10 @@ header {
     width: auto;
 }
 
-.company-logo-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-.logo-fw {
-    font-size: 2.5rem;
-    font-weight: 900;
-    letter-spacing: 2px;
-    color: white;
-    line-height: 1;
-}
-
-.logo-subtext {
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 3px;
-    color: rgba(255, 255, 255, 0.9);
-    margin-top: 2px;
-}
-
 .divider {
     width: 2px;
     height: 50px;
     background: rgba(255, 255, 255, 0.3);
-}
-
-.company-logo {
-    height: 60px;
-    width: auto;
-    filter: brightness(0) invert(1);
 }
 
 h1 {
@@ -123,7 +99,7 @@ nav {
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.95rem;
-    transition: all 0.2s;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
     color: var(--text-color);
     text-align: left;
 }
@@ -177,7 +153,7 @@ button {
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.95rem;
-    transition: all 0.3s;
+    transition: background-color 0.3s, color 0.3s, transform 0.3s, box-shadow 0.3s, border-color 0.3s;
 }
 
 .btn-primary {
@@ -196,7 +172,8 @@ button {
 }
 
 .btn-secondary:hover {
-    background: #475569;
+    background: var(--secondary-hover);
+    transform: translateY(-1px);
 }
 
 input[type="date"],
@@ -209,25 +186,6 @@ select {
 
 .schedule-grid {
     overflow-x: auto;
-}
-
-.schedule-table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 800px;
-}
-
-.schedule-table th {
-    background: var(--bg-color);
-    padding: 12px;
-    text-align: left;
-    border-bottom: 2px solid var(--border-color);
-    font-weight: 600;
-}
-
-.schedule-table td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border-color);
 }
 
 .shift-badge {
@@ -259,31 +217,6 @@ select {
 .shift-U-rejected { background: #9E9E9E; color: #fff; } /* Vacation (rejected) - Gray */
 .shift-AU { background: #FF5722; color: #fff; } /* Sick leave - Red-Orange */
 .shift-L { background: #BDBDBD; color: #000; } /* Training - Light gray */
-
-.employees-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 15px;
-}
-
-.employee-card {
-    background: var(--bg-color);
-    padding: 15px;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-}
-
-.employee-card h3 {
-    margin-bottom: 8px;
-    color: var(--primary-color);
-}
-
-.employee-info {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    font-size: 0.9rem;
-}
 
 .statistics-grid {
     display: grid;
@@ -415,6 +348,10 @@ select {
     font-weight: bold;
     cursor: pointer;
     color: var(--secondary-color);
+    background: transparent;
+    border: none;
+    padding: 0;
+    line-height: 1;
 }
 
 .close:hover {
@@ -631,18 +568,6 @@ select {
         display: none;
     }
     
-    .logo-fw {
-        font-size: 2rem;
-    }
-    
-    .logo-subtext {
-        font-size: 0.6rem;
-    }
-    
-    .company-logo {
-        height: 40px;
-    }
-    
     .company-logo-img {
         height: 40px;
     }
@@ -824,7 +749,7 @@ body.authenticated .auth-only {
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s, transform 0.2s;
 }
 
 .btn-login:hover {
@@ -840,11 +765,12 @@ body.authenticated .auth-only {
     border-radius: 4px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s;
 }
 
 .btn-logout:hover {
     background: rgba(239, 68, 68, 1);
+    transform: translateY(-1px);
 }
 
 .login-info {
@@ -979,7 +905,7 @@ body.authenticated .auth-only {
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     white-space: nowrap;
 }
 
@@ -1026,7 +952,7 @@ body.authenticated .auth-only {
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     white-space: nowrap;
 }
 
@@ -1132,23 +1058,6 @@ body.authenticated .auth-only {
     gap: 30px;
 }
 
-.admin-section {
-    background: var(--card-bg);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-}
-
-.admin-section h3 {
-    margin-bottom: 10px;
-    color: var(--primary-color);
-}
-
-.admin-section p {
-    color: var(--secondary-color);
-    margin-bottom: 15px;
-}
-
 .settings-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -1174,46 +1083,7 @@ body.authenticated .auth-only {
     font-size: 1rem;
 }
 
-.info-box {
-    background: var(--bg-color);
-    padding: 15px;
-    border-radius: 6px;
-    border-left: 4px solid var(--primary-color);
-}
-
-.info-box p {
-    margin: 5px 0;
-}
-
 /* Tabs */
-.tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid var(--border-color);
-}
-
-.tab-btn {
-    background: none;
-    border: none;
-    padding: 10px 20px;
-    font-size: 1rem;
-    color: var(--secondary-color);
-    cursor: pointer;
-    border-bottom: 3px solid transparent;
-    transition: all 0.2s;
-}
-
-.tab-btn:hover {
-    color: var(--primary-color);
-}
-
-.tab-btn.active {
-    color: var(--primary-color);
-    border-bottom-color: var(--primary-color);
-    font-weight: 600;
-}
-
 .tab-content {
     display: none;
 }
@@ -1254,7 +1124,6 @@ body.disponent button.admin-only.admin-strict {
 
 
 
-/* Table Styles */
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -1262,6 +1131,7 @@ body.disponent button.admin-only.admin-strict {
     box-shadow: var(--shadow);
     border-radius: 8px;
     overflow: hidden;
+    margin-top: 20px;
 }
 
 .data-table thead {
@@ -1281,37 +1151,6 @@ body.disponent button.admin-only.admin-strict {
 
 .data-table tbody tr {
     border-bottom: 1px solid var(--border-color);
-}
-
-/* Badge Styles */
-.badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.badge.success {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-.badge.warning {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.badge.danger {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-/* Grid Layout */
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
 }
 
 .card {
@@ -1421,6 +1260,10 @@ body.disponent button.admin-only.admin-strict {
 .shift-cell:hover .empty-cell-placeholder {
     opacity: 1;
     color: var(--primary-color);
+}
+
+.shift-cell[data-action="showQuickEntryModalForCell"] {
+    cursor: pointer;
 }
 
 .calendar-table .week-cell {
@@ -1546,43 +1389,9 @@ body.disponent button.admin-only.admin-strict {
     color: white;
 }
 
-/* Old year view styles - kept for backwards compatibility */
-.year-view-container {
-    margin: 20px 0;
-}
-
-.month-section {
-    margin-bottom: 40px;
-}
-
-.month-title {
-    text-align: center;
-    color: var(--primary-color);
-    font-size: 1.3rem;
-    margin: 20px 0;
-    padding: 10px;
-    background: var(--bg-color);
-    border-radius: 8px;
-}
-
-.year-view .week-column {
-    min-width: 70px;
-}
-
-.year-view .shift-badge {
-    font-size: 0.7rem;
-    padding: 2px 6px;
-}
-
 /* Sunday and holiday column highlighting */
 .sunday-column,
-.holiday-column {
-    background: #ffebee !important;
-    color: #c62828 !important;
-}
-
-.sunday-cell,
-.holiday-cell {
+.sunday-cell {
     background: #fff5f5 !important;
 }
 
@@ -1699,7 +1508,7 @@ body.disponent button.admin-only.admin-strict {
     border: none;
     cursor: pointer;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .btn-edit {
@@ -1709,6 +1518,7 @@ body.disponent button.admin-only.admin-strict {
 
 .btn-edit:hover {
     background: var(--primary-hover);
+    transform: translateY(-1px);
 }
 
 .btn-delete {
@@ -1727,6 +1537,7 @@ body.disponent button.admin-only.admin-strict {
 
 .btn-success:hover {
     background: #388e3c;
+    transform: translateY(-1px);
 }
 
 .btn-danger {
@@ -1735,41 +1546,8 @@ body.disponent button.admin-only.admin-strict {
 }
 
 .btn-danger:hover {
-    background: #d32f2f;
-}
-
-/* Data table styles */
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-.data-table thead {
-    background: var(--primary-color);
-    color: white;
-}
-
-.data-table th {
-    padding: 12px;
-    text-align: left;
-    font-weight: 600;
-}
-
-.data-table td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.data-table tbody tr:hover {
-    background: var(--bg-color);
-}
-
-/* Grid styles */
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    background: var(--danger-hover);
+    transform: translateY(-1px);
 }
 
 .employees-grid {
@@ -1917,7 +1695,7 @@ body.disponent button.admin-only.admin-strict {
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
     position: relative;
     bottom: -2px;
 }
@@ -1949,11 +1727,6 @@ body.disponent button.admin-only.admin-strict {
     margin-bottom: 20px;
     border-radius: 4px;
     color: #075985;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
 }
 
 @media (max-width: 768px) {
@@ -2153,7 +1926,8 @@ body.disponent button.admin-only.admin-strict {
 }
 
 .btn-danger:hover {
-    background-color: #d32f2f;
+    background-color: var(--danger-hover);
+    transform: translateY(-1px);
 }
 
 .workdays-checkboxes {
@@ -2256,6 +2030,9 @@ body.disponent button.admin-only.admin-strict {
     cursor: pointer;
     margin: 0;
     transition: transform 0.2s ease;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
 }
 
 .notification-bell:hover {
@@ -2318,7 +2095,7 @@ body.disponent button.admin-only.admin-strict {
     padding: 15px;
     margin-bottom: 15px;
     background-color: white;
-    transition: all 0.2s ease;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .notification-item:hover {
@@ -2761,7 +2538,7 @@ body.disponent button.admin-only.admin-strict {
 
 .planning-result-more {
     font-style: italic;
-    color: var(--text-secondary, #666) !important;
+    color: var(--text-secondary, #666);
 }
 
 /* ============================================================================
@@ -2869,10 +2646,6 @@ body.disponent button.admin-only.admin-strict {
     display: block;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
 /* Responsive Tables */
 .table-scroll-container {
     overflow-x: auto;
@@ -2880,12 +2653,6 @@ body.disponent button.admin-only.admin-strict {
 }
 
 @media (max-width: 768px) {
-    .schedule-table th,
-    .schedule-table td {
-        font-size: 0.75rem;
-        padding: 2px 4px;
-    }
-
     .menu-toggle {
         font-size: 0.85rem;
         padding: 7px 12px;
@@ -2904,13 +2671,13 @@ body.disponent button.admin-only.admin-strict {
 
 /* Keyboard Accessibility */
 :focus-visible {
-    outline: 3px solid #cc0000;
+    outline: 3px solid var(--primary-color);
     outline-offset: 2px;
 }
 
 button:focus-visible,
 [role="button"]:focus-visible,
 [tabindex]:focus-visible {
-    outline: 3px solid #cc0000;
+    outline: 3px solid var(--primary-color);
     outline-offset: 2px;
 }

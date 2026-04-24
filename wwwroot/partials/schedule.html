@@ -11,14 +11,14 @@
                     <!-- Week View Controls -->
                     <div id="week-controls" class="date-controls">
                         <button data-action="changeDate" data-delta="-1">◀ Vorherige Woche</button>
-                        <input type="date" id="startDate" onchange="loadSchedule()">
+                        <input type="date" id="startDate" data-action="loadScheduleDebounced">
                         <button data-action="changeDate" data-delta="1">Nächste Woche ▶</button>
                     </div>
                     
                     <!-- Month View Controls -->
                     <div id="month-controls" class="date-controls" style="display: none;">
                         <button data-action="changeMonth" data-delta="-1">◀ Vorheriger Monat</button>
-                        <select id="monthSelect" onchange="loadSchedule()">
+                        <select id="monthSelect" data-action="loadScheduleDebounced">
                             <option value="1">Januar</option>
                             <option value="2">Februar</option>
                             <option value="3">März</option>
@@ -32,7 +32,7 @@
                             <option value="11">November</option>
                             <option value="12">Dezember</option>
                         </select>
-                        <select id="monthYearSelect" onchange="loadSchedule()"></select>
+                        <select id="monthYearSelect" data-action="loadScheduleDebounced"></select>
                         <button data-action="changeMonth" data-delta="1">Nächster Monat ▶</button>
                         <span id="approvalStatus" style="margin-left: 15px; padding: 5px 10px; border-radius: 4px; font-weight: bold;"></span>
                         <button id="approvalButton" data-action="togglePlanApproval" class="btn-primary admin-only" style="display: none; margin-left: 10px;">Dienstplan freigeben</button>
@@ -41,7 +41,7 @@
                     <!-- Year View Controls -->
                     <div id="year-controls" class="date-controls" style="display: none;">
                         <button data-action="changeYear" data-delta="-1">◀ Vorheriges Jahr</button>
-                        <select id="yearSelect" onchange="loadSchedule()"></select>
+                        <select id="yearSelect" data-action="loadScheduleDebounced"></select>
                         <button data-action="changeYear" data-delta="1">Nächstes Jahr ▶</button>
                     </div>
                     
@@ -66,9 +66,9 @@
     <!-- Edit Shift Assignment Modal -->
     <div id="editShiftModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeEditShiftModal">&times;</span>
+            <button class="close" type="button" data-action="closeEditShiftModal" aria-label="Schicht-Dialog schließen">&times;</button>
             <h2 id="editShiftModalTitle">Schicht bearbeiten</h2>
-            <form id="editShiftForm" onsubmit="saveShiftAssignment(event)">
+            <form id="editShiftForm">
                 <input type="hidden" id="editShiftId">
                 <div class="form-group">
                     <label>Mitarbeiter*</label>
@@ -113,13 +113,13 @@
     <!-- Bulk Edit Modal -->
     <div id="bulkEditModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeBulkEditModal">&times;</span>
+            <button class="close" type="button" data-action="closeBulkEditModal" aria-label="Mehrfachbearbeitung schließen">&times;</button>
             <h2>Mehrere Schichten bearbeiten</h2>
             <p>Sie bearbeiten <strong id="bulkEditShiftCount">0</strong> Schichten gleichzeitig.</p>
             
             <div id="bulkEditSummary"></div>
             
-            <form id="bulkEditForm" onsubmit="saveBulkEdit(event)">
+            <form id="bulkEditForm">
                 <div class="form-group">
                     <label>Mitarbeiter ändern</label>
                     <select id="bulkEditEmployeeId">
@@ -159,7 +159,7 @@
     <!-- Quick Entry Modal for empty cells -->
     <div id="quickEntryModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeQuickEntryModal">&times;</span>
+            <button class="close" type="button" data-action="closeQuickEntryModal" aria-label="Schnellerfassung schließen">&times;</button>
             <h2>Schicht oder Abwesenheit hinzufügen</h2>
             <p id="quickEntryInfo">Mitarbeiter: <strong id="quickEntryEmployee"></strong><br>Datum: <strong id="quickEntryDate"></strong></p>
             
@@ -168,7 +168,7 @@
             
             <div class="form-group">
                 <label>Was möchten Sie hinzufügen?*</label>
-                <select id="quickEntryType" required onchange="updateQuickEntryOptions()">
+                <select id="quickEntryType" required data-action="updateQuickEntryOptions">
                     <option value="">Bitte wählen...</option>
                     <option value="shift">Schicht</option>
                     <option value="absence">Abwesenheit (z.B. AU, L, benutzerdefinierte Typen)</option>
@@ -205,7 +205,7 @@
     <!-- Plan Shifts Modal -->
     <div id="planShiftsModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closePlanShiftsModal">&times;</span>
+            <button class="close" type="button" data-action="closePlanShiftsModal" aria-label="Planungsdialog schließen">&times;</button>
             <h2>Schichten automatisch planen</h2>
             
             <!-- Loading Overlay -->
@@ -223,7 +223,7 @@
                 <button type="button" id="cancelPlanningBtn" data-action="cancelPlanning" class="btn-secondary" style="margin-top: 15px; background: rgba(255,255,255,0.9); color: #333; border: 1px solid #ccc;">⏹ Planung abbrechen</button>
             </div>
             
-            <form id="planShiftsForm" onsubmit="executePlanShifts(event)">
+            <form id="planShiftsForm">
                 <div class="form-group">
                     <label>Monat*</label>
                     <select id="planMonth">
@@ -272,7 +272,7 @@
     <!-- Planning Result Modal -->
     <div id="planningResultModal" class="modal">
         <div class="modal-content large">
-            <span class="close" data-action="closePlanningResultModal">&times;</span>
+            <button class="close" type="button" data-action="closePlanningResultModal" aria-label="Ergebnisdialog schließen">&times;</button>
             <h2 id="planningResultTitle">Planung abgeschlossen</h2>
             <div id="planningResultContent"></div>
             <div class="form-actions">

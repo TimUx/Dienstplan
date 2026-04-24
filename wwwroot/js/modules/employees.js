@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, escapeJsString, sanitizeColorCode, formatImportResult, showToast, getCsrfToken } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, formatImportResult, showToast, getCsrfToken } from './utils.js';
 import { hasRole, canEditEmployees, canPlanShifts } from './auth.js';
 import { store } from './store.js';
 
@@ -55,8 +55,8 @@ export function displayEmployees(employees) {
                 </div>
                 ${canEdit ? `
                     <div class="card-actions">
-                        <button onclick="editEmployee(${e.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
-                        ${isAdmin ? `<button onclick="deleteEmployee(${e.id}, '${e.vorname} ${e.name}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                        <button data-action="editEmployeeById" data-id="${e.id}" class="btn-small btn-edit">✏️ Bearbeiten</button>
+                        ${isAdmin ? `<button data-action="deleteEmployeeById" data-id="${e.id}" data-name="${escapeHtml(`${e.vorname} ${e.name}`)}" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
                     </div>
                 ` : ''}
             </div>
@@ -284,8 +284,8 @@ export function displayTeams(teams) {
                 <p><strong>Mitarbeiter:</strong> ${team.employeeCount || 0}</p>
                 ${canEdit ? `
                     <div class="card-actions">
-                        <button onclick="editTeam(${team.id})" class="btn-small btn-edit">✏️ Bearbeiten</button>
-                        ${isAdmin ? `<button onclick="deleteTeam(${team.id}, '${escapeHtml(team.name)}')" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
+                        <button data-action="editTeamById" data-id="${team.id}" class="btn-small btn-edit">✏️ Bearbeiten</button>
+                        ${isAdmin ? `<button data-action="deleteTeamById" data-id="${team.id}" data-name="${teamName}" class="btn-small btn-delete">🗑️ Löschen</button>` : ''}
                     </div>
                 ` : ''}
             </div>
@@ -874,9 +874,9 @@ export function displayShiftTypesManagement(shiftTypes) {
         html += `<td><div class="color-preview" style="background-color: ${shift.colorCode}"></div></td>`;
         html += `<td>${statusBadge}</td>`;
         html += '<td class="actions">';
-        html += `<button onclick="editShiftType(${shift.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
-        html += `<button onclick="showShiftTypeTeamsModal(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-secondary">👥 Teams</button> `;
-        html += `<button onclick="deleteShiftType(${shift.id}, '${escapeHtml(shift.code)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
+        html += `<button data-action="editShiftTypeById" data-id="${shift.id}" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
+        html += `<button data-action="showShiftTypeTeamsModalById" data-id="${shift.id}" data-code="${escapeHtml(shift.code)}" class="btn-small btn-secondary">👥 Teams</button> `;
+        html += `<button data-action="deleteShiftTypeById" data-id="${shift.id}" data-code="${escapeHtml(shift.code)}" class="btn-small btn-danger">🗑️ Löschen</button>`;
         html += '</td>';
         html += '</tr>';
     });
@@ -933,8 +933,8 @@ export function displayRotationGroups(groups) {
         html += `<td>${shiftRotation || '<em>Keine Schichten</em>'}</td>`;
         html += `<td>${statusBadge}</td>`;
         html += '<td class="actions">';
-        html += `<button onclick="editRotationGroup(${group.id})" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
-        html += `<button onclick="deleteRotationGroup(${group.id}, '${escapeJsString(group.name)}')" class="btn-small btn-danger">🗑️ Löschen</button>`;
+        html += `<button data-action="editRotationGroupById" data-id="${group.id}" class="btn-small btn-secondary">✏️ Bearbeiten</button> `;
+        html += `<button data-action="deleteRotationGroupById" data-id="${group.id}" data-name="${escapeHtml(group.name)}" class="btn-small btn-danger">🗑️ Löschen</button>`;
         html += '</td>';
         html += '</tr>';
     });
@@ -1006,7 +1006,7 @@ export async function loadAvailableShiftsForRotation(selectedShifts = []) {
                 html += '<span class="drag-handle">☰</span>';
                 html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span>`;
                 html += `<span>${escapeHtml(shift.name)}</span>`;
-                html += `<button type="button" class="btn-small btn-danger" onclick="removeShiftFromRotation(this)">✖</button>`;
+                html += `<button type="button" class="btn-small btn-danger" data-action="removeShiftFromRotation">✖</button>`;
                 html += '</div>';
             });
         }
@@ -1018,7 +1018,7 @@ export async function loadAvailableShiftsForRotation(selectedShifts = []) {
             html += '<div class="form-group" style="margin-top: 20px;"><label>Weitere Schichten hinzufügen:</label></div>';
             availableShifts.forEach(shift => {
                 html += '<div class="checkbox-item">';
-                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" onchange="addShiftToRotation(${shift.id}, '${escapeJsString(shift.code)}', '${escapeJsString(shift.name)}', '${sanitizeColorCode(shift.colorCode)}')">`;
+                html += `<label><input type="checkbox" name="available-shift-${shift.id}" value="${shift.id}" data-action="addShiftToRotationFromCheckbox" data-shift-id="${shift.id}" data-shift-code="${escapeHtml(shift.code)}" data-shift-name="${escapeHtml(shift.name)}" data-color-code="${sanitizeColorCode(shift.colorCode)}">`;
                 html += `<span class="shift-badge" style="background-color: ${sanitizeColorCode(shift.colorCode)}">${escapeHtml(shift.code)}</span> ${escapeHtml(shift.name)}`;
                 html += '</label></div>';
             });
@@ -1049,7 +1049,7 @@ export function addShiftToRotation(shiftId, shiftCode, shiftName, colorCode) {
         <span class="drag-handle">☰</span>
         <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span>
         <span>${escapeHtml(shiftName)}</span>
-        <button type="button" class="btn-small btn-danger" onclick="removeShiftFromRotation(this)">✖</button>
+        <button type="button" class="btn-small btn-danger" data-action="removeShiftFromRotation">✖</button>
     `;
 
     if (formGroup) {
@@ -1089,7 +1089,7 @@ export function removeShiftFromRotation(button) {
     const newCheckbox = document.createElement('div');
     newCheckbox.className = 'checkbox-item';
     newCheckbox.innerHTML = `
-        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" onchange="addShiftToRotation(${shiftId}, '${escapeJsString(shiftCode)}', '${escapeJsString(shiftName)}', '${safeColorCode}')">
+        <label><input type="checkbox" name="available-shift-${shiftId}" value="${shiftId}" data-action="addShiftToRotationFromCheckbox" data-shift-id="${shiftId}" data-shift-code="${escapeHtml(shiftCode)}" data-shift-name="${escapeHtml(shiftName)}" data-color-code="${safeColorCode}">
         <span class="shift-badge" style="background-color: ${safeColorCode}">${escapeHtml(shiftCode)}</span> ${escapeHtml(shiftName)}
         </label>
     `;
@@ -1403,8 +1403,8 @@ export function displayUsers(users) {
         html += `<td>${escapeHtml(user.roles.join(', '))}</td>`;
         html += `<td>${statusBadge}</td>`;
         html += `<td>`;
-        html += `<button onclick="editUser('${escapeHtml(user.id)}')" class="btn-small btn-primary">Bearbeiten</button> `;
-        html += `<button onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')" class="btn-small btn-danger">Löschen</button>`;
+        html += `<button data-action="editUserById" data-id="${escapeHtml(user.id)}" class="btn-small btn-primary">Bearbeiten</button> `;
+        html += `<button data-action="deleteUserById" data-id="${escapeHtml(user.id)}" data-email="${escapeHtml(user.email)}" class="btn-small btn-danger">Löschen</button>`;
         html += `</td>`;
         html += '</tr>';
     });

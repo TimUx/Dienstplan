@@ -104,7 +104,7 @@
                 
                 <div class="controls">
                     <label>Jahr auswählen:</label>
-                    <select id="vacationYearSelect" onchange="loadVacationYearPlan()">
+                    <select id="vacationYearSelect" data-action="loadVacationYearPlan">
                         <!-- Years will be populated dynamically -->
                     </select>
                     <button data-action="loadVacationYearPlan" class="btn-primary">Laden</button>
@@ -129,9 +129,9 @@
     <!-- Vacation Request Modal -->
     <div id="vacationRequestModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeVacationRequestModal">&times;</span>
+            <button class="close" type="button" data-action="closeVacationRequestModal" aria-label="Urlaubsantrag-Dialog schließen">&times;</button>
             <h2>Urlaubsantrag stellen</h2>
-            <form id="vacationRequestForm" onsubmit="saveVacationRequest(event)">
+            <form id="vacationRequestForm">
                 <div class="form-group">
                     <label>Mitarbeiter*</label>
                     <select id="vacationEmployeeId" required>
@@ -161,9 +161,9 @@
     <!-- Absence (AU/L) Modal -->
     <div id="absenceModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeAbsenceModal">&times;</span>
+            <button class="close" type="button" data-action="closeAbsenceModal" aria-label="Abwesenheits-Dialog schließen">&times;</button>
             <h2 id="absenceModalTitle">Abwesenheit erfassen</h2>
-            <form id="absenceForm" onsubmit="saveAbsence(event)">
+            <form id="absenceForm">
                 <input type="hidden" id="absenceType">
                 <div class="form-group">
                     <label>Mitarbeiter*</label>
@@ -200,9 +200,9 @@
     <!-- Vacation Period Modal -->
     <div id="vacationPeriodModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeVacationPeriodModal">&times;</span>
+            <button class="close" type="button" data-action="closeVacationPeriodModal" aria-label="Ferienzeit-Dialog schließen">&times;</button>
             <h2 id="vacationPeriodModalTitle">Ferienzeit hinzufügen</h2>
-            <form id="vacationPeriodForm" onsubmit="saveVacationPeriod(event)">
+            <form id="vacationPeriodForm">
                 <input type="hidden" id="vacationPeriodId">
                 <div class="form-group">
                     <label>Name*</label>
@@ -232,9 +232,9 @@
     <!-- Absence Type Management Modal -->
     <div id="absenceTypeModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeAbsenceTypeModal">&times;</span>
+            <button class="close" type="button" data-action="closeAbsenceTypeModal" aria-label="Abwesenheitstyp-Dialog schließen">&times;</button>
             <h2 id="absenceTypeModalTitle">Abwesenheitstyp hinzufügen</h2>
-            <form id="absenceTypeForm" onsubmit="saveAbsenceType(event)">
+            <form id="absenceTypeForm">
                 <input type="hidden" id="absenceTypeId">
                 <div class="form-group">
                     <label>Bezeichnung*</label>
@@ -274,9 +274,9 @@
     <!-- Shift Exchange Modal -->
     <div id="shiftExchangeModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeShiftExchangeModal">&times;</span>
+            <button class="close" type="button" data-action="closeShiftExchangeModal" aria-label="Diensttausch-Dialog schließen">&times;</button>
             <h2>Dienst zum Tausch anbieten</h2>
-            <form id="shiftExchangeForm" onsubmit="saveShiftExchange(event)">
+            <form id="shiftExchangeForm">
                 <div class="form-group">
                     <label>Datum*</label>
                     <input type="date" id="exchangeDate" required>

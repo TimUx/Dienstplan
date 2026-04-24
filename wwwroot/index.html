@@ -17,10 +17,10 @@
                 </div>
                 <div class="header-right">
                     <div class="header-actions">
-                        <div id="notification-bell" class="notification-bell admin-only" style="display:none;" data-action="showNotificationModal">
+                        <button id="notification-bell" class="notification-bell admin-only" style="display:none;" data-action="showNotificationModal" type="button" aria-label="Benachrichtigungen öffnen">
                             <span class="bell-icon">🔔</span>
                             <span id="notification-badge" class="notification-badge" style="display:none;">0</span>
-                        </div>
+                        </button>
                         <div id="header-menu" class="header-menu">
                             <button id="header-menu-toggle" class="menu-toggle" type="button" aria-label="Navigation öffnen" aria-haspopup="true" aria-expanded="false">
                                 ☰ Menü
@@ -74,9 +74,9 @@
     <!-- Login Modal -->
     <div id="loginModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeLoginModal">&times;</span>
+            <button class="close" type="button" data-action="closeLoginModal" aria-label="Anmelden-Dialog schließen">&times;</button>
             <h2>Anmelden</h2>
-            <form id="loginForm" onsubmit="login(event)">
+            <form id="loginForm">
                 <div class="form-group">
                     <label>E-Mail*</label>
                     <input type="email" id="loginEmail" required>
@@ -111,10 +111,10 @@
     <!-- Forgot Password Modal -->
     <div id="forgotPasswordModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeForgotPasswordModal">&times;</span>
+            <button class="close" type="button" data-action="closeForgotPasswordModal" aria-label="Passwort vergessen-Dialog schließen">&times;</button>
             <h2>Passwort vergessen</h2>
             <p>Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten eine E-Mail mit einem Link zum Zurücksetzen Ihres Passworts.</p>
-            <form id="forgotPasswordForm" onsubmit="submitForgotPassword(event)">
+            <form id="forgotPasswordForm">
                 <div class="form-group">
                     <label>E-Mail*</label>
                     <input type="email" id="forgotPasswordEmail" required>
@@ -132,9 +132,9 @@
     <!-- Reset Password Modal -->
     <div id="resetPasswordModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeResetPasswordModal">&times;</span>
+            <button class="close" type="button" data-action="closeResetPasswordModal" aria-label="Passwort zurücksetzen-Dialog schließen">&times;</button>
             <h2>Neues Passwort setzen</h2>
-            <form id="resetPasswordForm" onsubmit="submitResetPassword(event)">
+            <form id="resetPasswordForm">
                 <input type="hidden" id="resetToken">
                 <div class="form-group">
                     <label>Neues Passwort*</label>
@@ -158,9 +158,9 @@
     <!-- Change Password Modal -->
     <div id="changePasswordModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeChangePasswordModal">&times;</span>
+            <button class="close" type="button" data-action="closeChangePasswordModal" aria-label="Passwort ändern-Dialog schließen">&times;</button>
             <h2>Passwort ändern</h2>
-            <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
+            <form id="changePasswordForm">
                 <div class="form-group">
                     <label>Aktuelles Passwort*</label>
                     <input type="password" id="currentPassword" required>
@@ -187,7 +187,7 @@
     <!-- Notification Modal -->
     <div id="notificationModal" class="modal">
         <div class="modal-content large">
-            <span class="close" data-action="closeNotificationModal">&times;</span>
+            <button class="close" type="button" data-action="closeNotificationModal" aria-label="Benachrichtigungen-Dialog schließen">&times;</button>
             <h2>🔔 Benachrichtigungen über Mindestschichtstärke</h2>
             
             <div class="notification-header">

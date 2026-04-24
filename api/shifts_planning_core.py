@@ -70,6 +70,7 @@ def _serialize_planning_report(report) -> str:
         'objective_value': report.objective_value,
         'solver_time_seconds': report.solver_time_seconds,
         'penalty_breakdown': report.penalty_breakdown,
+        'stage_metrics': report.stage_metrics,
     }
     return json.dumps(data, ensure_ascii=False)
 

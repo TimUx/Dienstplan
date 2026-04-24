@@ -101,9 +101,9 @@
     <!-- Modal for adding/editing employee -->
     <div id="employeeModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeEmployeeModal">&times;</span>
+            <button class="close" type="button" data-action="closeEmployeeModal" aria-label="Mitarbeiter-Dialog schließen">&times;</button>
             <h2 id="employeeModalTitle">Mitarbeiter hinzufügen</h2>
-            <form id="employeeForm" onsubmit="saveEmployee(event)">
+            <form id="employeeForm">
                 <input type="hidden" id="employeeId">
                 <div class="form-group">
                     <label>Vorname*</label>
@@ -177,9 +177,9 @@
     <!-- Team Modal -->
     <div id="teamModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeTeamModal">&times;</span>
+            <button class="close" type="button" data-action="closeTeamModal" aria-label="Team-Dialog schließen">&times;</button>
             <h2 id="teamModalTitle">Team hinzufügen</h2>
-            <form id="teamForm" onsubmit="saveTeam(event)">
+            <form id="teamForm">
                 <input type="hidden" id="teamEditId">
                 <div class="form-group">
                     <label>Team-Name*</label>
@@ -204,9 +204,9 @@
     <!-- Shift Type Modal -->
     <div id="shiftTypeModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeShiftTypeModal">&times;</span>
+            <button class="close" type="button" data-action="closeShiftTypeModal" aria-label="Schichttyp-Dialog schließen">&times;</button>
             <h2 id="shiftTypeModalTitle">Schichttyp hinzufügen</h2>
-            <form id="shiftTypeForm" onsubmit="saveShiftType(event)">
+            <form id="shiftTypeForm">
                 <input type="hidden" id="shiftTypeId">
                 <div class="form-group">
                     <label>Schichtkürzel*</label>
@@ -307,9 +307,9 @@
     <!-- Shift Type Teams Modal -->
     <div id="shiftTypeTeamsModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeShiftTypeTeamsModal">&times;</span>
+            <button class="close" type="button" data-action="closeShiftTypeTeamsModal" aria-label="Teams-Zuordnung schließen">&times;</button>
             <h2 id="shiftTypeTeamsModalTitle">Teams für Schicht zuweisen</h2>
-            <form id="shiftTypeTeamsForm" onsubmit="saveShiftTypeTeams(event)">
+            <form id="shiftTypeTeamsForm">
                 <input type="hidden" id="shiftTypeTeamsId">
                 <div class="form-group">
                     <label>Wählen Sie die Teams aus, die diese Schicht arbeiten können:</label>
@@ -328,9 +328,9 @@
     <!-- Rotation Group Modal -->
     <div id="rotationGroupModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeRotationGroupModal">&times;</span>
+            <button class="close" type="button" data-action="closeRotationGroupModal" aria-label="Rotationsgruppe schließen">&times;</button>
             <h2 id="rotationGroupModalTitle">Rotationsgruppe erstellen</h2>
-            <form id="rotationGroupForm" onsubmit="saveRotationGroup(event)">
+            <form id="rotationGroupForm">
                 <input type="hidden" id="rotationGroupId">
                 <div class="form-group">
                     <label>Name*</label>
@@ -364,9 +364,9 @@
     <!-- User Management Modal -->
     <div id="userModal" class="modal">
         <div class="modal-content">
-            <span class="close" data-action="closeUserModal">&times;</span>
+            <button class="close" type="button" data-action="closeUserModal" aria-label="Benutzer-Dialog schließen">&times;</button>
             <h2 id="userModalTitle">Benutzer hinzufügen</h2>
-            <form id="userForm" onsubmit="saveUser(event)">
+            <form id="userForm">
                 <input type="hidden" id="userId">
                 <div class="form-group">
                     <label>Vollständiger Name*</label>

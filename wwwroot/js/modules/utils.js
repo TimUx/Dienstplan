@@ -458,9 +458,16 @@ export function showToast(message, type = 'info', duration = 4000) {
     `;
 
     const close = toast.querySelector('.toast-close');
+    let removed = false;
+    const removeToast = () => {
+        if (removed) return;
+        removed = true;
+        toast.remove();
+    };
     const dismiss = () => {
         toast.classList.add('toast-hiding');
-        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+        toast.addEventListener('transitionend', removeToast, { once: true });
+        setTimeout(removeToast, 350);
     };
     close.addEventListener('click', dismiss);
 
@@ -472,6 +479,19 @@ export function showToast(message, type = 'info', duration = 4000) {
     if (duration > 0) {
         setTimeout(dismiss, duration);
     }
+}
+
+/**
+ * Debounce helper for high-frequency UI events.
+ */
+export function debounce(fn, delay = 200) {
+    let timer = null;
+    return (...args) => {
+        if (timer) {
+            clearTimeout(timer);
+        }
+        timer = setTimeout(() => fn(...args), delay);
+    };
 }
 
 // ============================================================================

@@ -106,7 +106,9 @@ export function closeLoginModal() {
 }
 
 export async function login(event) {
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+    }
 
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
@@ -313,7 +315,7 @@ export function displayNotifications(notifications) {
                     <span class="notification-item-date">${date}</span>
                     <div class="notification-item-actions">
                         ${!notification.isRead ? `
-                            <button class="btn-mark-read" onclick="markNotificationRead(${notification.id})">
+                            <button class="btn-mark-read" data-action="markNotificationRead" data-id="${notification.id}">
                                 ✓ Als gelesen markieren
                             </button>
                         ` : ''}
@@ -338,11 +340,11 @@ export async function markNotificationRead(notificationId) {
             loadNotifications(currentNotificationFilter);
             loadNotificationCount();
         } else {
-            alert('Fehler beim Markieren der Benachrichtigung.');
+            showToast('Fehler beim Markieren der Benachrichtigung.', 'error');
         }
     } catch (error) {
         console.error('Error marking notification as read:', error);
-        alert('Fehler beim Markieren der Benachrichtigung.');
+        showToast('Fehler beim Markieren der Benachrichtigung.', 'error');
     }
 }
 
@@ -408,7 +410,9 @@ export function closeChangePasswordModal() {
 }
 
 export async function submitChangePassword(event) {
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+    }
 
     const currentPassword = document.getElementById('currentPassword').value;
     const newPassword = document.getElementById('changeNewPassword').value;
@@ -476,7 +480,9 @@ export function closeForgotPasswordModal() {
 }
 
 export async function submitForgotPassword(event) {
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+    }
 
     const email = document.getElementById('forgotPasswordEmail').value;
 
@@ -561,7 +567,9 @@ export async function validateResetToken(token) {
 }
 
 export async function submitResetPassword(event) {
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+    }
 
     const token = document.getElementById('resetToken').value;
     const newPassword = document.getElementById('newPassword').value;

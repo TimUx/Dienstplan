@@ -144,7 +144,7 @@
                                 </select>
                                 <input type="date" id="audit-start-date" style="margin-right: 8px;">
                                 <input type="date" id="audit-end-date" style="margin-right: 8px;">
-                                <button onclick="window.loadAuditLog()" class="btn-primary">Laden</button>
+                                <button data-action="loadAuditLog" class="btn-primary">Laden</button>
                             </div>
                             <div id="audit-log-content">
                                 <p>Klicken Sie auf "Laden" um die Einträge anzuzeigen.</p>
@@ -158,9 +158,9 @@
     <!-- Email Settings Modal -->
     <div id="emailSettingsModal" class="modal">
         <div class="modal-content large">
-            <span class="close" data-action="closeEmailSettingsModal">&times;</span>
+            <button class="close" type="button" data-action="closeEmailSettingsModal" aria-label="E-Mail-Einstellungen schließen">&times;</button>
             <h2>E-Mail-Einstellungen</h2>
-            <form id="emailSettingsForm" onsubmit="saveEmailSettings(event)">
+            <form id="emailSettingsForm">
                 <h3>SMTP-Server</h3>
                 <div class="form-row">
                     <div class="form-group">

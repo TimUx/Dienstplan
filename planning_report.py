@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +185,9 @@ class PlanningReport:
     penalty_breakdown: Dict[str, float] = field(default_factory=dict)
     """Aufschlüsselung der Zielfunktion nach Strafkategorien (Kategoriename → Gesamtstrafe)."""
 
+    stage_metrics: List[Dict[str, Any]] = field(default_factory=list)
+    """Metriken je Solver-Stufe (Build-/Solve-Zeit, Ergebnisstatus, Relaxation-Level)."""
+
     # -----------------------------------------------------------------------
     # Computed properties
     # -----------------------------------------------------------------------
@@ -249,6 +252,8 @@ class PlanningReport:
         lines.append(f"Status:           {status_label}")
         lines.append(f"Solver-Laufzeit:  {self.solver_time_seconds:.1f} Sekunden")
         lines.append(f"Zielfunktionswert: {self.objective_value:.0f}")
+        if self.stage_metrics:
+            lines.append(f"Solver-Stufen:    {len(self.stage_metrics)}")
 
         if self.penalty_breakdown:
             _subheading("Aufschlüsselung der Zielfunktion (Soft-Constraints)")

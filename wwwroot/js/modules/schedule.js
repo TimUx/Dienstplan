@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken } from './utils.js';
+import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken, debounce } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
@@ -16,6 +16,12 @@ export let selectedShifts = new Set();
 
 let _currentPlanJobId = null;
 let _planningElapsedTimer = null;
+let _scheduleAbortController = null;
+const _debouncedLoadSchedule = debounce(() => loadSchedule(), 220);
+
+export function loadScheduleDebounced() {
+    _debouncedLoadSchedule();
+}
 
 // ============================================================================
 // DATE PICKERS & INIT
@@ -85,7 +91,7 @@ export function switchScheduleView(view, tabElement) {
     document.getElementById('month-controls').style.display = view === 'month' ? 'flex' : 'none';
     document.getElementById('year-controls').style.display = view === 'year' ? 'flex' : 'none';
 
-    loadSchedule();
+    loadScheduleDebounced();
 }
 
 export function changeDate(days) {
@@ -93,7 +99,7 @@ export function changeDate(days) {
     const date = new Date(dateInput.value);
     date.setDate(date.getDate() + (days * 7));
     dateInput.value = date.toISOString().split('T')[0];
-    loadSchedule();
+    loadScheduleDebounced();
 }
 
 export function changeMonth(delta) {
@@ -116,7 +122,7 @@ export function changeMonth(delta) {
     monthSelect.value = month;
     yearSelect.value = year;
 
-    loadSchedule();
+    loadScheduleDebounced();
 }
 
 export function changeYear(delta) {
@@ -124,7 +130,7 @@ export function changeYear(delta) {
     let year = parseInt(yearSelect.value);
     year += delta;
     yearSelect.value = year;
-    loadSchedule();
+    loadScheduleDebounced();
 }
 
 // ============================================================================
@@ -152,9 +158,14 @@ export async function loadSchedule() {
     content.innerHTML = '<p class="loading">Lade Dienstplan...</p>';
 
     try {
+        if (_scheduleAbortController) {
+            _scheduleAbortController.abort();
+        }
+        _scheduleAbortController = new AbortController();
+        const { signal } = _scheduleAbortController;
         const [scheduleResponse, employeesResponse] = await Promise.all([
-            fetch(`${API_BASE}/shifts/schedule?startDate=${startDate}&view=${viewType}`),
-            fetch(`${API_BASE}/employees`)
+            fetch(`${API_BASE}/shifts/schedule?startDate=${startDate}&view=${viewType}`, { signal }),
+            fetch(`${API_BASE}/employees`, { signal })
         ]);
 
         const data = await scheduleResponse.json();
@@ -166,6 +177,9 @@ export async function loadSchedule() {
             await updateApprovalStatus();
         }
     } catch (error) {
+        if (error.name === 'AbortError') {
+            return;
+        }
         content.innerHTML = `<p class="error">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
     }
 }
@@ -274,7 +288,7 @@ export function displayWeekView(data, employees) {
                     cellContent = shifts.map(s => createShiftBadge(s)).join(' ');
                 } else {
                     if (canPlanShifts()) {
-                        cellClickable = ` onclick="showQuickEntryModal('${employee.id}', '${dateStr}')" style="cursor: pointer;"`;
+                        cellClickable = ` data-action="showQuickEntryModalForCell" data-employee-id="${employee.id}" data-date="${dateStr}" tabindex="0" role="button"`;
                         cellContent = '<span class="empty-cell-placeholder">+</span>';
                     }
                 }
@@ -398,7 +412,7 @@ export function displayMonthView(data, employees) {
                         cellContent = shifts.map(s => createShiftBadge(s)).join(' ');
                     } else {
                         if (canPlanShifts()) {
-                            cellClickable = ` onclick="showQuickEntryModal('${employee.id}', '${dateStr}')" style="cursor: pointer;"`;
+                            cellClickable = ` data-action="showQuickEntryModalForCell" data-employee-id="${employee.id}" data-date="${dateStr}" tabindex="0" role="button"`;
                             cellContent = '<span class="empty-cell-placeholder">+</span>';
                         }
                     }
@@ -602,9 +616,9 @@ export function createShiftBadge(shift) {
     let onclickAttr = '';
     if (canEdit && shiftId) {
         if (multiSelectMode) {
-            onclickAttr = `onclick="toggleShiftSelection(${shiftId}); return false;" style="cursor:pointer; ${styleAttr}"`;
+            onclickAttr = `data-action="toggleShiftSelectionById" data-shift-id="${shiftId}" style="cursor:pointer; ${styleAttr}"`;
         } else {
-            onclickAttr = `onclick="editShiftAssignment(${shiftId})" style="cursor:pointer; ${styleAttr}"`;
+            onclickAttr = `data-action="editShiftAssignmentById" data-shift-id="${shiftId}" style="cursor:pointer; ${styleAttr}"`;
         }
     } else if (colorCode) {
         onclickAttr = `style="${styleAttr}"`;
@@ -1297,6 +1311,23 @@ export async function showQuickEntryModal(employeeId, dateStr) {
     }
 
     document.getElementById('quickEntryModal').style.display = 'block';
+}
+
+export function showQuickEntryModalForCell(employeeId, dateStr) {
+    if (!employeeId || !dateStr) return;
+    showQuickEntryModal(employeeId, dateStr);
+}
+
+export function editShiftAssignmentById(shiftId) {
+    const id = Number.parseInt(shiftId, 10);
+    if (Number.isNaN(id)) return;
+    editShiftAssignment(id);
+}
+
+export function toggleShiftSelectionById(shiftId) {
+    const id = Number.parseInt(shiftId, 10);
+    if (Number.isNaN(id)) return;
+    toggleShiftSelection(id);
 }
 
 export function updateQuickEntryOptions() {

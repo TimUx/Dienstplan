@@ -1,6 +1,18 @@
-import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES, getCsrfToken } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES, getCsrfToken, showToast } from './utils.js';
 import { hasRole, canPlanShifts } from './auth.js';
 import { loadSchedule } from './schedule.js';
+
+const _requestControllers = new Map();
+
+function _nextSignal(key) {
+    const prev = _requestControllers.get(key);
+    if (prev) {
+        prev.abort();
+    }
+    const controller = new AbortController();
+    _requestControllers.set(key, controller);
+    return controller.signal;
+}
 
 // ============================================================================
 // VACATION REQUESTS
@@ -17,7 +29,8 @@ export async function loadVacationRequests(filter = 'all') {
         }
 
         const response = await fetch(url, {
-            credentials: 'include'
+            credentials: 'include',
+            signal: _nextSignal('vacationRequests')
         });
 
         if (response.ok) {
@@ -33,6 +46,7 @@ export async function loadVacationRequests(filter = 'all') {
             content.innerHTML = '<p class="error">Fehler beim Laden der Urlaubsanträge.</p>';
         }
     } catch (error) {
+        if (error.name === 'AbortError') return;
         console.error('Error loading vacation requests:', error);
         content.innerHTML = '<p class="error">Fehler beim Laden der Urlaubsanträge.</p>';
     }
@@ -66,13 +80,13 @@ export function displayVacationRequests(requests) {
         if (canProcess && req.status === 'InBearbeitung') {
             html += `
                 <td>
-                    <button onclick="processVacationRequest(${req.id}, 'Genehmigt')" class="btn-small btn-success">✓ Genehmigen</button>
-                    <button onclick="processVacationRequest(${req.id}, 'NichtGenehmigt')" class="btn-small btn-danger">✗ Ablehnen</button>
+                    <button data-action="processVacationRequest" data-id="${req.id}" data-status="Genehmigt" class="btn-small btn-success">✓ Genehmigen</button>
+                    <button data-action="processVacationRequest" data-id="${req.id}" data-status="NichtGenehmigt" class="btn-small btn-danger">✗ Ablehnen</button>
                 </td>`;
         } else if (canProcess && req.status === 'Genehmigt') {
             html += `
                 <td>
-                    <button onclick="deleteVacationRequest(${req.id}, '${escapeHtml(req.employeeName)}')" class="btn-small btn-danger">🗑️ Stornieren</button>
+                    <button data-action="deleteVacationRequest" data-id="${req.id}" data-employee-name="${escapeHtml(req.employeeName)}" class="btn-small btn-danger">🗑️ Stornieren</button>
                 </td>`;
         } else if (canProcess) {
             html += '<td>-</td>';
@@ -129,16 +143,16 @@ export async function saveVacationRequest(event) {
         });
 
         if (response.ok) {
-            alert('Urlaubsantrag erfolgreich eingereicht!');
+            showToast('Urlaubsantrag erfolgreich eingereicht!', 'success');
             closeVacationRequestModal();
             loadVacationRequests('all');
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else {
-            alert('Fehler beim Speichern des Urlaubsantrags.');
+            showToast('Fehler beim Speichern des Urlaubsantrags.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -157,17 +171,17 @@ export async function processVacationRequest(id, status) {
         });
 
         if (result.ok) {
-            alert(`Urlaubsantrag wurde ${status === 'Genehmigt' ? 'genehmigt' : 'abgelehnt'}!`);
+            showToast(`Urlaubsantrag wurde ${status === 'Genehmigt' ? 'genehmigt' : 'abgelehnt'}!`, 'success');
             loadVacationRequests('pending');
         } else if (result.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (result.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            alert('Fehler beim Verarbeiten des Antrags.');
+            showToast('Fehler beim Verarbeiten des Antrags.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -184,18 +198,18 @@ export async function deleteVacationRequest(id, employeeName) {
         });
 
         if (result.ok) {
-            alert('Urlaubsantrag wurde erfolgreich storniert!');
+            showToast('Urlaubsantrag wurde erfolgreich storniert!', 'success');
             loadVacationRequests('all');
         } else if (result.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (result.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
             const error = await result.json();
-            alert(error.error || 'Fehler beim Stornieren des Urlaubsantrags.');
+            showToast(error.error || 'Fehler beim Stornieren des Urlaubsantrags.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -219,8 +233,7 @@ export function switchAbsenceTab(tabName) {
 
     const tabButtons = document.querySelectorAll('#absences-view .tab-btn');
     tabButtons.forEach(btn => {
-        const btnOnclick = btn.getAttribute('onclick');
-        if (btnOnclick && btnOnclick.includes(`'${tabName}'`)) {
+        if (btn.dataset.tab === tabName) {
             btn.classList.add('active');
         }
     });
@@ -255,7 +268,8 @@ export async function loadAbsences(type) {
 
     try {
         const response = await fetch(`${API_BASE}/absences`, {
-            credentials: 'include'
+            credentials: 'include',
+            signal: _nextSignal('absences')
         });
 
         if (response.ok) {
@@ -266,6 +280,7 @@ export async function loadAbsences(type) {
             content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
         }
     } catch (error) {
+        if (error.name === 'AbortError') return;
         console.error('Error loading absences:', error);
         content.innerHTML = '<p class="error">Fehler beim Laden der Abwesenheiten.</p>';
     }
@@ -312,7 +327,7 @@ export function displayAbsences(absences, type) {
         html += `<td>${absence.createdAt ? new Date(absence.createdAt).toLocaleDateString('de-DE') : '-'}</td>`;
 
         if (canDelete) {
-            html += `<td><button onclick="deleteAbsence(${absence.id}, '${type}')" class="btn-small btn-danger">Löschen</button></td>`;
+            html += `<td><button data-action="deleteAbsence" data-id="${absence.id}" data-type="${type}" class="btn-small btn-danger">Löschen</button></td>`;
         }
 
         html += '</tr>';
@@ -404,7 +419,7 @@ export async function saveAbsence(event) {
         const typeValue = type === 'AU' ? ABSENCE_TYPES.AU : ABSENCE_TYPES.L;
         absence.type = typeValue;
     } else {
-        alert('Bitte wählen Sie einen Abwesenheitstyp.');
+        showToast('Bitte wählen Sie einen Abwesenheitstyp.', 'warning');
         return;
     }
 
@@ -417,7 +432,7 @@ export async function saveAbsence(event) {
         });
 
         if (response.ok) {
-            alert('Abwesenheit erfolgreich erfasst!');
+            showToast('Abwesenheit erfolgreich erfasst!', 'success');
             closeAbsenceModal();
             if (type) {
                 loadAbsences(type);
@@ -431,15 +446,15 @@ export async function saveAbsence(event) {
                 }
             }
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
             const error = await response.json();
-            alert(error.error || 'Fehler beim Speichern der Abwesenheit.');
+            showToast(error.error || 'Fehler beim Speichern der Abwesenheit.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -456,17 +471,17 @@ export async function deleteAbsence(id, type) {
         });
 
         if (response.ok) {
-            alert('Abwesenheit erfolgreich gelöscht!');
+            showToast('Abwesenheit erfolgreich gelöscht!', 'success');
             loadAbsences(type);
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            alert('Fehler beim Löschen der Abwesenheit.');
+            showToast('Fehler beim Löschen der Abwesenheit.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -485,7 +500,8 @@ export async function loadShiftExchanges(filter = 'available') {
         }
 
         const response = await fetch(url, {
-            credentials: 'include'
+            credentials: 'include',
+            signal: _nextSignal('shiftExchanges')
         });
 
         if (response.ok) {
@@ -497,6 +513,7 @@ export async function loadShiftExchanges(filter = 'available') {
             content.innerHTML = '<p class="error">Fehler beim Laden der Diensttausch-Angebote.</p>';
         }
     } catch (error) {
+        if (error.name === 'AbortError') return;
         console.error('Error loading shift exchanges:', error);
         content.innerHTML = '<p class="error">Fehler beim Laden der Diensttausch-Angebote.</p>';
     }
@@ -530,13 +547,13 @@ export function displayShiftExchanges(exchanges, filter) {
         if (filter === 'available' && ex.status === 'Angeboten') {
             html += `
                 <td>
-                    <button onclick="requestShiftExchange(${ex.id})" class="btn-small btn-primary">Anfragen</button>
+                    <button data-action="requestShiftExchange" data-id="${ex.id}" class="btn-small btn-primary">Anfragen</button>
                 </td>`;
         } else if (canProcess && ex.status === 'Angefragt') {
             html += `
                 <td>
-                    <button onclick="processShiftExchange(${ex.id}, 'Genehmigt')" class="btn-small btn-success">✓ Genehmigen</button>
-                    <button onclick="processShiftExchange(${ex.id}, 'Abgelehnt')" class="btn-small btn-danger">✗ Ablehnen</button>
+                    <button data-action="processShiftExchange" data-id="${ex.id}" data-status="Genehmigt" class="btn-small btn-success">✓ Genehmigen</button>
+                    <button data-action="processShiftExchange" data-id="${ex.id}" data-status="Abgelehnt" class="btn-small btn-danger">✗ Ablehnen</button>
                 </td>`;
         } else {
             html += '<td>-</td>';
@@ -627,23 +644,23 @@ export async function saveShiftExchange(event) {
         });
 
         if (response.ok) {
-            alert('Diensttausch erfolgreich angeboten!');
+            showToast('Diensttausch erfolgreich angeboten!', 'success');
             closeShiftExchangeModal();
             loadShiftExchanges('available');
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else {
-            alert('Fehler beim Anbieten des Diensttauschs.');
+            showToast('Fehler beim Anbieten des Diensttauschs.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
 export async function requestShiftExchange(id) {
     const { currentUser } = await import('./auth.js');
     if (!currentUser) {
-        alert('Bitte melden Sie sich an.');
+        showToast('Bitte melden Sie sich an.', 'warning');
         return;
     }
 
@@ -661,15 +678,15 @@ export async function requestShiftExchange(id) {
         });
 
         if (response.ok) {
-            alert('Diensttausch erfolgreich angefragt! Warten Sie auf die Genehmigung durch den Disponenten.');
+            showToast('Diensttausch erfolgreich angefragt! Warten Sie auf die Genehmigung durch den Disponenten.', 'success');
             loadShiftExchanges('available');
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else {
-            alert('Fehler beim Anfragen des Diensttauschs.');
+            showToast('Fehler beim Anfragen des Diensttauschs.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -688,17 +705,17 @@ export async function processShiftExchange(id, status) {
         });
 
         if (response.ok) {
-            alert(`Diensttausch wurde ${status === 'Genehmigt' ? 'genehmigt' : 'abgelehnt'}!`);
+            showToast(`Diensttausch wurde ${status === 'Genehmigt' ? 'genehmigt' : 'abgelehnt'}!`, 'success');
             loadShiftExchanges('pending');
         } else if (response.status === 401) {
-            alert('Bitte melden Sie sich an.');
+            showToast('Bitte melden Sie sich an.', 'warning');
         } else if (response.status === 403) {
-            alert('Sie haben keine Berechtigung für diese Aktion.');
+            showToast('Sie haben keine Berechtigung für diese Aktion.', 'error');
         } else {
-            alert('Fehler beim Verarbeiten des Tauschs.');
+            showToast('Fehler beim Verarbeiten des Tauschs.', 'error');
         }
     } catch (error) {
-        alert(`Fehler: ${error.message}`);
+        showToast(`Fehler: ${error.message}`, 'error');
     }
 }
 
@@ -750,10 +767,10 @@ export function displayVacationPeriods(periods) {
         html += `<td>${endDate}</td>`;
         html += `<td><span style="display:inline-block;width:30px;height:20px;background-color:${period.colorCode};border:1px solid #ccc;border-radius:3px;"></span></td>`;
         html += '<td class="actions">';
-        html += `<button onclick="editVacationPeriod(${period.id})" class="btn-icon" title="Bearbeiten">✏️</button>`;
+        html += `<button data-action="editVacationPeriod" data-id="${period.id}" class="btn-icon" title="Bearbeiten">✏️</button>`;
 
         if (hasRole('Admin')) {
-            html += `<button onclick="deleteVacationPeriod(${period.id}, '${escapeHtml(period.name)}')" class="btn-icon" title="Löschen">🗑️</button>`;
+            html += `<button data-action="deleteVacationPeriod" data-id="${period.id}" data-name="${escapeHtml(period.name)}" class="btn-icon" title="Löschen">🗑️</button>`;
         }
 
         html += '</td></tr>';
@@ -765,7 +782,7 @@ export function displayVacationPeriods(periods) {
 
 export function showVacationPeriodModal(periodId = null) {
     if (!canPlanShifts()) {
-        alert('Sie haben keine Berechtigung, Ferienzeiten zu verwalten.');
+        showToast('Sie haben keine Berechtigung, Ferienzeiten zu verwalten.', 'error');
         return;
     }
 
@@ -797,12 +814,12 @@ export async function loadVacationPeriodForEdit(periodId) {
             document.getElementById('vacationPeriodEndDate').value = period.endDate;
             document.getElementById('vacationPeriodColor').value = period.colorCode || '#E8F5E9';
         } else {
-            alert('Fehler beim Laden der Ferienzeit.');
+            showToast('Fehler beim Laden der Ferienzeit.', 'error');
             closeVacationPeriodModal();
         }
     } catch (error) {
         console.error('Error loading vacation period:', error);
-        alert('Fehler beim Laden der Ferienzeit.');
+        showToast('Fehler beim Laden der Ferienzeit.', 'error');
         closeVacationPeriodModal();
     }
 }
@@ -850,20 +867,20 @@ export async function saveVacationPeriod(event) {
             closeVacationPeriodModal();
             loadVacationPeriods();
             loadSchedule();
-            alert(isEdit ? 'Ferienzeit erfolgreich aktualisiert!' : 'Ferienzeit erfolgreich hinzugefügt!');
+            showToast(isEdit ? 'Ferienzeit erfolgreich aktualisiert!' : 'Ferienzeit erfolgreich hinzugefügt!', 'success');
         } else {
             const error = await response.json();
-            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error saving vacation period:', error);
-        alert('Fehler beim Speichern der Ferienzeit.');
+        showToast('Fehler beim Speichern der Ferienzeit.', 'error');
     }
 }
 
 export async function deleteVacationPeriod(periodId, periodName) {
     if (!hasRole('Admin')) {
-        alert('Nur Administratoren können Ferienzeiten löschen.');
+        showToast('Nur Administratoren können Ferienzeiten löschen.', 'error');
         return;
     }
 
@@ -881,14 +898,14 @@ export async function deleteVacationPeriod(periodId, periodName) {
         if (response.ok) {
             loadVacationPeriods();
             loadSchedule();
-            alert('Ferienzeit erfolgreich gelöscht!');
+            showToast('Ferienzeit erfolgreich gelöscht!', 'success');
         } else {
             const error = await response.json();
-            alert(`Fehler: ${error.error || 'Unbekannter Fehler'}`);
+            showToast(`Fehler: ${error.error || 'Unbekannter Fehler'}`, 'error');
         }
     } catch (error) {
         console.error('Error deleting vacation period:', error);
-        alert('Fehler beim Löschen der Ferienzeit.');
+        showToast('Fehler beim Löschen der Ferienzeit.', 'error');
     }
 }
 
@@ -929,7 +946,8 @@ export async function loadVacationYearPlan() {
 
     try {
         const response = await fetch(`${API_BASE}/vacationyearplan/${year}`, {
-            credentials: 'include'
+            credentials: 'include',
+            signal: _nextSignal('vacationYearPlan')
         });
 
         if (response.ok) {
@@ -948,6 +966,7 @@ export async function loadVacationYearPlan() {
             contentDiv.innerHTML = '<p class="error">Fehler beim Laden des Urlaubsjahresplans.</p>';
         }
     } catch (error) {
+        if (error.name === 'AbortError') return;
         console.error('Error loading vacation year plan:', error);
         contentDiv.innerHTML = '<p class="error">Fehler beim Laden des Urlaubsjahresplans.</p>';
     }
@@ -1089,12 +1108,12 @@ export function displayVacationYearApprovals(approvals) {
             html += '<td><span class="shift-badge shift-U">✓ Freigegeben</span></td>';
             html += `<td>${escapeHtml(yearData.approvedBy || '-')}</td>`;
             html += `<td>${yearData.approvedAt ? new Date(yearData.approvedAt).toLocaleDateString('de-DE') : '-'}</td>`;
-            html += `<td><button onclick="toggleYearApproval(${yearData.year}, false)" class="btn-small btn-danger">Freigabe zurückziehen</button></td>`;
+            html += `<td><button data-action="toggleYearApproval" data-year="${yearData.year}" data-approve="false" class="btn-small btn-danger">Freigabe zurückziehen</button></td>`;
         } else {
             html += '<td><span class="shift-badge shift-U-rejected">✗ Nicht freigegeben</span></td>';
             html += '<td>-</td>';
             html += '<td>-</td>';
-            html += `<td><button onclick="toggleYearApproval(${yearData.year}, true)" class="btn-small btn-primary">Freigeben</button></td>`;
+            html += `<td><button data-action="toggleYearApproval" data-year="${yearData.year}" data-approve="true" class="btn-small btn-primary">Freigeben</button></td>`;
         }
 
         html += '</tr>';
@@ -1126,14 +1145,14 @@ export async function toggleYearApproval(year, approve) {
         });
 
         if (response.ok) {
-            alert(`Jahr ${year} wurde erfolgreich ${approve ? 'freigegeben' : 'gesperrt'}.`);
+            showToast(`Jahr ${year} wurde erfolgreich ${approve ? 'freigegeben' : 'gesperrt'}.`, 'success');
             loadVacationYearApprovals();
         } else {
-            alert(`Fehler beim ${action} des Jahres.`);
+            showToast(`Fehler beim ${action} des Jahres.`, 'error');
         }
     } catch (error) {
         console.error(`Error toggling year approval:`, error);
-        alert(`Fehler beim ${action} des Jahres.`);
+        showToast(`Fehler beim ${action} des Jahres.`, 'error');
     }
 }
 
@@ -1200,9 +1219,9 @@ export function displayVacationYearApprovalsAbsence(approvals) {
         html += '<td class="actions">';
 
         if (item.isApproved) {
-            html += `<button onclick="toggleYearApprovalAbsence(${item.year}, false)" class="btn-small btn-danger">🔒 Sperren</button>`;
+            html += `<button data-action="toggleYearApprovalAbsence" data-year="${item.year}" data-approve="false" class="btn-small btn-danger">🔒 Sperren</button>`;
         } else {
-            html += `<button onclick="toggleYearApprovalAbsence(${item.year}, true)" class="btn-small btn-success">✓ Freigeben</button>`;
+            html += `<button data-action="toggleYearApprovalAbsence" data-year="${item.year}" data-approve="true" class="btn-small btn-success">✓ Freigeben</button>`;
         }
 
         html += '</td>';
@@ -1235,14 +1254,14 @@ export async function toggleYearApprovalAbsence(year, approve) {
         });
 
         if (response.ok) {
-            alert(`Jahr ${year} wurde erfolgreich ${approve ? 'freigegeben' : 'gesperrt'}.`);
+            showToast(`Jahr ${year} wurde erfolgreich ${approve ? 'freigegeben' : 'gesperrt'}.`, 'success');
             loadVacationYearApprovalsAbsence();
         } else {
-            alert(`Fehler beim ${action} des Jahres.`);
+            showToast(`Fehler beim ${action} des Jahres.`, 'error');
         }
     } catch (error) {
         console.error(`Error toggling year approval:`, error);
-        alert(`Fehler beim ${action} des Jahres.`);
+        showToast(`Fehler beim ${action} des Jahres.`, 'error');
     }
 }
 
@@ -1305,8 +1324,8 @@ export async function loadAbsenceTypes() {
                 html += `<td><span style="display: inline-block; padding: 4px 12px; background: ${type.colorCode}; border: 1px solid #ccc; border-radius: 4px;">${type.colorCode}</span></td>`;
                 html += `<td>${new Date(type.createdAt).toLocaleDateString('de-DE')}</td>`;
                 html += '<td class="admin-only">';
-                html += `<button onclick="editAbsenceType(${type.id})" class="btn-secondary btn-small">✏️ Bearbeiten</button> `;
-                html += `<button onclick="deleteAbsenceType(${type.id}, ${JSON.stringify(type.name)})" class="btn-danger btn-small">🗑️ Löschen</button>`;
+                html += `<button data-action="editAbsenceType" data-id="${type.id}" class="btn-secondary btn-small">✏️ Bearbeiten</button> `;
+                html += `<button data-action="deleteAbsenceType" data-id="${type.id}" data-name="${escapeHtml(type.name)}" class="btn-danger btn-small">🗑️ Löschen</button>`;
                 html += '</td>';
                 html += '</tr>';
             });
@@ -1360,7 +1379,7 @@ export async function loadAbsenceTypeForEdit(id) {
         }
     } catch (error) {
         console.error('Error loading absence type:', error);
-        alert('Fehler beim Laden des Abwesenheitstyps');
+        showToast('Fehler beim Laden des Abwesenheitstyps', 'error');
     }
 }
 
@@ -1392,14 +1411,14 @@ export async function saveAbsenceType(event) {
         if (result.ok) {
             closeAbsenceTypeModal();
             loadAbsenceTypes();
-            alert(id ? 'Abwesenheitstyp erfolgreich aktualisiert!' : 'Abwesenheitstyp erfolgreich erstellt!');
+            showToast(id ? 'Abwesenheitstyp erfolgreich aktualisiert!' : 'Abwesenheitstyp erfolgreich erstellt!', 'success');
         } else {
             const error = await result.json();
-            alert(error.error || 'Fehler beim Speichern des Abwesenheitstyps');
+            showToast(error.error || 'Fehler beim Speichern des Abwesenheitstyps', 'error');
         }
     } catch (error) {
         console.error('Error saving absence type:', error);
-        alert('Fehler beim Speichern des Abwesenheitstyps');
+        showToast('Fehler beim Speichern des Abwesenheitstyps', 'error');
     }
 }
 
@@ -1421,14 +1440,14 @@ export async function deleteAbsenceType(id, name) {
 
         if (result.ok) {
             loadAbsenceTypes();
-            alert('Abwesenheitstyp erfolgreich gelöscht!');
+            showToast('Abwesenheitstyp erfolgreich gelöscht!', 'success');
         } else {
             const error = await result.json();
-            alert(error.error || 'Fehler beim Löschen des Abwesenheitstyps');
+            showToast(error.error || 'Fehler beim Löschen des Abwesenheitstyps', 'error');
         }
     } catch (error) {
         console.error('Error deleting absence type:', error);
-        alert('Fehler beim Löschen des Abwesenheitstyps');
+        showToast('Fehler beim Löschen des Abwesenheitstyps', 'error');
     }
 }
 

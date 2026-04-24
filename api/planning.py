@@ -7,8 +7,104 @@ from fastapi.responses import JSONResponse, Response
 from datetime import date
 
 from .shared import get_db, require_auth
+from .planning_health_config import (
+    HEALTH_STAGE1_FAST_SOLVE_SECONDS,
+    HEALTH_GREEN_STAGES,
+    HEALTH_YELLOW_STAGES,
+    HEALTH_RED_STAGES,
+)
 
 router = APIRouter()
+
+
+def _build_stage_metrics_summary(stage_metrics: list) -> dict:
+    """
+    Build a compact performance summary from stage metrics.
+    """
+    if not stage_metrics:
+        return {
+            "has_metrics": False,
+            "total_build_seconds": 0.0,
+            "total_solve_seconds": 0.0,
+            "slowest_stage": None,
+            "successful_stage": None,
+            "health": {
+                "color": "unknown",
+                "reason": "Keine Stage-Metriken vorhanden",
+            },
+        }
+
+    executed = [m for m in stage_metrics if not m.get("skipped")]
+    total_build = sum(float(m.get("build_seconds") or 0.0) for m in executed)
+    total_solve = sum(float(m.get("solve_seconds") or 0.0) for m in executed)
+
+    slowest_stage = None
+    if executed:
+        slowest = max(executed, key=lambda m: float(m.get("solve_seconds") or 0.0))
+        slowest_stage = {
+            "stage": slowest.get("stage"),
+            "label": slowest.get("label"),
+            "solve_seconds": float(slowest.get("solve_seconds") or 0.0),
+        }
+
+    successful_stage = None
+    for metric in stage_metrics:
+        if metric.get("solved"):
+            successful_stage = {
+                "stage": metric.get("stage"),
+                "label": metric.get("label"),
+                "relaxation_level": metric.get("relaxation_level"),
+            }
+            break
+
+    if successful_stage is None:
+        health = {
+            "color": "red",
+            "reason": "Keine erfolgreiche Solver-Stufe gefunden",
+        }
+    else:
+        solved_stage = successful_stage.get("stage")
+        # Heuristik:
+        # - green: Lösung in Stage 1 und <= HEALTH_STAGE1_FAST_SOLVE_SECONDS
+        # - yellow: Lösung in Stage 1 aber darüber ODER Lösung in Stage 2/3
+        # - red: Notfallplan (Stage 4) oder keine erfolgreiche Solver-Stufe
+        if solved_stage in HEALTH_GREEN_STAGES:
+            if total_solve <= HEALTH_STAGE1_FAST_SOLVE_SECONDS:
+                health = {
+                    "color": "green",
+                    "reason": "Direkt in Stage 1 mit kurzer Solve-Zeit gelöst",
+                }
+            else:
+                health = {
+                    "color": "yellow",
+                    "reason": "In Stage 1 gelöst, aber mit erhöhter Solve-Zeit",
+                }
+        elif solved_stage in HEALTH_YELLOW_STAGES:
+            health = {
+                "color": "yellow",
+                "reason": "Nur mit Fallback-Stufe gelöst",
+            }
+        elif solved_stage in HEALTH_RED_STAGES:
+            health = {
+                "color": "red",
+                "reason": "Nur Notfallplan verfügbar",
+            }
+        else:
+            health = {
+                "color": "red",
+                "reason": f"Unbekannte erfolgreiche Stage: {solved_stage}",
+            }
+
+    return {
+        "has_metrics": True,
+        "stage_count": len(stage_metrics),
+        "executed_stage_count": len(executed),
+        "total_build_seconds": round(total_build, 3),
+        "total_solve_seconds": round(total_solve, 3),
+        "slowest_stage": slowest_stage,
+        "successful_stage": successful_stage,
+        "health": health,
+    }
 
 
 def _deserialize_report(report_json: str) -> dict:
@@ -49,6 +145,8 @@ def get_planning_report(request: Request, year: int, month: int):
         return JSONResponse(content={'error': f'No planning report found for {year}/{month:02d}'}, status_code=404)
 
     report_dict = _deserialize_report(row['report_json'])
+    stage_metrics = report_dict.get('stage_metrics', [])
+    report_dict['stage_metrics_summary'] = _build_stage_metrics_summary(stage_metrics)
     return report_dict
 
 
@@ -142,6 +240,7 @@ def get_planning_report_summary(request: Request, year: int, month: int):
         objective_value=report_dict.get('objective_value', 0.0),
         solver_time_seconds=report_dict.get('solver_time_seconds', 0.0),
         penalty_breakdown=report_dict.get('penalty_breakdown', {}),
+        stage_metrics=report_dict.get('stage_metrics', []),
     )
 
     summary = report.generate_text_summary()

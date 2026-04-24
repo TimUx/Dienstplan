@@ -429,21 +429,35 @@ class ShiftPlanningSolver:
             model, employee_active, employee_weekend_shift, 
             employee_cross_team_shift, employee_cross_team_weekend, team_shift,
             employees, teams, dates, weeks, shift_codes, max_total_weekend_staff=12)
-        
-        _constraint_progress("Cross-shift capacity enforcement")
-        print("  - Cross-shift capacity enforcement (prevent N overflow when F/S have capacity)")
-        cross_shift_capacity_violations = add_cross_shift_capacity_enforcement(
-            model, employee_active, employee_weekend_shift, team_shift,
-            employee_cross_team_shift, employee_cross_team_weekend,
-            employees, teams, dates, weeks, shift_codes, shift_types)
-        
-        _constraint_progress("Daily shift ratio constraints")
-        print("  - Daily shift ratio constraints (ensure F >= S on weekdays)")
-        from constraints import add_daily_shift_ratio_constraints
-        daily_ratio_violations = add_daily_shift_ratio_constraints(
-            model, employee_active, employee_weekend_shift, team_shift,
-            employee_cross_team_shift, employee_cross_team_weekend,
-            employees, teams, dates, weeks, shift_codes, shift_types)
+
+        cross_shift_capacity_violations = []
+        daily_ratio_violations = []
+        if self.relaxation_level == 0:
+            _constraint_progress("Cross-shift capacity enforcement")
+            print("  - Cross-shift capacity enforcement (prevent N overflow when F/S have capacity)")
+            cross_shift_capacity_violations = add_cross_shift_capacity_enforcement(
+                model, employee_active, employee_weekend_shift, team_shift,
+                employee_cross_team_shift, employee_cross_team_weekend,
+                employees, teams, dates, weeks, shift_codes, shift_types)
+
+            _constraint_progress("Daily shift ratio constraints")
+            print("  - Daily shift ratio constraints (ensure F >= S on weekdays)")
+            from constraints import add_daily_shift_ratio_constraints
+            daily_ratio_violations = add_daily_shift_ratio_constraints(
+                model, employee_active, employee_weekend_shift, team_shift,
+                employee_cross_team_shift, employee_cross_team_weekend,
+                employees, teams, dates, weeks, shift_codes, shift_types)
+        else:
+            _constraint_progress("Cross-shift capacity enforcement")
+            print("  - [FALLBACK] Cross-shift capacity enforcement SKIPPED (faster feasibility)")
+            self.relaxed_constraints.append(
+                "Schicht-Kapazitätsfeinsteuerung: In Fallback deaktiviert, um schneller eine machbare Lösung zu finden"
+            )
+            _constraint_progress("Daily shift ratio constraints")
+            print("  - [FALLBACK] Daily shift ratio constraints SKIPPED (faster feasibility)")
+            self.relaxed_constraints.append(
+                "Tagesschicht-Verhältnis (F>=S>=N etc.): In Fallback deaktiviert, Fokus auf Besetzbarkeit"
+            )
         
         _constraint_progress("Rest time constraints")
         print("  - Rest time constraints (11h min, soft penalties for violations)")
@@ -555,15 +569,22 @@ class ShiftPlanningSolver:
         
         # SOFT CONSTRAINTS (OPTIMIZATION)
         _constraint_progress("Fairness objectives")
-        print("  - Fairness objectives (per-employee, year-long, including block scheduling)")
-        objective_terms = add_fairness_objectives(
-            model, employee_active, employee_weekend_shift, team_shift,
-            employee_cross_team_shift, employee_cross_team_weekend,
-            employees, teams, dates, weeks, shift_codes,
-            self.planning_model.ytd_weekend_counts,
-            self.planning_model.ytd_night_counts,
-            self.planning_model.ytd_holiday_counts
-        )
+        objective_terms = []
+        if self.relaxation_level == 0:
+            print("  - Fairness objectives (per-employee, year-long, including block scheduling)")
+            objective_terms = add_fairness_objectives(
+                model, employee_active, employee_weekend_shift, team_shift,
+                employee_cross_team_shift, employee_cross_team_weekend,
+                employees, teams, dates, weeks, shift_codes,
+                self.planning_model.ytd_weekend_counts,
+                self.planning_model.ytd_night_counts,
+                self.planning_model.ytd_holiday_counts
+            )
+        else:
+            print("  - [FALLBACK] Fairness objectives SKIPPED (faster feasibility)")
+            self.relaxed_constraints.append(
+                "Fairness-Ziele (jahrweite Verteilung): In Fallback deaktiviert, um Laufzeit zu reduzieren"
+            )
         
         # Add block scheduling objectives (encourage full blocks)
         # These are bonuses, so we want to maximize them (minimize negative sum)
@@ -711,6 +732,7 @@ class ShiftPlanningSolver:
         
         # Calculate total days once for temporal weighting calculations
         total_days = len(dates)
+        date_to_index = {d: idx for idx, d in enumerate(dates)}
         
         # Add overstaffing penalties - strongly discourage weekend overstaffing
         # Per requirements: Fill weekdays to capacity BEFORE overstaffing weekends
@@ -729,7 +751,7 @@ class ShiftPlanningSolver:
             print(f"  Adding {len(weekend_overstaffing)} weekend overstaffing penalties (base weight {WEEKEND_OVERSTAFFING_PENALTY_WEIGHT}x with temporal bias - STRONGLY avoid late month)...")
             for overstaff_var, overstaff_date in weekend_overstaffing:
                 # Calculate day index (0-based) within the planning period
-                day_index = dates.index(overstaff_date)
+                day_index = date_to_index.get(overstaff_date, 0)
                 
                 # Calculate temporal multiplier for OVERSTAFFING: ranges from 0.5 (early) to 2.0 (late)
                 # Formula: 0.5 + 1.5 * (day_index / total_days)
@@ -814,7 +836,7 @@ class ShiftPlanningSolver:
                 
                 for understaff_var, understaff_date in understaffing_list:
                     # Calculate day index (0-based) within the planning period
-                    day_index = dates.index(understaff_date)
+                    day_index = date_to_index.get(understaff_date, 0)
                     
                     # Calculate temporal multiplier: ranges from 1.5 (early) to 0.5 (late)
                     # Formula: 1.5 - (day_index / total_days)
@@ -848,7 +870,6 @@ class ShiftPlanningSolver:
         # Count total staff assigned to each shift and apply inverse priority weights
         # Shifts with higher max_staff get rewarded (negative penalty = bonus)
         # Shifts with lower max_staff get penalized to discourage overuse
-        print("  Adding shift type preference objectives (proportional to max_staff)...")
         shift_penalty_weights = {}
         
         # Calculate penalty/reward weights based on max_staff values
@@ -876,119 +897,104 @@ class ShiftPlanningSolver:
                 'N': 3    # Nacht/Night - stronger PENALTY (discourage when possible)
             }
         
-        # Pre-build day→week_idx map for O(1) lookup (avoid re-scanning weeks per date)
-        date_to_week_idx: Dict[date, int] = {}
-        for w_idx, week_dates in enumerate(weeks):
-            for wd in week_dates:
-                date_to_week_idx[wd] = w_idx
+        if self.relaxation_level == 0:
+            print("  Adding shift type preference objectives (proportional to max_staff)...")
+            # Pre-build day→week_idx map for O(1) lookup (avoid re-scanning weeks per date)
+            date_to_week_idx: Dict[date, int] = {}
+            for w_idx, week_dates in enumerate(weeks):
+                for wd in week_dates:
+                    date_to_week_idx[wd] = w_idx
 
-        # Pre-build per-team, per-day count of active members (constant — not a CP var)
-        # active_team_members[team_id][d] = number of employees in team that have an
-        # employee_active entry for date d (i.e., are not absent on that day).
-        active_team_members: Dict[int, Dict[date, int]] = {}
-        for team in teams:
-            active_team_members[team.id] = {}
-            for d in dates:
-                if d.weekday() >= 5:
-                    continue
-                count = sum(
-                    1 for emp in employees
-                    if emp.team_id == team.id and (emp.id, d) in employee_active
-                )
-                if count:
-                    active_team_members[team.id][d] = count
-
-        # Build shift preference objective using team-level linear terms.
-        # This replaces the previous per-employee bool × bool multiplication approach
-        # (O(employees × weekdays × shifts) non-linear constraints) with O(teams × weeks
-        # × shifts) linear coefficient additions — dramatically reducing model complexity.
-        for d in dates:
-            if d.weekday() >= 5:  # Skip weekends
-                continue
-
-            week_idx = date_to_week_idx.get(d)
-            if week_idx is None:
-                continue
-
-            for shift in shift_codes:
-                if shift not in shift_penalty_weights:
-                    continue
-
-                weight = shift_penalty_weights[shift]
-
-                # Team-level contribution: team_shift[t,w,s] * active_count (linear)
-                for team in teams:
-                    if (team.id, week_idx, shift) not in team_shift:
+            # Pre-build per-team, per-day count of active members (constant — not a CP var)
+            # active_team_members[team_id][d] = number of employees in team that have an
+            # employee_active entry for date d (i.e., are not absent on that day).
+            active_team_members: Dict[int, Dict[date, int]] = {}
+            for team in teams:
+                active_team_members[team.id] = {}
+                for d in dates:
+                    if d.weekday() >= 5:
                         continue
-                    count = active_team_members.get(team.id, {}).get(d, 0)
-                    if count:
-                        # team_shift is a BoolVar; multiplying by constant count is linear.
-                        objective_terms.append(team_shift[(team.id, week_idx, shift)] * (count * weight))
-
-                # Cross-team workers: these are individual BoolVars, add directly.
-                for emp in employees:
-                    if (emp.id, d, shift) in employee_cross_team_shift:
-                        objective_terms.append(employee_cross_team_shift[(emp.id, d, shift)] * weight)
-        
-        # NEW: Add temporal penalty for weekend work (discourage working late-month weekends)
-        # This encourages distributing weekend shifts earlier in the month
-        # Apply to BOTH regular team weekend work AND cross-team weekend work
-        print("  Adding temporal weekend work penalties (discourage late-month weekends)...")
-        weekend_work_penalties = 0
-        # (total_days already calculated above)
-        
-        # Penalize regular team weekend assignments
-        for emp in employees:
-            for d in dates:
-                if d.weekday() < 5:  # Skip weekdays
-                    continue
-                
-                if (emp.id, d) not in employee_weekend_shift:
-                    continue
-                
-                # Calculate temporal weight for this date
-                day_index = dates.index(d)
-                # Temporal multiplier: 0 (early) to 1000 (late)
-                # Day 0: 0x penalty, Last day: 1000x
-                # Very strong penalty to ensure late weekend work is avoided
-                temporal_weight = 1000.0 * (day_index / total_days)
-                
-                if temporal_weight > 0:
-                    # Penalize this employee working this late weekend
-                    # employee_weekend_shift is 1 if working, 0 if not
-                    # Use round() to preserve precision
-                    final_w = round(temporal_weight)
-                    objective_terms.append(employee_weekend_shift[(emp.id, d)] * final_w)
-                    self.penalty_groups.setdefault("Späte Wochenendarbeit (zeitgewichtet)", []).append(
-                        (employee_weekend_shift[(emp.id, d)], final_w)
+                    count = sum(
+                        1 for emp in employees
+                        if emp.team_id == team.id and (emp.id, d) in employee_active
                     )
-                    weekend_work_penalties += 1
-        
-        # ALSO penalize cross-team weekend assignments with same temporal penalty
-        for emp in employees:
+                    if count:
+                        active_team_members[team.id][d] = count
+
+            # Build shift preference objective using team-level linear terms.
             for d in dates:
-                if d.weekday() < 5:  # Skip weekdays
+                if d.weekday() >= 5:  # Skip weekends
                     continue
-                
-                # Check all possible cross-team weekend assignments for this employee/date
+
+                week_idx = date_to_week_idx.get(d)
+                if week_idx is None:
+                    continue
+
                 for shift in shift_codes:
-                    if (emp.id, d, shift) not in employee_cross_team_weekend:
+                    if shift not in shift_penalty_weights:
                         continue
-                    
-                    # Calculate temporal weight for this date
-                    day_index = dates.index(d)
+
+                    weight = shift_penalty_weights[shift]
+
+                    # Team-level contribution: team_shift[t,w,s] * active_count (linear)
+                    for team in teams:
+                        if (team.id, week_idx, shift) not in team_shift:
+                            continue
+                        count = active_team_members.get(team.id, {}).get(d, 0)
+                        if count:
+                            objective_terms.append(team_shift[(team.id, week_idx, shift)] * (count * weight))
+
+                    # Cross-team workers: these are individual BoolVars, add directly.
+                    for emp in employees:
+                        if (emp.id, d, shift) in employee_cross_team_shift:
+                            objective_terms.append(employee_cross_team_shift[(emp.id, d, shift)] * weight)
+
+            # Add temporal penalty for weekend work (discourage working late-month weekends)
+            print("  Adding temporal weekend work penalties (discourage late-month weekends)...")
+            weekend_work_penalties = 0
+            for emp in employees:
+                for d in dates:
+                    if d.weekday() < 5:
+                        continue
+                    if (emp.id, d) not in employee_weekend_shift:
+                        continue
+                    day_index = date_to_index.get(d, 0)
                     temporal_weight = 1000.0 * (day_index / total_days)
-                    
                     if temporal_weight > 0:
-                        # Penalize cross-team weekend work with same temporal penalty
                         final_w = round(temporal_weight)
-                        objective_terms.append(employee_cross_team_weekend[(emp.id, d, shift)] * final_w)
+                        objective_terms.append(employee_weekend_shift[(emp.id, d)] * final_w)
                         self.penalty_groups.setdefault("Späte Wochenendarbeit (zeitgewichtet)", []).append(
-                            (employee_cross_team_weekend[(emp.id, d, shift)], final_w)
+                            (employee_weekend_shift[(emp.id, d)], final_w)
                         )
                         weekend_work_penalties += 1
-        
-        print(f"  Added {weekend_work_penalties} temporal weekend work penalties")
+
+            for emp in employees:
+                for d in dates:
+                    if d.weekday() < 5:
+                        continue
+                    for shift in shift_codes:
+                        if (emp.id, d, shift) not in employee_cross_team_weekend:
+                            continue
+                        day_index = date_to_index.get(d, 0)
+                        temporal_weight = 1000.0 * (day_index / total_days)
+                        if temporal_weight > 0:
+                            final_w = round(temporal_weight)
+                            objective_terms.append(employee_cross_team_weekend[(emp.id, d, shift)] * final_w)
+                            self.penalty_groups.setdefault("Späte Wochenendarbeit (zeitgewichtet)", []).append(
+                                (employee_cross_team_weekend[(emp.id, d, shift)], final_w)
+                            )
+                            weekend_work_penalties += 1
+
+            print(f"  Added {weekend_work_penalties} temporal weekend work penalties")
+        else:
+            print("  - [FALLBACK] Shift type preference objectives SKIPPED (faster feasibility)")
+            self.relaxed_constraints.append(
+                "Schichttyp-Präferenz (max_staff-Proportion): In Fallback deaktiviert"
+            )
+            print("  - [FALLBACK] Temporal weekend work penalties SKIPPED (faster feasibility)")
+            self.relaxed_constraints.append(
+                "Zeitgewichtete Wochenendpräferenz: In Fallback deaktiviert"
+            )
         
         # Set objective function (minimize sum of objective terms)
         if objective_terms:
@@ -1038,6 +1044,10 @@ class ShiftPlanningSolver:
 
         # Build employee -> team mapping for efficiency
         emp_to_team = {emp.id: emp.team_id for emp in employees if emp.team_id}
+        date_to_week_idx: Dict[date, int] = {}
+        for w_idx, week_dates in enumerate(weeks):
+            for wd in week_dates:
+                date_to_week_idx[wd] = w_idx
 
         # Derive team/week -> shift hints via majority vote over employee assignments.
         # For each (team, week) pair, count how many employee records suggest each shift.
@@ -1050,11 +1060,7 @@ class ShiftPlanningSolver:
             team_id = emp_to_team.get(emp_id)
             if team_id is None:
                 continue
-            week_idx = None
-            for w_idx, week_dates in enumerate(weeks):
-                if d in week_dates:
-                    week_idx = w_idx
-                    break
+            week_idx = date_to_week_idx.get(d)
             if week_idx is None:
                 continue
             key = (team_id, week_idx)
@@ -2371,6 +2377,7 @@ def _build_planning_report(
     solver_time_seconds: float,
     relaxed_constraints_strs: List[str],
     penalty_breakdown: Optional[Dict[str, float]] = None,
+    stage_metrics: Optional[List[Dict[str, Any]]] = None,
 ) -> PlanningReport:
     """Build a PlanningReport from solver outputs and a fresh validation run."""
     start_date = planning_model.original_start_date
@@ -2444,6 +2451,7 @@ def _build_planning_report(
         objective_value=objective_value,
         solver_time_seconds=solver_time_seconds,
         penalty_breakdown=penalty_breakdown or {},
+        stage_metrics=stage_metrics or [],
     )
 
 
@@ -2559,6 +2567,8 @@ def solve_shift_planning(
             previous_employee_shifts=planning_model.previous_employee_shifts,
         )
 
+    stage_metrics: List[Dict[str, Any]] = []
+
     # ------------------------------------------------------------------ #
     # Pre-check: skip Stage 1 when min-staffing is provably infeasible   #
     # ------------------------------------------------------------------ #
@@ -2624,8 +2634,35 @@ def solve_shift_planning(
 
     if not _stage1_skip_reason:
         s1 = _make_solver(planning_model, level=0, limit=stage1_limit)
+        stage1_build_start = time.perf_counter()
         s1.add_all_constraints(progress_callback=progress_callback)
-    if not _stage1_skip_reason and s1.solve(progress_callback=progress_callback):
+        stage1_build_seconds = time.perf_counter() - stage1_build_start
+        stage1_solve_start = time.perf_counter()
+        stage1_ok = s1.solve(progress_callback=progress_callback)
+        stage1_solve_seconds = time.perf_counter() - stage1_solve_start
+        stage_metrics.append({
+            "stage": "STAGE_1",
+            "label": "Normaler Lösungsversuch",
+            "relaxation_level": 0,
+            "time_limit_seconds": stage1_limit,
+            "build_seconds": round(stage1_build_seconds, 3),
+            "solve_seconds": round(stage1_solve_seconds, 3),
+            "solved": bool(stage1_ok),
+            "cp_status": int(s1.status) if s1.status is not None else None,
+            "objective_value": s1.solution.ObjectiveValue() if stage1_ok and s1.solution else None,
+            "solver_wall_time_seconds": s1.solution.WallTime() if stage1_ok and s1.solution else None,
+        })
+    else:
+        stage1_ok = False
+        stage_metrics.append({
+            "stage": "STAGE_1",
+            "label": "Normaler Lösungsversuch",
+            "relaxation_level": 0,
+            "time_limit_seconds": stage1_limit,
+            "skipped": True,
+            "skip_reason": _stage1_skip_reason,
+        })
+    if not _stage1_skip_reason and stage1_ok:
         _emit_progress(
             progress_callback,
             "stage_completed",
@@ -2645,6 +2682,7 @@ def solve_shift_planning(
             solver_time_seconds=s1.solution.WallTime() if s1.solution else 0.0,
             relaxed_constraints_strs=[],
             penalty_breakdown=s1.compute_penalty_breakdown(),
+            stage_metrics=stage_metrics,
         )
         return result[0], result[1], report
 
@@ -2670,8 +2708,25 @@ def solve_shift_planning(
     print("=" * 60)
     m2 = _rebuild_model()
     s2 = _make_solver(m2, level=1, limit=stage2_limit)
+    stage2_build_start = time.perf_counter()
     s2.add_all_constraints(progress_callback=progress_callback)
-    if s2.solve(progress_callback=progress_callback):
+    stage2_build_seconds = time.perf_counter() - stage2_build_start
+    stage2_solve_start = time.perf_counter()
+    stage2_ok = s2.solve(progress_callback=progress_callback)
+    stage2_solve_seconds = time.perf_counter() - stage2_solve_start
+    stage_metrics.append({
+        "stage": "STAGE_2",
+        "label": "Fallback 1",
+        "relaxation_level": 1,
+        "time_limit_seconds": stage2_limit,
+        "build_seconds": round(stage2_build_seconds, 3),
+        "solve_seconds": round(stage2_solve_seconds, 3),
+        "solved": bool(stage2_ok),
+        "cp_status": int(s2.status) if s2.status is not None else None,
+        "objective_value": s2.solution.ObjectiveValue() if stage2_ok and s2.solution else None,
+        "solver_wall_time_seconds": s2.solution.WallTime() if stage2_ok and s2.solution else None,
+    })
+    if stage2_ok:
         _emit_progress(
             progress_callback,
             "stage_completed",
@@ -2691,6 +2746,7 @@ def solve_shift_planning(
             solver_time_seconds=s2.solution.WallTime() if s2.solution else 0.0,
             relaxed_constraints_strs=s2.relaxed_constraints,
             penalty_breakdown=s2.compute_penalty_breakdown(),
+            stage_metrics=stage_metrics,
         )
         return result[0], result[1], report
 
@@ -2713,8 +2769,25 @@ def solve_shift_planning(
     print("=" * 60)
     m3 = _rebuild_model()
     s3 = _make_solver(m3, level=2, limit=stage3_limit)
+    stage3_build_start = time.perf_counter()
     s3.add_all_constraints(progress_callback=progress_callback)
-    if s3.solve(progress_callback=progress_callback):
+    stage3_build_seconds = time.perf_counter() - stage3_build_start
+    stage3_solve_start = time.perf_counter()
+    stage3_ok = s3.solve(progress_callback=progress_callback)
+    stage3_solve_seconds = time.perf_counter() - stage3_solve_start
+    stage_metrics.append({
+        "stage": "STAGE_3",
+        "label": "Fallback 2",
+        "relaxation_level": 2,
+        "time_limit_seconds": stage3_limit,
+        "build_seconds": round(stage3_build_seconds, 3),
+        "solve_seconds": round(stage3_solve_seconds, 3),
+        "solved": bool(stage3_ok),
+        "cp_status": int(s3.status) if s3.status is not None else None,
+        "objective_value": s3.solution.ObjectiveValue() if stage3_ok and s3.solution else None,
+        "solver_wall_time_seconds": s3.solution.WallTime() if stage3_ok and s3.solution else None,
+    })
+    if stage3_ok:
         _emit_progress(
             progress_callback,
             "stage_completed",
@@ -2734,6 +2807,7 @@ def solve_shift_planning(
             solver_time_seconds=s3.solution.WallTime() if s3.solution else 0.0,
             relaxed_constraints_strs=s3.relaxed_constraints,
             penalty_breakdown=s3.compute_penalty_breakdown(),
+            stage_metrics=stage_metrics,
         )
         return result[0], result[1], report
 
@@ -2767,6 +2841,13 @@ def solve_shift_planning(
         objective_value=0.0,
         solver_time_seconds=0.0,
         relaxed_constraints_strs=greedy_relaxed,
+        stage_metrics=stage_metrics + [{
+            "stage": "STAGE_4",
+            "label": "Notfallplan",
+            "relaxation_level": 3,
+            "solver_type": "GREEDY_EMERGENCY",
+            "solved": True,
+        }],
     )
     _emit_progress(
         progress_callback,

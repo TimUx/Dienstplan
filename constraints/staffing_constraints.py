@@ -93,6 +93,16 @@ def add_staffing_constraints(
                 "max": st.max_staff_weekend
             }
     
+    shift_type_by_code = {st.code: st for st in shift_types}
+    date_to_week_idx: Dict[date, int] = {}
+    for w_idx, week_dates in enumerate(weeks):
+        for wd in week_dates:
+            date_to_week_idx[wd] = w_idx
+    team_members: Dict[int, List[Employee]] = {}
+    for emp in employees:
+        if emp.team_id is not None:
+            team_members.setdefault(emp.team_id, []).append(emp)
+
     # Initialize separate lists for different penalty types
     weekday_overstaffing_penalties = []
     weekend_overstaffing_penalties = []
@@ -104,13 +114,7 @@ def add_staffing_constraints(
         is_weekend = d.weekday() >= 5
         staffing = staffing_weekend if is_weekend else staffing_weekday
         
-        # Find which week this date belongs to
-        week_idx = None
-        for w_idx, week_dates in enumerate(weeks):
-            if d in week_dates:
-                week_idx = w_idx
-                break
-        
+        week_idx = date_to_week_idx.get(d)
         if week_idx is None:
             continue
         
@@ -120,12 +124,7 @@ def add_staffing_constraints(
             
             # Check if this shift works on this day (Mon-Fri vs Sat-Sun)
             # Find the shift type for this shift code
-            shift_type = None
-            if shift_types:
-                for st in shift_types:
-                    if st.code == shift:
-                        shift_type = st
-                        break
+            shift_type = shift_type_by_code.get(shift)
             
             # Skip if shift doesn't work on this day
             if shift_type and not shift_type.works_on_date(d):
@@ -143,10 +142,7 @@ def add_staffing_constraints(
                         continue
                     
                     # Count members of this team working on this weekend day
-                    for emp in employees:
-                        if emp.team_id != team.id:
-                            continue  # Only count team members
-                        
+                    for emp in team_members.get(team.id, []):
                         if (emp.id, d) not in employee_weekend_shift:
                             continue
                         
@@ -211,10 +207,7 @@ def add_staffing_constraints(
                         continue
                     
                     # Count active members of this team on this day
-                    for emp in employees:
-                        if emp.team_id != team.id:
-                            continue  # Only count team members
-                        
+                    for emp in team_members.get(team.id, []):
                         if (emp.id, d) not in employee_active:
                             continue
                         

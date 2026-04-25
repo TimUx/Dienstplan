@@ -47,6 +47,60 @@ jobs:
       run: |
         python -m PyInstaller Dienstplan.spec
 
+    - name: Check signing configuration
+      id: signing
+      shell: pwsh
+      run: |
+        $hasCert = -not [string]::IsNullOrWhiteSpace("${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}")
+        $hasPassword = -not [string]::IsNullOrWhiteSpace("${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}")
+        if ($hasCert -and $hasPassword) {
+          "enabled=true" >> $env:GITHUB_OUTPUT
+          Write-Host "Code signing is enabled."
+        } else {
+          "enabled=false" >> $env:GITHUB_OUTPUT
+          Write-Host "Code signing secrets missing - building unsigned artifacts."
+        }
+
+    - name: Import code-signing certificate
+      if: steps.signing.outputs.enabled == 'true'
+      shell: pwsh
+      run: |
+        $certPath = Join-Path $env:RUNNER_TEMP "dienstplan-codesign.pfx"
+        [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}"))
+        "WINDOWS_SIGN_CERT_PATH=$certPath" >> $env:GITHUB_ENV
+
+    - name: Sign app executable
+      if: steps.signing.outputs.enabled == 'true'
+      shell: pwsh
+      run: |
+        $exePath = "dist\Dienstplan\Dienstplan.exe"
+        if (!(Test-Path $exePath)) {
+          throw "Executable not found: $exePath"
+        }
+        $timestampServers = @(
+          "http://timestamp.digicert.com",
+          "http://timestamp.sectigo.com"
+        )
+        $signed = $false
+        foreach ($ts in $timestampServers) {
+          Write-Host "Trying timestamp server: $ts"
+          & signtool sign `
+            /fd SHA256 `
+            /td SHA256 `
+            /tr $ts `
+            /f "$env:WINDOWS_SIGN_CERT_PATH" `
+            /p "${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}" `
+            "$exePath"
+          if ($LASTEXITCODE -eq 0) {
+            $signed = $true
+            break
+          }
+        }
+        if (-not $signed) {
+          throw "Signing failed with all configured timestamp servers."
+        }
+        signtool verify /pa "$exePath"
+
     - name: Create distribution ZIP
       run: |
         $zip = "Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip"
@@ -61,6 +115,38 @@ jobs:
         iscc /DMyAppVersion=$version installer\Dienstplan.iss
         echo "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
       id: installerstep
+
+    - name: Sign installer executable
+      if: steps.signing.outputs.enabled == 'true'
+      shell: pwsh
+      run: |
+        $installerPath = "dist\Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe"
+        if (!(Test-Path $installerPath)) {
+          throw "Installer not found: $installerPath"
+        }
+        $timestampServers = @(
+          "http://timestamp.digicert.com",
+          "http://timestamp.sectigo.com"
+        )
+        $signed = $false
+        foreach ($ts in $timestampServers) {
+          Write-Host "Trying timestamp server: $ts"
+          & signtool sign `
+            /fd SHA256 `
+            /td SHA256 `
+            /tr $ts `
+            /f "$env:WINDOWS_SIGN_CERT_PATH" `
+            /p "${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}" `
+            "$installerPath"
+          if ($LASTEXITCODE -eq 0) {
+            $signed = $true
+            break
+          }
+        }
+        if (-not $signed) {
+          throw "Signing failed with all configured timestamp servers."
+        }
+        signtool verify /pa "$installerPath"
 
     - name: Upload Windows ZIP artifact
       uses: actions/upload-artifact@v4
@@ -256,7 +342,7 @@ jobs:
           
           ## 📝 Datenbankpfad
           
-          - `data\dienstplan.db` im selben Verzeichnis wie `Dienstplan.exe`
+          - Windows: `%LOCALAPPDATA%\Dienstplan\data\dienstplan.db`
           - Wird automatisch beim ersten Start angelegt
           - Für Backups: diese Datei regelmäßig kopieren
           

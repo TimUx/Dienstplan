@@ -481,6 +481,148 @@ export function showToast(message, type = 'info', duration = 4000) {
     }
 }
 
+function buildDialogShell(title) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.style.display = 'block';
+
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+
+    const heading = document.createElement('h2');
+    heading.textContent = title;
+
+    const body = document.createElement('p');
+    body.style.marginBottom = '16px';
+
+    const actions = document.createElement('div');
+    actions.className = 'form-actions';
+
+    content.appendChild(heading);
+    content.appendChild(body);
+    content.appendChild(actions);
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+
+    return { overlay, content, body, actions };
+}
+
+/**
+ * Promise-based confirm dialog with app styling.
+ */
+export function confirmDialog(
+    message,
+    {
+        title = 'Bestätigung',
+        confirmText = 'Bestätigen',
+        cancelText = 'Abbrechen',
+    } = {}
+) {
+    return new Promise((resolve) => {
+        const { overlay, content, body, actions } = buildDialogShell(title);
+        body.textContent = message;
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'btn-secondary';
+        cancelButton.textContent = cancelText;
+
+        const confirmButton = document.createElement('button');
+        confirmButton.type = 'button';
+        confirmButton.className = 'btn-primary';
+        confirmButton.textContent = confirmText;
+
+        const cleanup = (result) => {
+            document.removeEventListener('keydown', onKeyDown);
+            overlay.remove();
+            resolve(result);
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') cleanup(false);
+            if (event.key === 'Enter') cleanup(true);
+        };
+
+        cancelButton.addEventListener('click', () => cleanup(false));
+        confirmButton.addEventListener('click', () => cleanup(true));
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) cleanup(false);
+        });
+
+        document.addEventListener('keydown', onKeyDown);
+        actions.appendChild(cancelButton);
+        actions.appendChild(confirmButton);
+
+        setTimeout(() => confirmButton.focus(), 0);
+    });
+}
+
+/**
+ * Promise-based input dialog with app styling.
+ */
+export function promptDialog(
+    message,
+    {
+        title = 'Eingabe erforderlich',
+        placeholder = '',
+        defaultValue = '',
+        confirmText = 'Übernehmen',
+        cancelText = 'Abbrechen',
+    } = {}
+) {
+    return new Promise((resolve) => {
+        const { overlay, content, body, actions } = buildDialogShell(title);
+        body.textContent = message;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = placeholder;
+        input.value = defaultValue;
+        input.style.width = '100%';
+        input.style.marginBottom = '16px';
+        input.style.padding = '10px 12px';
+        input.style.border = '2px solid var(--border-color)';
+        input.style.borderRadius = '6px';
+        content.insertBefore(input, actions);
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'btn-secondary';
+        cancelButton.textContent = cancelText;
+
+        const confirmButton = document.createElement('button');
+        confirmButton.type = 'button';
+        confirmButton.className = 'btn-primary';
+        confirmButton.textContent = confirmText;
+
+        const cleanup = (result) => {
+            document.removeEventListener('keydown', onKeyDown);
+            overlay.remove();
+            resolve(result);
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') cleanup(null);
+            if (event.key === 'Enter') cleanup(input.value.trim());
+        };
+
+        cancelButton.addEventListener('click', () => cleanup(null));
+        confirmButton.addEventListener('click', () => cleanup(input.value.trim()));
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) cleanup(null);
+        });
+
+        document.addEventListener('keydown', onKeyDown);
+        actions.appendChild(cancelButton);
+        actions.appendChild(confirmButton);
+
+        setTimeout(() => {
+            input.focus();
+            input.select();
+        }, 0);
+    });
+}
+
 /**
  * Debounce helper for high-frequency UI events.
  */

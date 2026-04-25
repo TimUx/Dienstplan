@@ -14,10 +14,14 @@
                     <!-- Employees Tab -->
                     <div id="management-employees-tab" class="tab-content active">
                         <h3>Mitarbeiterverwaltung</h3>
-                        <div class="controls">
-                            <button data-action="showAddEmployeeModal" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
-                            <button data-action="exportEmployeesCsv" class="btn-secondary admin-only">📤 Mitarbeiter exportieren (CSV)</button>
-                            <button data-action="showImportEmployeesModal" class="btn-secondary admin-only">📥 Mitarbeiter importieren (CSV)</button>
+                        <div class="controls management-toolbar">
+                            <div class="toolbar-group toolbar-group-primary">
+                                <button data-action="showAddEmployeeModal" class="btn-primary admin-only">+ Mitarbeiter hinzufügen</button>
+                            </div>
+                            <div class="toolbar-group toolbar-group-secondary">
+                                <button data-action="showImportEmployeesModal" class="btn-secondary admin-only">📥 Mitarbeiter importieren (CSV)</button>
+                                <button data-action="exportEmployeesCsv" class="btn-secondary admin-only">📤 Mitarbeiter exportieren (CSV)</button>
+                            </div>
                         </div>
                         <div id="employees-content">
                             <p class="loading">Lade Mitarbeiter...</p>
@@ -27,10 +31,14 @@
                     <!-- Teams Tab -->
                     <div id="management-teams-tab" class="tab-content">
                         <h3>Teamverwaltung</h3>
-                        <div class="controls">
-                            <button data-action="showAddTeamModal" class="btn-primary admin-only">+ Team hinzufügen</button>
-                            <button data-action="exportTeamsCsv" class="btn-secondary admin-only">📤 Teams exportieren (CSV)</button>
-                            <button data-action="showImportTeamsModal" class="btn-secondary admin-only">📥 Teams importieren (CSV)</button>
+                        <div class="controls management-toolbar">
+                            <div class="toolbar-group toolbar-group-primary">
+                                <button data-action="showAddTeamModal" class="btn-primary admin-only">+ Team hinzufügen</button>
+                            </div>
+                            <div class="toolbar-group toolbar-group-secondary">
+                                <button data-action="showImportTeamsModal" class="btn-secondary admin-only">📥 Teams importieren (CSV)</button>
+                                <button data-action="exportTeamsCsv" class="btn-secondary admin-only">📤 Teams exportieren (CSV)</button>
+                            </div>
                         </div>
                         <div id="teams-content">
                             <p class="loading">Lade Teams...</p>
@@ -51,11 +59,15 @@
                         <!-- Shift Types Sub-tab -->
                         <div id="shift-types-content-tab" class="tab-content active">
                             <p>Verwalten Sie Schichtmodelle, Arbeitszeiten, Kürzel und Farben. Definieren Sie, welche Teams welche Schichten arbeiten können.</p>
-                            <div class="controls">
-                                <button data-action="showShiftTypeModal" class="btn-primary">+ Schichttyp hinzufügen</button>
-                                <button data-action="loadShiftTypesManagement" class="btn-secondary">🔄 Aktualisieren</button>
-                                <button type="button" data-action="exportShiftSettings" class="btn-secondary admin-only">📤 Exportieren (JSON)</button>
-                                <button type="button" data-action="showImportShiftSettingsModal" class="btn-secondary admin-only">📥 Importieren (JSON)</button>
+                            <div class="controls management-toolbar">
+                                <div class="toolbar-group toolbar-group-primary">
+                                    <button data-action="showShiftTypeModal" class="btn-primary">+ Schichttyp hinzufügen</button>
+                                    <button data-action="loadShiftTypesManagement" class="btn-secondary">🔄 Aktualisieren</button>
+                                </div>
+                                <div class="toolbar-group toolbar-group-secondary">
+                                    <button type="button" data-action="showImportShiftSettingsModal" class="btn-secondary admin-only">📥 Importieren (JSON)</button>
+                                    <button type="button" data-action="exportShiftSettings" class="btn-secondary admin-only">📤 Exportieren (JSON)</button>
+                                </div>
                             </div>
                             <div id="shift-types-management-content">
                                 <p class="loading">Lade Schichttypen...</p>
@@ -70,11 +82,15 @@
                                 <p>ℹ️ <strong>Rotationsgruppen</strong> ermöglichen es, mehrere Schichten zu einer Gruppe zusammenzufassen und deren Rotationsreihenfolge zentral zu definieren.</p>
                                 <p>Beispiel: Eine "3-Schicht-Rotation" könnte die Schichten F (Früh) → N (Nacht) → S (Spät) beinhalten.</p>
                             </div>
-                            <div class="controls">
-                                <button data-action="showRotationGroupModal" class="btn-primary">+ Rotationsgruppe hinzufügen</button>
-                                <button data-action="loadRotationGroups" class="btn-secondary">🔄 Aktualisieren</button>
-                                <button type="button" data-action="exportShiftSettings" class="btn-secondary admin-only">📤 Exportieren (JSON)</button>
-                                <button type="button" data-action="showImportShiftSettingsModal" class="btn-secondary admin-only">📥 Importieren (JSON)</button>
+                            <div class="controls management-toolbar">
+                                <div class="toolbar-group toolbar-group-primary">
+                                    <button data-action="showRotationGroupModal" class="btn-primary">+ Rotationsgruppe hinzufügen</button>
+                                    <button data-action="loadRotationGroups" class="btn-secondary">🔄 Aktualisieren</button>
+                                </div>
+                                <div class="toolbar-group toolbar-group-secondary">
+                                    <button type="button" data-action="showImportShiftSettingsModal" class="btn-secondary admin-only">📥 Importieren (JSON)</button>
+                                    <button type="button" data-action="exportShiftSettings" class="btn-secondary admin-only">📤 Exportieren (JSON)</button>
+                                </div>
                             </div>
                             <div id="rotation-groups-content">
                                 <p class="loading">Lade Rotationsgruppen...</p>
@@ -85,10 +101,14 @@
                         <div id="shift-settings-content-tab" class="tab-content">
                             <h4>Allgemeine Schichtplanungseinstellungen</h4>
                             <p>Konfigurieren Sie die globalen Parameter für die Schichtplanung.</p>
-                            <div class="controls">
-                                <button data-action="loadGlobalSettings" class="btn-secondary">🔄 Aktualisieren</button>
-                                <button type="button" data-action="exportShiftSettings" class="btn-secondary admin-only">📤 Exportieren (JSON)</button>
-                                <button type="button" data-action="showImportShiftSettingsModal" class="btn-secondary admin-only">📥 Importieren (JSON)</button>
+                            <div class="controls management-toolbar">
+                                <div class="toolbar-group toolbar-group-primary">
+                                    <button data-action="loadGlobalSettings" class="btn-secondary">🔄 Aktualisieren</button>
+                                </div>
+                                <div class="toolbar-group toolbar-group-secondary">
+                                    <button type="button" data-action="showImportShiftSettingsModal" class="btn-secondary admin-only">📥 Importieren (JSON)</button>
+                                    <button type="button" data-action="exportShiftSettings" class="btn-secondary admin-only">📤 Exportieren (JSON)</button>
+                                </div>
                             </div>
                             <div id="global-settings-content">
                                 <p class="loading">Lade Einstellungen...</p>

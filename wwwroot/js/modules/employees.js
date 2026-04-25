@@ -269,7 +269,7 @@ export function displayTeams(teams) {
     const canEdit = canEditEmployees();
     const isAdmin = hasRole('Admin');
 
-    let html = '<div class="grid">';
+    let html = '<div class="teams-grid">';
     teams.forEach(team => {
         const virtualBadge = team.isVirtual ? '<span style="background: #999; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 8px;">Virtuell</span>' : '';
         const teamName = escapeHtml(team.name);
@@ -277,7 +277,7 @@ export function displayTeams(teams) {
         const teamEmail = escapeHtml(team.email || 'Nicht angegeben');
 
         html += `
-            <div class="card">
+            <div class="card team-card">
                 <h3>${teamName}${virtualBadge}</h3>
                 <p>${teamDesc}</p>
                 <p><strong>E-Mail:</strong> ${teamEmail}</p>

@@ -469,13 +469,28 @@ proc.terminate()
 
 ### Code Signing (Recommended for Distribution)
 
-For professional distribution, sign the executable:
+For professional distribution, sign the executable and installer.  
+The GitHub workflow supports automatic signing when these repository secrets are set:
 
-1. Obtain a code signing certificate
+- `WINDOWS_SIGN_CERT_BASE64` (Base64 content of your `.pfx` certificate file)
+- `WINDOWS_SIGN_CERT_PASSWORD` (password of the `.pfx`)
+
+If the secrets are missing, the workflow still builds unsigned artifacts.
+
+Example to create Base64 from a `.pfx` in PowerShell:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\certificate.pfx")) | Set-Clipboard
+```
+
+Manual signing example:
+
+1. Obtain a code signing certificate (`.pfx`)
 2. Install SignTool (Windows SDK)
-3. Sign the executable:
+3. Sign the executable and installer:
    ```cmd
-   signtool sign /f certificate.pfx /p password dist\Dienstplan\Dienstplan.exe
+   signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f certificate.pfx /p password dist\Dienstplan\Dienstplan.exe
+   signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f certificate.pfx /p password dist\Dienstplan-Windows-Setup-v2.2.0.exe
    ```
 
 ### Virus Scanning

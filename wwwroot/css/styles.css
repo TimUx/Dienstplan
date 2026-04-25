@@ -1395,6 +1395,11 @@ body.disponent button.admin-only.admin-strict {
     background: #fff5f5 !important;
 }
 
+/* Keep Sunday/holiday headers readable on light red background. */
+.calendar-table th.sunday-column {
+    color: #b42318 !important;
+}
+
 /* Additional modal and form styles */
 .modal-content.large {
     max-width: 700px;

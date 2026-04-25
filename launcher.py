@@ -24,17 +24,24 @@ def main():
     """Main launcher function"""
     # Determine application and data paths
     if getattr(sys, 'frozen', False):
-        # Running in a bundle (PyInstaller)
-        # Data directory should be next to the executable for persistence
-        exe_dir = Path(sys.executable).parent
-        data_dir = exe_dir / "data"
+        # Running in a bundle (PyInstaller). Store data in a per-user writable path
+        # so the app can run without administrator privileges.
+        if os.name == "nt":
+            local_appdata = os.environ.get("LOCALAPPDATA")
+            if local_appdata:
+                data_dir = Path(local_appdata) / "Dienstplan" / "data"
+            else:
+                data_dir = Path.home() / "AppData" / "Local" / "Dienstplan" / "data"
+        else:
+            exe_dir = Path(sys.executable).parent
+            data_dir = exe_dir / "data"
     else:
         # Running in normal Python environment
         application_path = Path(__file__).parent
         data_dir = application_path / "data"
     
     # Ensure data directory exists
-    data_dir.mkdir(exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
     
     print("=" * 60)
     print("DIENSTPLAN - Schichtverwaltungssystem")

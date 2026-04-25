@@ -29,8 +29,8 @@ AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
 AppVerName={#MyAppName} {#MyAppVersion}
 
-; Install to Program Files by default
-DefaultDirName={autopf}\{#MyAppName}
+; Install per user by default so no admin rights are required
+DefaultDirName={localappdata}\Programs\{#MyAppName}
 ; Start-menu group
 DefaultGroupName={#MyAppName}
 ; Licence shown during install
@@ -42,8 +42,9 @@ OutputBaseFilename=Dienstplan-Windows-Setup-v{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 
-; Require admin rights so the app can be installed for all users
-PrivilegesRequired=admin
+; No admin rights required; app runs in user context
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 
 ; Close running instances automatically before upgrade to avoid file-lock errors
 CloseApplications=yes
@@ -90,7 +91,7 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    DataDir := ExpandConstant('{app}\data');
+    DataDir := ExpandConstant('{localappdata}\Dienstplan\data');
     if DirExists(DataDir) then
     begin
       if MsgBox(

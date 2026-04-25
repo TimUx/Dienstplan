@@ -21,17 +21,25 @@ class PlanningRuntimeConfig:
 def load_planning_runtime_config() -> PlanningRuntimeConfig:
     """Load CPU-safe planning runtime settings from environment."""
     cpu_count = os.cpu_count() or 1
+
+    # Prefer full CPU usage for one planning run by default.
+    # Multi-job throttling remains configurable via env vars.
+    default_max_concurrent_jobs = 1
+    default_solver_workers = cpu_count
+
     max_concurrent_jobs = max(
         1,
-        _env_int("DIENSTPLAN_MAX_CONCURRENT_JOBS", min(4, cpu_count)),
+        _env_int("DIENSTPLAN_MAX_CONCURRENT_JOBS", default_max_concurrent_jobs),
     )
+    max_concurrent_jobs = min(max_concurrent_jobs, cpu_count)
     solver_workers_per_job = max(
         1,
         _env_int(
             "DIENSTPLAN_SOLVER_WORKERS_PER_JOB",
-            max(1, cpu_count // max_concurrent_jobs),
+            default_solver_workers,
         ),
     )
+    solver_workers_per_job = min(solver_workers_per_job, cpu_count)
     return PlanningRuntimeConfig(
         cpu_count=cpu_count,
         max_concurrent_jobs=max_concurrent_jobs,

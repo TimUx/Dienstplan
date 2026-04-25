@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken, debounce } from './utils.js';
+import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken, debounce, confirmDialog } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
@@ -18,9 +18,46 @@ let _currentPlanJobId = null;
 let _planningElapsedTimer = null;
 let _scheduleAbortController = null;
 const _debouncedLoadSchedule = debounce(() => loadSchedule(), 220);
+let _employeesCacheTimestamp = 0;
+const EMPLOYEES_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function loadScheduleDebounced() {
     _debouncedLoadSchedule();
+}
+
+function buildVacationPeriodsByDate(vacationPeriods = []) {
+    const map = new Map();
+    vacationPeriods.forEach((period) => {
+        const startDate = new Date(period.startDate);
+        const endDate = new Date(period.endDate);
+        startDate.setHours(12, 0, 0, 0);
+        endDate.setHours(12, 0, 0, 0);
+
+        for (const d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            const key = formatLocalDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+            const existing = map.get(key) || [];
+            existing.push(period);
+            map.set(key, existing);
+        }
+    });
+    return map;
+}
+
+async function getScheduleEmployees(signal) {
+    const cached = store.getState('cachedEmployees');
+    if (Array.isArray(cached) && cached.length > 0 && (Date.now() - _employeesCacheTimestamp) < EMPLOYEES_CACHE_TTL_MS) {
+        return cached;
+    }
+
+    const response = await fetch(`${API_BASE}/employees`, { signal });
+    if (!response.ok) {
+        throw new Error('Mitarbeiterdaten konnten nicht geladen werden.');
+    }
+
+    const employees = await response.json();
+    store.setState('cachedEmployees', employees);
+    _employeesCacheTimestamp = Date.now();
+    return employees;
 }
 
 // ============================================================================
@@ -163,13 +200,15 @@ export async function loadSchedule() {
         }
         _scheduleAbortController = new AbortController();
         const { signal } = _scheduleAbortController;
-        const [scheduleResponse, employeesResponse] = await Promise.all([
+        const [scheduleResponse, employees] = await Promise.all([
             fetch(`${API_BASE}/shifts/schedule?startDate=${startDate}&view=${viewType}`, { signal }),
-            fetch(`${API_BASE}/employees`, { signal })
+            getScheduleEmployees(signal),
         ]);
 
+        if (!scheduleResponse.ok) {
+            throw new Error(`Dienstplan konnte nicht geladen werden (${scheduleResponse.status}).`);
+        }
         const data = await scheduleResponse.json();
-        const employees = await employeesResponse.json();
 
         displaySchedule(data, employees);
 
@@ -204,6 +243,7 @@ export function displaySchedule(data, employees) {
 
 export function displayWeekView(data, employees) {
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
+    const vacationByDate = buildVacationPeriodsByDate(data.vacationPeriods || []);
 
     let dates = [];
     if (data.startDate && data.endDate) {
@@ -243,11 +283,7 @@ export function displayWeekView(data, employees) {
 
         dates.forEach(dateStr => {
             const date = new Date(dateStr);
-            const activePeriods = data.vacationPeriods.filter(period => {
-                const startDate = new Date(period.startDate);
-                const endDate = new Date(period.endDate);
-                return date >= startDate && date <= endDate;
-            });
+            const activePeriods = vacationByDate.get(dateStr) || [];
 
             let content = '';
             if (activePeriods.length > 0) {
@@ -307,6 +343,7 @@ export function displayWeekView(data, employees) {
 
 export function displayMonthView(data, employees) {
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
+    const vacationByDate = buildVacationPeriodsByDate(data.vacationPeriods || []);
 
     let dates = [];
     if (data.startDate && data.endDate) {
@@ -363,11 +400,7 @@ export function displayMonthView(data, employees) {
         weekGroups.forEach(week => {
             week.days.forEach(dateStr => {
                 const date = new Date(dateStr);
-                const activePeriods = data.vacationPeriods.filter(period => {
-                    const startDate = new Date(period.startDate);
-                    const endDate = new Date(period.endDate);
-                    return date >= startDate && date <= endDate;
-                });
+                const activePeriods = vacationByDate.get(dateStr) || [];
 
                 let content = '';
                 if (activePeriods.length > 0) {
@@ -432,6 +465,7 @@ export function displayMonthView(data, employees) {
 
 export function displayYearView(data, employees) {
     const teamGroups = groupByTeamAndEmployee(data.assignments, employees, data.absences || []);
+    const vacationByDate = buildVacationPeriodsByDate(data.vacationPeriods || []);
 
     let dates = [];
     if (data.startDate && data.endDate) {
@@ -493,11 +527,7 @@ export function displayYearView(data, employees) {
         weekGroups.forEach(week => {
             week.days.forEach(dateStr => {
                 const date = new Date(dateStr);
-                const activePeriods = data.vacationPeriods.filter(period => {
-                    const startDate = new Date(period.startDate);
-                    const endDate = new Date(period.endDate);
-                    return date >= startDate && date <= endDate;
-                });
+                const activePeriods = vacationByDate.get(dateStr) || [];
 
                 let content = '';
                 if (activePeriods.length > 0) {
@@ -677,7 +707,7 @@ export async function executePlanShifts(event) {
         ? `Möchten Sie wirklich alle Schichten für ${periodText} neu planen? Bestehende Schichten werden überschrieben (außer feste Schichten).`
         : `Möchten Sie Schichten für ${periodText} planen? Bereits geplante Tage werden übersprungen.`;
 
-    if (!confirm(confirmText)) {
+    if (!await confirmDialog(confirmText, { title: 'Planung starten' })) {
         return;
     }
 
@@ -1190,7 +1220,7 @@ export async function saveShiftAssignment(event) {
                 document.getElementById('editShiftWarningText').textContent = error.error;
                 document.getElementById('editShiftWarning').style.display = 'block';
 
-                if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
+                if (await confirmDialog(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`, { title: 'Regelverstoß' })) {
                     showToast('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.', 'warning');
                 }
             } else {
@@ -1212,7 +1242,7 @@ export async function saveShiftAssignment(event) {
 export async function deleteShiftAssignment() {
     const shiftId = document.getElementById('editShiftId').value;
 
-    if (!confirm('Möchten Sie diese Schichtzuweisung wirklich löschen?')) {
+    if (!await confirmDialog('Möchten Sie diese Schichtzuweisung wirklich löschen?', { title: 'Schicht löschen' })) {
         return;
     }
 
@@ -1404,7 +1434,7 @@ export async function saveQuickEntry() {
             } else if (response.status === 400) {
                 const error = await response.json();
                 if (error.warning) {
-                    if (confirm(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`)) {
+                    if (await confirmDialog(`⚠️ Regelverstoß:\n\n${error.error}\n\nMöchten Sie die Änderung trotzdem vornehmen?`, { title: 'Regelverstoß' })) {
                         showToast('Erzwungene Änderungen sind noch nicht implementiert. Die Schicht muss den Regeln entsprechen.', 'error');
                     }
                 } else {
@@ -1512,7 +1542,7 @@ export function toggleMultiSelectMode() {
     }
 
     updateSelectionCounter();
-    loadSchedule();
+    applyMultiSelectModeToRenderedBadges();
 }
 
 export function toggleShiftSelection(shiftId) {
@@ -1526,14 +1556,38 @@ export function toggleShiftSelection(shiftId) {
         selectedShifts.add(shiftId);
     }
 
-    loadSchedule();
+    updateRenderedShiftSelection(shiftId);
     updateSelectionCounter();
 }
 
 export function clearShiftSelection() {
     selectedShifts.clear();
-    loadSchedule();
+    clearRenderedShiftSelections();
     updateSelectionCounter();
+}
+
+function applyMultiSelectModeToRenderedBadges() {
+    document.querySelectorAll('.shift-badge[data-shift-id]').forEach((badge) => {
+        if (multiSelectMode) {
+            badge.dataset.action = 'toggleShiftSelectionById';
+            badge.classList.remove('shift-selected');
+        } else {
+            badge.dataset.action = 'editShiftAssignmentById';
+            badge.classList.remove('shift-selected');
+        }
+    });
+}
+
+function updateRenderedShiftSelection(shiftId) {
+    document.querySelectorAll(`.shift-badge[data-shift-id="${shiftId}"]`).forEach((badge) => {
+        badge.classList.toggle('shift-selected', selectedShifts.has(shiftId));
+    });
+}
+
+function clearRenderedShiftSelections() {
+    document.querySelectorAll('.shift-badge.shift-selected').forEach((badge) => {
+        badge.classList.remove('shift-selected');
+    });
 }
 
 export function updateSelectionCounter() {
@@ -1629,7 +1683,7 @@ export async function saveBulkEdit(event) {
         return;
     }
 
-    if (!confirm(`Möchten Sie ${selectedShifts.size} Schicht${selectedShifts.size !== 1 ? 'en' : ''} wirklich ändern?`)) {
+    if (!await confirmDialog(`Möchten Sie ${selectedShifts.size} Schicht${selectedShifts.size !== 1 ? 'en' : ''} wirklich ändern?`, { title: 'Mehrfachbearbeitung' })) {
         return;
     }
 
@@ -1748,7 +1802,7 @@ export async function togglePlanApproval() {
         const monthName = new Date(year, month - 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
         const action = newApprovalState ? 'freigeben' : 'zurückziehen';
 
-        if (!confirm(`Möchten Sie den Dienstplan für ${monthName} wirklich ${action}?`)) {
+        if (!await confirmDialog(`Möchten Sie den Dienstplan für ${monthName} wirklich ${action}?`, { title: 'Planfreigabe' })) {
             return;
         }
 

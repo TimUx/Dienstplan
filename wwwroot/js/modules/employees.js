@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, sanitizeColorCode, formatImportResult, showToast, getCsrfToken } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, formatImportResult, showToast, getCsrfToken, confirmDialog, promptDialog } from './utils.js';
 import { hasRole, canEditEmployees, canPlanShifts } from './auth.js';
 import { store } from './store.js';
 
@@ -136,7 +136,7 @@ export async function deleteEmployee(id, name) {
         return;
     }
 
-    if (!confirm(`Möchten Sie den Mitarbeiter "${name}" wirklich löschen?\n\nAchtung: Alle zugehörigen Schichten und Abwesenheiten werden ebenfalls gelöscht!`)) {
+    if (!await confirmDialog(`Möchten Sie den Mitarbeiter "${name}" wirklich löschen?\n\nAchtung: Alle zugehörigen Schichten und Abwesenheiten werden ebenfalls gelöscht!`, { title: 'Mitarbeiter löschen' })) {
         return;
     }
 
@@ -342,7 +342,7 @@ export async function deleteTeam(id, name) {
         return;
     }
 
-    if (!confirm(`Möchten Sie das Team "${name}" wirklich löschen?`)) {
+    if (!await confirmDialog(`Möchten Sie das Team "${name}" wirklich löschen?`, { title: 'Team löschen' })) {
         return;
     }
 
@@ -704,7 +704,7 @@ export async function saveShiftType(event) {
 }
 
 export async function deleteShiftType(shiftTypeId, shiftCode) {
-    if (!confirm(`Möchten Sie den Schichttyp "${shiftCode}" wirklich löschen?`)) {
+    if (!await confirmDialog(`Möchten Sie den Schichttyp "${shiftCode}" wirklich löschen?`, { title: 'Schichttyp löschen' })) {
         return;
     }
 
@@ -1210,7 +1210,7 @@ export async function editRotationGroup(groupId) {
 }
 
 export async function deleteRotationGroup(groupId, groupName) {
-    if (!confirm(`Möchten Sie die Rotationsgruppe "${groupName}" wirklich löschen?`)) {
+    if (!await confirmDialog(`Möchten Sie die Rotationsgruppe "${groupName}" wirklich löschen?`, { title: 'Rotationsgruppe löschen' })) {
         return;
     }
 
@@ -1442,7 +1442,7 @@ export async function editUser(userId) {
 }
 
 export async function deleteUser(userId, userEmail) {
-    if (!confirm(`Möchten Sie den Benutzer "${userEmail}" wirklich löschen?`)) {
+    if (!await confirmDialog(`Möchten Sie den Benutzer "${userEmail}" wirklich löschen?`, { title: 'Benutzer löschen' })) {
         return;
     }
 
@@ -1663,7 +1663,10 @@ export async function saveEmailSettings(event) {
 }
 
 export async function testEmailSettings() {
-    const testEmail = prompt('Bitte geben Sie eine E-Mail-Adresse für den Test ein:');
+    const testEmail = await promptDialog('Bitte geben Sie eine E-Mail-Adresse für den Test ein:', {
+        title: 'E-Mail-Test',
+        placeholder: 'beispiel@firma.de',
+    });
     if (!testEmail) return;
 
     try {

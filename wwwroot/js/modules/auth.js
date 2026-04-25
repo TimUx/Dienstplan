@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, fetchCsrfToken, getCsrfToken, showToast } from './utils.js';
+import { API_BASE, escapeHtml, fetchCsrfToken, getCsrfToken, showToast, confirmDialog } from './utils.js';
 
 // Authentication state
 export let currentUser = null;
@@ -24,10 +24,6 @@ export async function checkAuthenticationStatus() {
         updateUIForAnonymousUser();
     }
 
-    // Load initial view — uses window.loadSchedule to avoid circular imports
-    if (window.loadSchedule) {
-        window.loadSchedule();
-    }
 }
 
 export function updateUIForAuthenticatedUser(user) {
@@ -349,7 +345,7 @@ export async function markNotificationRead(notificationId) {
 }
 
 export async function markAllNotificationsRead() {
-    if (!confirm('Möchten Sie wirklich alle Benachrichtigungen als gelesen markieren?')) {
+    if (!await confirmDialog('Möchten Sie wirklich alle Benachrichtigungen als gelesen markieren?', { title: 'Alle Benachrichtigungen' })) {
         return;
     }
 
@@ -362,15 +358,15 @@ export async function markAllNotificationsRead() {
 
         if (response.ok) {
             const result = await response.json();
-            alert(`${result.count} Benachrichtigung${result.count !== 1 ? 'en' : ''} als gelesen markiert.`);
+            showToast(`${result.count} Benachrichtigung${result.count !== 1 ? 'en' : ''} als gelesen markiert.`, 'success');
             loadNotifications(currentNotificationFilter);
             loadNotificationCount();
         } else {
-            alert('Fehler beim Markieren der Benachrichtigungen.');
+            showToast('Fehler beim Markieren der Benachrichtigungen.', 'error');
         }
     } catch (error) {
         console.error('Error marking all notifications as read:', error);
-        alert('Fehler beim Markieren der Benachrichtigungen.');
+        showToast('Fehler beim Markieren der Benachrichtigungen.', 'error');
     }
 }
 

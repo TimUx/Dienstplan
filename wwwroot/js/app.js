@@ -29,7 +29,6 @@ const VIEW_PARTIALS = {
 };
 
 const loadedPartials = new Set();
-const trackedShiftSettingsButtons = new WeakSet();
 let headerMenuInitialized = false;
 const coreFormSubmitHandlers = {
     loginForm: (event) => auth.login(event),
@@ -166,56 +165,7 @@ async function ensurePartialLoaded(partialUrl) {
     const html = await response.text();
     const container = document.getElementById('view-container');
     container.insertAdjacentHTML('beforeend', html);
-    if (partialUrl === '/partials/management.html') {
-        bindShiftSettingsJsonButtons();
-    }
     loadedPartials.add(partialUrl);
-}
-
-function bindShiftSettingsJsonButtons() {
-    const handlers = {
-        exportShiftSettings: () => employees.exportShiftSettings(),
-        showImportShiftSettingsModal: () => employees.showImportShiftSettingsModal(),
-    };
-    // Build selector from registered handler keys so action names stay in sync.
-    const shiftSettingsActionSelector = Object.keys(handlers)
-        .map((action) => `[data-action="${action}"]`)
-        .join(', ');
-
-    document.querySelectorAll(shiftSettingsActionSelector).forEach((button) => {
-        if (trackedShiftSettingsButtons.has(button)) return;
-
-        const action = button.dataset.action;
-        const handler = handlers[action];
-        if (!handler) return;
-
-        button.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handler();
-        });
-        trackedShiftSettingsButtons.add(button);
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        const el = event.target.closest('[data-action][role="button"]');
-        if (!el) return;
-        const action = el.dataset.action;
-        const handler = actionMap[action];
-        if (!handler) return;
-        event.preventDefault();
-        handler(el, event);
-    });
-
-    document.addEventListener('change', (event) => {
-        const el = event.target.closest('[data-action]');
-        if (!el) return;
-        const action = el.dataset.action;
-        const handler = actionMap[action];
-        if (!handler) return;
-        handler(el, event);
-    });
 }
 
 async function showView(viewName) {

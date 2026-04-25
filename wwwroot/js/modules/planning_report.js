@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml } from './utils.js';
+import { API_BASE, escapeHtml, showToast } from './utils.js';
 
 // ============================================================================
 // PLANNING REPORT
@@ -70,11 +70,11 @@ export async function exportPlanningReportSummary() {
         });
 
         if (response.status === 404) {
-            alert('Kein Planungsbericht für diesen Monat vorhanden.');
+            showToast('Kein Planungsbericht für diesen Monat vorhanden.', 'warning');
             return;
         }
         if (!response.ok) {
-            alert('Fehler beim Abrufen des Berichts.');
+            showToast('Fehler beim Abrufen des Berichts.', 'error');
             return;
         }
 
@@ -89,7 +89,7 @@ export async function exportPlanningReportSummary() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (error) {
-        alert(`Fehler beim Export: ${error.message}`);
+        showToast(`Fehler beim Export: ${error.message}`, 'error');
     }
 }
 

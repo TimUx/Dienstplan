@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES, getCsrfToken, showToast } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, ABSENCE_TYPES, getCsrfToken, showToast, confirmDialog, promptDialog } from './utils.js';
 import { hasRole, canPlanShifts } from './auth.js';
 import { loadSchedule } from './schedule.js';
 
@@ -157,7 +157,10 @@ export async function saveVacationRequest(event) {
 }
 
 export async function processVacationRequest(id, status) {
-    const response = prompt(`${status === 'Genehmigt' ? 'Genehmigung' : 'Ablehnung'} - Optionale Antwort:`);
+    const response = await promptDialog(`${status === 'Genehmigt' ? 'Genehmigung' : 'Ablehnung'} - Optionale Antwort:`, {
+        title: 'Urlaubsantrag bearbeiten',
+        placeholder: 'Optionale Antwort an den Mitarbeiter',
+    });
 
     try {
         const result = await fetch(`${API_BASE}/vacationrequests/${id}/status`, {
@@ -186,7 +189,7 @@ export async function processVacationRequest(id, status) {
 }
 
 export async function deleteVacationRequest(id, employeeName) {
-    if (!confirm(`Möchten Sie den Urlaubsantrag von "${employeeName}" wirklich stornieren?\n\nDieser genehmigte Urlaub wird gelöscht.`)) {
+    if (!await confirmDialog(`Möchten Sie den Urlaubsantrag von "${employeeName}" wirklich stornieren?\n\nDieser genehmigte Urlaub wird gelöscht.`, { title: 'Urlaubsantrag stornieren' })) {
         return;
     }
 
@@ -459,7 +462,7 @@ export async function saveAbsence(event) {
 }
 
 export async function deleteAbsence(id, type) {
-    if (!confirm('Möchten Sie diese Abwesenheit wirklich löschen?')) {
+    if (!await confirmDialog('Möchten Sie diese Abwesenheit wirklich löschen?', { title: 'Abwesenheit löschen' })) {
         return;
     }
 
@@ -664,7 +667,10 @@ export async function requestShiftExchange(id) {
         return;
     }
 
-    const employeeId = prompt('Bitte geben Sie Ihre Mitarbeiter-ID ein:');
+    const employeeId = await promptDialog('Bitte geben Sie Ihre Mitarbeiter-ID ein:', {
+        title: 'Diensttausch anfragen',
+        placeholder: 'Mitarbeiter-ID',
+    });
     if (!employeeId) return;
 
     try {
@@ -691,7 +697,10 @@ export async function requestShiftExchange(id) {
 }
 
 export async function processShiftExchange(id, status) {
-    const notes = prompt(`${status === 'Genehmigt' ? 'Genehmigung' : 'Ablehnung'} - Optionale Notizen:`);
+    const notes = await promptDialog(`${status === 'Genehmigt' ? 'Genehmigung' : 'Ablehnung'} - Optionale Notizen:`, {
+        title: 'Diensttausch bearbeiten',
+        placeholder: 'Optionale Notizen',
+    });
 
     try {
         const response = await fetch(`${API_BASE}/shiftexchanges/${id}/process`, {
@@ -884,7 +893,7 @@ export async function deleteVacationPeriod(periodId, periodName) {
         return;
     }
 
-    if (!confirm(`Möchten Sie die Ferienzeit "${periodName}" wirklich löschen?`)) {
+    if (!await confirmDialog(`Möchten Sie die Ferienzeit "${periodName}" wirklich löschen?`, { title: 'Ferienzeit löschen' })) {
         return;
     }
 
@@ -1126,7 +1135,7 @@ export function displayVacationYearApprovals(approvals) {
 export async function toggleYearApproval(year, approve) {
     const action = approve ? 'freigeben' : 'zurückziehen';
 
-    if (!confirm(`Möchten Sie die Anzeige der Urlaubsdaten für das Jahr ${year} wirklich ${action}?`)) {
+    if (!await confirmDialog(`Möchten Sie die Anzeige der Urlaubsdaten für das Jahr ${year} wirklich ${action}?`, { title: 'Jahresfreigabe ändern' })) {
         return;
     }
 
@@ -1235,7 +1244,7 @@ export function displayVacationYearApprovalsAbsence(approvals) {
 export async function toggleYearApprovalAbsence(year, approve) {
     const action = approve ? 'Freigabe' : 'Sperrung';
 
-    if (!confirm(`Möchten Sie das Jahr ${year} wirklich ${approve ? 'freigeben' : 'sperren'}?`)) {
+    if (!await confirmDialog(`Möchten Sie das Jahr ${year} wirklich ${approve ? 'freigeben' : 'sperren'}?`, { title: 'Jahr umschalten' })) {
         return;
     }
 
@@ -1427,7 +1436,7 @@ export function editAbsenceType(id) {
 }
 
 export async function deleteAbsenceType(id, name) {
-    if (!confirm(`Möchten Sie den Abwesenheitstyp "${name}" wirklich löschen?`)) {
+    if (!await confirmDialog(`Möchten Sie den Abwesenheitstyp "${name}" wirklich löschen?`, { title: 'Abwesenheitstyp löschen' })) {
         return;
     }
 

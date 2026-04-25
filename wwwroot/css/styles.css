@@ -587,8 +587,20 @@ select {
         flex-direction: column;
     }
     
-    .employees-grid {
+    .employees-grid,
+    .teams-grid {
         grid-template-columns: 1fr;
+    }
+
+    .management-toolbar {
+        justify-content: flex-start;
+        gap: 10px;
+    }
+
+    .management-toolbar .toolbar-group,
+    .management-toolbar .toolbar-group-secondary {
+        width: 100%;
+        justify-content: flex-start;
     }
     
     .statistics-grid {
@@ -1561,6 +1573,12 @@ body.disponent button.admin-only.admin-strict {
     gap: 20px;
 }
 
+.teams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
 .employee-card,
 .card {
     background: var(--card-bg);
@@ -1574,6 +1592,10 @@ body.disponent button.admin-only.admin-strict {
 .card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
+}
+
+.team-card {
+    border: 1px solid var(--border-color);
 }
 
 .employee-card h3,
@@ -1592,6 +1614,29 @@ body.disponent button.admin-only.admin-strict {
 
 .employee-info span {
     font-size: 0.9rem;
+}
+
+.management-toolbar {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.management-toolbar .toolbar-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.management-toolbar .toolbar-group-secondary {
+    justify-content: flex-end;
+}
+
+.management-toolbar .btn-primary,
+.management-toolbar .btn-secondary {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 /* Info box */
@@ -1763,6 +1808,7 @@ body.disponent button.admin-only.admin-strict {
     }
     
     .employees-grid,
+    .teams-grid,
     .grid {
         grid-template-columns: 1fr;
     }

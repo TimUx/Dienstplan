@@ -2,8 +2,11 @@
 import sys
 import subprocess
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+
+from .ops_metrics import snapshot as metrics_snapshot
+from .shared import require_role
 
 router = APIRouter()
 
@@ -64,4 +67,11 @@ def health_check():
         'python': python_version,
         'ortools': ortools_version,
         'last_updated': _get_last_merge_or_commit_iso(),
+        'ops': metrics_snapshot(),
     }, status_code=http_status)
+
+
+@router.get('/api/ops/metrics', dependencies=[Depends(require_role('Admin'))])
+def get_ops_metrics(request: Request):
+    """Return lightweight operational metrics for runtime monitoring."""
+    return {'metrics': metrics_snapshot()}

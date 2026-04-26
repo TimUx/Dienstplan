@@ -18,10 +18,10 @@ from tests.fixtures.factories import csrf_headers, dashboard_url, schedule_url
 pytestmark = pytest.mark.e2e
 
 
-def test_flow_anonymous_health_then_shift_types(client):
+def test_flow_anonymous_health_then_authenticated_shift_types(client, admin_client):
     h = client.get("/api/health")
     assert h.status_code == 200
-    st = client.get("/api/shifttypes")
+    st = admin_client.get("/api/shifttypes")
     assert st.status_code == 200
     codes = {x["code"] for x in st.json()}
     assert {"F", "N", "S"}.issubset(codes)

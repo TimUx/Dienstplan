@@ -5,8 +5,8 @@ import pytest
 
 @pytest.mark.api
 class TestTeams:
-    def test_list_teams_public_or_authenticated(self, client):
-        r = client.get("/api/teams")
+    def test_list_teams_requires_authenticated_session(self, admin_client):
+        r = admin_client.get("/api/teams")
         assert r.status_code == 200
         data = r.json()
         assert isinstance(data, list)

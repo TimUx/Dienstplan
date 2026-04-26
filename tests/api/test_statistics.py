@@ -36,7 +36,7 @@ def _set_weekly_hours(db_path, hours):
 
 
 class TestDashboardStatistics:
-    def test_absence_days_are_clipped_to_selected_period_and_include_vacation(self, client, test_db):
+    def test_absence_days_are_clipped_to_selected_period_and_include_vacation(self, admin_client, test_db):
         employee_id = _get_test_employee_id(test_db)
         urlaub_type_id = _get_absence_type_id(test_db, 'U')
         _clear_employee_data(test_db, employee_id)
@@ -49,7 +49,7 @@ class TestDashboardStatistics:
             """, (employee_id, urlaub_type_id))
             conn.commit()
 
-        resp = client.get('/api/statistics/dashboard?startDate=2025-02-01&endDate=2025-02-28')
+        resp = admin_client.get('/api/statistics/dashboard?startDate=2025-02-01&endDate=2025-02-28')
         assert resp.status_code == 200
         data = resp.json()
 
@@ -57,7 +57,7 @@ class TestDashboardStatistics:
         assert entry['totalDays'] == 5
         assert entry['byType'].get('U') == 5
 
-    def test_au_urlaub_lehrgang_absence_hours_are_capped_to_six_days_per_week(self, client, test_db):
+    def test_au_urlaub_lehrgang_absence_hours_are_capped_to_six_days_per_week(self, admin_client, test_db):
         employee_id = _get_test_employee_id(test_db)
         au_type_id = _get_absence_type_id(test_db, 'AU')
         _clear_employee_data(test_db, employee_id)
@@ -71,7 +71,7 @@ class TestDashboardStatistics:
             """, (employee_id, au_type_id))
             conn.commit()
 
-        resp = client.get('/api/statistics/dashboard?startDate=2025-02-01&endDate=2025-02-28')
+        resp = admin_client.get('/api/statistics/dashboard?startDate=2025-02-01&endDate=2025-02-28')
         assert resp.status_code == 200
         data = resp.json()
 

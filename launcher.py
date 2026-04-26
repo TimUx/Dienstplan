@@ -8,6 +8,7 @@ import os
 import webbrowser
 import threading
 import time
+import multiprocessing
 from pathlib import Path
 
 
@@ -195,4 +196,8 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
+    # Required for Windows + PyInstaller when child processes are spawned
+    # (e.g. ProcessPoolExecutor in shift planning). Without this, worker
+    # subprocesses may rerun the full launcher and appear as app restarts.
+    multiprocessing.freeze_support()
     main()

@@ -5,9 +5,11 @@ import logging
 from datetime import datetime
 
 from .planning_job_store import get_job, update_job
-from .shifts_planning_pool import SOLVER_WORKERS_PER_JOB
+from .planning_runtime import load_planning_runtime_config
 
 logger = logging.getLogger(__name__)
+_runtime_cfg = load_planning_runtime_config()
+SOLVER_WORKERS_PER_JOB = _runtime_cfg.solver_workers_per_job
 
 def _serialize_planning_report(report) -> str:
     """

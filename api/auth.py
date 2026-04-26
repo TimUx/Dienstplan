@@ -17,6 +17,7 @@ from .shared import (
     check_csrf, parse_json_body
 )
 from .error_utils import api_error
+from .user_service import normalize_and_validate_roles
 
 logger = logging.getLogger(__name__)
 
@@ -321,12 +322,9 @@ def create_user(request: Request, data: dict = Depends(parse_json_body)):
             return JSONResponse(content={'error': 'Passwort ist erforderlich wenn E-Mail angegeben wird'}, status_code=400)
         
         # Validate roles
-        valid_roles = ['Admin', 'Mitarbeiter', 'Disponent']
-        if not isinstance(roles, list):
-            roles = [roles]
-        for role in roles:
-            if role not in valid_roles:
-                return JSONResponse(content={'error': f'Ung\u00fcltige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}, status_code=400)
+        roles, role_error = normalize_and_validate_roles(roles)
+        if role_error:
+            return JSONResponse(content={'error': role_error}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -398,8 +396,13 @@ def create_user(request: Request, data: dict = Depends(parse_json_body)):
         return JSONResponse(content={'success': True, 'userId': employee_id, 'employeeId': employee_id}, status_code=201)
         
     except Exception as e:
-        logger.error(f"Create employee/user error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Erstellen: {str(e)}'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Erstellen des Benutzers',
+            status_code=500,
+            exc=e,
+            context='create_user',
+        )
 
 
 @router.put('/api/users/{user_id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -429,12 +432,9 @@ def update_user(request: Request, user_id: int, data: dict = Depends(parse_json_
             return JSONResponse(content={'error': 'Vorname, Name und Personalnummer sind erforderlich'}, status_code=400)
         
         # Validate roles
-        valid_roles = ['Admin', 'Mitarbeiter', 'Disponent']
-        if not isinstance(roles, list):
-            roles = [roles]
-        for role in roles:
-            if role not in valid_roles:
-                return JSONResponse(content={'error': f'Ung\u00fcltige Rolle: {role}. Erlaubt: {", ".join(valid_roles)}'}, status_code=400)
+        roles, role_error = normalize_and_validate_roles(roles)
+        if role_error:
+            return JSONResponse(content={'error': role_error}, status_code=400)
         
         db = get_db()
         conn = db.get_connection()
@@ -534,8 +534,13 @@ def update_user(request: Request, user_id: int, data: dict = Depends(parse_json_
         return {'success': True}
         
     except Exception as e:
-        logger.error(f"Update employee/user error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim Aktualisieren: {str(e)}'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Aktualisieren des Benutzers',
+            status_code=500,
+            exc=e,
+            context='update_user',
+        )
 
 
 @router.delete('/api/users/{user_id}', dependencies=[Depends(require_role('Admin')), Depends(check_csrf)])
@@ -596,8 +601,13 @@ def delete_user(request: Request, user_id: int):
         return {'success': True}
         
     except Exception as e:
-        logger.error(f"Delete employee/user error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler beim L\u00f6schen: {str(e)}'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Löschen des Benutzers',
+            status_code=500,
+            exc=e,
+            context='delete_user',
+        )
 
 
 @router.get('/api/roles', dependencies=[Depends(require_role('Admin'))])
@@ -674,8 +684,13 @@ def change_password(request: Request, data: dict = Depends(parse_json_body)):
         return {'success': True}
         
     except Exception as e:
-        logger.error(f"Change password error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Ändern des Passworts',
+            status_code=500,
+            exc=e,
+            context='change_password',
+        )
 
 
 @router.post('/api/auth/forgot-password', dependencies=[Depends(check_csrf)])
@@ -737,8 +752,13 @@ def forgot_password(request: Request, data: dict = Depends(parse_json_body)):
         return {'success': True, 'message': 'Falls die E-Mail-Adresse existiert, wurde eine Anleitung zum Zur\u00fccksetzen des Passworts gesendet.'}
         
     except Exception as e:
-        logger.error(f"Forgot password error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler bei Passwort-zurücksetzen Anfrage',
+            status_code=500,
+            exc=e,
+            context='forgot_password',
+        )
 
 
 @router.post('/api/auth/reset-password', dependencies=[Depends(check_csrf)])
@@ -809,8 +829,13 @@ def reset_password(request: Request, data: dict = Depends(parse_json_body)):
         return {'success': True}
         
     except Exception as e:
-        logger.error(f"Reset password error: {str(e)}")
-        return JSONResponse(content={'error': f'Fehler: {str(e)}'}, status_code=500)
+        return api_error(
+            logger,
+            'Fehler beim Zurücksetzen des Passworts',
+            status_code=500,
+            exc=e,
+            context='reset_password',
+        )
 
 
 @router.post('/api/auth/validate-reset-token', dependencies=[Depends(check_csrf)])

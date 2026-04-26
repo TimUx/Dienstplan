@@ -10,6 +10,50 @@ import threading
 import time
 from pathlib import Path
 
+
+def _parse_bootstrap_env(file_path: Path) -> dict:
+    """Parse simple KEY=VALUE lines from bootstrap env file."""
+    values = {}
+    for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            values[key] = value
+    return values
+
+
+def _apply_one_time_bootstrap_credentials(data_dir: Path) -> Path | None:
+    """
+    Load one-time bootstrap credentials from a file in data directory.
+
+    The file is consumed only for first database initialization and removed
+    afterwards to avoid keeping plaintext passwords on disk.
+    """
+    bootstrap_file = data_dir / "bootstrap.env"
+    if not bootstrap_file.exists():
+        return None
+
+    try:
+        bootstrap_values = _parse_bootstrap_env(bootstrap_file)
+    except Exception as exc:
+        print(f"[!] Could not read bootstrap credentials: {exc}")
+        return None
+
+    admin_email = bootstrap_values.get("DIENSTPLAN_INITIAL_ADMIN_EMAIL")
+    admin_password = bootstrap_values.get("DIENSTPLAN_INITIAL_ADMIN_PASSWORD")
+    if admin_email:
+        os.environ["DIENSTPLAN_INITIAL_ADMIN_EMAIL"] = admin_email
+    if admin_password:
+        os.environ["DIENSTPLAN_INITIAL_ADMIN_PASSWORD"] = admin_password
+    if admin_email or admin_password:
+        print("[i] One-time bootstrap credentials loaded for initial setup.")
+    return bootstrap_file
+
+
 def open_browser(url, delay=2):
     """Open browser after a short delay to let server start"""
     time.sleep(delay)
@@ -23,7 +67,10 @@ def open_browser(url, delay=2):
 def main():
     """Main launcher function"""
     # Determine application and data paths
-    if getattr(sys, 'frozen', False):
+    configured_data_dir = os.environ.get("DIENSTPLAN_DATA_DIR", "").strip()
+    if configured_data_dir:
+        data_dir = Path(configured_data_dir).expanduser()
+    elif getattr(sys, 'frozen', False):
         # Running in a bundle (PyInstaller). Store data in a per-user writable path
         # so the app can run without administrator privileges.
         if os.name == "nt":
@@ -33,8 +80,11 @@ def main():
             else:
                 data_dir = Path.home() / "AppData" / "Local" / "Dienstplan" / "data"
         else:
-            exe_dir = Path(sys.executable).parent
-            data_dir = exe_dir / "data"
+            xdg_data_home = os.environ.get("XDG_DATA_HOME")
+            if xdg_data_home:
+                data_dir = Path(xdg_data_home) / "Dienstplan" / "data"
+            else:
+                data_dir = Path.home() / ".local" / "share" / "Dienstplan" / "data"
     else:
         # Running in normal Python environment
         application_path = Path(__file__).parent
@@ -57,9 +107,11 @@ def main():
     db_path = str(data_dir / "dienstplan.db")
     
     # Check if database exists, if not initialize it; otherwise run migrations
+    bootstrap_file_to_delete = None
     if not os.path.exists(db_path):
         print("[i] No database found. Initializing new database...")
         print()
+        bootstrap_file_to_delete = _apply_one_time_bootstrap_credentials(data_dir)
         try:
             from db_init import initialize_database
             # Initialize without sample data (production-ready empty database)
@@ -73,6 +125,13 @@ def main():
             print(f"[!] Error initializing database: {e}")
             print("   The application may not work correctly.")
             print()
+        finally:
+            if bootstrap_file_to_delete and bootstrap_file_to_delete.exists():
+                try:
+                    bootstrap_file_to_delete.unlink()
+                    print("[i] Removed one-time bootstrap credential file.")
+                except Exception as exc:
+                    print(f"[!] Could not remove bootstrap credential file: {exc}")
     else:
         # Existing database – apply any outstanding migrations automatically
         try:

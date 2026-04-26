@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+systemctl stop dienstplan.service || true
+systemctl disable dienstplan.service || true
+systemctl daemon-reload || true

@@ -30,6 +30,7 @@ Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx
 
 1. `Dienstplan-Windows-Setup-v*.exe` herunterladen und ausführen
 2. Installationsassistenten folgen
+3. Im Installer initiale Admin-E-Mail und optional ein Initialpasswort eingeben
 3. Dienstplan über Startmenü oder Desktop-Verknüpfung starten
 4. Ein Konsolenfenster öffnet sich mit Serverinformationen
 5. Ihr Standard-Webbrowser öffnet sich automatisch auf `http://localhost:5000`
@@ -51,8 +52,8 @@ Laden Sie die neueste Version von den [GitHub Releases](https://github.com/TimUx
 
 1. Beim ersten Start wird automatisch eine leere Datenbank erstellt
 2. Melden Sie sich mit dem Administrator-Konto an:
-   - **E-Mail:** Wert von `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Standard: `admin@fritzwinter.de`), sofern beim Packen/Start nicht gesetzt
-   - **Passwort:** Wert von `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder das bei der **ersten** Datenbank-Erstellung in der Konsole ausgegebene Initialpasswort
+   - **E-Mail:** Installer-Eingabe (oder `admin@fritzwinter.de`, falls leer)
+   - **Passwort:** Installer-Eingabe oder das bei der **ersten** Datenbank-Erstellung in der Konsole ausgegebene Initialpasswort
 3. **WICHTIG:** Ändern Sie das Passwort nach der ersten Anmeldung!
 
 ## 🛑 Beenden der Anwendung

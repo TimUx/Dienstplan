@@ -1,0 +1,17 @@
+[Unit]
+Description=Dienstplan service
+After=network.target
+
+[Service]
+Type=simple
+User=dienstplan
+Group=dienstplan
+Environment=HOME=/var/lib/dienstplan
+Environment=DIENSTPLAN_DATA_DIR=/var/lib/dienstplan/data
+WorkingDirectory=/opt/dienstplan/Dienstplan
+ExecStart=/opt/dienstplan/Dienstplan/Dienstplan
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

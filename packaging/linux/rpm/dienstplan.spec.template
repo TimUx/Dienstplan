@@ -1,0 +1,56 @@
+Name:           dienstplan
+Version:        __VERSION__
+Release:        1%{?dist}
+Summary:        Dienstplan Schichtverwaltung
+License:        MIT
+URL:            https://github.com/TimUx/Dienstplan
+BuildArch:      x86_64
+Source0:        dienstplan-root.tar.gz
+
+Requires(post): systemd shadow-utils
+Requires(preun): systemd
+Requires:       libc, libgcc, libstdc++
+
+%description
+Standalone Dienstplan server packaged as a Linux system service.
+
+%prep
+%setup -q -c -T
+tar -xzf %{SOURCE0}
+
+%build
+
+%install
+rm -rf %{buildroot}
+mkdir -p %{buildroot}
+cp -a rootfs/. %{buildroot}/
+
+%post
+getent group dienstplan >/dev/null || groupadd --system dienstplan
+id -u dienstplan >/dev/null 2>&1 || \
+  useradd --system --home /var/lib/dienstplan --create-home --shell /usr/sbin/nologin -g dienstplan dienstplan
+mkdir -p /var/lib/dienstplan/data
+chown -R dienstplan:dienstplan /var/lib/dienstplan
+chmod 750 /var/lib/dienstplan
+
+/usr/sbin/dienstplan-setup-admin || true
+%systemd_post dienstplan.service
+
+echo "Dienstplan installiert."
+echo "Start:   sudo systemctl start dienstplan"
+echo "Status:  sudo systemctl status dienstplan"
+
+%preun
+%systemd_preun dienstplan.service
+
+%postun
+%systemd_postun_with_restart dienstplan.service
+
+%files
+%defattr(-,root,root,-)
+/opt/dienstplan
+/usr/bin/dienstplan
+/usr/lib/systemd/system/dienstplan.service
+/usr/sbin/dienstplan-setup-admin
+%dir %attr(0750,dienstplan,dienstplan) /var/lib/dienstplan
+%dir %attr(0750,dienstplan,dienstplan) /var/lib/dienstplan/data

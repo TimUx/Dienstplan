@@ -1,0 +1,9 @@
+Package: dienstplan
+Version: __VERSION__
+Section: admin
+Priority: optional
+Architecture: amd64
+Maintainer: Dienstplan Team <no-reply@example.com>
+Depends: libc6, libgcc-s1, libstdc++6
+Description: Dienstplan Schichtverwaltung
+ Standalone Dienstplan server packaged as a Linux system service.

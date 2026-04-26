@@ -5,23 +5,23 @@ import pytest
 
 
 class TestGetEmployees:
-    def test_get_employees_returns_200(self, client):
-        resp = client.get('/api/employees')
+    def test_get_employees_returns_200(self, admin_client):
+        resp = admin_client.get('/api/employees')
         assert resp.status_code == 200
 
-    def test_get_employees_returns_list(self, client):
-        resp = client.get('/api/employees')
+    def test_get_employees_returns_list(self, admin_client):
+        resp = admin_client.get('/api/employees')
         data = resp.json()
         assert isinstance(data, list)
 
-    def test_get_employees_has_sample_data(self, client):
-        resp = client.get('/api/employees')
+    def test_get_employees_has_sample_data(self, admin_client):
+        resp = admin_client.get('/api/employees')
         data = resp.json()
         # Sample data has at least 17 employees
         assert len(data) >= 17
 
-    def test_get_employees_have_required_fields(self, client):
-        resp = client.get('/api/employees')
+    def test_get_employees_have_required_fields(self, admin_client):
+        resp = admin_client.get('/api/employees')
         employees = resp.json()
         assert len(employees) > 0
         first = employees[0]
@@ -30,15 +30,15 @@ class TestGetEmployees:
         assert 'name' in first
         assert 'personalnummer' in first
 
-    def test_get_employee_by_id(self, client):
+    def test_get_employee_by_id(self, admin_client):
         # Get all first then fetch one
-        employees = client.get('/api/employees').json()
+        employees = admin_client.get('/api/employees').json()
         emp_id = employees[0]['id']
-        resp = client.get(f'/api/employees/{emp_id}')
+        resp = admin_client.get(f'/api/employees/{emp_id}')
         assert resp.status_code == 200
 
-    def test_get_nonexistent_employee_returns_404(self, client):
-        resp = client.get('/api/employees/999999')
+    def test_get_nonexistent_employee_returns_404(self, admin_client):
+        resp = admin_client.get('/api/employees/999999')
         assert resp.status_code == 404
 
 
@@ -121,16 +121,16 @@ class TestCreateEmployee:
 
 
 class TestGetTeams:
-    def test_get_teams_returns_200(self, client):
-        resp = client.get('/api/teams')
+    def test_get_teams_returns_200(self, admin_client):
+        resp = admin_client.get('/api/teams')
         assert resp.status_code == 200
 
-    def test_get_teams_returns_list(self, client):
-        resp = client.get('/api/teams')
+    def test_get_teams_returns_list(self, admin_client):
+        resp = admin_client.get('/api/teams')
         data = resp.json()
         assert isinstance(data, list)
 
-    def test_get_teams_has_sample_data(self, client):
-        resp = client.get('/api/teams')
+    def test_get_teams_has_sample_data(self, admin_client):
+        resp = admin_client.get('/api/teams')
         data = resp.json()
         assert len(data) >= 3

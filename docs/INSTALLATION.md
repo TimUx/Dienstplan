@@ -4,6 +4,9 @@
 
 Diese Anleitung beschreibt alle verfügbaren Installationsarten für das Dienstplan-System.
 
+Fuer Installer-spezifische Uebergabe von Admin-User und Passwort siehe:
+`docs/INSTALLER_CREDENTIALS.md`.
+
 ---
 
 ## Übersicht der Installationsmethoden
@@ -229,6 +232,10 @@ Die Standalone-Executable ist die einfachste Installationsmethode – **keine Py
 
 > **Wichtig:** Lassen Sie das Konsolenfenster geöffnet, solange Sie die Anwendung nutzen!
 
+Wenn Sie den Windows Setup-Installer nutzen, koennen Sie Admin-E-Mail und
+Initialpasswort direkt im Installer-Wizard setzen. Details:
+`docs/INSTALLER_CREDENTIALS.md`.
+
 #### Datenspeicherung
 
 - Die Datenbank wird automatisch erstellt: `data\dienstplan.db` (neben der `.exe`)
@@ -293,6 +300,23 @@ tail -f dienstplan.log
 # Beenden
 kill <PID>
 ```
+
+### 2.4 Linux – Installer-Pakete (.deb/.rpm)
+
+Neben der portablen Linux-Binary stehen Installer-Pakete zur Verfuegung:
+
+```bash
+# Debian/Ubuntu
+sudo dpkg -i dienstplan_<version>_amd64.deb
+
+# RHEL/Fedora/SUSE
+sudo rpm -Uvh dienstplan-<version>-1.x86_64.rpm
+```
+
+Waerend der Installation werden (bei interaktivem Terminal) Admin-E-Mail und
+Passwort abgefragt und fuer den ersten Start hinterlegt.
+
+Vollstaendige Anleitung: `docs/INSTALLER_CREDENTIALS.md`.
 
 ---
 

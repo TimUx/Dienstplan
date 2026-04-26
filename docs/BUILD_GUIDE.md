@@ -17,6 +17,19 @@ The build system supports creating **two different versions**:
 
 You can build either version individually or both at once.
 
+## Build Variants (Artifacts)
+
+- `Windows ZIP` (portable): `Dienstplan-Windows-v<version>.zip`
+- `Windows Installer`: `Dienstplan-Windows-Setup-v<version>.exe`
+- `Linux tar.gz` (portable): `Dienstplan-Linux-v<version>.tar.gz`
+- `Linux DEB Installer`: `dienstplan_<version>_amd64.deb`
+- `Linux RPM Installer`: `dienstplan-<version>-1.x86_64.rpm`
+
+Credential bootstrap behavior by variant:
+- Installer variants (`.exe`, `.deb`, `.rpm`) can prompt for admin email/password.
+- Portable variants (`.zip`, `.tar.gz`) use environment variables or `bootstrap.env`.
+- Details: `docs/INSTALLER_CREDENTIALS.md`
+
 ## Quick Build (Windows)
 
 ### Option 1: Build Single Version
@@ -109,6 +122,25 @@ chmod +x build_executable_both.sh
 - `release-empty/` - Folder containing empty database build
 - `release-sample/` - Folder containing sample data build
 
+### Option 3: Build Linux Installer Packages (.deb/.rpm)
+
+```bash
+# 1) Build the Linux one-dir app first
+python3 -m PyInstaller Dienstplan.spec
+
+# 2) Build Debian + RPM packages
+chmod +x build_linux_packages.sh
+./build_linux_packages.sh 2.2.0
+```
+
+During package installation an interactive installer prompt asks for initial
+admin email and password. Credentials are written as one-time bootstrap file
+and consumed automatically on first application start.
+
+**Output:**
+- `dist/packages/dienstplan_<version>_amd64.deb`
+- `dist/packages/dienstplan-<version>-1.x86_64.rpm`
+
 ## Understanding the Build Process
 
 ### Step 1: Install Dependencies
@@ -148,6 +180,12 @@ For a proper Windows installer (Start-menu entry, Add/Remove Programs), run:
 
 ```cmd
 iscc /DMyAppVersion=2.1.0 installer\Dienstplan.iss
+```
+
+Linux installer packages can be built with:
+
+```bash
+./build_linux_packages.sh 2.2.0
 ```
 
 ## Build Configuration

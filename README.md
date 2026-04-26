@@ -1223,6 +1223,7 @@ Das Dienstplan-System verfügt über eine umfassende Dokumentation:
 
 ### 📘 Für Benutzer
 - **[Installationsanleitung](docs/INSTALLATION.md)** - Native Python, 1-Klick-EXE, Docker Compose
+- **[Installer Credentials Guide](docs/INSTALLER_CREDENTIALS.md)** - Admin-User/Passwort bei Windows- und Linux-Installer setzen
 - **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** - Vollständige Anleitung für alle Funktionen mit Screenshots
 - **[Schnellstart](docs/QUICKSTART.md)** - In 5 Minuten produktiv (EN)
 - **[Windows Standalone Guide](docs/WINDOWS_EXECUTABLE.md)** - Anleitung für die Exe-Version

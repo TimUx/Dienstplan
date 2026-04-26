@@ -108,12 +108,24 @@ jobs:
         echo "ZIP_NAME=$zip" >> $env:GITHUB_OUTPUT
       id: zipstep
 
+    # windows-latest can be Server 2025+, where Inno Setup is not preinstalled (ISCC not on PATH).
+    - name: Install Inno Setup
+      shell: pwsh
+      run: |
+        choco install innosetup --no-progress -y
+        $dir = @(
+          "${env:ProgramFiles(x86)}\Inno Setup 6",
+          "${env:ProgramFiles}\Inno Setup 6"
+        ) | Where-Object { Test-Path (Join-Path $_ "ISCC.exe") } | Select-Object -First 1
+        if (-not $dir) { throw "ISCC.exe not found after choco install innosetup" }
+        Add-Content -Path $env:GITHUB_PATH -Value $dir
+
     - name: Build Inno Setup installer
+      shell: pwsh
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
-        $installer = "dist\Dienstplan-Windows-Setup-v${version}.exe"
         iscc /DMyAppVersion=$version installer\Dienstplan.iss
-        echo "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
+        "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
       id: installerstep
 
     - name: Sign installer executable
@@ -181,6 +193,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
+        sudo apt-get update
+        sudo apt-get install -y rpm
     
     - name: Test Python modules
       run: |
@@ -227,6 +241,23 @@ jobs:
         echo "TAR_NAME=$TAR" >> $GITHUB_OUTPUT
       id: tarstep
 
+    - name: Build Linux .deb/.rpm packages
+      run: |
+        chmod +x build_linux_packages.sh
+        ./build_linux_packages.sh "${{ steps.version.outputs.VERSION }}"
+
+    - name: Upload Linux deb artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-deb
+        path: dist/packages/*.deb
+
+    - name: Upload Linux rpm artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-rpm
+        path: dist/packages/*.rpm
+
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
@@ -266,6 +297,16 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: linux-tarball
+
+    - name: Download Linux deb package
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-deb
+
+    - name: Download Linux rpm package
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-rpm
     
     - name: Generate changelog
       id: changelog
@@ -301,6 +342,8 @@ jobs:
           | Datei | Beschreibung |
           |-------|--------------|
           | **Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz** | tar.gz entpacken und `Dienstplan` starten |
+          | **dienstplan_${{ steps.version.outputs.VERSION }}_amd64.deb** | Debian/Ubuntu Paket inkl. Installer-Skripte |
+          | **dienstplan-${{ steps.version.outputs.VERSION }}-1*.rpm** | RPM Paket für RHEL/Fedora/SUSE inkl. Installer-Skripte |
 
           ## ✨ What's New
 
@@ -333,6 +376,15 @@ jobs:
           chmod +x Dienstplan
           ./Dienstplan
           ```
+
+          Paketinstallation:
+          ```bash
+          # Debian/Ubuntu
+          sudo dpkg -i dienstplan_${{ steps.version.outputs.VERSION }}_amd64.deb
+          
+          # RHEL/Fedora/SUSE
+          sudo rpm -Uvh dienstplan-${{ steps.version.outputs.VERSION }}-1.x86_64.rpm
+          ```
           
           ## 🔐 Initiale Zugangsdaten
           
@@ -358,6 +410,8 @@ jobs:
           Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
           Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe
           Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+          dienstplan_${{ steps.version.outputs.VERSION }}_amd64.deb
+          dienstplan-${{ steps.version.outputs.VERSION }}-1*.x86_64.rpm
         draft: false
         prerelease: false
       env:

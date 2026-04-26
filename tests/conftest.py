@@ -1,12 +1,17 @@
 """Shared fixtures for the Dienstplan test suite."""
 
-import gc
 import os
+
+# Planning shares a process-global pool with default max_concurrent_jobs=1. A test
+# that starts a plan job (e.g. ops metrics) can still be running when the next
+# planning test runs → intermittent HTTP 503. Tests clamp to cpu_count anyway.
+os.environ.setdefault("DIENSTPLAN_MAX_CONCURRENT_JOBS", "8")
+
+import gc
 import sys
 import time
 
 import pytest
-
 
 from datetime import date
 from entities import (
@@ -42,7 +47,7 @@ def test_db(tmp_path):
         return
     # Windows keeps SQLite files locked until connections are GC'd; release then retry remove.
     gc.collect()
-    attempts = 12 if sys.platform == 'win32' else 1
+    attempts = 30 if sys.platform == 'win32' else 1
     last_err = None
     for i in range(attempts):
         try:
@@ -52,7 +57,7 @@ def test_db(tmp_path):
             last_err = e
             gc.collect()
             if i + 1 < attempts:
-                time.sleep(0.05)
+                time.sleep(0.1)
     raise last_err
 
 

@@ -1,7 +1,7 @@
 """API tests for absence management endpoints."""
 
 import pytest
-
+from fastapi.testclient import TestClient
 
 
 def _get_first_employee_id(client):
@@ -11,38 +11,37 @@ def _get_first_employee_id(client):
 
 
 class TestGetAbsences:
-    def test_get_absences_returns_200(self, client):
+    def test_get_absences_without_auth_returns_401(self, client):
         resp = client.get('/api/absences')
+        assert resp.status_code == 401
+
+    def test_get_absences_returns_200(self, admin_client):
+        resp = admin_client.get('/api/absences')
         assert resp.status_code == 200
 
-    def test_get_absences_returns_list(self, client):
-        resp = client.get('/api/absences')
+    def test_get_absences_returns_list(self, admin_client):
+        resp = admin_client.get('/api/absences')
         data = resp.json()
         assert isinstance(data, list)
 
-    def test_get_absences_no_auth_required(self, client):
-        """Absences GET is publicly readable."""
-        resp = client.get('/api/absences')
-        assert resp.status_code == 200
-
 
 class TestGetAbsenceTypes:
-    def test_get_absence_types_returns_200(self, client):
-        resp = client.get('/api/absencetypes')
+    def test_get_absence_types_returns_200(self, admin_client):
+        resp = admin_client.get('/api/absencetypes')
         assert resp.status_code == 200
 
-    def test_get_absence_types_returns_list(self, client):
-        data = client.get('/api/absencetypes').json()
+    def test_get_absence_types_returns_list(self, admin_client):
+        data = admin_client.get('/api/absencetypes').json()
         assert isinstance(data, list)
 
-    def test_absence_types_contain_standard_codes(self, client):
-        data = client.get('/api/absencetypes').json()
+    def test_absence_types_contain_standard_codes(self, admin_client):
+        data = admin_client.get('/api/absencetypes').json()
         codes = [item.get('code') for item in data]
         for expected in ('U', 'AU', 'L'):
             assert expected in codes, f"Standard absence code '{expected}' not found"
 
-    def test_absence_types_have_required_fields(self, client):
-        data = client.get('/api/absencetypes').json()
+    def test_absence_types_have_required_fields(self, admin_client):
+        data = admin_client.get('/api/absencetypes').json()
         assert len(data) > 0
         first = data[0]
         assert 'id' in first or 'Id' in first
@@ -58,10 +57,21 @@ class TestCreateAbsence:
             'endDate': '2025-03-14',
         }
 
-    def test_create_without_auth_returns_401(self, client):
-        emp_id = _get_first_employee_id(client)
-        csrf = client.get('/api/csrf-token').json()['token']
-        resp = client.post(
+    def test_create_without_auth_returns_401(self, app):
+        # admin_client is the same underlying client as `client` when both are injected;
+        # use a separate TestClient so the POST truly has no session cookie.
+        admin = TestClient(app, raise_server_exceptions=False)
+        csrf_adm = admin.get('/api/csrf-token').json()['token']
+        admin.post(
+            '/api/auth/login',
+            json={'email': 'admin@fritzwinter.de', 'password': 'Admin123!'},
+            headers={'X-CSRF-Token': csrf_adm},
+        )
+        emp_id = _get_first_employee_id(admin)
+
+        anon = TestClient(app, raise_server_exceptions=False)
+        csrf = anon.get('/api/csrf-token').json()['token']
+        resp = anon.post(
             '/api/absences',
             json=self._absence_payload(emp_id),
             headers={'X-CSRF-Token': csrf},

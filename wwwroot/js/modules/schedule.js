@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken, debounce, confirmDialog } from './utils.js';
+import { API_BASE, escapeHtml, formatLocalDate, getAbsenceCode, getContrastTextColor, generateDateRange, getUniqueDates, getWeekNumber, groupDatesByWeek, isHessianHoliday, YEAR_VIEW_SCROLL_PADDING, YEAR_VIEW_SCROLL_DELAY, groupByTeamAndEmployee, getAbsenceForDate, showToast, getCsrfToken, fetchCsrfToken, debounce, confirmDialog, emptyStateHtml } from './utils.js';
 import { canPlanShifts, isAdmin } from './auth.js';
 import { loadEmployees, cachedEmployees } from './employees.js';
 import { showPlanningResultModal } from './planning_report.js';
@@ -254,7 +254,7 @@ export function displayWeekView(data, employees) {
     dates.sort();
 
     if (dates.length === 0) {
-        return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
+        return emptyStateHtml('Keine Schichten im ausgewählten Zeitraum.');
     }
 
     const firstDate = new Date(dates[0]);
@@ -354,7 +354,7 @@ export function displayMonthView(data, employees) {
     dates.sort();
 
     if (dates.length === 0) {
-        return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
+        return emptyStateHtml('Keine Schichten im ausgewählten Zeitraum.');
     }
 
     const weekGroups = groupDatesByWeek(dates);
@@ -476,7 +476,7 @@ export function displayYearView(data, employees) {
     dates.sort();
 
     if (dates.length === 0) {
-        return '<p>Keine Schichten im ausgewählten Zeitraum.</p>';
+        return emptyStateHtml('Keine Schichten im ausgewählten Zeitraum.');
     }
 
     const firstDate = new Date(dates[0]);

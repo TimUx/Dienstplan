@@ -723,3 +723,10 @@ export function hideLoading(containerId) {
         if (spinner) spinner.remove();
     }
 }
+
+/**
+ * Return a standardized empty-state markup snippet.
+ */
+export function emptyStateHtml(message, { icon = 'ℹ️', className = 'info' } = {}) {
+    return `<p class="${className}">${icon} ${escapeHtml(message)}</p>`;
+}

@@ -84,6 +84,41 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; The [Code] section below asks the user whether to delete it.
 
 [Code]
+var
+  BootstrapPage: TInputQueryWizardPage;
+
+function GetBootstrapDataDir(): String;
+begin
+  Result := ExpandConstant('{localappdata}\Dienstplan\data');
+end;
+
+function GetBootstrapFilePath(): String;
+begin
+  Result := GetBootstrapDataDir() + '\bootstrap.env';
+end;
+
+function EscapeEnvValue(Value: String): String;
+begin
+  Result := StringChangeEx(Value, '\', '\\', True);
+  Result := StringChangeEx(Result, #13, '', True);
+  Result := StringChangeEx(Result, #10, '', True);
+end;
+
+procedure InitializeWizard;
+begin
+  BootstrapPage :=
+    CreateInputQueryPage(
+      wpSelectTasks,
+      'Initialen Administrator konfigurieren',
+      'Zugangsdaten für den ersten Start festlegen',
+      'Diese Werte werden nur beim ersten Start für die Erstellung des Admin-Benutzers verwendet.'
+    );
+
+  BootstrapPage.Add('Administrator E-Mail:', False);
+  BootstrapPage.Values[0] := 'admin@fritzwinter.de';
+  BootstrapPage.Add('Initiales Passwort (optional):', True);
+end;
+
 // Ask the user during uninstall whether to also remove the data directory.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
@@ -106,5 +141,40 @@ end;
 
 // Nothing extra needed during install; standard upgrade handling is sufficient.
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  DataDir: String;
+  BootstrapFile: String;
+  AdminEmail: String;
+  AdminPassword: String;
+  Lines: TArrayOfString;
 begin
+  if CurStep = ssPostInstall then
+  begin
+    AdminEmail := Trim(BootstrapPage.Values[0]);
+    AdminPassword := BootstrapPage.Values[1];
+
+    if (AdminEmail <> '') or (AdminPassword <> '') then
+    begin
+      DataDir := GetBootstrapDataDir();
+      BootstrapFile := GetBootstrapFilePath();
+      ForceDirectories(DataDir);
+
+      SetArrayLength(Lines, 0);
+      if AdminEmail <> '' then
+      begin
+        SetArrayLength(Lines, GetArrayLength(Lines) + 1);
+        Lines[GetArrayLength(Lines) - 1] :=
+          'DIENSTPLAN_INITIAL_ADMIN_EMAIL=' + EscapeEnvValue(AdminEmail);
+      end;
+      if AdminPassword <> '' then
+      begin
+        SetArrayLength(Lines, GetArrayLength(Lines) + 1);
+        Lines[GetArrayLength(Lines) - 1] :=
+          'DIENSTPLAN_INITIAL_ADMIN_PASSWORD=' + EscapeEnvValue(AdminPassword);
+      end;
+
+      if GetArrayLength(Lines) > 0 then
+        SaveStringsToFile(BootstrapFile, Lines, False);
+    end;
+  end;
 end;

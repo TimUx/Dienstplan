@@ -173,7 +173,10 @@ jobs:
         path: dist\Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe
 
   build-python-linux-empty:
-    runs-on: ubuntu-latest
+    # Build on Ubuntu 22.04 to keep glibc requirements compatible with
+    # older target systems. ubuntu-latest may pull in newer glibc symbols
+    # (e.g. GLIBC_2.38) that break startup on customer machines.
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     

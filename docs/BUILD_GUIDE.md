@@ -93,6 +93,21 @@ move dist\Dienstplan.exe .
 
 ## Quick Build (Linux/macOS)
 
+### Linux compatibility note (important)
+
+For portable Linux builds, create artifacts on an **older baseline system**
+(currently Ubuntu 22.04 / glibc 2.35 in CI).  
+If you build on newer systems (for example Ubuntu 24.04, glibc 2.39), the
+binary may require newer symbols and fail on customer machines with errors like:
+
+```text
+Failed to load Python shared library ...: /lib/x86_64-linux-gnu/libm.so.6:
+version `GLIBC_2.38' not found
+```
+
+Use the project's GitHub workflow for release artifacts to ensure broad runtime
+compatibility across supported Linux distributions.
+
 ### Option 1: Build Single Version
 
 ```bash

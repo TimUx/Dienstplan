@@ -108,12 +108,24 @@ jobs:
         echo "ZIP_NAME=$zip" >> $env:GITHUB_OUTPUT
       id: zipstep
 
+    # windows-latest can be Server 2025+, where Inno Setup is not preinstalled (ISCC not on PATH).
+    - name: Install Inno Setup
+      shell: pwsh
+      run: |
+        choco install innosetup --no-progress -y
+        $dir = @(
+          "${env:ProgramFiles(x86)}\Inno Setup 6",
+          "${env:ProgramFiles}\Inno Setup 6"
+        ) | Where-Object { Test-Path (Join-Path $_ "ISCC.exe") } | Select-Object -First 1
+        if (-not $dir) { throw "ISCC.exe not found after choco install innosetup" }
+        Add-Content -Path $env:GITHUB_PATH -Value $dir
+
     - name: Build Inno Setup installer
+      shell: pwsh
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
-        $installer = "dist\Dienstplan-Windows-Setup-v${version}.exe"
         iscc /DMyAppVersion=$version installer\Dienstplan.iss
-        echo "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
+        "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
       id: installerstep
 
     - name: Sign installer executable

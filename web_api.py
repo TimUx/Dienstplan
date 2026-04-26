@@ -8,7 +8,7 @@ Routes are organised into FastAPI routers in the api/ package.
 import logging
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +18,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from api import shared as _shared
-from api.shared import Database, ensure_absence_types_table, set_db, limiter
+from api.shared import Database, ensure_absence_types_table, set_db, limiter, require_auth
 
 
 def configure_logging(debug: bool = False):
@@ -36,32 +36,11 @@ def _get_or_create_secret_key(db_path: str) -> str:
     if env_key:
         return env_key
 
-    import sqlite3
     import secrets as _secrets
-
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT Value FROM AppSettings WHERE Key = 'SecretKey'")
-        row = cursor.fetchone()
-        if row and row[0]:
-            conn.close()
-            return row[0]
-
-        new_key = _secrets.token_hex(32)
-        cursor.execute(
-            "INSERT OR IGNORE INTO AppSettings (Key, Value) VALUES ('SecretKey', ?)",
-            (new_key,)
-        )
-        conn.commit()
-        conn.close()
-        logging.getLogger(__name__).warning(
-            "Generated new SECRET_KEY and stored in DB. Set FLASK_SECRET_KEY env var for production."
-        )
-        return new_key
-    except Exception:
-        import secrets as _secrets2
-        return _secrets2.token_hex(32)
+    logging.getLogger(__name__).warning(
+        "FLASK_SECRET_KEY not set; using ephemeral key. Set FLASK_SECRET_KEY for persistent sessions."
+    )
+    return _secrets.token_hex(32)
 
 
 def _compute_asset_versions(static_folder: str) -> dict:
@@ -160,14 +139,14 @@ def create_app(db_path: str = "dienstplan.db") -> FastAPI:
     from api.audit import router as audit_router
 
     app.include_router(auth_router)
-    app.include_router(employees_router)
-    app.include_router(shifts_router)
-    app.include_router(absences_router)
-    app.include_router(statistics_router)
+    app.include_router(employees_router, dependencies=[Depends(require_auth)])
+    app.include_router(shifts_router, dependencies=[Depends(require_auth)])
+    app.include_router(absences_router, dependencies=[Depends(require_auth)])
+    app.include_router(statistics_router, dependencies=[Depends(require_auth)])
     app.include_router(settings_router)
-    app.include_router(planning_router)
+    app.include_router(planning_router, dependencies=[Depends(require_auth)])
     app.include_router(health_router)
-    app.include_router(audit_router)
+    app.include_router(audit_router, dependencies=[Depends(require_auth)])
 
     # ============================================================================
     # STATIC FILES (Web UI)

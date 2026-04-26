@@ -49,7 +49,7 @@ def _upsert_app_setting(cursor, key: str, value: str, modified_by: str) -> None:
     """, (key, value, datetime.utcnow().isoformat(), modified_by))
 
 
-@router.get('/api/settings/global')
+@router.get('/api/settings/global', dependencies=[Depends(require_auth)])
 def get_global_settings(request: Request):
     """Get global shift planning settings"""
     try:
@@ -351,10 +351,31 @@ def save_email_settings(request: Request, data: dict = Depends(parse_json_body))
         cursor.execute("SELECT Id FROM EmailSettings WHERE Id = 1")
         exists = cursor.fetchone()
         
+        smtp_password_env = os.environ.get('DIENSTPLAN_SMTP_PASSWORD')
         if exists:
             # Update existing settings
             # Only update password if provided
-            if data.get('password'):
+            if smtp_password_env:
+                cursor.execute("""
+                    UPDATE EmailSettings
+                    SET SmtpHost = ?, SmtpPort = ?, UseSsl = ?, RequiresAuthentication = ?,
+                        Username = ?, Password = NULL, SenderEmail = ?, SenderName = ?,
+                        ReplyToEmail = ?, IsEnabled = ?, ModifiedAt = ?, ModifiedBy = ?
+                    WHERE Id = 1
+                """, (
+                    data.get('smtpHost'),
+                    data.get('smtpPort', 587),
+                    1 if data.get('useSsl') else 0,
+                    1 if data.get('requiresAuthentication') else 0,
+                    data.get('username'),
+                    data.get('senderEmail'),
+                    data.get('senderName'),
+                    data.get('replyToEmail'),
+                    1 if data.get('isEnabled') else 0,
+                    datetime.utcnow().isoformat(),
+                    request.session.get('user_email')
+                ))
+            elif data.get('password'):
                 cursor.execute("""
                     UPDATE EmailSettings
                     SET SmtpHost = ?, SmtpPort = ?, UseSsl = ?, RequiresAuthentication = ?,
@@ -409,7 +430,7 @@ def save_email_settings(request: Request, data: dict = Depends(parse_json_body))
                 1 if data.get('useSsl') else 0,
                 1 if data.get('requiresAuthentication') else 0,
                 data.get('username'),
-                data.get('password'),
+                None if smtp_password_env else data.get('password'),
                 data.get('senderEmail'),
                 data.get('senderName'),
                 data.get('replyToEmail'),

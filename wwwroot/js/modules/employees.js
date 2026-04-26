@@ -1,4 +1,4 @@
-import { API_BASE, escapeHtml, sanitizeColorCode, formatImportResult, showToast, getCsrfToken, confirmDialog, promptDialog } from './utils.js';
+import { API_BASE, escapeHtml, sanitizeColorCode, formatImportResult, showToast, getCsrfToken, confirmDialog, promptDialog, emptyStateHtml } from './utils.js';
 import { hasRole, canEditEmployees, canPlanShifts } from './auth.js';
 import { store } from './store.js';
 
@@ -30,7 +30,7 @@ export function displayEmployees(employees) {
     const content = document.getElementById('employees-content');
 
     if (employees.length === 0) {
-        content.innerHTML = '<p>Keine Mitarbeiter vorhanden.</p>';
+        content.innerHTML = emptyStateHtml('Keine Mitarbeiter vorhanden.');
         return;
     }
 
@@ -262,7 +262,7 @@ export function displayTeams(teams) {
     const content = document.getElementById('teams-content');
 
     if (teams.length === 0) {
-        content.innerHTML = '<p>Keine Teams vorhanden.</p>';
+        content.innerHTML = emptyStateHtml('Keine Teams vorhanden.');
         return;
     }
 
@@ -842,7 +842,7 @@ export function displayShiftTypesManagement(shiftTypes) {
     const container = document.getElementById('shift-types-management-content');
 
     if (shiftTypes.length === 0) {
-        container.innerHTML = '<p class="info">Keine Schichttypen vorhanden. Klicken Sie auf "+ Schichttyp hinzufügen" um einen neuen Schichttyp anzulegen.</p>';
+        container.innerHTML = emptyStateHtml('Keine Schichttypen vorhanden. Klicken Sie auf "+ Schichttyp hinzufügen" um einen neuen Schichttyp anzulegen.');
         return;
     }
 
@@ -1383,7 +1383,7 @@ export function displayUsers(users) {
     const content = document.getElementById('users-content');
 
     if (!users || users.length === 0) {
-        content.innerHTML = '<p>Keine Benutzer gefunden.</p>';
+        content.innerHTML = emptyStateHtml('Keine Benutzer gefunden.');
         return;
     }
 
@@ -1936,7 +1936,7 @@ export function displayAuditLogsPaginated(result) {
     const pagination = document.getElementById('audit-pagination');
 
     if (!result.items || result.items.length === 0) {
-        content.innerHTML = '<p>Keine Einträge im Änderungsprotokoll gefunden.</p>';
+        content.innerHTML = emptyStateHtml('Keine Einträge im Änderungsprotokoll gefunden.');
         pagination.style.display = 'none';
         return;
     }

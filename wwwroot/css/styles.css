@@ -1965,20 +1965,10 @@ body.disponent button.admin-only.admin-strict {
     color: white;
 }
 
-.btn-small {
+.data-table .btn-small {
     padding: 4px 8px;
     font-size: 12px;
     margin: 2px;
-}
-
-.btn-danger {
-    background-color: #f44336;
-    color: white;
-}
-
-.btn-danger:hover {
-    background-color: var(--danger-hover);
-    transform: translateY(-1px);
 }
 
 .workdays-checkboxes {

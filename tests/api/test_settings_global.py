@@ -5,8 +5,12 @@ import pytest
 
 @pytest.mark.api
 class TestGlobalSettings:
-    def test_get_global_settings_returns_defaults_shape(self, client):
+    def test_get_global_settings_requires_auth(self, client):
         r = client.get("/api/settings/global")
+        assert r.status_code == 401
+
+    def test_get_global_settings_returns_defaults_shape(self, admin_client):
+        r = admin_client.get("/api/settings/global")
         assert r.status_code == 200
         data = r.json()
         assert "minRestHoursBetweenShifts" in data

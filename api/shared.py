@@ -85,6 +85,7 @@ class Database:
     def get_connection(self):
         """Get database connection"""
         conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -92,6 +93,7 @@ class Database:
     def connection(self):
         """Context manager for database connection - auto-closes on exit."""
         conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -360,6 +362,7 @@ def ensure_absence_types_table(db_path: str):
     This is called at app startup to handle existing databases that may not have this table.
     """
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
     
     try:

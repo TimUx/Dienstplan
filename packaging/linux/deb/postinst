@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! id -u dienstplan >/dev/null 2>&1; then
+  useradd --system --home /var/lib/dienstplan --create-home --shell /usr/sbin/nologin dienstplan
+fi
+
+mkdir -p /var/lib/dienstplan/data
+chown -R dienstplan:dienstplan /var/lib/dienstplan
+chmod 750 /var/lib/dienstplan
+
+if command -v dienstplan-setup-admin >/dev/null 2>&1; then
+  dienstplan-setup-admin || true
+fi
+
+systemctl daemon-reload || true
+systemctl enable dienstplan.service || true
+
+echo "Dienstplan installiert."
+echo "Start:   sudo systemctl start dienstplan"
+echo "Status:  sudo systemctl status dienstplan"

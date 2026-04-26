@@ -9,6 +9,7 @@ import json
 import logging
 import secrets
 import os
+import hashlib
 
 from .shared import (
     get_db, require_auth, require_role, log_audit, limiter,
@@ -22,6 +23,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 MAX_FAILED_LOGIN_ATTEMPTS = int(os.environ.get("DIENSTPLAN_MAX_FAILED_LOGIN_ATTEMPTS", "5"))
 LOCKOUT_MINUTES = int(os.environ.get("DIENSTPLAN_LOCKOUT_MINUTES", "15"))
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()  # nosec B324
 
 
 @router.get('/api/csrf-token')
@@ -705,11 +710,12 @@ def forgot_password(request: Request, data: dict = Depends(parse_json_body)):
         reset_token = sec.token_urlsafe(32)
         expires_at = (datetime.utcnow() + timedelta(hours=24)).isoformat()
         
-        # Store reset token
+        # Store only hashed reset token to reduce leak impact.
+        token_hash = _hash_reset_token(reset_token)
         cursor.execute("""
             INSERT INTO PasswordResetTokens (EmployeeId, Token, ExpiresAt)
             VALUES (?, ?, ?)
-        """, (employee[0], reset_token, expires_at))
+        """, (employee[0], token_hash, expires_at))
         
         conn.commit()
         
@@ -752,12 +758,13 @@ def reset_password(request: Request, data: dict = Depends(parse_json_body)):
         conn = db.get_connection()
         cursor = conn.cursor()
         
-        # Find valid token
+        # Find valid token by hash so raw token is never stored in DB.
+        token_hash = _hash_reset_token(token)
         cursor.execute("""
             SELECT Id, EmployeeId, ExpiresAt
             FROM PasswordResetTokens
             WHERE Token = ? AND IsUsed = 0
-        """, (token,))
+        """, (token_hash,))
         
         token_row = cursor.fetchone()
         
@@ -819,11 +826,12 @@ def validate_reset_token(request: Request, data: dict = Depends(parse_json_body)
         conn = db.get_connection()
         cursor = conn.cursor()
         
+        token_hash = _hash_reset_token(token)
         cursor.execute("""
             SELECT ExpiresAt
             FROM PasswordResetTokens
             WHERE Token = ? AND IsUsed = 0
-        """, (token,))
+        """, (token_hash,))
         
         row = cursor.fetchone()
         conn.close()

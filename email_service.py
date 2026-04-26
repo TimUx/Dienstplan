@@ -4,6 +4,7 @@ Email service for sending notifications using configured SMTP settings.
 
 import smtplib
 import sqlite3
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, Dict, Tuple
@@ -32,13 +33,17 @@ def get_email_settings(conn: sqlite3.Connection) -> Optional[Dict]:
     if not row:
         return None
     
+    smtp_password = os.environ.get('DIENSTPLAN_SMTP_PASSWORD')
+    if smtp_password is None:
+        smtp_password = row[5]
+
     return {
         'smtpHost': row[0],
         'smtpPort': row[1],
         'useSsl': bool(row[2]),
         'requiresAuthentication': bool(row[3]),
         'username': row[4],
-        'password': row[5],
+        'password': smtp_password,
         'senderEmail': row[6],
         'senderName': row[7],
         'replyToEmail': row[8],

@@ -5,57 +5,73 @@ import pytest
 
 
 class TestGetShiftTypes:
-    def test_get_shifttypes_returns_200(self, client):
-        resp = client.get('/api/shifttypes')
+    def test_get_shifttypes_returns_200(self, admin_client):
+        resp = admin_client.get('/api/shifttypes')
         assert resp.status_code == 200
 
-    def test_get_shifttypes_returns_list(self, client):
-        data = client.get('/api/shifttypes').json()
+    def test_get_shifttypes_returns_list(self, admin_client):
+        data = admin_client.get('/api/shifttypes').json()
         assert isinstance(data, list)
 
-    def test_get_shifttypes_has_standard_codes(self, client):
-        data = client.get('/api/shifttypes').json()
+    def test_get_shifttypes_has_standard_codes(self, admin_client):
+        data = admin_client.get('/api/shifttypes').json()
         codes = {item.get('code') for item in data}
         for code in ('F', 'S', 'N'):
             assert code in codes, f"Standard shift code '{code}' not found"
 
-    def test_get_shifttypes_have_required_fields(self, client):
-        data = client.get('/api/shifttypes').json()
+    def test_get_shifttypes_have_required_fields(self, admin_client):
+        data = admin_client.get('/api/shifttypes').json()
         assert len(data) > 0
         first = data[0]
         assert 'id' in first
         assert 'code' in first
         assert 'name' in first
 
-    def test_get_single_shifttype_returns_200(self, client):
-        shift_types = client.get('/api/shifttypes').json()
+    def test_get_single_shifttype_returns_200(self, admin_client):
+        shift_types = admin_client.get('/api/shifttypes').json()
         st_id = shift_types[0]['id']
-        resp = client.get(f'/api/shifttypes/{st_id}')
+        resp = admin_client.get(f'/api/shifttypes/{st_id}')
         assert resp.status_code == 200
 
 
 class TestGetSchedule:
-    def test_get_schedule_with_start_date_returns_200(self, client):
-        resp = client.get('/api/shifts/schedule?startDate=2025-01-06')
+    def test_get_schedule_with_start_date_returns_200(self, admin_client):
+        resp = admin_client.get('/api/shifts/schedule?startDate=2025-01-06')
         assert resp.status_code == 200
 
-    def test_get_schedule_without_start_date_returns_400(self, client):
-        resp = client.get('/api/shifts/schedule')
+    def test_get_schedule_without_start_date_returns_400(self, admin_client):
+        resp = admin_client.get('/api/shifts/schedule')
         assert resp.status_code == 400
 
-    def test_get_schedule_week_view(self, client):
-        resp = client.get('/api/shifts/schedule?startDate=2025-01-06&view=week')
+    def test_get_schedule_week_view(self, admin_client):
+        resp = admin_client.get('/api/shifts/schedule?startDate=2025-01-06&view=week')
         assert resp.status_code == 200
 
-    def test_get_schedule_month_view(self, client):
-        resp = client.get('/api/shifts/schedule?startDate=2025-01-01&view=month')
+    def test_get_schedule_month_view(self, admin_client):
+        resp = admin_client.get('/api/shifts/schedule?startDate=2025-01-01&view=month')
         assert resp.status_code == 200
 
-    def test_get_schedule_returns_assignments_key(self, client):
-        resp = client.get('/api/shifts/schedule?startDate=2025-01-06')
+    def test_get_schedule_returns_assignments_key(self, admin_client):
+        resp = admin_client.get('/api/shifts/schedule?startDate=2025-01-06')
         data = resp.json()
         # Should return a dict with assignments or similar structure
         assert isinstance(data, dict)
+        assert 'assignments' in data
+        assert 'metrics' in data
+        assert 'processingMs' in data['metrics']
+
+    def test_get_schedule_team_filter_only_returns_requested_team(self, admin_client):
+        employees_resp = admin_client.get('/api/employees')
+        employees = employees_resp.json()
+        team_ids = {e.get('teamId') for e in employees if e.get('teamId')}
+        if not team_ids:
+            pytest.skip('No team assignments available in fixture data')
+
+        team_id = next(iter(team_ids))
+        resp = admin_client.get(f'/api/shifts/schedule?startDate=2025-01-06&teamId={team_id}')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert all(item.get('teamId') == team_id for item in data.get('assignments', []))
 
 
 class TestPlanningEndpoint:

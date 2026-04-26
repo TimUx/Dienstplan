@@ -1,6 +1,7 @@
 """Shift schedule (calendar) API routes."""
 
 import logging
+import time
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Request
@@ -31,6 +32,13 @@ def get_schedule(request: Request):
         limit = max(0, int(request.query_params.get('limit', 0)))
     except (ValueError, TypeError):
         return JSONResponse(content={'error': 'page and limit must be integers'}, status_code=400)
+
+    # Optional filters for large views
+    try:
+        team_id = int(request.query_params['teamId']) if 'teamId' in request.query_params else None
+        employee_id = int(request.query_params['employeeId']) if 'employeeId' in request.query_params else None
+    except (ValueError, TypeError):
+        return JSONResponse(content={'error': 'teamId and employeeId must be integers'}, status_code=400)
 
     if not start_date_str:
         return JSONResponse(content={'error': 'startDate is required'}, status_code=400)
@@ -75,6 +83,7 @@ def get_schedule(request: Request):
             return JSONResponse(content={'error': 'Invalid endDate format. Use YYYY-MM-DD'}, status_code=400)
     
     conn = None
+    started_at = time.perf_counter()
     try:
         db = get_db()
         conn = db.get_connection()
@@ -84,37 +93,37 @@ def get_schedule(request: Request):
         user_roles = request.session.get('user_roles', [])
         is_admin = 'Admin' in user_roles
         
-        # Get approved months if user is not admin
-        approved_months = set()
+        # Build assignment query with SQL-first filtering for better performance.
+        assignment_conditions = ["sa.Date >= ?", "sa.Date <= ?"]
+        assignment_params = [start_date.isoformat(), end_date.isoformat()]
+        if team_id is not None:
+            assignment_conditions.append("e.TeamId = ?")
+            assignment_params.append(team_id)
+        if employee_id is not None:
+            assignment_conditions.append("sa.EmployeeId = ?")
+            assignment_params.append(employee_id)
         if not is_admin:
-            cursor.execute("""
-                SELECT Year, Month FROM ShiftPlanApprovals
-                WHERE IsApproved = 1
+            assignment_conditions.append("""
+                EXISTS (
+                    SELECT 1 FROM ShiftPlanApprovals spa
+                    WHERE spa.IsApproved = 1
+                      AND spa.Year = CAST(strftime('%Y', sa.Date) AS INTEGER)
+                      AND spa.Month = CAST(strftime('%m', sa.Date) AS INTEGER)
+                )
             """)
-            for row in cursor.fetchall():
-                approved_months.add((row['Year'], row['Month']))
-        
-        # Get assignments
-        cursor.execute("""
+
+        cursor.execute(f"""
             SELECT sa.*, e.Vorname, e.Name, e.TeamId,
                    st.Code, st.Name as ShiftName, st.ColorCode
             FROM ShiftAssignments sa
             JOIN Employees e ON sa.EmployeeId = e.Id
             JOIN ShiftTypes st ON sa.ShiftTypeId = st.Id
-            WHERE sa.Date >= ? AND sa.Date <= ?
+            WHERE {' AND '.join(assignment_conditions)}
             ORDER BY sa.Date, e.TeamId, e.Name, e.Vorname
-        """, (start_date.isoformat(), end_date.isoformat()))
+        """, tuple(assignment_params))
         
         assignments = []
         for row in cursor.fetchall():
-            assignment_date = date.fromisoformat(row['Date'])
-            year_month = (assignment_date.year, assignment_date.month)
-            
-            # Filter based on approval status for non-admin users
-            if not is_admin and year_month not in approved_months:
-                # Skip unapproved plans for regular users
-                continue
-            
             assignments.append({
                 'id': row['Id'],
                 'employeeId': row['EmployeeId'],
@@ -131,14 +140,25 @@ def get_schedule(request: Request):
             })
         
         # Get absences from Absences table
-        cursor.execute("""
+        absence_conditions = [
+            "((a.StartDate <= ? AND a.EndDate >= ?) OR (a.StartDate >= ? AND a.StartDate <= ?))"
+        ]
+        absence_params = [
+            end_date.isoformat(), start_date.isoformat(), start_date.isoformat(), end_date.isoformat()
+        ]
+        if team_id is not None:
+            absence_conditions.append("e.TeamId = ?")
+            absence_params.append(team_id)
+        if employee_id is not None:
+            absence_conditions.append("a.EmployeeId = ?")
+            absence_params.append(employee_id)
+
+        cursor.execute(f"""
             SELECT a.*, e.Vorname, e.Name, e.TeamId
             FROM Absences a
             JOIN Employees e ON a.EmployeeId = e.Id
-            WHERE (a.StartDate <= ? AND a.EndDate >= ?)
-               OR (a.StartDate >= ? AND a.StartDate <= ?)
-        """, (end_date.isoformat(), start_date.isoformat(), 
-              start_date.isoformat(), end_date.isoformat()))
+            WHERE {' AND '.join(absence_conditions)}
+        """, tuple(absence_params))
         
         absences = []
         for row in cursor.fetchall():
@@ -156,15 +176,26 @@ def get_schedule(request: Request):
             })
         
         # Also get vacation requests (all statuses) and add them as absences
-        cursor.execute("""
+        vacation_conditions = [
+            "((vr.StartDate <= ? AND vr.EndDate >= ?) OR (vr.StartDate >= ? AND vr.StartDate <= ?))"
+        ]
+        vacation_params = [
+            end_date.isoformat(), start_date.isoformat(), start_date.isoformat(), end_date.isoformat()
+        ]
+        if team_id is not None:
+            vacation_conditions.append("e.TeamId = ?")
+            vacation_params.append(team_id)
+        if employee_id is not None:
+            vacation_conditions.append("vr.EmployeeId = ?")
+            vacation_params.append(employee_id)
+
+        cursor.execute(f"""
             SELECT vr.Id, vr.EmployeeId, vr.StartDate, vr.EndDate, vr.Notes, vr.Status,
                    e.Vorname, e.Name, e.TeamId
             FROM VacationRequests vr
             JOIN Employees e ON vr.EmployeeId = e.Id
-            WHERE ((vr.StartDate <= ? AND vr.EndDate >= ?)
-               OR (vr.StartDate >= ? AND vr.StartDate <= ?))
-        """, (end_date.isoformat(), start_date.isoformat(),
-              start_date.isoformat(), end_date.isoformat()))
+            WHERE {' AND '.join(vacation_conditions)}
+        """, tuple(vacation_params))
         
         vacation_id_offset = 10000  # Offset to avoid ID conflicts
         for row in cursor.fetchall():
@@ -213,6 +244,7 @@ def get_schedule(request: Request):
         
         pagination = _paginate(assignments, page, limit)
 
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         return {
             'startDate': start_date.isoformat(),
             'endDate': end_date.isoformat(),
@@ -224,7 +256,11 @@ def get_schedule(request: Request):
                 'page': pagination['page'],
                 'limit': pagination['limit'],
                 'totalPages': pagination['totalPages'],
-            }
+            },
+            'metrics': {
+                'processingMs': elapsed_ms,
+                'assignmentsReturned': len(pagination['data']),
+            },
         }
         
     except Exception as e:

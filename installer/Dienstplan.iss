@@ -99,9 +99,10 @@ end;
 
 function EscapeEnvValue(Value: String): String;
 begin
-  Result := StringChangeEx(Value, '\', '\\', True);
-  Result := StringChangeEx(Result, #13, '', True);
-  Result := StringChangeEx(Result, #10, '', True);
+  Result := Value;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, #13, '', True);
+  StringChangeEx(Result, #10, '', True);
 end;
 
 procedure InitializeWizard;

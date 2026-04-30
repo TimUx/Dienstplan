@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from .planning_job_store import get_job, update_job
 from .planning_runtime import load_planning_runtime_config
@@ -115,6 +115,9 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
     import json as _json
     import sqlite3 as _sqlite3
     from datetime import datetime as _datetime, date as _date, timedelta as _timedelta
+    # Keep unprefixed aliases for existing helper code in this worker.
+    date = _date
+    timedelta = _timedelta
 
     _logging.basicConfig(
         level=_logging.INFO,
@@ -180,12 +183,11 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         
         # Calculate weeks for boundary detection (needed for employee locks)
         # We'll skip locking employee assignments in boundary weeks to avoid conflicts
-        from datetime import timedelta
         dates_list = []
         current = extended_start
         while current <= extended_end:
             dates_list.append(current)
-            current += timedelta(days=1)
+            current += _timedelta(days=1)
         
         # Calculate weeks
         weeks_for_boundary = []
@@ -215,7 +217,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         # Boundary weeks span month boundaries and may have assignments that conflict
         # with current shift configuration or team-based rotation requirements
         for emp_id, date_str, shift_code in existing_employee_assignments:
-            assignment_date = date.fromisoformat(date_str)
+            assignment_date = _date.fromisoformat(date_str)
             
             # Skip assignments in boundary weeks - they will be re-planned to match current config
             if assignment_date in boundary_week_dates:
@@ -252,12 +254,11 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
             
             # Build locked constraints from existing assignments
             # We need to map dates to week indices
-            from datetime import timedelta
             dates_list = []
             current = extended_start
             while current <= extended_end:
                 dates_list.append(current)
-                current += timedelta(days=1)
+                current += _timedelta(days=1)
             
             # Calculate weeks
             weeks = []
@@ -297,7 +298,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
             # First pass: identify conflicts and boundary weeks
             conflicting_team_weeks = set()  # Track (team_id, week_idx) pairs with conflicts
             for team_id, date_str, shift_code in existing_team_assignments:
-                assignment_date = date.fromisoformat(date_str)
+                assignment_date = _date.fromisoformat(date_str)
                 if assignment_date in date_to_week:
                     week_idx = date_to_week[assignment_date]
                     
@@ -340,8 +341,8 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         cursor = conn.cursor()
         
         # First pass: Load initial lookback period (same as before)
-        initial_lookback_start = extended_start - timedelta(days=max_consecutive_limit)
-        initial_lookback_end = extended_start - timedelta(days=1)
+        initial_lookback_start = extended_start - _timedelta(days=max_consecutive_limit)
+        initial_lookback_end = extended_start - _timedelta(days=1)
         
         cursor.execute("""
             SELECT sa.EmployeeId, sa.Date, st.Code
@@ -356,7 +357,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         # Group shifts by employee for analysis
         employee_shift_dates = {}
         for emp_id, date_str, shift_code in initial_shifts:
-            shift_date = date.fromisoformat(date_str)
+            shift_date = _date.fromisoformat(date_str)
             try:
                 emp_id_int = int(emp_id)
             except (ValueError, TypeError):
@@ -384,13 +385,13 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
             # Check if there's a consecutive chain leading up to extended_start
             # Work backwards from extended_start - 1 to find consecutive days
             consecutive_days = 0
-            check_date = extended_start - timedelta(days=1)
+            check_date = extended_start - _timedelta(days=1)
             # Check max_consecutive_limit days to see if all have shifts
             for _ in range(max_consecutive_limit):
                 has_shift = any(shift_date == check_date for shift_date, _ in shifts)
                 if has_shift:
                     consecutive_days += 1
-                    check_date -= timedelta(days=1)
+                    check_date -= _timedelta(days=1)
                 else:
                     break
             
@@ -401,8 +402,8 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         
         # Extend lookback for employees who need it
         if employees_to_extend:
-            extended_lookback_start = extended_start - timedelta(days=max_lookback_days)
-            extended_lookback_end = initial_lookback_start - timedelta(days=1)
+            extended_lookback_start = extended_start - _timedelta(days=max_lookback_days)
+            extended_lookback_end = initial_lookback_start - _timedelta(days=1)
             
             logger.info(f"Extending lookback for {len(employees_to_extend)} employees with long consecutive chains")
             
@@ -421,7 +422,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
             cursor.execute(query, params)
             
             for emp_id, date_str, shift_code in cursor.fetchall():
-                shift_date = date.fromisoformat(date_str)
+                shift_date = _date.fromisoformat(date_str)
                 try:
                     emp_id_int = int(emp_id)
                 except (ValueError, TypeError):
@@ -464,7 +465,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         # Only the month directly before start_date is used; older history is ignored.
         warm_start_shifts = {}
         try:
-            prev_month_end = start_date - timedelta(days=1)
+            prev_month_end = start_date - _timedelta(days=1)
             prev_month_start = prev_month_end.replace(day=1)
             conn_ws = db.get_connection()
             cursor_ws = conn_ws.cursor()
@@ -487,7 +488,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
                         f"Warmstart: could not convert employee ID {emp_id!r} to int, skipping"
                     )
                     continue
-                warm_start_shifts[(emp_id_int, date.fromisoformat(date_str))] = shift_code
+                warm_start_shifts[(emp_id_int, _date.fromisoformat(date_str))] = shift_code
             conn_ws.close()
             if warm_start_shifts:
                 logger.info(
@@ -660,7 +661,7 @@ def _run_planning_job(job_id: str, start_date, end_date, force: bool, db_path: s
         logger.info(f"Total assignments generated: {len(assignments)}")
         logger.info(f"  - Current month ({start_date} to {end_date}): {current_month_count}")
         if future_extended_count > 0:
-            logger.info(f"  - Extended into next month ({end_date + timedelta(days=1)} to {extended_end}): {future_extended_count}")
+            logger.info(f"  - Extended into next month ({end_date + _timedelta(days=1)} to {extended_end}): {future_extended_count}")
         if past_excluded_count > 0:
             logger.info(f"  - Excluded from previous month (already planned): {past_excluded_count}")
         

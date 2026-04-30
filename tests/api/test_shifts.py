@@ -1,5 +1,7 @@
 """API tests for shift-related endpoints."""
 
+import time
+
 import pytest
 
 
@@ -99,3 +101,37 @@ class TestPlanningEndpoint:
             '/api/shifts/plan?startDate=2025-03-01&endDate=2025-03-31',
         )
         assert resp.status_code == 403
+
+    def test_plan_with_absences_does_not_fail_with_date_nameerror(self, admin_client):
+        """
+        Regression test for planning worker scope bug:
+        NameError: name 'date' is not defined.
+        """
+        resp = admin_client.post(
+            '/api/shifts/plan?startDate=2026-02-01&endDate=2026-02-28&force=false',
+            headers={'X-CSRF-Token': admin_client.csrf_token},
+        )
+        assert resp.status_code == 202
+        job_id = resp.json().get('jobId')
+        assert job_id
+
+        deadline = time.monotonic() + 45
+        status_payload = {}
+        status = 'running'
+
+        while status == 'running' and time.monotonic() < deadline:
+            time.sleep(0.2)
+            status_resp = admin_client.get(
+                f'/api/shifts/plan/status/{job_id}',
+                headers={'X-CSRF-Token': admin_client.csrf_token},
+            )
+            assert status_resp.status_code == 200
+            status_payload = status_resp.json()
+            status = status_payload.get('status', 'running')
+
+        assert status != 'running', f"Planning job {job_id} did not finish in time: {status_payload}"
+
+        details = (status_payload.get('details') or '')
+        message = (status_payload.get('message') or '')
+        assert "name 'date' is not defined" not in details
+        assert "name 'date' is not defined" not in message

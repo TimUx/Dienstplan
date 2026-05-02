@@ -108,7 +108,8 @@ end;
 
 function BootstrapCredentialsShouldSkip(Sender: TWizardPage): Boolean;
 begin
-  Result := HadExistingUninstallAtSessionStart or WizardRepair;
+  // No WizardRepair: not in all IS versions; prior uninstall entry covers upgrade/repair.
+  Result := HadExistingUninstallAtSessionStart;
 end;
 
 function GetBootstrapDataDir(): String;
@@ -176,7 +177,7 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
-    if HadExistingUninstallAtSessionStart or WizardRepair then
+    if HadExistingUninstallAtSessionStart then
       exit;
 
     AdminEmail := Trim(BootstrapPage.Values[0]);

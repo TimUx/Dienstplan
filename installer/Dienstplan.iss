@@ -73,7 +73,8 @@ Source: "..\dist\Dienstplan\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 [Icons]
 Name: "{group}\{#MyAppName}";         Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; Per-user desktop only ({commondesktop} needs elevation and fails with PrivilegesRequired=lowest)
+Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 ; Offer to launch the application directly after installation
@@ -86,6 +87,29 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 [Code]
 var
   BootstrapPage: TInputQueryWizardPage;
+  HadExistingUninstallAtSessionStart: Boolean;
+
+function UninstallRegistrySubkey(): String;
+begin
+  Result := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+    ExpandConstant('{#SetupSetting("AppId")}') + '_is1';
+end;
+
+function InitializeSetup(): Boolean;
+var
+  UninstallCmd: String;
+begin
+  HadExistingUninstallAtSessionStart :=
+    (RegQueryStringValue(HKLM, UninstallRegistrySubkey(), 'UninstallString', UninstallCmd) or
+     RegQueryStringValue(HKCU, UninstallRegistrySubkey(), 'UninstallString', UninstallCmd)) and
+    (Trim(UninstallCmd) <> '');
+  Result := True;
+end;
+
+function BootstrapCredentialsShouldSkip(Sender: TWizardPage): Boolean;
+begin
+  Result := HadExistingUninstallAtSessionStart or WizardRepair;
+end;
 
 function GetBootstrapDataDir(): String;
 begin
@@ -118,6 +142,7 @@ begin
   BootstrapPage.Add('Administrator E-Mail:', False);
   BootstrapPage.Values[0] := 'admin@fritzwinter.de';
   BootstrapPage.Add('Initiales Passwort (optional):', True);
+  BootstrapPage.OnShouldSkipPage := @BootstrapCredentialsShouldSkip;
 end;
 
 // Ask the user during uninstall whether to also remove the data directory.
@@ -151,6 +176,9 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
+    if HadExistingUninstallAtSessionStart or WizardRepair then
+      exit;
+
     AdminEmail := Trim(BootstrapPage.Values[0]);
     AdminPassword := BootstrapPage.Values[1];
 

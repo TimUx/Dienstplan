@@ -283,26 +283,12 @@ export async function showPlanningResultModal(year, month, periodText) {
     }
 }
 
-function getResultStatusConfig(status, violations) {
-    const hasHard = (violations || []).some(v => v.severity === 'HARD');
-    if (hasHard || status === 'EMERGENCY') {
-        return { icon: '🚨', label: 'Notfallplan', cssClass: 'planning-result-status-emergency' };
-    }
-    if (status === 'OPTIMAL' || status === 'FEASIBLE') {
-        return { icon: '✅', label: 'Optimal geplant', cssClass: 'planning-result-status-optimal' };
-    }
-    return { icon: '⚠️', label: 'Mit Abweichungen', cssClass: 'planning-result-status-warning' };
-}
-
 function renderResultSummary(report) {
     const violations  = report.rule_violations || [];
     const totalShifts = Object.values(report.shifts_assigned || {}).reduce((a, b) => a + b, 0);
     const absenceCount = (report.absent_employees || []).length;
-    const cfg = getResultStatusConfig(report.status, violations);
 
     let html = '';
-
-    html += `<div class="planning-result-status ${escapeHtml(cfg.cssClass)}">${cfg.icon} ${escapeHtml(cfg.label)}</div>`;
 
     html += '<div class="planning-result-summary">';
     html += `<p>👥 ${escapeHtml(String(report.total_employees ?? 0))} Mitarbeiter berücksichtigt</p>`;

@@ -6,7 +6,7 @@ ortools>=9.8.3296
 
 # FastAPI - Web framework for REST API
 fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
+uvicorn[standard]>=0.52.4
 
 # FastAPI middleware and extensions
 bcrypt>=4.0.0

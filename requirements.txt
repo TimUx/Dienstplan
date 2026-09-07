@@ -2,7 +2,7 @@
 # Core dependencies for the shift planning migration
 
 # OR-Tools - Constraint Programming solver
-ortools>=9.8.3296
+ortools>=9.15.6755
 
 # FastAPI - Web framework for REST API
 fastapi>=0.115.0

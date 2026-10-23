@@ -1,18 +1,56 @@
 name: Build, Test and Release
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing published release tag (for example v2.2.232)'
+        required: true
+        type: string
+      source_sha:
+        description: 'Full 40-character source commit SHA; must match the tag'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.release_tag }}
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+      version: ${{ steps.target.outputs.version }}
+      sha: ${{ steps.target.outputs.sha }}
+    steps:
+    - name: Checkout workflow tools
+      uses: actions/checkout@v4
+    - name: Validate existing release and resolve source
+      id: target
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        REQUIRE_SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' }}
+      run: python3 scripts/release_target.py resolve
+
   build-python-windows-empty:
+    needs: prepare
     runs-on: windows-latest
-    permissions:
-      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        ref: ${{ needs.prepare.outputs.sha }}
         fetch-depth: 0
     
     - name: Setup Python
@@ -35,13 +73,6 @@ jobs:
     - name: Run automated test suite (no slow solver)
       run: |
         python -m pytest -m "not slow" tests/ --tb=short -q
-    
-    - name: Get version
-      id: version
-      run: |
-        $VERSION = "2.2.${{ github.run_number }}"
-        echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
-        echo "Building version $VERSION (Production - Empty Database)"
     
     - name: Build Windows One-Dir distribution with PyInstaller
       run: |
@@ -103,7 +134,7 @@ jobs:
 
     - name: Create distribution ZIP
       run: |
-        $zip = "Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip"
+        $zip = "Dienstplan-Windows-v${env:VERSION}.zip"
         Compress-Archive -Path "dist\Dienstplan\*" -DestinationPath $zip -Force
         echo "ZIP_NAME=$zip" >> $env:GITHUB_OUTPUT
       id: zipstep
@@ -123,7 +154,7 @@ jobs:
     - name: Build Inno Setup installer
       shell: pwsh
       run: |
-        $version = "${{ steps.version.outputs.VERSION }}"
+        $version = $env:VERSION
         iscc /DMyAppVersion=$version installer\Dienstplan.iss
         "INSTALLER_NAME=Dienstplan-Windows-Setup-v${version}.exe" >> $env:GITHUB_OUTPUT
       id: installerstep
@@ -132,7 +163,7 @@ jobs:
       if: steps.signing.outputs.enabled == 'true'
       shell: pwsh
       run: |
-        $installerPath = "dist\Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe"
+        $installerPath = "dist\Dienstplan-Windows-Setup-v${env:VERSION}.exe"
         if (!(Test-Path $installerPath)) {
           throw "Installer not found: $installerPath"
         }
@@ -164,26 +195,30 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: windows-zip
-        path: Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
+        path: Dienstplan-Windows-v${{ env.VERSION }}.zip
+        if-no-files-found: error
 
     - name: Upload Windows installer artifact
       uses: actions/upload-artifact@v4
       with:
         name: windows-installer
-        path: dist\Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe
+        path: dist\Dienstplan-Windows-Setup-v${{ env.VERSION }}.exe
+        if-no-files-found: error
 
   build-python-linux-empty:
+    needs: prepare
     # Build on Ubuntu 22.04 to keep glibc requirements compatible with
     # older target systems. ubuntu-latest may pull in newer glibc symbols
     # (e.g. GLIBC_2.38) that break startup on customer machines.
     runs-on: ubuntu-22.04
-    permissions:
-      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        ref: ${{ needs.prepare.outputs.sha }}
         fetch-depth: 0
     
     - name: Setup Python
@@ -209,20 +244,13 @@ jobs:
       run: |
         python -m pytest -m "not slow" tests/ --tb=short -q
     
-    - name: Get version
-      id: version
-      run: |
-        VERSION="2.2.${{ github.run_number }}"
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version $VERSION (Production - Empty Database)"
-    
     - name: Build Linux One-Dir distribution with PyInstaller
       run: |
         python -m PyInstaller Dienstplan.spec
 
     - name: Create distribution tar.gz
       run: |
-        TAR="Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz"
+        TAR="Dienstplan-Linux-v${VERSION}.tar.gz"
         SOURCE_DIR=""
         if [ -d "dist/Dienstplan" ]; then
           SOURCE_DIR="dist/Dienstplan"
@@ -237,7 +265,7 @@ jobs:
           cp -a "$SOURCE_DIR" dist/Dienstplan
         fi
         # Write a VERSION file so users can always check which build they have
-        echo "${{ steps.version.outputs.VERSION }}" > dist/Dienstplan/VERSION
+        echo "$VERSION" > dist/Dienstplan/VERSION
         # Package with a top-level Dienstplan/ folder so extracting to any
         # directory is safe and the contents don't spill into the current dir
         tar -czf "$TAR" -C dist Dienstplan
@@ -247,28 +275,31 @@ jobs:
     - name: Build Linux .deb/.rpm packages
       run: |
         chmod +x build_linux_packages.sh
-        ./build_linux_packages.sh "${{ steps.version.outputs.VERSION }}"
+        ./build_linux_packages.sh "$VERSION"
 
     - name: Upload Linux deb artifact
       uses: actions/upload-artifact@v4
       with:
         name: linux-deb
         path: dist/packages/*.deb
+        if-no-files-found: error
 
     - name: Upload Linux rpm artifact
       uses: actions/upload-artifact@v4
       with:
         name: linux-rpm
         path: dist/packages/*.rpm
+        if-no-files-found: error
 
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
         name: linux-tarball
-        path: Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
+        path: Dienstplan-Linux-v${{ env.VERSION }}.tar.gz
+        if-no-files-found: error
 
   create-release:
-    needs: [build-python-windows-empty, build-python-linux-empty]
+    needs: [prepare, build-python-windows-empty, build-python-linux-empty]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -278,13 +309,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
-    - name: Get version
-      id: version
-      run: |
-        VERSION="2.2.${{ github.run_number }}"
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version $VERSION"
     
     - name: Download Windows ZIP
       uses: actions/download-artifact@v4
@@ -311,111 +335,10 @@ jobs:
       with:
         name: linux-rpm
     
-    - name: Generate changelog
-      id: changelog
-      run: |
-        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-        echo "## Changes in this release" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        git log --pretty=format:"- %s (%h)" -10 >> $GITHUB_OUTPUT || echo "- Initial release" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.version.outputs.VERSION }}
-        name: Release v${{ steps.version.outputs.VERSION }}
-        body: |
-          # Dienstplan Release v${{ steps.version.outputs.VERSION }}
-          
-          **Version 2.2 - Python Edition - Production Release**
-          
-          ## 📦 Downloads
-          
-          Download the package for your platform:
-
-          ### Windows
-          | Datei | Beschreibung |
-          |-------|--------------|
-          | **Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe** | Empfohlen – Inno-Setup-Installer (installiert in Programme, Startmenü-Eintrag) |
-          | **Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip** | Portabel – ZIP entpacken und `Dienstplan.exe` starten |
-
-          ### Linux
-          | Datei | Beschreibung |
-          |-------|--------------|
-          | **Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz** | tar.gz entpacken und `Dienstplan` starten |
-          | **dienstplan_${{ steps.version.outputs.VERSION }}_amd64.deb** | Debian/Ubuntu Paket inkl. Installer-Skripte |
-          | **dienstplan-${{ steps.version.outputs.VERSION }}-1*.rpm** | RPM Paket für RHEL/Fedora/SUSE inkl. Installer-Skripte |
-
-          ## ✨ What's New
-
-          - ✅ **One-Dir build**: DLLs liegen als lose Dateien neben `Dienstplan.exe` – kein Entpacken beim Start mehr
-          - ✅ **Schnellerer Start**: Kein temporäres Extrahieren nach `%TEMP%` wie beim alten Monolith
-          - ✅ **Inno-Setup-Installer**: Installiert das Programm sauber in Programme, legt Startmenü- und Desktop-Verknüpfung an
-          - ✅ **Portable ZIP**: Alternativ einfach entpacken und ausführen
-          - ✅ **Linux tar.gz mit Top-Level-Ordner**: Entpacken landet sauber in `Dienstplan/` – kein Verschmutzen des aktuellen Verzeichnisses
-          - ✅ **VERSION-Datei im Linux-Paket**: `cat Dienstplan/VERSION` zeigt die genaue Build-Version
-          - ✅ **Keine Python-Installation nötig**: Alles mitgeliefert
-          - ✅ **Datenbank wird automatisch angelegt**: Beim ersten Start leer, für den Produktiveinsatz bereit
-          
-          ## 🚀 Quick Start
-
-          ### Windows (Installer)
-          1. `Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe` herunterladen und ausführen
-          2. Installationsassistent folgen
-          3. Dienstplan über Startmenü oder Desktop-Verknüpfung starten
-          4. Browser öffnet sich automatisch auf http://localhost:5000
-
-          ### Windows (Portable ZIP)
-          1. `Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip` herunterladen und entpacken
-          2. `Dienstplan.exe` doppelklicken
-          3. Browser öffnet sich automatisch auf http://localhost:5000
-
-          ### Linux
-          ```bash
-          tar -xzf Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
-          cd Dienstplan
-          chmod +x Dienstplan
-          ./Dienstplan
-          ```
-
-          Paketinstallation:
-          ```bash
-          # Debian/Ubuntu
-          sudo dpkg -i dienstplan_${{ steps.version.outputs.VERSION }}_amd64.deb
-          
-          # RHEL/Fedora/SUSE
-          sudo rpm -Uvh dienstplan-${{ steps.version.outputs.VERSION }}-1.x86_64.rpm
-          ```
-          
-          ## 🔐 Initiale Zugangsdaten
-          
-          - **E-Mail**: über `DIENSTPLAN_INITIAL_ADMIN_EMAIL` (Fallback: `admin@fritzwinter.de`)
-          - **Passwort**: über `DIENSTPLAN_INITIAL_ADMIN_PASSWORD` oder beim ersten Start automatisch generiert
-          - ⚠️ **Bitte das Initialpasswort nach dem ersten Login ändern!**
-          
-          ## 📝 Datenbankpfad
-          
-          - Windows: `%LOCALAPPDATA%\Dienstplan\data\dienstplan.db`
-          - Wird automatisch beim ersten Start angelegt
-          - Für Backups: diese Datei regelmäßig kopieren
-          
-          ## 🛠️ Technische Details
-          
-          - **Web-Server**: Uvicorn (ASGI, produktionsreif)
-          - **Solver**: Google OR-Tools CP-SAT
-          - **Datenbank**: SQLite (automatisch initialisiert)
-          - **Build**: PyInstaller One-Dir + Inno Setup Installer
-          
-          ${{ steps.changelog.outputs.CHANGELOG }}
-        files: |
-          Dienstplan-Windows-v${{ steps.version.outputs.VERSION }}.zip
-          Dienstplan-Windows-Setup-v${{ steps.version.outputs.VERSION }}.exe
-          Dienstplan-Linux-v${{ steps.version.outputs.VERSION }}.tar.gz
-          dienstplan_${{ steps.version.outputs.VERSION }}_amd64.deb
-          dienstplan-${{ steps.version.outputs.VERSION }}-1*.x86_64.rpm
-        draft: false
-        prerelease: false
+    - name: Verify target, upload assets and verify downloads
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+        REQUIRE_SOURCE_SHA: 'true'
+      run: python3 scripts/release_target.py publish

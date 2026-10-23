@@ -19,6 +19,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Test release target and asset guards
+        run: python3 -m unittest discover -s scripts -p test_release_target.py -v
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

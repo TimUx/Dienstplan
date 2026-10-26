@@ -34,7 +34,7 @@ bottleneck>=1.6.0
 alembic>=1.13.0
 
 # PDF export (reportlab) - required for binary builds
-reportlab>=5.0.1
+reportlab>=5.1.0
 
 # Build tools for creating standalone executable
 pyinstaller>=6.0.0

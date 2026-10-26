@@ -11,7 +11,7 @@ uvicorn[standard]>=0.52.4
 # FastAPI middleware and extensions
 bcrypt>=5.0.0
 slowapi>=0.1.10
-python-multipart>=0.0.22
+python-multipart>=0.0.32
 itsdangerous>=2.2.0
 
 # Standard library enhancements

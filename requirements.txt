@@ -31,7 +31,7 @@ bottleneck>=1.6.0
 # No additional package needed for SQLite3
 
 # Alembic – database migration management (SQLAlchemy is installed as dependency)
-alembic>=1.13.0
+alembic>=1.20.1
 
 # PDF export (reportlab) - required for binary builds
 reportlab>=5.0.1

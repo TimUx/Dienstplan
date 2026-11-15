@@ -15,7 +15,7 @@ python-multipart>=0.0.32
 itsdangerous>=2.2.0
 
 # Standard library enhancements
-python-dateutil>=2.9.0.post0
+python-dateutil>=4.0.0
 
 # NumPy version constraint
 # OR-Tools and its dependencies (including pandas) now support NumPy 2.x

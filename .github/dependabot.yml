@@ -23,6 +23,11 @@ updates:
     open-pull-requests-limit: 5
     pull-request-branch-name:
       separator: "/"
+    ignore:
+      # ortools (the shift solver) has no wheels for Python 3.15 yet, so the image build
+      # fails (#312). Remove this once ortools supports Python 3.15.
+      - dependency-name: "python"
+        versions: [">=3.15"]
 
   - package-ecosystem: "composer"
     directory: "/"
